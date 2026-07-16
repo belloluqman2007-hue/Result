@@ -70,3 +70,51 @@ document.getElementById("card").addEventListener("click", function () {
 // Fill in today's date as a sensible default for Issue Date
 document.getElementById("issue").value = new Date().toISOString().split("T")[0];
 applyToCard();
+/* ====================================================================
+   NEW (PDF download - the fix for printing on phones):
+   Phone browsers silently block window.print(), so this button renders
+   BOTH sides of the ID card into a real PDF file. On a phone the PDF
+   simply downloads / opens - from there it can be printed or shared on
+   WhatsApp. On computers the old "Print Card" button keeps working.
+   The 3D flip is flattened temporarily (class .ams-pdf-flat) so the
+   back side can be captured.
+   ==================================================================== */
+document.getElementById("downloadPdf").addEventListener("click", function () {
+    if (!window.jspdf || !window.html2canvas) {
+        if (window.amsToast) window.amsToast("PDF generator is still loading - try again in a moment.", "info");
+        return;
+    }
+
+    var card = document.getElementById("card");
+    var btn = this;
+    btn.disabled = true;
+    card.classList.add("ams-pdf-flat"); // undo the 3D flip while capturing
+
+    var captureOpts = { scale: 3, backgroundColor: "#ffffff", useCORS: true };
+    var front = card.querySelector(".card-front");
+    var back = card.querySelector(".card-back");
+
+    Promise.all([html2canvas(front, captureOpts), html2canvas(back, captureOpts)])
+        .then(function (canvases) {
+            card.classList.remove("ams-pdf-flat");
+            btn.disabled = false;
+
+            var pdf = new window.jspdf.jsPDF({ unit: "mm", format: "a4" });
+            canvases.forEach(function (cv, i) {
+                var w = 85.6;                                     // real ID-card width
+                var h = Math.min((cv.height * w) / cv.width, 53.98); // keep proportion, cap at card height
+                var y = 20 + i * (53.98 + 10);                    // front, then back below it
+                pdf.addImage(cv.toDataURL("image/png"), "PNG", (210 - w) / 2, y, w, h);
+            });
+
+            var reg = (document.getElementById("regNo").textContent || "student").trim().replace(/[^\w-]/g, "_");
+            pdf.save("ID-Card-" + reg + ".pdf");
+            if (window.amsToast) window.amsToast("PDF downloaded \u2713 open it and print/share from your phone", "success", 6000);
+        })
+        .catch(function (err) {
+            console.warn("PDF error:", err);
+            card.classList.remove("ams-pdf-flat");
+            btn.disabled = false;
+            if (window.amsToast) window.amsToast("Could not create the PDF - please try again.", "error");
+        });
+});

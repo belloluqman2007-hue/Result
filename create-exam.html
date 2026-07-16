@@ -78,6 +78,9 @@
       <!-- CHANGED (print fix): calls examPrint() in js/exam.js - identical
            to window.print() on computers, plus a helpful tip on phones. -->
       <button type="button" onclick="examPrint()">Print / Save as PDF</button>
+      <!-- NEW: phone-proof printing - downloads the whole exam as a PDF
+           that can be printed/shared from any phone -->
+      <button type="button" onclick="downloadExamPDF()">&#11015; Download PDF (phone)</button>
     </div>
 
     <!-- Rich text toolbar for the body -->
@@ -225,6 +228,10 @@
   <script src="js/ui.js"></script>
   <script src="js/app.js"></script>
   <script src="js/subject.js"></script>
+  <!-- NEW (PDF download): local copies of jsPDF + html2canvas, used only
+       by the "Download PDF" button. No CDN/internet dependency. -->
+  <script src="js/vendor/jspdf.umd.min.js"></script>
+  <script src="js/vendor/html2canvas.min.js"></script>
   <script src="js/exam.js"></script>
 
   <!-- NEW (PWA conversion): registers the service worker + install button. Additive only. -->

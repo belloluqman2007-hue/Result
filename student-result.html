@@ -43,6 +43,20 @@
 <button onclick="searchResult()">Search</button>
 <button onclick="printResult()">Print Result</button>
 <button onclick="downloadPDF()" id="downloadBtn">Download PDF</button>
+
+<!-- NEW (staff export): export results by class to Excel, right here on
+     the Check Result page as requested. Hidden from the public - it only
+     appears when a staff member is logged in (wired up in js/result.js).
+     READ-ONLY: no result styling, layout or printing is touched. -->
+<div id="staffExport" style="display:none; margin-top:14px; padding:12px; border:1px dashed #2f5021; border-radius:10px;">
+  <strong style="font-size:14px; color:#2f5021;">Staff only: Export results to Excel</strong>
+  <div style="display:flex; gap:8px; margin-top:8px; flex-wrap:wrap;">
+    <select id="exportClass" style="flex:1; min-width:180px; padding:9px;">
+      <option value="">All classes</option>
+    </select>
+    <button type="button" id="exportBtn">&#11015; Download Excel</button>
+  </div>
+</div>
 </div>
 <div id="reportContainer" class="report-container">
     <div class="report-header">

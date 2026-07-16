@@ -363,3 +363,30 @@
   }
 }
 
+
+/* ==================================================================
+   NEW (PDF capture helper): while html2canvas renders the card for
+   the "Download PDF" button, the 3D flip is temporarily flattened by
+   adding .ams-pdf-flat to the card (js/idcard.js adds/removes it).
+   Screen-only; printing rules are separate and untouched.
+================================================================== */
+.card.ams-pdf-flat{
+  height:auto;
+}
+.card.ams-pdf-flat .card-inner{
+  transition:none !important;
+  transform:none !important;
+  height:auto;
+}
+.card.ams-pdf-flat .card-front,
+.card.ams-pdf-flat .card-back{
+  position:relative;
+  inset:auto;
+  transform:none !important;
+  backface-visibility:visible;
+  width:100%;
+  height:214px;
+}
+.card.ams-pdf-flat .card-back{
+  margin-top:12px;
+}

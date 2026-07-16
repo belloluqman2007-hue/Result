@@ -48,6 +48,9 @@
         <div class="buttons">
           <button type="button" id="apply">Apply to Card</button>
           <button type="button" id="print">Print Card</button>
+          <!-- NEW: phone-proof printing - downloads a PDF that can be
+               printed/shared from any phone (phones block window.print) -->
+          <button type="button" id="downloadPdf">&#11015; Download PDF</button>
         </div>
       </form>
       <p class="hint">Fill in the details, upload a photo, then click <strong>Apply to Card</strong>. Click the card itself to flip it and preview the back.</p>
@@ -91,6 +94,10 @@
   <!-- NEW: shared UI helpers (toasts, dark mode) - additive -->
   <script src="js/ui.js"></script>
   <script src="js/app.js"></script>
+  <!-- NEW (PDF download): local copies of jsPDF + html2canvas, used only
+       by the "Download PDF" button. No CDN/internet dependency. -->
+  <script src="js/vendor/jspdf.umd.min.js"></script>
+  <script src="js/vendor/html2canvas.min.js"></script>
   <script src="js/idcard.js"></script>
 
   <!-- NEW (PWA conversion): registers the service worker + install button. Additive only. -->

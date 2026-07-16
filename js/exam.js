@@ -405,3 +405,48 @@ function examPrint() {
         );
     }
 }
+
+/* ====================================================================
+   NEW (PDF download - the fix for printing on phones):
+   Phone browsers block window.print(), so this renders EVERY exam page
+   into one real PDF (one A4 page per exam page). Works fully on phones:
+   the PDF downloads/opens and can be printed or shared from there.
+   Pages are captured one after another to keep phone memory low.
+   ==================================================================== */
+function downloadExamPDF() {
+    if (!window.jspdf || !window.html2canvas) {
+        if (window.amsToast) window.amsToast("PDF generator is still loading - try again in a moment.", "info");
+        return;
+    }
+    var pages = document.querySelectorAll(".exam-page");
+    if (!pages.length) {
+        if (window.amsToast) window.amsToast("Generate the exam page first.", "info");
+        return;
+    }
+    if (window.amsToast) window.amsToast("Building PDF\u2026 please wait.", "info", 2500);
+
+    var pdf = new window.jspdf.jsPDF({ unit: "mm", format: "a4" });
+    var i = 0;
+
+    function captureNext() {
+        if (i >= pages.length) {
+            pdf.save("exam.pdf");
+            if (window.amsToast) window.amsToast("PDF downloaded \u2713 open it and print/share from your phone", "success", 6000);
+            return;
+        }
+        html2canvas(pages[i], { scale: 2, backgroundColor: "#ffffff", useCORS: true })
+            .then(function (cv) {
+                var wMm = 210;
+                var hMm = (cv.height * 210) / cv.width;
+                var finalW = wMm;
+                var finalH = Math.min(hMm, 297);
+                if (hMm > 297) finalW = (cv.width * 297) / cv.height; // shrink to fit one A4 page
+                if (i > 0) pdf.addPage();
+                pdf.addImage(cv.toDataURL("image/jpeg", 0.95), "JPEG", (210 - finalW) / 2, 0, finalW, finalH);
+                i++;
+                captureNext();
+            })
+            .catch(function () { i++; captureNext(); }); // skip a bad page, keep the rest
+    }
+    captureNext();
+}

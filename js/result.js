@@ -257,3 +257,45 @@ function downloadPDF() {
 
   window.print();
 }
+/* ====================================================================
+   NEW (staff export by class): shows a small "Export results to Excel"
+   panel on the Check Result page, but ONLY when a staff member is
+   logged in. The public never sees it. Downloads come from the
+   read-only /export-all-results route. Nothing about result display,
+   calculation or printing is touched.
+   ==================================================================== */
+(function () {
+    "use strict";
+
+    fetch("/me")
+        .then(function (r) { return r.json(); })
+        .then(function (session) {
+            if (!session || !session.loggedIn) return; // public visitor - stay hidden
+
+            var panel = document.getElementById("staffExport");
+            if (!panel) return;
+            panel.style.display = "block";
+
+            // Fill the class dropdown from the school's real class list.
+            fetch("/classes")
+                .then(function (r) { return r.ok ? r.json() : []; })
+                .then(function (classes) {
+                    var sel = document.getElementById("exportClass");
+                    (classes || []).forEach(function (c) {
+                        var name = c.class_name || c;
+                        var opt = document.createElement("option");
+                        opt.value = name;
+                        opt.textContent = name;
+                        sel.appendChild(opt);
+                    });
+                })
+                .catch(function () { /* dropdown keeps just "All classes" */ });
+
+            document.getElementById("exportBtn").addEventListener("click", function () {
+                var cls = document.getElementById("exportClass").value;
+                var url = "/export-all-results" + (cls ? "?class=" + encodeURIComponent(cls) : "");
+                window.location.assign(url); // browser downloads the .xlsx
+            });
+        })
+        .catch(function () { /* not logged in - panel stays hidden */ });
+})();

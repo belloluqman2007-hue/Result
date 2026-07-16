@@ -166,3 +166,29 @@ window.print) the button shows a tip: menu ⋮ → Share → Print.
 **Exam printing** — print styles no longer force a fixed 297mm page height
 (it rounded past A4 and spilled a blank 2nd page). Each exam page now fits its
 own single A4 sheet. Print button also shows the same phone tip.
+
+---
+
+## Fix pack 3 (additive, no rebuilding)
+
+**Printing on phones (exam + ID card)** — phone browsers block window.print().
+Both pages now have a "⬇ Download PDF" button (jsPDF + html2canvas, vendored
+in js/vendor/ — no internet needed): renders BOTH ID sides / EVERY exam page
+into a real PDF that downloads on the phone, ready to print or share on
+WhatsApp. Computer print buttons unchanged.
+
+**Export by class on Check Result page** — a small "Staff only: Export results
+to Excel" panel now appears on student-result.html, visible ONLY when logged
+in as staff (public never sees it). Pick a class → downloads that class's
+Excel; "All classes" = everything. Download stays read-only. The dashboard ⬇
+button from fix pack 2 still works (exports all).
+
+**Excel template date mangling fixed** — all typing cells in the template are
+now TEXT-formatted, so Excel no longer rewrites 2010-12-14 as 14/12/2010.
+Server also accepts 14/12/2010 text and converts it automatically. Re-download
+the template from the Add Student page after deploying.
+
+**Create Exam mobile layout** — exam paper pages shrink to phone width with
+proportional margins; button bars wrap; the formatting toolbar scrolls
+horizontally. Screen-only change inside @media screen — print/PDF output still
+produces exact A4 pages.

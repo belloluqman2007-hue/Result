@@ -1360,6 +1360,12 @@ SELECT
                     dob = dob.toISOString().split("T")[0];
                 } else {
                     dob = String(dob || "").trim();
+                    // NEW (template clarity): also accept dates pasted/typed
+                    // as DD/MM/YYYY text - convert to the expected YYYY-MM-DD.
+                    const mdy = dob.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+                    if (mdy) {
+                        dob = `${mdy[3]}-${mdy[2].padStart(2, "0")}-${mdy[1].padStart(2, "0")}`;
+                    }
                 }
 
                 if (!studentId || !fullName || !gender || !className) {
@@ -1487,19 +1493,29 @@ app.post("/promote-class", requireLogin, (req, res) => {
 // dependency already installed for bulk student upload.
 // ----------------------------------------------------------------
 app.get("/export-all-results", requireLogin, (req, res) => {
+    // NEW (per-class export): optional ?class=<exact class name> filter.
+    // Empty or missing -> export everything (unchanged behaviour).
+    const classFilter = (req.query.class || "").trim();
+    const where = classFilter ? "WHERE class_name = ?" : "";
+    const params = classFilter ? [classFilter] : [];
+
     connection.query(
         `SELECT student_id, student_name, class_name, term, session, subject,
                 first_test, second_test, note_score, attendance_score,
                 ca_score, exam_score, total, grade
          FROM results
+         ${where}
          ORDER BY session, term, class_name, student_name, subject`,
+        params,
         (err, rows) => {
             if (err) {
                 console.log(err);
                 return res.status(500).send("Database Error");
             }
             if (!rows || rows.length === 0) {
-                return res.status(404).send("No results to export yet.");
+                return res.status(404).send(classFilter
+                    ? "No results found for that class yet."
+                    : "No results to export yet.");
             }
 
             // Rename columns once, in human-friendly plain English.
@@ -1530,8 +1546,12 @@ app.get("/export-all-results", requireLogin, (req, res) => {
             XLSX.utils.book_append_sheet(workbook, sheet, "All Results");
             const buffer = XLSX.write(workbook, { type: "buffer", bookType: "xlsx" });
 
+            const fileName = classFilter
+                ? `results-${classFilter.replace(/[^\w؀-ۿ-]/g, "_")}.xlsx`
+                : "all-results.xlsx";
             res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
-            res.setHeader("Content-Disposition", "attachment; filename=all-results.xlsx");
+            // NEW: encodeURIComponent keeps Arabic class names valid in the filename header
+            res.setHeader("Content-Disposition", `attachment; filename*=UTF-8''${encodeURIComponent(fileName)}`);
             res.send(buffer);
         }
     );

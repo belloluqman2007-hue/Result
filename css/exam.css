@@ -501,3 +501,29 @@ body{
     display:none !important;
   }
 }
+/* ==================================================================
+   NEW (mobile editing - screen only, printing rules untouched):
+   The A4 page (210mm) is much wider than a phone. On small screens the
+   page now shrinks to the phone width with PROPORTIONAL margins, so
+   what you see while writing still matches the final printed exam.
+================================================================== */
+@media screen and (max-width: 820px){
+  .exam-meta-bar{ padding:10px; gap:10px; }
+  .meta-field{ min-width:0; flex:1 1 45%; }
+  .meta-actions{ flex-basis:100%; }
+
+  .exam-actions-bar{ padding:0 10px 10px; gap:8px; }
+  .exam-actions-bar button{ flex:1 1 45%; padding:11px 8px; }
+
+  .exam-format-toolbar{ padding:8px; gap:6px; flex-wrap:nowrap; overflow-x:auto; }
+  .exam-format-toolbar button,
+  .exam-format-toolbar select{ flex:0 0 auto; }
+
+  .exam-pages{ padding:12px 6px 40px; gap:16px; }
+  .exam-page{
+    width:100% !important;
+    max-width:100%;
+    min-height:auto;
+    padding:7% 6%;   /* same proportions as the A4 print margins */
+  }
+}
