@@ -138,3 +138,31 @@ instead of a bare error.
 - Android phone: open the site in Chrome → menu ⋮ → *Install app* / *Add to Home screen*
 - Windows PC: open the site in Chrome/Edge → click the install icon in the address bar
 (requires HTTPS — your Render site already has it)
+
+---
+
+## Fix pack 2 (additive, no rebuilding)
+
+**Excel bulk template** — `templates/student_upload_template.xlsx` regenerated:
+styled frozen header, readable widths, a yellow EXAMPLE row (system now auto-skips
+any Student ID starting with "EXAMPLE" — tiny guard added inside the existing
+bulk parser), and a new "READ ME" help sheet. Headers & sheet names unchanged.
+Photos still cannot travel inside Excel: import first, then **Students page →
+click student → "Add / Change Photo"** (uses NEW route `/update-student-photo`).
+
+**Delete student** — new "🗑 Delete Student" button in the Students page profile
+modal. Uses the EXISTING routes `/delete-student/:id` (admin-only) and
+`/delete-results-by-student/:id` (clears their results). Confirm dialog warns
+first. No new tables, no result-module code touched.
+
+**Export all results** — NEW read-only route `/export-all-results` (SELECT only)
++ a small ⬇ button in the dashboard top bar. Downloads every result as one
+`all-results.xlsx`. No result page, style, or calculation touched.
+
+**ID card** — flip slowed .6s → 1.15s; print CSS flattens the 3D flip so BOTH
+sides print on one sheet (front + back below it); on phones (which ignore
+window.print) the button shows a tip: menu ⋮ → Share → Print.
+
+**Exam printing** — print styles no longer force a fixed 297mm page height
+(it rounded past A4 and spilled a blank 2nd page). Each exam page now fits its
+own single A4 sheet. Print button also shows the same phone tip.

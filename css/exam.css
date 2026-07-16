@@ -481,7 +481,12 @@ body{
     display:block !important;
     box-shadow:none !important;
     width:210mm !important;
-    min-height:297mm !important;
+    /* FIX (print, one page per exam page): the forced 297mm min-height
+       rounded a hair past the A4 sheet and spilled a blank second page.
+       Height now follows the content exactly. */
+    min-height:0 !important;
+    height:auto !important;
+    overflow:hidden;
     margin:0 !important;
     page-break-after:always;
     break-after:page;

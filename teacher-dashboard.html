@@ -93,6 +93,12 @@
           <button class="ams-icon-btn" onclick="amsToggleTheme()" title="Toggle dark mode">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>
           </button>
+          <!-- NEW (export): downloads EVERY result as one Excel file.
+               Read-only export - no result page, style or calculation touched. -->
+          <button class="ams-icon-btn" onclick="window.location.assign('/export-all-results')"
+                  title="Export ALL results to Excel">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="M7 10l5 5 5-5"/><path d="M4 21h16"/></svg>
+          </button>
         </div>
       </header>
 

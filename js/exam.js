@@ -389,3 +389,19 @@ function deleteExamFromPanel(id) {
             alert("Error deleting exam.");
         });
 }
+/* ====================================================================
+   NEW (print fix): called by the "Print / Save as PDF" button.
+   Identical to window.print() on computers. On phones - where browsers
+   silently ignore window.print() - it shows a helpful tip instead of
+   leaving the user with a dead button.
+   ==================================================================== */
+function examPrint() {
+    window.print();
+    if (/Android|iPhone|iPad|iPod/i.test(navigator.userAgent) && window.amsToast) {
+        window.amsToast(
+            "Phone tip: on mobile use the browser menu (\u22EE) \u2192 Share \u2192 Print.",
+            "info",
+            6500
+        );
+    }
+}

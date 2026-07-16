@@ -197,6 +197,11 @@
             '<div class="ams-modal-actions">' +
                 '<button type="button" class="m-btn-ghost" onclick="amsProfileClose()">Close</button>' +
                 '<a href="student-result.html"><button type="button">Open Result Checker</button></a>' +
+                /* NEW (student management): photo upload + delete buttons,
+                   wired up right after the modal is shown. */
+                '<button type="button" class="m-btn-sm" id="amsPhotoBtn">&#128247; Add / Change Photo</button>' +
+                '<input type="file" id="amsPhotoInput" accept="image/jpeg,image/png" style="display:none">' +
+                '<button type="button" class="m-btn-danger m-btn-sm" id="amsDeleteBtn">&#128465; Delete Student</button>' +
             "</div>";
 
         box.querySelector("h3").textContent = s.full_name || "-";
@@ -205,6 +210,78 @@
         box.querySelector(".pv-class").textContent = s.class_name || "-";
         box.querySelector(".pv-gender").textContent = s.gender || "-";
         box.querySelector(".pv-dob").textContent = dob;
+
+        /* ---------- NEW (student management): Add/Change Photo ----------
+           Excel bulk upload cannot carry photos, so photos for imported
+           students are attached here, one student at a time. */
+        var photoBtn = box.querySelector("#amsPhotoBtn");
+        var photoInput = box.querySelector("#amsPhotoInput");
+        if (photoBtn && photoInput) {
+            photoBtn.addEventListener("click", function () { photoInput.click(); });
+            photoInput.addEventListener("change", function () {
+                if (!photoInput.files.length) return;
+                var fd = new FormData();
+                fd.append("student_id", s.student_id); // BEFORE the file: multer uses it to name the file
+                fd.append("photo", photoInput.files[0]);
+                photoBtn.disabled = true;
+                fetch("/update-student-photo", { method: "POST", body: fd })
+                    .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+                    .then(function (out) {
+                        photoBtn.disabled = false;
+                        if (!out.ok) return window.amsToast(out.j.message || "Photo upload failed", "error");
+                        s.photo_path = out.j.photo_path;
+                        var img = box.querySelector(".ams-profile-head img");
+                        if (img) img.src = out.j.photo_path + "?t=" + Date.now();
+                        window.amsToast("Photo saved \u2713", "success");
+                        loadStudents(); // refresh the grid behind the modal
+                    })
+                    .catch(function () {
+                        photoBtn.disabled = false;
+                        window.amsToast("Network error while uploading photo", "error");
+                    });
+            });
+        }
+
+        /* ---------- NEW (student management): Delete student ----------
+           Uses the existing server route /delete-student (admin-only).
+           After the student is removed, their saved results are cleared
+           with the existing /delete-results-by-student route. */
+        var deleteBtn = box.querySelector("#amsDeleteBtn");
+        if (deleteBtn) {
+            deleteBtn.addEventListener("click", function () {
+                window.amsConfirm(
+                    "Delete " + (s.full_name || s.student_id) + "?",
+                    "This permanently removes the student AND all of their saved exam results. This cannot be undone.",
+                    { confirmText: "Yes, delete", cancelText: "Cancel" }
+                ).then(function (yes) {
+                    if (!yes) return;
+                    deleteBtn.disabled = true;
+                    fetch("/delete-student/" + encodeURIComponent(s.student_id), { method: "DELETE" })
+                        .then(function (r) {
+                            if (r.status === 401 || r.status === 403) {
+                                deleteBtn.disabled = false;
+                                window.amsToast("Only the admin account can delete students.", "error", 4500);
+                                return false;
+                            }
+                            if (!r.ok) throw new Error("delete-failed");
+                            // Student removed - now clear their results too (best effort).
+                            return fetch("/delete-results-by-student/" + encodeURIComponent(s.student_id), { method: "DELETE" })
+                                .catch(function () { /* leave any orphan results; they never appear anywhere */ })
+                                .then(function () { return true; });
+                        })
+                        .then(function (done) {
+                            if (!done) return;
+                            window.amsToast("Student deleted.", "success");
+                            window.amsProfileClose();
+                            loadStudents();
+                        })
+                        .catch(function () {
+                            deleteBtn.disabled = false;
+                            window.amsToast("Could not delete. Please try again.", "error");
+                        });
+                });
+            });
+        }
 
         overlay.style.display = "flex";
     }

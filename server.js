@@ -1252,6 +1252,38 @@ SELECT
         );
     });
 
+    // ----------------------------------------------------------------
+    // NEW (bulk-photo helper): attach or replace the photo of a student
+    // who ALREADY exists (e.g. added via bulk Excel upload, which cannot
+    // carry photos). ADDITIVE - it changes no existing route or query.
+    // The client must send the "student_id" FormData field BEFORE the
+    // file, because multer uses it to name the saved file.
+    // ----------------------------------------------------------------
+    app.post("/update-student-photo", requireLogin, upload.single("photo"), (req, res) => {
+        if (!req.file) {
+            return res.status(400).json({ message: "No photo uploaded." });
+        }
+        const studentId = (req.body.student_id || "").trim();
+        if (!studentId) {
+            return res.status(400).json({ message: "Missing student ID." });
+        }
+        const photoPath = `images/students/${req.file.filename}`;
+        connection.query(
+            "UPDATE students SET photo_path = ? WHERE student_id = ?",
+            [photoPath, studentId],
+            (err, result) => {
+                if (err) {
+                    console.log(err);
+                    return res.status(500).json({ message: "Database error while saving photo." });
+                }
+                if (result.affectedRows === 0) {
+                    return res.status(404).json({ message: "No student found with that ID." });
+                }
+                res.json({ message: "Photo saved.", photo_path: photoPath });
+            }
+        );
+    });
+
     app.get("/download-student-template", requireLogin, (req, res) => {
         const filePath = path.join(__dirname, "templates", "student_upload_template.xlsx");
         res.download(filePath, "student_upload_template.xlsx", (err) => {
@@ -1315,6 +1347,13 @@ SELECT
                 const gender = String(row["Gender"] || "").trim();
                 const className = String(row["Class"] || "").trim();
                 let dob = row["Date of Birth (YYYY-MM-DD)"];
+
+                // NEW (template clarity): rows whose Student ID starts with
+                // "EXAMPLE" are the template's sample rows - skip them so a
+                // forgotten example row can never create a fake student.
+                if (studentId.toUpperCase().startsWith("EXAMPLE")) {
+                    return processNextRow();
+                }
 
                 // Excel sometimes gives dates as JS Date objects instead of strings
                 if (dob instanceof Date) {
@@ -1440,6 +1479,63 @@ app.post("/promote-class", requireLogin, (req, res) => {
 
 });
 
+
+// ----------------------------------------------------------------
+// NEW (export): download EVERY result in the school as ONE Excel file.
+// 100% READ-ONLY - it only SELECTs; no result calculation, style, print
+// logic or result page is touched in any way. Uses the existing XLSX
+// dependency already installed for bulk student upload.
+// ----------------------------------------------------------------
+app.get("/export-all-results", requireLogin, (req, res) => {
+    connection.query(
+        `SELECT student_id, student_name, class_name, term, session, subject,
+                first_test, second_test, note_score, attendance_score,
+                ca_score, exam_score, total, grade
+         FROM results
+         ORDER BY session, term, class_name, student_name, subject`,
+        (err, rows) => {
+            if (err) {
+                console.log(err);
+                return res.status(500).send("Database Error");
+            }
+            if (!rows || rows.length === 0) {
+                return res.status(404).send("No results to export yet.");
+            }
+
+            // Rename columns once, in human-friendly plain English.
+            const data = rows.map((r) => ({
+                "Student ID": r.student_id,
+                "Student Name": r.student_name,
+                "Class": r.class_name,
+                "Session": r.session,
+                "Term": r.term,
+                "Subject": r.subject,
+                "1st Test": r.first_test,
+                "2nd Test": r.second_test,
+                "Note": r.note_score,
+                "Attendance": r.attendance_score,
+                "CA Total": r.ca_score,
+                "Exam Score": r.exam_score,
+                "Total": r.total,
+                "Grade": r.grade
+            }));
+
+            const workbook = XLSX.utils.book_new();
+            const sheet = XLSX.utils.json_to_sheet(data);
+            sheet["!cols"] = [
+                { wch: 12 }, { wch: 28 }, { wch: 24 }, { wch: 12 }, { wch: 10 },
+                { wch: 26 }, { wch: 9 }, { wch: 9 }, { wch: 7 }, { wch: 11 },
+                { wch: 9 }, { wch: 11 }, { wch: 8 }, { wch: 7 }
+            ];
+            XLSX.utils.book_append_sheet(workbook, sheet, "All Results");
+            const buffer = XLSX.write(workbook, { type: "buffer", bookType: "xlsx" });
+
+            res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+            res.setHeader("Content-Disposition", "attachment; filename=all-results.xlsx");
+            res.send(buffer);
+        }
+    );
+});
 
 app.delete("/delete-result/:id", requireLogin, (req, res) => {
     const id= req.params.id;

@@ -94,7 +94,9 @@
   position:relative;
   width:100%;
   height:100%;
-  transition:transform .6s;
+  /* CHANGE (flip feel): slowed from .6s to 1.15s with a soft ease so the
+     card flip is clearly visible instead of snapping. */
+  transition:transform 1.15s cubic-bezier(.45,.8,.3,1);
   transform-style:preserve-3d;
   box-shadow:0 20px 50px rgba(15,61,46,.35), 0 6px 16px rgba(0,0,0,.2);
   border-radius:14px;
@@ -332,17 +334,32 @@
 
   .card{
     width:85.6mm;
-    height:53.98mm;
+    height:auto;           /* FIX (print): let both sides stack vertically */
     box-shadow:none;
   }
 
   .card-inner{
     box-shadow:none;
+    transition:none !important;
+    transform:none !important;  /* FIX (print): undo the 3D flip */
+    height:auto;
   }
 
+  /* FIX (print): flatten front + back so BOTH sides print on the sheet
+     (before, the 3D/backface setup could print blank or front-only). */
   .card-front,
   .card-back{
+    position:relative;
+    inset:auto;
+    transform:none !important;
+    backface-visibility:visible;
+    width:100%;
+    height:53.98mm;        /* real ID-card height on paper */
     box-shadow:none;
+  }
+
+  .card-back{
+    margin-top:6mm;        /* small gap between the two printed sides */
   }
 }
 

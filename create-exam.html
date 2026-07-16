@@ -75,7 +75,9 @@
       <button type="button" onclick="openLoadPanel()">Open Saved Exam</button>
       <button type="button" onclick="insertPageBreak()">+ New Page</button>
       <button type="button" onclick="removeLastPage()">- Remove Last Page</button>
-      <button type="button" onclick="window.print()">Print / Save as PDF</button>
+      <!-- CHANGED (print fix): calls examPrint() in js/exam.js - identical
+           to window.print() on computers, plus a helpful tip on phones. -->
+      <button type="button" onclick="examPrint()">Print / Save as PDF</button>
     </div>
 
     <!-- Rich text toolbar for the body -->

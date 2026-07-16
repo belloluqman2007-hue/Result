@@ -52,6 +52,15 @@ document.getElementById("flipPhoto").addEventListener("change", function () {
 
 document.getElementById("print").addEventListener("click", function () {
     window.print();
+    // NEW (print fix): phone browsers ignore window.print(), so remind
+    // mobile users where the real print option lives on their phone.
+    if (/Android|iPhone|iPad|iPod/i.test(navigator.userAgent) && window.amsToast) {
+        window.amsToast(
+            "Phone tip: the print button can't open print on mobile - use your browser menu (\u22EE) \u2192 Share \u2192 Print instead.",
+            "info",
+            7000
+        );
+    }
 });
 
 document.getElementById("card").addEventListener("click", function () {
