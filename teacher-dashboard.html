@@ -1,0 +1,509 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Teacher Dashboard | Ameenullah School of Arabic and Islamic Studies</title>
+  <!-- Legacy stylesheet (unchanged) + new modern layer loaded after it -->
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/modern-ui.css">
+</head>
+<!-- onload behaviour preserved EXACTLY as before (same functions, same order) -->
+<body onload="loadClassesIntoSelects(); loadSubjects(); checkAuth();">
+
+  <!-- ======================================================
+       NEW APP SHELL: sidebar + topbar + responsive layout.
+       Every legacy feature from the old dashboard is kept:
+       same ids, same onclick/oninput handlers, same selects,
+       same table. Only the arrangement and styling changed.
+  ====================================================== -->
+  <div class="ams-shell">
+    <div class="ams-scrim"></div>
+
+    <!-- Sidebar navigation (contains ALL the original nav buttons) -->
+    <aside class="ams-sidebar">
+      <div class="ams-side-brand">
+        <img src="images/LOGO.JPG" alt="School Logo">
+        <div>
+          <div class="ams-school-name">AMEENULLAH SCHOOL OF ARABIC AND ISLAMIC STUDIES</div>
+          <div class="ams-school-sub">Result Management System</div>
+        </div>
+      </div>
+
+      <nav class="ams-side-nav">
+        <div class="ams-nav-label">Main</div>
+        <a href="teacher-dashboard.html" class="ams-active">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/></svg>
+          Dashboard
+        </a>
+        <a href="add-student.html">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M19 8v6"/><path d="M22 11h-6"/></svg>
+          Add Student
+        </a>
+        <a href="students.html"><!-- NEW page (directory) - additive -->
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+          Students Directory
+        </a>
+        <a href="add-subject.html">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+          Classes &amp; Subjects
+        </a>
+        <div class="ams-nav-label">Tools</div>
+        <a href="manage-signatures.html">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.24 12.24a6 6 0 0 0-8.49-8.49L5 10.5V19h8.5z"/><path d="m16 8-9.04 9.07"/><path d="M17.5 15H9"/></svg>
+          Manage Signatures
+        </a>
+        <a href="id-card.html">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><circle cx="8.5" cy="12" r="2.5"/><path d="M13.5 10.5H18"/><path d="M13.5 14H18"/><path d="M5 15.5c.9-1 2.1-1.5 3.5-1.5s2.6.5 3.5 1.5"/></svg>
+          Create ID Card
+        </a>
+        <a href="create-exam.html">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+          Create Exam
+        </a>
+        <a href="student-result.html">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+          Check Result
+        </a>
+      </nav>
+
+      <div class="ams-side-footer">
+        <button class="logout-btn" onclick="logout()">Logout</button><!-- same handler as before -->
+      </div>
+    </aside>
+
+    <!-- Main column -->
+    <main class="ams-main">
+      <header class="ams-topbar">
+        <button class="ams-icon-btn ams-hamburger" id="amsMenuToggle" aria-label="Menu">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
+        </button>
+        <div class="ams-page-title">Dashboard</div>
+        <div class="ams-topbar-right">
+          <div class="ams-clock" id="amsClock"></div>
+          <!-- NEW: dark mode toggle -->
+          <button class="ams-icon-btn" onclick="amsToggleTheme()" title="Toggle dark mode">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>
+          </button>
+        </div>
+      </header>
+
+      <div class="ams-page-pad">
+
+        <!-- Greeting: welcomeMessage id is UNCHANGED - app.js fills it -->
+        <div class="ams-greeting">
+          <div>
+            <h1>School Overview</h1>
+            <p><span id="welcomeMessage">Welcome</span> &nbsp;&middot;&nbsp; here's what's happening today.</p>
+          </div>
+        </div>
+
+        <!-- ======================================================
+             STAT CARDS: the three original counters keep their
+             EXACT ids (studentCount / subjectCount / resultCount)
+             so js/app.js fills them exactly as before. The rest
+             are NEW widgets fed by the new /dashboard-stats API.
+        ====================================================== -->
+        <div class="ams-stat-grid">
+          <div class="ams-stat">
+            <div class="ams-stat-icon ams-chip-emerald">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+            </div>
+            <div>
+              <div class="ams-stat-value" id="studentCount">0</div>
+              <div class="ams-stat-label">Total Students</div>
+            </div>
+          </div>
+          <div class="ams-stat">
+            <div class="ams-stat-icon ams-chip-jade">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+            </div>
+            <div>
+              <div class="ams-stat-value" id="subjectCount">0</div>
+              <div class="ams-stat-label">Subjects</div>
+            </div>
+          </div>
+          <div class="ams-stat">
+            <div class="ams-stat-icon ams-chip-teal">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M16 13H8"/><path d="M16 17H8"/></svg>
+            </div>
+            <div>
+              <div class="ams-stat-value" id="resultCount">0</div>
+              <div class="ams-stat-label">Results Recorded</div>
+            </div>
+          </div>
+          <!-- NEW stats below (additive, from /dashboard-stats) -->
+          <div class="ams-stat">
+            <div class="ams-stat-icon ams-chip-gold">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18"/><path d="M5 21V7l7-4 7 4v14"/><path d="M9 21v-6h6v6"/></svg>
+            </div>
+            <div>
+              <div class="ams-stat-value" id="amsClassCount">0</div>
+              <div class="ams-stat-label">Classes</div>
+            </div>
+          </div>
+          <div class="ams-stat">
+            <div class="ams-stat-icon ams-chip-indigo">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21v-1a7 7 0 0 1 14 0v1"/></svg>
+            </div>
+            <div>
+              <div class="ams-stat-value" id="amsStaffCount">0</div>
+              <div class="ams-stat-label">Staff Accounts</div>
+            </div>
+          </div>
+          <div class="ams-stat">
+            <div class="ams-stat-icon ams-chip-brick">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+            </div>
+            <div>
+              <div class="ams-stat-value" id="amsExamCount">0</div>
+              <div class="ams-stat-label">Saved Exams</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- NEW: quick action buttons (link to EXISTING pages only) -->
+        <div class="ams-panel" style="margin-bottom:22px;">
+          <div class="ams-panel-head">
+            <h3 class="ams-panel-title">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 3 14h7l-1 8 10-12h-7z"/></svg>
+              Quick Actions
+            </h3>
+          </div>
+          <div class="ams-quick-actions">
+            <a class="ams-qa" href="add-student.html">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M19 8v6"/><path d="M22 11h-6"/></svg>
+              Register Student
+            </a>
+            <a class="ams-qa" href="#score-entry">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+              Enter Scores
+            </a>
+            <a class="ams-qa" href="students.html">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+              Students Directory
+            </a>
+            <a class="ams-qa" href="create-exam.html">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>
+              Build Exam
+            </a>
+            <a class="ams-qa" href="student-result.html">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+              Check Result
+            </a>
+          </div>
+        </div>
+
+        <!-- ======================================================
+             NEW ANALYTICS ROW (all data comes from READ-ONLY
+             SELECT queries on existing tables - nothing is
+             written to the result system).
+        ====================================================== -->
+        <div class="ams-grid" style="margin-bottom:22px;">
+          <div class="ams-panel ams-col-8">
+            <div class="ams-panel-head">
+              <div>
+                <h3 class="ams-panel-title">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M8 17V9"/><path d="M13 17V5"/><path d="M18 17v-6"/></svg>
+                  Students per Class
+                </h3>
+                <div class="ams-panel-sub">Enrollment across all classes</div>
+              </div>
+            </div>
+            <div class="ams-chart-wrap"><canvas id="amsClassChart" height="220"></canvas></div>
+          </div>
+
+          <div class="ams-panel ams-col-4">
+            <div class="ams-panel-head">
+              <div>
+                <h3 class="ams-panel-title">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12A9 9 0 1 1 12 3"/><path d="M22 4 12 12l10-1z"/></svg>
+                  Grade Distribution
+                </h3>
+                <div class="ams-panel-sub">All recorded results</div>
+              </div>
+            </div>
+            <div class="ams-chart-wrap"><canvas id="amsGradeChart" height="180"></canvas></div>
+            <div class="ams-legend" id="amsGradeLegend"></div>
+          </div>
+        </div>
+
+        <div class="ams-grid" style="margin-bottom:22px;">
+          <!-- NEW: calendar widget (driven by school events) -->
+          <div class="ams-panel ams-col-4">
+            <div class="ams-panel-head">
+              <h3 class="ams-panel-title">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4"/><path d="M8 2v4"/><path d="M3 10h18"/></svg>
+                Calendar
+              </h3>
+            </div>
+            <div class="ams-cal">
+              <div class="ams-cal-head">
+                <button class="ams-icon-btn" type="button" onclick="amsCalMove(-1)" aria-label="Previous month">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+                </button>
+                <strong id="amsCalLabel">Month</strong>
+                <button class="ams-icon-btn" type="button" onclick="amsCalMove(1)" aria-label="Next month">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+                </button>
+              </div>
+              <div class="ams-cal-grid" id="amsCalGrid"></div>
+            </div>
+          </div>
+
+          <!-- NEW: upcoming events (new school_events table) -->
+          <div class="ams-panel ams-col-4">
+            <div class="ams-panel-head">
+              <h3 class="ams-panel-title">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 6h13"/><path d="M8 12h13"/><path d="M8 18h13"/><path d="M3 6h.01"/><path d="M3 12h.01"/><path d="M3 18h.01"/></svg>
+                Upcoming Events
+              </h3>
+            </div>
+            <form class="ams-form-row" id="amsEventForm">
+              <input type="text" id="amsEventTitle" placeholder="Event title" required>
+              <input type="date" id="amsEventDate" required>
+              <input type="text" id="amsEventNote" placeholder="Note (optional)">
+              <button type="submit" class="m-btn-sm">Add Event</button>
+            </form>
+            <div id="amsEventList"></div>
+          </div>
+
+          <!-- NEW: notice board / announcements (new table) -->
+          <div class="ams-panel ams-col-4">
+            <div class="ams-panel-head">
+              <h3 class="ams-panel-title">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m3 11 18-5v12L3 13z"/><path d="M11.6 16.8a3 3 0 1 1-5.8-1.6"/></svg>
+                Notice Board
+              </h3>
+            </div>
+            <form class="ams-form-row" id="amsAnnouncementForm">
+              <input type="text" id="amsAnnTitle" placeholder="Announcement title" required>
+              <textarea id="amsAnnBody" placeholder="Write the announcement..."></textarea>
+              <button type="submit" class="m-btn-sm">Post Announcement</button>
+            </form>
+            <div id="amsAnnouncementList"></div>
+          </div>
+        </div>
+
+        <!-- NEW: recent activity feed (derived with read-only queries) -->
+        <div class="ams-grid" style="margin-bottom:22px;">
+          <div class="ams-panel ams-col-12">
+            <div class="ams-panel-head">
+              <h3 class="ams-panel-title">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+                Recent Activity
+              </h3>
+            </div>
+            <ul class="ams-feed" id="amsActivityFeed">
+              <li><div class="ams-skeleton" style="height:34px; width:100%;"></div></li>
+            </ul>
+          </div>
+        </div>
+
+        <!-- ======================================================
+             EXISTING: Admin danger zone (unchanged logic & ids).
+             Markup kept; only wrapper classes restyled.
+        ====================================================== -->
+        <div id="adminDangerZone" style="display:none; margin:20px 0; padding:20px; background:#FBEAE6; border:1px solid #8C3B2E; border-radius:16px;">
+          <strong style="color:#8C3B2E; font-family:'Cairo', sans-serif;">Admin: Danger Zone</strong>
+          <p style="font-size:13px; color:#555; margin:6px 0 10px;">
+            This permanently deletes ALL results and ALL student records from the database. Use this only to clear test data before real use.
+          </p>
+          <button type="button" onclick="wipeAllData()" style="background:#8C3B2E; border-color:#8C3B2E; color:#fdf3ef;">Wipe All Results &amp; Students</button>
+        </div>
+
+        <!-- EXISTING: Promote Students (same select id + options + handler) -->
+        <div class="card-section">
+          <h2>Promote Students</h2>
+          <div class="promote-box">
+            <label>Select Current Class</label>
+            <select id="currentClass">
+              <option value="الأوّل التّحضيريّ">الأوّل التّحضيريّ</option>
+              <option value="الثّاني التّحضيريّ">الثّاني التّحضيريّ</option>
+              <option value="الثّالث التّحضيريّ">الثّالث التّحضيريّ</option>
+              <option value="الأوّل الابتدائيّ">الأوّل الابتدائيّ</option>
+              <option value="الثّاني الابتدائيّ">الثّاني الابتدائيّ</option>
+              <option value="الثّالث الابتدائيّ">الثّالث الابتدائيّ</option>
+              <option value="الرّابع الابتدائيّ">الرّابع الابتدائيّ</option>
+              <option value="الأوّل الإعداديّ">الأوّل الإعداديّ</option>
+              <option value="الثّاني الإعداديّ">الثّاني الإعداديّ</option>
+              <option value="الثّالث الإعداديّ">الثّالث الإعداديّ</option>
+              <option value="الأوّل الثّانويّ">الأوّل الثّانويّ</option>
+              <option value="الثّاني الثّانويّ">الثّاني الثّانويّ</option>
+              <option value="الثّالث الثّانويّ">الثّالث الثّانويّ</option>
+            </select>
+
+            <button class="promote-btn" onclick="promoteStudents()">
+              Promote Class
+            </button>
+          </div>
+        </div>
+
+        <!-- ======================================================
+             EXISTING RESULT ENTRY MODULE - READ-ONLY LOGIC.
+             The form below is byte-equivalent in behaviour:
+             same ids, same oninput/onblur/onchange handlers,
+             same buttons. ONLY visual grouping changed.
+        ====================================================== -->
+        <div class="score-card" id="score-entry">
+          <h2>📝 Enter Student Score</h2>
+
+          <div class="section-title">Student Information</div>
+
+          <form id="scoreForm">
+
+            <div class="form-group">
+              <label>Student ID</label>
+              <input type="text" id="studentId" onblur="loadStudent()" required>
+            </div>
+
+            <div class="form-group">
+              <label>Student Name</label>
+              <input type="text" id="studentName" required>
+            </div>
+
+            <div class="form-group">
+              <label>Class</label>
+              <select id="studentClass" required onchange="loadSubjects()">
+                <option value="" disabled selected>Select Class</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label>Session</label>
+              <select id="session" required>
+                <option value="" disabled selected>Select Session</option>
+                <option>2025/2026</option>
+                <option>2026/2027</option>
+                <option>2027/2028</option>
+                <option>2028/2029</option>
+                <option>2029/2030</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label>Term</label>
+              <select id="term" required>
+                <option value="" disabled selected>Select Term</option>
+                <option>1st Term</option>
+                <option>2nd Term</option>
+                <option>3rd Term</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label>Subject</label>
+              <select id="subject" required>
+                <option value="" disabled selected>Select Subject</option>
+              </select>
+            </div>
+
+            <div class="section-title">Assessment Scores</div>
+
+            <div class="form-group">
+              <label>First Test</label>
+              <input type="number" id="firstTest" oninput="calculateScore()">
+            </div>
+
+            <div class="form-group">
+              <label>Second Test</label>
+              <input type="number" id="secondTest" oninput="calculateScore()">
+            </div>
+
+            <div class="form-group">
+              <label>Note</label>
+              <input type="number" id="noteScore" oninput="calculateScore()">
+            </div>
+
+            <div class="form-group">
+              <label>Attendance</label>
+              <input type="number" id="attendanceScore" oninput="calculateScore()">
+            </div>
+
+            <div class="form-group">
+              <label>Exam</label>
+              <input type="number" id="examScore" oninput="calculateScore()">
+            </div>
+
+            <div class="section-title">Result</div>
+
+            <div class="form-group">
+              <label>CA Score</label>
+              <input type="number" id="caScore" readonly>
+            </div>
+
+            <div class="form-group">
+              <label>Total Score</label>
+              <input type="number" id="totalScore" readonly>
+            </div>
+
+            <div class="form-group">
+              <label>Grade</label>
+              <input type="text" id="grade" readonly>
+            </div>
+
+            <button type="button" id="saveScoreBtn" onclick="saveScore()">Save Score</button>
+
+            <button type="button" id="cancelEditBtn" onclick="cancelEdit()" style="display:none; background:#888; margin-left:10px;">Cancel Edit</button>
+          </form>
+        </div>
+
+        <!-- EXISTING: Student Scores loader (same ids / handlers) -->
+        <div class="ams-section-head" style="margin-top:26px;">
+          <h2>Student Scores</h2>
+        </div>
+
+        <div class="card-section" style="display:flex; gap:15px; align-items:center; flex-wrap:wrap;">
+          <input type="text" id="loadStudentId" placeholder="Enter Student ID to load their results">
+          <button type="button" onclick="loadExistingResults()">Load Results</button>
+          <button type="button" onclick="deleteAllResultsForStudent()" style="background:#8C3B2E; border-color:#8C3B2E; color:#fdf3ef;">Delete All Results for this Student</button>
+        </div>
+
+        <!-- NEW: table toolbar (filter + export). It only reads the
+             scoreTable rows - it never modifies result data. -->
+        <div class="ams-table-toolbar" style="margin:0 20px;">
+          <div class="ams-search-wrap">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+            <input type="text" id="amsScoreFilter" placeholder="Filter loaded scores (name, subject, term, grade...)" oninput="amsFilterScoreTable()">
+          </div>
+          <span class="ams-table-count" id="amsScoreCount"></span>
+          <button type="button" class="m-btn-ghost m-btn-sm" onclick="amsExportTableCSV(document.getElementById('scoreTable'), 'student-scores.csv')" style="margin-left:auto;">
+            ⭳ Export to Excel (CSV)
+          </button>
+        </div>
+
+        <!-- EXISTING: results table - same id + same 15 columns -->
+        <div class="ams-table-scroll" style="margin:0 20px 40px;">
+          <table id="scoreTable">
+            <tr>
+              <th>ID</th>
+              <th>Name</th>
+              <th>Class</th>
+              <th>Term</th>
+              <th>Subject</th>
+              <th>First Test</th>
+              <th>Second Test</th>
+              <th>Note</th>
+              <th>Attendance</th>
+              <th>CA</th>
+              <th>Exam</th>
+              <th>Total</th>
+              <th>Grade</th>
+              <th>Edit</th>
+              <th>Action</th>
+            </tr>
+          </table>
+        </div>
+
+      </div>
+    </main>
+  </div>
+
+  <!-- Scripts: ui.js (new helpers), then the ORIGINAL app.js +
+       subject.js untouched, then dashboard.js (new widgets). -->
+  <script src="js/ui.js"></script>
+  <script src="js/app.js"></script>
+  <script src="js/subject.js"></script>
+  <script src="js/dashboard.js"></script>
+</body>
+</html>

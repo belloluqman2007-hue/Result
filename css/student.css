@@ -1,0 +1,106 @@
+/* ===============================
+   ADD STUDENT PAGE
+================================*/
+
+.student-page{
+    min-height:100vh;
+    padding:40px;
+    background:linear-gradient(135deg,#edf8f0,#dff5e4);
+}
+.school-logo{
+  width:200px;
+}
+.student-header{
+    background:linear-gradient(135deg,var(--primary),var(--secondary));
+    color:var(--gold-pale);
+    text-align:center;
+    padding:28px 24px;
+}
+.student-header h2{
+    color:var(--gold-pale);
+    font-size:30px;
+    margin-bottom:8px;
+}
+
+.student-header p{color:var(--gold-pale);font-size:15px;opacity:.95}
+.student-header h2{
+    color:white;
+    font-size:34px;
+    margin-bottom:10px;
+}
+
+.student-header p{
+    color:#f3f3f3;
+    font-size:17px;
+}
+
+.student-body{
+    display:grid;
+    grid-template-columns:280px 1fr;
+    gap:35px;
+    padding:35px;
+}
+
+.passport-box{
+    text-align:center;
+}
+
+.student-passport{
+    width:170px;
+    height:210px;
+    object-fit:cover;
+    border-radius:12px;
+    border:5px solid var(--secondary);
+    box-shadow:0 12px 30px rgba(15,61,46,0.14);
+}
+
+#photo{margin-top:16px;width:100%;padding:12px;border:2px dashed var(--secondary);border-radius:12px;background:var(--parchment-deep)}
+
+.student-form{
+    display:grid;
+    grid-template-columns:repeat(2,1fr);
+    gap:22px;
+}
+
+.input-group{
+    display:flex;
+    flex-direction:column;
+}
+
+.input-group label{
+    font-weight:bold;
+    color:#2E7D32;
+    margin-bottom:8px;
+}
+
+.input-group input,.input-group select{padding:12px;border:1.5px solid var(--border);border-radius:10px;background:#fff;transition:.2s}
+
+.input-group input:focus,.input-group select:focus{border-color:var(--primary);background:#fff;box-shadow:0 8px 22px rgba(15,61,46,0.08)}
+
+.full-width{
+    grid-column:1/-1;
+}
+
+.save-btn{grid-column:1/-1;padding:14px;font-size:16px;font-weight:800;color:var(--gold-pale);border:none;border-radius:12px;background:linear-gradient(90deg,var(--primary),var(--secondary));transition:.25s}
+.save-btn:hover{transform:translateY(-3px);box-shadow:0 16px 36px rgba(15,61,46,0.12)}
+
+@media(max-width:850px){
+
+.student-body{
+    grid-template-columns:1fr;
+}
+
+.student-form{
+    grid-template-columns:1fr;
+}
+
+.student-passport{
+    width:160px;
+    height:190px;
+}
+
+.student-header h2{
+    font-size:26px;
+}
+
+}

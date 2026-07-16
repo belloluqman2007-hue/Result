@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Student ID Card | Ameenullah School of Arabic and Islamic Studies</title>
+  <link rel="stylesheet" href="css/style.css">
+  <!-- NEW: modern visual upgrade layer (between legacy base + page css) -->
+  <link rel="stylesheet" href="css/modern-ui.css">
+  <link rel="stylesheet" href="css/idcard.css">
+</head>
+<body onload="checkAuth();">
+  <main class="page">
+    <section class="controls search-container">
+      <a href="teacher-dashboard.html">&larr; Back to Dashboard</a>
+      <h2>Create ID Card</h2>
+
+      <form id="dataForm">
+        <label>School Name</label>
+        <input type="text" id="school" placeholder="School Name" value="AMEENULLAH SCHOOL OF ARABIC AND ISLAMIC STUDIES">
+
+        <label>Student Name</label>
+        <input type="text" id="name" placeholder="Student Name">
+
+        <label>Student ID</label>
+        <input type="text" id="reg" placeholder="e.g. AM0001">
+
+        <label>Class</label>
+        <input type="text" id="cls" placeholder="e.g. الأوّل الثّانويّ">
+
+        <label>Issue Date</label>
+        <input type="date" id="issue">
+
+        <label class="photoLabel">Photo <input type="file" id="photo" accept="image/*"></label>
+
+        <label class="checkboxLabel">
+          <input type="checkbox" id="flipPhoto"> Flip photo horizontally
+        </label>
+
+        <div class="buttons">
+          <button type="button" id="apply">Apply to Card</button>
+          <button type="button" id="print">Print Card</button>
+        </div>
+      </form>
+      <p class="hint">Fill in the details, upload a photo, then click <strong>Apply to Card</strong>. Click the card itself to flip it and preview the back.</p>
+    </section>
+
+    <section class="preview">
+      <div class="card" id="card">
+        <div class="card-inner">
+
+          <div class="card-front">
+            <div class="brand"><span id="schoolName">AMEENULLAH SCHOOL OF ARABIC AND ISLAMIC STUDIES</span></div>
+
+            <div class="photo" id="photoPreview"><img id="photoImg" alt="Student photo"></div>
+
+            <div class="details">
+              <h2 id="studentName">Student Name</h2>
+              <p class="meta"><strong>ID:</strong> <span id="regNo">-</span></p>
+              <p class="meta"><strong>Class:</strong> <span id="class">-</span></p>
+            </div>
+
+            <div class="footer">
+              <div class="issued"><small>Issued</small><strong id="issueDate">-</strong></div>
+              <div class="qr">ID</div>
+            </div>
+          </div>
+
+          <div class="card-back">
+            <h3>Contact &amp; Info</h3>
+            <p>3, Temidire street, Off Ondo Road, Ijeb-Ode, Ogun State.</p>
+            <p>Tel: 08062445559, 08058306889</p>
+            <p class="small">This card remains the property of the school. If found, please return to the address above.</p>
+          </div>
+
+        </div>
+      </div>
+
+      <p class="flip-hint">Tap the card to flip</p>
+    </section>
+  </main>
+
+  <!-- NEW: shared UI helpers (toasts, dark mode) - additive -->
+  <script src="js/ui.js"></script>
+  <script src="js/app.js"></script>
+  <script src="js/idcard.js"></script>
+</body>
+</html>

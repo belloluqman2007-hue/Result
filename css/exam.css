@@ -1,0 +1,498 @@
+/* ==========================================
+   EXAM CREATOR
+   Cover page prints as classic black-on-white
+   letterhead (for cheap bulk photocopying).
+   The editing chrome uses our brand colors.
+========================================== */
+
+body{
+  background:var(--parchment-deep);
+}
+
+.exam-toolbar-outer{
+  position:sticky;
+  top:0;
+  z-index:50;
+  background:#fff;
+  border-bottom:5px solid var(--emerald);
+  box-shadow:0 4px 14px rgba(0,0,0,.08);
+}
+
+.exam-meta-bar{
+  display:flex;
+  flex-wrap:wrap;
+  gap:14px;
+  align-items:flex-end;
+  padding:12px 16px;
+}
+
+.meta-field{
+  display:flex;
+  flex-direction:column;
+  min-width:150px;
+}
+
+.meta-field label{
+  font-size:11px;
+  font-weight:700;
+  color:var(--emerald);
+  margin-bottom:4px;
+  text-transform:uppercase;
+  letter-spacing:.4px;
+}
+
+.meta-field input,
+.meta-field select{
+  padding:8px 10px;
+  border-radius:4px;
+  font-size:13px;
+}
+
+.meta-actions{
+  justify-content:flex-end;
+}
+
+.exam-actions-bar{
+  display:flex;
+  gap:10px;
+  padding:0 16px 12px;
+  flex-wrap:wrap;
+}
+
+.exam-actions-bar button{
+  padding:9px 16px;
+  font-size:12px;
+}
+
+.exam-format-toolbar{
+  display:flex;
+  align-items:center;
+  gap:6px;
+  padding:8px 16px;
+  background:var(--parchment-deep);
+  flex-wrap:wrap;
+  border-top:1px solid var(--line);
+}
+
+.exam-format-toolbar button{
+  padding:6px 10px;
+  font-size:12px;
+  min-width:32px;
+}
+
+.exam-format-toolbar select{
+  padding:6px 8px;
+  font-size:12px;
+  border-radius:4px;
+}
+
+.exam-format-toolbar .divider{
+  width:1px;
+  height:22px;
+  background:var(--line);
+  margin:0 4px;
+}
+
+#voiceBtn.recording{
+  background:var(--brick);
+  border-color:var(--brick);
+  color:#fff;
+  animation:pulse 1.2s infinite;
+}
+
+@keyframes pulse{
+  0%,100%{ opacity:1; }
+  50%{ opacity:.6; }
+}
+
+.harakat-palette{
+  display:flex;
+  align-items:center;
+  gap:4px;
+  padding:8px 16px;
+  background:#fff;
+  border-top:1px solid var(--line);
+  flex-wrap:wrap;
+}
+
+.harakat-label{
+  font-size:11px;
+  font-weight:700;
+  color:var(--emerald);
+  margin-right:6px;
+}
+
+.harakat-palette button{
+  background:var(--parchment-deep);
+  color:var(--emerald);
+  border:1px solid var(--line);
+  font-size:18px;
+  font-family:'Amiri', serif;
+  padding:4px 12px;
+  min-width:36px;
+}
+
+.harakat-palette button:hover{
+  background:var(--gold-pale);
+}
+
+/* ==========================================
+   THE PAGES
+========================================== */
+.exam-pages{
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  gap:24px;
+  padding:30px 16px 60px;
+}
+
+.exam-page{
+  width:210mm;
+  min-height:297mm;
+  max-width:100%;
+  background:#fff;
+  box-shadow:0 10px 30px rgba(0,0,0,.15);
+  padding:18mm 16mm;
+  box-sizing:border-box;
+  color:#000;
+  font-family:'Amiri', 'Cairo', serif;
+}
+
+/* ===== Cover page (page 1) ===== */
+.cover-page{
+  display:flex;
+  flex-direction:column;
+  justify-content:space-between;
+  align-items:stretch;
+  text-align:center;
+  position:relative;
+}
+
+.cover-page::before{
+  content:"";
+  position:absolute;
+  top:8mm;
+  left:8mm;
+  right:8mm;
+  bottom:8mm;
+  border:10px double #000;
+  border-radius: 5px;
+  pointer-events:none;
+}
+
+.cover-page > *{
+  width:100%;
+}
+
+.bismillah{
+  font-family:'Amiri', serif;
+  font-size:20px;
+  margin-bottom:10px;
+}
+
+.cover-logo{
+  width:100px;
+  height:100px;
+  object-fit:cover;
+  border-radius:50%;
+  margin-bottom:10px;
+}
+
+.cover-arabic-name{
+  font-family:'Amiri', serif;
+  font-size:35px;
+  font-weight:1000;
+  margin-bottom:4px;
+  letter-spacing: 10px;
+}
+
+.cover-english-name{
+  font-family:'Cairo', sans-serif;
+  font-size:25px;
+  font-weight:700;
+  letter-spacing:.3px;
+  margin-bottom:12px;
+}
+
+.cover-divider{
+  height:6px;
+  background:#000;
+  margin:10px auto 14px;
+  width:100%;
+}
+
+.cover-address,
+.cover-contact{
+  font-family:'Cairo', sans-serif;
+  font-size:20px;
+  font-weight:700;
+  margin-bottom:4px;
+}
+
+.cover-contact a{
+  color:#000;
+  text-decoration:underline;
+}
+
+.cover-motto{
+  font-family:'Cairo', sans-serif, 'Amiri';
+  font-size:14px;
+  font-weight:700;
+  margin:12px 0;
+}
+
+.cover-exam-period{
+  font-family:'Amiri', serif;
+  font-size:25px;
+  font-weight:700;
+  margin:14px 0 20px;
+}
+
+.cover-info-table{
+  width:100%;
+  border-collapse:collapse;
+  margin-bottom:22px;
+  direction:rtl;
+}
+
+.cover-info-table td{
+  padding:8px 4px;
+  font-size:20px;
+  font-family:'Amiri', serif;
+  font-weight:700;
+  border:none;
+  text-align:right;
+  line-height: 2.5;
+}
+
+.cover-info-table .label{
+  white-space:nowrap;
+  width:1%;
+}
+
+.cover-info-table .value{
+  text-align:right;
+}
+
+.cover-info-table .blank-line{
+  border-bottom:1.5px solid #000;
+}
+
+.cover-info-table .blank-line-short{
+  border-bottom:1.5px solid #000;
+  width:120px;
+}
+
+.cover-instructions{
+  text-align:right;
+  direction:rtl;
+  margin-bottom:26px;
+  font-family:'Amiri', serif;
+  outline:none;
+}
+
+.instructions-title{
+  font-weight:700;
+  font-size:20px;
+  margin-bottom:8px;
+}
+
+.cover-instructions ol{
+  padding-right:22px;
+  font-size:18px;
+  line-height:2.5;
+}
+
+.cover-wish{
+  font-family:'Cairo', sans-serif;
+  font-size:11px;
+  text-align:left;
+  margin-top:30px;
+}
+
+.cover-code{
+  font-family:'Cairo', sans-serif;
+  font-size:11px;
+  text-align:center;
+  margin-top:8px;
+  color:#555;
+}
+
+/* ===== Body pages ===== */
+.body-page{
+  padding:20mm 18mm;
+}
+
+.exam-body{
+  min-height:250mm;
+  outline:none;
+  font-family:'Amiri', 'Cairo', serif;
+  font-size:15px;
+  line-height:1.9;
+}
+
+.exam-body p,
+.exam-body li{
+  margin-bottom:10px;
+}
+
+.exam-body.spacing-compact{
+  line-height:1.4;
+  font-size:14px;
+}
+.exam-body.spacing-compact p,
+.exam-body.spacing-compact li{
+  margin-bottom:4px;
+}
+
+.exam-body.spacing-normal{
+  line-height:1.9;
+  font-size:15px;
+}
+.exam-body.spacing-normal p,
+.exam-body.spacing-normal li{
+  margin-bottom:10px;
+}
+
+.exam-body.spacing-relaxed{
+  line-height:2.4;
+  font-size:16px;
+}
+.exam-body.spacing-relaxed p,
+.exam-body.spacing-relaxed li{
+  margin-bottom:20px;
+}
+
+.exam-body.spacing-spacious{
+  line-height:3.2;
+  font-size:17px;
+}
+.exam-body.spacing-spacious p,
+.exam-body.spacing-spacious li{
+  margin-bottom:34px;
+}
+
+.toolbar-label{
+  font-size:11px;
+  font-weight:700;
+  color:var(--emerald);
+}
+
+.exam-body table{
+  width:100%;
+  border-collapse:collapse;
+  margin:14px 0;
+}
+
+.exam-body table td,
+.exam-body table th{
+  border:1px solid #000;
+  padding:8px;
+}
+
+.exam-body[dir="ltr"]{
+  text-align:left;
+}
+
+.exam-body[dir="rtl"]{
+  text-align:right;
+}
+
+.page-break{
+  page-break-before:always;
+  break-before:page;
+  border-top:2px dashed var(--line);
+  margin:30px 0;
+  padding-top:1px;
+}
+
+/* ==========================================
+   LOAD SAVED EXAM PANEL
+========================================== */
+.load-panel-overlay{
+  position:fixed;
+  inset:0;
+  background:rgba(15,61,46,.55);
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  z-index:100;
+}
+
+.load-panel{
+  background:#fff;
+  border-radius:8px;
+  padding:26px;
+  width:600px;
+  max-width:92%;
+  max-height:80vh;
+  overflow-y:auto;
+  position:relative;
+  box-shadow:var(--shadow-lift);
+}
+
+.load-panel h3{
+  margin-bottom:16px;
+}
+
+.load-panel .close-btn{
+  position:absolute;
+  top:20px;
+  right:20px;
+  background:var(--brick);
+  border-color:var(--brick);
+  padding:6px 14px;
+  font-size:11px;
+}
+
+/* ==========================================
+   PRINT
+========================================== */
+@media print{
+  @page{
+    size:A4 portrait;
+    margin:0;
+  }
+
+  *{
+    -webkit-print-color-adjust:exact;
+    print-color-adjust:exact;
+  }
+
+  html, body{
+    background:#fff !important;
+    margin:0 !important;
+    padding:0 !important;
+    height:auto !important;
+  }
+
+  body > *:not(.exam-pages){
+    display:none !important;
+  }
+
+  .exam-pages{
+    display:block !important;
+    padding:0 !important;
+    gap:0 !important;
+  }
+
+  .exam-page{
+    display:block !important;
+    box-shadow:none !important;
+    width:210mm !important;
+    min-height:297mm !important;
+    margin:0 !important;
+    page-break-after:always;
+    break-after:page;
+  }
+
+  .exam-page:last-child{
+    page-break-after:auto;
+    break-after:auto;
+  }
+
+  .load-panel-overlay{
+    display:none !important;
+  }
+}

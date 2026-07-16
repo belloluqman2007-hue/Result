@@ -1,0 +1,1658 @@
+/* ==========================================================
+   MODERN UI LAYER  (css/modern-ui.css)  [NEW FILE - ADDITIVE]
+   ----------------------------------------------------------
+   Purpose: Progressive visual upgrade for the whole system.
+   This file NEVER overrides result calculations or the print
+   layout. It is loaded AFTER css/style.css on every page so
+   all equal-specificity rules here win, while page-specific
+   sheets (exam.css / idcard.css) still load after it and keep
+   working exactly as before.
+
+   Safety notes:
+   - The report card (.report-container) and @media print rules
+     from style.css are intentionally untouched. In dark mode a
+     dedicated "report guard" near the bottom forces the report
+     card to stay light so print/PDF output is IDENTICAL.
+   - All new UI components use the .m-/feature class names so
+     they can't collide with legacy markup.
+========================================================== */
+
+/* ---------- 1. Design tokens (modern palette, additive) ---------- */
+:root{
+  /* Brand stays emerald + jade + cream (matches legacy variables) */
+  --m-emerald:#0F3D2E;
+  --m-emerald-2:#1C5A42;
+  --m-emerald-3:#2C7A57;
+  --m-jade:#2F9E6E;
+  --m-jade-bright:#3FB37E;
+  --m-jade-pale:#D8EEE2;
+  --m-brick:#8C3B2E;
+
+  /* Modern surfaces */
+  --m-bg:#F2F8F5;
+  --m-surface:#FFFFFF;
+  --m-surface-2:#F6FAF8;
+  --m-border:#D9E8E0;
+  --m-text:#21201C;
+  --m-muted:#5F6E66;
+
+  /* Radii + shadows */
+  --m-radius-sm:10px;
+  --m-radius:16px;
+  --m-radius-lg:20px;
+  --m-shadow-1:0 2px 6px rgba(15,61,46,.06), 0 1px 2px rgba(15,61,46,.04);
+  --m-shadow-2:0 12px 32px rgba(15,61,46,.10);
+  --m-shadow-3:0 24px 60px rgba(15,61,46,.16);
+
+  /* Motion */
+  --m-ease:cubic-bezier(.22,.61,.36,1);
+  --m-speed:.22s;
+}
+
+/* ---------- 2. Base polish ---------- */
+*{
+  -webkit-tap-highlight-color:transparent;
+}
+
+::selection{
+  background:var(--m-jade-pale);
+  color:var(--m-emerald);
+}
+
+/* Slimmer, on-brand scrollbars (purely cosmetic) */
+*::-webkit-scrollbar{ width:10px; height:10px; }
+*::-webkit-scrollbar-thumb{
+  background:#BFD9CB;
+  border-radius:8px;
+  border:2px solid transparent;
+  background-clip:content-box;
+}
+*::-webkit-scrollbar-thumb:hover{ background:#9CC3AE; }
+*::-webkit-scrollbar-track{ background:transparent; }
+
+/* ---------- 3. Modern buttons ----------
+   Upgrades the global legacy `button` rule (style.css) because
+   this file loads later with equal specificity. Content, ids and
+   handlers are unchanged - only the look. */
+button{
+  background:linear-gradient(135deg,var(--m-emerald),var(--m-emerald-2));
+  border:1px solid transparent;
+  border-radius:var(--m-radius-sm);
+  color:#F2F9F4;
+  padding:11px 20px;
+  font-size:13.5px;
+  font-weight:700;
+  letter-spacing:.2px;
+  text-transform:none;
+  box-shadow:var(--m-shadow-1);
+  transition:transform var(--m-speed) var(--m-ease),
+             box-shadow var(--m-speed) var(--m-ease),
+             background var(--m-speed) var(--m-ease),
+             filter var(--m-speed) var(--m-ease);
+}
+
+button:hover{
+  background:linear-gradient(135deg,var(--m-emerald-2),var(--m-emerald-3));
+  color:#fff;
+  transform:translateY(-1px);
+  box-shadow:var(--m-shadow-2);
+}
+
+button:active{
+  transform:translateY(0);
+  box-shadow:var(--m-shadow-1);
+  filter:brightness(.97);
+}
+
+/* Modern secondary / ghost / danger variants for NEW UI only */
+.m-btn-ghost{
+  background:var(--m-surface);
+  color:var(--m-emerald) !important;
+  border:1.5px solid var(--m-border);
+  box-shadow:none;
+}
+.m-btn-ghost:hover{
+  background:var(--m-jade-pale);
+  color:var(--m-emerald) !important;
+  border-color:var(--m-jade);
+}
+.m-btn-danger{
+  background:linear-gradient(135deg,#8C3B2E,#A94A3A) !important;
+  border:1px solid transparent !important;
+  color:#FDF3EF !important;
+}
+.m-btn-danger:hover{
+  background:linear-gradient(135deg,#A94A3A,#C05B4B) !important;
+  color:#fff !important;
+}
+.m-btn-sm{
+  padding:7px 13px;
+  font-size:12.5px;
+  border-radius:8px;
+}
+
+/* ---------- 4. Modern inputs (visual only, screen-only) ---------- */
+@media screen{
+input, select, textarea{
+  border:1.5px solid var(--m-border);
+  border-radius:var(--m-radius-sm);
+  transition:border-color var(--m-speed) var(--m-ease),
+             box-shadow var(--m-speed) var(--m-ease),
+             background var(--m-speed) var(--m-ease);
+}
+
+input:focus, select:focus, textarea:focus{
+  border-color:var(--m-jade);
+  outline:none;
+  box-shadow:0 0 0 4px rgba(47,158,110,.14);
+}
+}
+
+/* ---------- 5. Legacy "document cards" -> clean modern cards ----------
+   Turns the gold-outlined manuscript frames into modern rounded
+   cards. Applies to login box, search containers and sections
+   across every page. Structure/content unchanged.
+   SCREEN-ONLY so printed documents keep their original styling. */
+@media screen{
+.login-box,
+.search-container,
+.card-section,
+.score-card{
+  outline:none !important;
+  border:1px solid var(--m-border) !important;
+  border-radius:var(--m-radius-lg) !important;
+  box-shadow:var(--m-shadow-2) !important;
+  animation:mFadeUp .45s var(--m-ease) both;
+}
+
+/* Remove the corner "diamond seal" markers for a cleaner look */
+.login-box::before,
+.search-container::before,
+.score-card::before{
+  content:none !important;
+}
+}
+
+/* Report card: on SCREEN we may soften corners, but the PRINTED
+   result sheet must look EXACTLY as before - so any visual tweak
+   here is wrapped in @media screen and cannot affect printing. */
+@media screen{
+  .report-container{
+    outline:none !important;
+    border-radius:var(--m-radius) !important;
+  }
+}
+
+/* ---------- 6. Summary cards (dashboard legacy `.card`) ---------- */
+@media screen{
+.card{
+  border-radius:var(--m-radius) !important;
+  border-top:none !important;
+  box-shadow:var(--m-shadow-2) !important;
+  position:relative;
+  overflow:hidden;
+  transition:transform var(--m-speed) var(--m-ease), box-shadow var(--m-speed) var(--m-ease);
+}
+.card:hover{
+  transform:translateY(-3px);
+  box-shadow:var(--m-shadow-3) !important;
+}
+}
+
+/* ---------- 7. Tables (NOT the report table) ----------
+   #resultTable + print layout stay exactly as style.css defines.
+   SCREEN-ONLY: at print time legacy style.css rules alone apply,
+   so printed report/exam tables are 100% unchanged. */
+@media screen{
+table:not(#resultTable){
+  border-collapse:separate;
+  border-spacing:0;
+}
+
+table:not(#resultTable) th{
+  background:linear-gradient(135deg,var(--m-emerald),var(--m-emerald-2));
+  border:none;
+  padding:12px 10px;
+  position:sticky;
+  top:0;
+  z-index:2;
+}
+
+table:not(#resultTable) td{
+  border:none;
+  border-bottom:1px solid var(--m-border);
+}
+
+table:not(#resultTable) tr:last-child td{
+  border-bottom:none;
+}
+
+table:not(#resultTable) tr:nth-child(even){
+  background:var(--m-surface-2);
+}
+}
+
+/* ---------- 8. Entrance animations ---------- */
+@keyframes mFadeUp{
+  from{ opacity:0; transform:translateY(14px); }
+  to{ opacity:1; transform:translateY(0); }
+}
+@keyframes mFadeIn{
+  from{ opacity:0; }
+  to{ opacity:1; }
+}
+@keyframes mPopIn{
+  0%{ opacity:0; transform:scale(.94) translateY(8px); }
+  100%{ opacity:1; transform:scale(1) translateY(0); }
+}
+@keyframes mShimmer{
+  from{ background-position:200% 0; }
+  to{ background-position:-200% 0; }
+}
+@keyframes mSpin{
+  to{ transform:rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce){
+  *, *::before, *::after{
+    animation-duration:.01ms !important;
+    animation-iteration-count:1 !important;
+    transition-duration:.01ms !important;
+  }
+}
+
+/* ==========================================================
+   9. TOAST NOTIFICATIONS  (JsToast system in js/ui.js)
+========================================================== */
+#ams-toast-root{
+  position:fixed;
+  bottom:22px;
+  right:22px;
+  display:flex;
+  flex-direction:column;
+  gap:10px;
+  z-index:99999;
+  max-width:min(380px, calc(100vw - 44px));
+}
+
+.ams-toast{
+  display:flex;
+  align-items:flex-start;
+  gap:11px;
+  background:var(--m-surface);
+  color:var(--m-text);
+  border:1px solid var(--m-border);
+  border-left:4px solid var(--m-jade);
+  border-radius:14px;
+  padding:13px 16px;
+  box-shadow:var(--m-shadow-3);
+  font-family:'Cairo',sans-serif;
+  font-size:14px;
+  line-height:1.45;
+  animation:mPopIn .3s var(--m-ease) both;
+  white-space:pre-line; /* keeps multi-line alert text readable */
+}
+
+.ams-toast .ams-toast-icon{
+  flex-shrink:0;
+  width:20px;
+  height:20px;
+  margin-top:1px;
+}
+.ams-toast.ams-toast-success{ border-left-color:var(--m-jade); }
+.ams-toast.ams-toast-success .ams-toast-icon{ color:var(--m-jade); }
+.ams-toast.ams-toast-error{ border-left-color:#C0392B; }
+.ams-toast.ams-toast-error .ams-toast-icon{ color:#C0392B; }
+.ams-toast.ams-toast-info{ border-left-color:#2563EB; }
+.ams-toast.ams-toast-info .ams-toast-icon{ color:#2563EB; }
+
+.ams-toast.ams-toast-leaving{
+  transition:opacity .28s var(--m-ease), transform .28s var(--m-ease);
+  opacity:0;
+  transform:translateX(18px);
+}
+
+/* ==========================================================
+   10. CONFIRMATION MODAL  (used by NEW features only)
+========================================================== */
+.ams-modal-overlay{
+  position:fixed;
+  inset:0;
+  background:rgba(15,61,46,.45);
+  backdrop-filter:blur(4px);
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  z-index:99998;
+  animation:mFadeIn .2s var(--m-ease) both;
+  padding:18px;
+}
+
+.ams-modal{
+  background:var(--m-surface);
+  color:var(--m-text);
+  border-radius:var(--m-radius-lg);
+  border:1px solid var(--m-border);
+  box-shadow:var(--m-shadow-3);
+  width:min(440px,100%);
+  padding:26px;
+  animation:mPopIn .25s var(--m-ease) both;
+}
+
+.ams-modal h3{
+  font-family:'Cairo',sans-serif;
+  font-size:18px;
+  margin-bottom:8px;
+}
+.ams-modal p{
+  font-size:14.5px;
+  color:var(--m-muted);
+  line-height:1.55;
+  margin-bottom:20px;
+  white-space:pre-line;
+}
+.ams-modal .ams-modal-actions{
+  display:flex;
+  justify-content:flex-end;
+  gap:10px;
+}
+
+/* ==========================================================
+   11. Loading / skeleton / spinner / empty states
+========================================================== */
+.ams-skeleton{
+  border-radius:12px;
+  background:linear-gradient(90deg,#E7F1EB 25%,#F4FAF7 45%,#E7F1EB 65%);
+  background-size:200% 100%;
+  animation:mShimmer 1.3s linear infinite;
+  min-height:16px;
+}
+
+.ams-spinner{
+  width:22px;
+  height:22px;
+  border-radius:50%;
+  border:3px solid var(--m-jade-pale);
+  border-top-color:var(--m-jade);
+  animation:mSpin .7s linear infinite;
+  display:inline-block;
+  vertical-align:middle;
+}
+
+.ams-empty{
+  text-align:center;
+  padding:36px 20px;
+  color:var(--m-muted);
+  font-family:'Cairo',sans-serif;
+}
+.ams-empty svg{
+  width:74px;
+  height:74px;
+  opacity:.5;
+  margin-bottom:12px;
+}
+.ams-empty h4{
+  color:var(--m-emerald);
+  font-family:'Cairo',sans-serif;
+  font-size:16px;
+  margin-bottom:4px;
+}
+.ams-empty p{ font-size:13.5px; }
+
+/* ==========================================================
+   12. APP SHELL (sidebar + topbar) - dashboard & directory
+========================================================== */
+.ams-shell{
+  display:flex;
+  min-height:100vh;
+}
+
+.ams-sidebar{
+  width:264px;
+  flex-shrink:0;
+  background:linear-gradient(180deg,var(--m-emerald) 0%,var(--m-emerald-2) 70%,#17492F 100%);
+  color:#EAF6EF;
+  display:flex;
+  flex-direction:column;
+  position:sticky;
+  top:0;
+  height:100vh;
+  overflow-y:auto;
+  z-index:50;
+  transition:margin-left .28s var(--m-ease);
+}
+
+.ams-side-brand{
+  display:flex;
+  align-items:center;
+  gap:12px;
+  padding:20px 18px 16px;
+  border-bottom:1px solid rgba(255,255,255,.12);
+}
+.ams-side-brand img{
+  width:46px;
+  height:46px;
+  border-radius:50%;
+  background:#fff;
+  padding:2px;
+  border:2px solid var(--m-jade-bright);
+  object-fit:cover;
+}
+.ams-side-brand .ams-school-name{
+  font-size:12.5px;
+  font-weight:700;
+  line-height:1.35;
+  letter-spacing:.2px;
+  color:#fff;
+}
+.ams-side-brand .ams-school-sub{
+  font-size:11px;
+  color:var(--m-jade-pale);
+  opacity:.9;
+}
+
+.ams-side-nav{
+  display:flex;
+  flex-direction:column;
+  gap:4px;
+  padding:14px 12px;
+  flex:1;
+}
+.ams-side-nav .ams-nav-label{
+  font-size:10.5px;
+  text-transform:uppercase;
+  letter-spacing:1.1px;
+  color:#9CC3AE;
+  padding:12px 12px 6px;
+  font-weight:700;
+}
+.ams-side-nav a{
+  display:flex;
+  align-items:center;
+  gap:11px;
+  padding:11px 12px;
+  border-radius:10px;
+  color:#DDEEE4;
+  font-family:'Cairo',sans-serif;
+  font-size:13.8px;
+  font-weight:600;
+  transition:background var(--m-speed) var(--m-ease), color var(--m-speed);
+  margin-left:0;
+}
+.ams-side-nav a svg{
+  width:18px;
+  height:18px;
+  flex-shrink:0;
+  opacity:.9;
+}
+.ams-side-nav a:hover{
+  background:rgba(255,255,255,.10);
+  color:#fff;
+}
+.ams-side-nav a.ams-active{
+  background:linear-gradient(135deg,var(--m-jade),var(--m-jade-bright));
+  color:#fff;
+  box-shadow:0 6px 16px rgba(0,0,0,.22);
+}
+.ams-side-footer{
+  padding:14px;
+  border-top:1px solid rgba(255,255,255,.12);
+}
+.ams-side-footer .ams-user-chip{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  margin-bottom:10px;
+}
+.ams-avatar{
+  width:38px;
+  height:38px;
+  border-radius:50%;
+  background:rgba(255,255,255,.16);
+  border:1.5px solid var(--m-jade-bright);
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  font-weight:800;
+  font-size:15px;
+  color:#fff;
+  font-family:'Cairo',sans-serif;
+}
+.ams-side-footer .ams-user-name{
+  font-size:13px;
+  font-weight:700;
+  color:#fff;
+  line-height:1.2;
+}
+.ams-side-footer .ams-user-role{
+  font-size:11px;
+  color:#9CC3AE;
+}
+.ams-side-footer button{
+  width:100%;
+  margin-top:0;
+}
+
+.ams-main{
+  flex:1;
+  min-width:0;
+  display:flex;
+  flex-direction:column;
+}
+
+/* Topbar */
+.ams-topbar{
+  position:sticky;
+  top:0;
+  z-index:40;
+  display:flex;
+  align-items:center;
+  gap:14px;
+  padding:13px clamp(16px,3vw,30px);
+  background:rgba(255,255,255,.85);
+  backdrop-filter:blur(12px);
+  border-bottom:1px solid var(--m-border);
+}
+.ams-topbar .ams-page-title{
+  font-family:'Cairo',sans-serif;
+  font-size:17px;
+  font-weight:800;
+  color:var(--m-emerald);
+}
+.ams-topbar .ams-topbar-right{
+  margin-left:auto;
+  display:flex;
+  align-items:center;
+  gap:14px;
+}
+.ams-clock{
+  font-family:'IBM Plex Mono',monospace;
+  font-size:13px;
+  color:var(--m-muted);
+  text-align:right;
+  line-height:1.25;
+}
+.ams-clock strong{
+  color:var(--m-emerald);
+  display:block;
+  font-size:13.5px;
+}
+.ams-icon-btn{
+  background:var(--m-surface);
+  border:1.5px solid var(--m-border);
+  color:var(--m-emerald);
+  width:40px;
+  height:40px;
+  border-radius:12px;
+  padding:0;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  box-shadow:none;
+}
+.ams-icon-btn:hover{
+  background:var(--m-jade-pale);
+  color:var(--m-emerald);
+  transform:none;
+  box-shadow:none;
+}
+.ams-icon-btn svg{ width:19px; height:19px; }
+
+.ams-hamburger{ display:none; }
+
+.ams-page-pad{
+  padding:24px clamp(16px,3vw,34px) 60px;
+  width:100%;
+  max-width:1460px;
+  margin:0 auto;
+}
+
+/* Greeting banner */
+.ams-greeting{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:16px;
+  flex-wrap:wrap;
+  margin-bottom:22px;
+  animation:mFadeUp .4s var(--m-ease) both;
+}
+.ams-greeting h1{
+  font-family:'Cairo',sans-serif;
+  font-size:clamp(20px,2.6vw,27px);
+  color:var(--m-emerald);
+  font-weight:800;
+}
+.ams-greeting p{
+  color:var(--m-muted);
+  font-size:14px;
+  margin-top:2px;
+}
+
+/* ==========================================================
+   13. Stat cards / dashboard grid / panels (NEW components)
+========================================================== */
+.ams-stat-grid{
+  display:grid;
+  grid-template-columns:repeat(auto-fit,minmax(168px,1fr));
+  gap:16px;
+  margin-bottom:22px;
+}
+.ams-stat{
+  background:var(--m-surface);
+  border:1px solid var(--m-border);
+  border-radius:var(--m-radius);
+  padding:17px 18px;
+  display:flex;
+  align-items:center;
+  gap:14px;
+  box-shadow:var(--m-shadow-1);
+  transition:transform var(--m-speed) var(--m-ease), box-shadow var(--m-speed) var(--m-ease);
+  animation:mFadeUp .45s var(--m-ease) both;
+  position:relative;
+  overflow:hidden;
+}
+.ams-stat:hover{
+  transform:translateY(-3px);
+  box-shadow:var(--m-shadow-2);
+}
+.ams-stat .ams-stat-icon{
+  width:46px;
+  height:46px;
+  border-radius:13px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  flex-shrink:0;
+  color:#fff;
+}
+.ams-stat .ams-stat-icon svg{ width:22px; height:22px; }
+.ams-stat .ams-stat-value{
+  font-family:'IBM Plex Mono',monospace;
+  font-size:24px;
+  font-weight:600;
+  color:var(--m-emerald);
+  line-height:1.1;
+}
+.ams-stat .ams-stat-label{
+  font-size:12px;
+  font-weight:700;
+  text-transform:uppercase;
+  letter-spacing:.5px;
+  color:var(--m-muted);
+  font-family:'Cairo',sans-serif;
+}
+
+/* Gradient icon chip variants */
+.ams-chip-emerald{ background:linear-gradient(135deg,#1C5A42,#2C7A57); }
+.ams-chip-jade{ background:linear-gradient(135deg,#2F9E6E,#3FB37E); }
+.ams-chip-teal{ background:linear-gradient(135deg,#0E7490,#22B8CF); }
+.ams-chip-gold{ background:linear-gradient(135deg,#B7791F,#E0A93E); }
+.ams-chip-brick{ background:linear-gradient(135deg,#8C3B2E,#C05B4B); }
+.ams-chip-indigo{ background:linear-gradient(135deg,#33449B,#5B6FD4); }
+
+/* 12-col responsive layout */
+.ams-grid{
+  display:grid;
+  grid-template-columns:repeat(12,1fr);
+  gap:20px;
+  align-items:start;
+}
+.ams-col-3{ grid-column:span 3; }
+.ams-col-4{ grid-column:span 4; }
+.ams-col-5{ grid-column:span 5; }
+.ams-col-6{ grid-column:span 6; }
+.ams-col-7{ grid-column:span 7; }
+.ams-col-8{ grid-column:span 8; }
+.ams-col-9{ grid-column:span 9; }
+.ams-col-12{ grid-column:span 12; }
+
+@media(max-width:1100px){
+  .ams-col-3,.ams-col-4,.ams-col-5{ grid-column:span 6; }
+  .ams-col-6,.ams-col-7,.ams-col-8,.ams-col-9{ grid-column:span 12; }
+}
+@media(max-width:640px){
+  .ams-col-3,.ams-col-4,.ams-col-5,.ams-col-6{ grid-column:span 12; }
+}
+
+/* Generic modern panel */
+.ams-panel{
+  background:var(--m-surface);
+  border:1px solid var(--m-border);
+  border-radius:var(--m-radius-lg);
+  box-shadow:var(--m-shadow-1);
+  padding:22px;
+  animation:mFadeUp .45s var(--m-ease) both;
+}
+.ams-panel-head{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  flex-wrap:wrap;
+  margin-bottom:16px;
+}
+.ams-panel-title{
+  font-family:'Cairo',sans-serif;
+  font-size:16.5px;
+  font-weight:800;
+  color:var(--m-emerald);
+  display:flex;
+  align-items:center;
+  gap:10px;
+  margin:0;
+  border:none;
+  padding:0;
+}
+.ams-panel-title svg{
+  width:19px;
+  height:19px;
+  color:var(--m-jade);
+}
+.ams-panel-sub{
+  font-size:12.5px;
+  color:var(--m-muted);
+  margin-top:2px;
+}
+
+/* Quick action buttons */
+.ams-quick-actions{
+  display:flex;
+  flex-wrap:wrap;
+  gap:12px;
+}
+.ams-qa{
+  flex:1 1 150px;
+  min-width:140px;
+  display:flex;
+  flex-direction:column;
+  align-items:flex-start;
+  gap:10px;
+  background:var(--m-surface-2);
+  border:1.5px solid var(--m-border);
+  border-radius:var(--m-radius);
+  padding:15px 16px;
+  color:var(--m-emerald);
+  font-family:'Cairo',sans-serif;
+  font-weight:700;
+  font-size:13.5px;
+  transition:all var(--m-speed) var(--m-ease);
+}
+.ams-qa svg{ width:21px; height:21px; color:var(--m-jade); }
+.ams-qa:hover{
+  border-color:var(--m-jade);
+  background:#fff;
+  transform:translateY(-2px);
+  box-shadow:var(--m-shadow-2);
+}
+
+/* ==========================================================
+   14. Charts (canvas) area + legend
+========================================================== */
+.ams-chart-wrap{
+  position:relative;
+  width:100%;
+}
+.ams-chart-wrap canvas{
+  width:100% !important;
+  display:block;
+}
+.ams-legend{
+  display:flex;
+  flex-wrap:wrap;
+  gap:10px 18px;
+  margin-top:12px;
+  font-family:'Cairo',sans-serif;
+  font-size:12.5px;
+  color:var(--m-muted);
+}
+.ams-legend .ams-legend-dot{
+  width:10px;
+  height:10px;
+  border-radius:3px;
+  display:inline-block;
+  margin-right:6px;
+}
+
+/* Progress bars (for top-subject style widgets / stats) */
+.ams-progress{
+  background:var(--m-surface-2);
+  border-radius:99px;
+  height:9px;
+  overflow:hidden;
+  border:1px solid var(--m-border);
+}
+.ams-progress > span{
+  display:block;
+  height:100%;
+  border-radius:99px;
+  background:linear-gradient(90deg,var(--m-jade),var(--m-jade-bright));
+  transition:width .8s var(--m-ease);
+}
+
+/* ==========================================================
+   15. Activity feed (timeline)
+========================================================== */
+.ams-feed{
+  list-style:none;
+  display:flex;
+  flex-direction:column;
+}
+.ams-feed li{
+  display:flex;
+  gap:13px;
+  padding:11px 2px;
+  border-bottom:1px dashed var(--m-border);
+}
+.ams-feed li:last-child{ border-bottom:none; }
+.ams-feed .ams-feed-dot{
+  width:34px;
+  height:34px;
+  border-radius:11px;
+  flex-shrink:0;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  color:#fff;
+}
+.ams-feed .ams-feed-dot svg{ width:16px; height:16px; }
+.ams-feed .ams-feed-text{
+  font-size:13.5px;
+  color:var(--m-text);
+  font-family:'Cairo',sans-serif;
+  line-height:1.4;
+}
+.ams-feed .ams-feed-time{
+  font-size:11.5px;
+  color:var(--m-muted);
+}
+
+/* ==========================================================
+   16. Announcements (notice board) + events list
+========================================================== */
+.ams-note{
+  border:1px solid var(--m-border);
+  border-left:4px solid var(--m-jade);
+  background:var(--m-surface-2);
+  border-radius:12px;
+  padding:13px 15px;
+  margin-bottom:11px;
+  animation:mFadeUp .3s var(--m-ease) both;
+}
+.ams-note .ams-note-title{
+  font-family:'Cairo',sans-serif;
+  font-weight:800;
+  font-size:14px;
+  color:var(--m-emerald);
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:10px;
+}
+.ams-note .ams-note-body{
+  font-size:13.5px;
+  color:var(--m-muted);
+  margin-top:4px;
+  white-space:pre-line;
+}
+.ams-note .ams-note-date{
+  font-size:11.5px;
+  color:var(--m-muted);
+  margin-top:6px;
+}
+.ams-note .ams-note-del{
+  background:transparent;
+  border:none;
+  box-shadow:none;
+  color:#C0392B;
+  padding:3px;
+  border-radius:8px;
+}
+.ams-note .ams-note-del:hover{
+  background:rgba(192,57,43,.1);
+  transform:none;
+  box-shadow:none;
+}
+.ams-note .ams-note-del svg{ width:15px; height:15px; display:block; }
+
+.ams-event{
+  display:flex;
+  align-items:center;
+  gap:13px;
+  padding:10px 2px;
+  border-bottom:1px dashed var(--m-border);
+}
+.ams-event:last-child{ border-bottom:none; }
+.ams-event .ams-event-date{
+  width:52px;
+  text-align:center;
+  border-radius:11px;
+  background:linear-gradient(135deg,var(--m-emerald),var(--m-emerald-2));
+  color:#fff;
+  padding:7px 4px;
+  flex-shrink:0;
+}
+.ams-event .ams-event-date strong{
+  display:block;
+  font-family:'IBM Plex Mono',monospace;
+  font-size:16px;
+}
+.ams-event .ams-event-date span{
+  font-size:10px;
+  text-transform:uppercase;
+  letter-spacing:.6px;
+}
+.ams-event .ams-event-title{
+  font-family:'Cairo',sans-serif;
+  font-size:13.5px;
+  font-weight:700;
+  color:var(--m-text);
+  flex:1;
+}
+.ams-event .ams-event-note{ font-size:12px; color:var(--m-muted); font-weight:500; }
+
+/* Small inline forms used by announcements/events */
+.ams-form-row{
+  display:flex;
+  gap:10px;
+  flex-wrap:wrap;
+  margin-bottom:14px;
+}
+.ams-form-row input,
+.ams-form-row textarea,
+.ams-form-row select{
+  font-family:'Cairo',sans-serif;
+  padding:10px 13px;
+  font-size:13.5px;
+  flex:1;
+  min-width:140px;
+  background:var(--m-surface-2);
+}
+.ams-form-row textarea{
+  min-height:64px;
+  resize:vertical;
+  width:100%;
+  flex-basis:100%;
+}
+
+/* ==========================================================
+   17. Mini calendar
+========================================================== */
+.ams-cal{
+  user-select:none;
+}
+.ams-cal-head{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  margin-bottom:10px;
+}
+.ams-cal-head strong{
+  font-family:'Cairo',sans-serif;
+  font-size:14.5px;
+  color:var(--m-emerald);
+}
+.ams-cal-head .ams-icon-btn{ width:32px; height:32px; border-radius:9px; }
+.ams-cal-grid{
+  display:grid;
+  grid-template-columns:repeat(7,1fr);
+  gap:4px;
+  text-align:center;
+}
+.ams-cal-grid .ams-cal-dow{
+  font-size:10.5px;
+  font-weight:800;
+  text-transform:uppercase;
+  letter-spacing:.5px;
+  color:var(--m-muted);
+  padding:5px 0;
+}
+.ams-cal-day{
+  position:relative;
+  font-family:'IBM Plex Mono',monospace;
+  font-size:12.5px;
+  padding:7px 0;
+  border-radius:9px;
+  color:var(--m-text);
+  cursor:default;
+  transition:background var(--m-speed);
+}
+.ams-cal-day:hover{ background:var(--m-surface-2); }
+.ams-cal-day.ams-cal-other{ color:#B9C6BF; }
+.ams-cal-day.ams-cal-today{
+  background:linear-gradient(135deg,var(--m-jade),var(--m-jade-bright));
+  color:#fff;
+  font-weight:700;
+}
+.ams-cal-day.ams-cal-event::after{
+  content:"";
+  position:absolute;
+  left:50%;
+  transform:translateX(-50%);
+  bottom:3px;
+  width:5px;
+  height:5px;
+  border-radius:50%;
+  background:var(--m-brick);
+}
+.ams-cal-day.ams-cal-today.ams-cal-event::after{ background:#fff; }
+
+/* ==========================================================
+   18. Table toolbar (search / export / count) + scroll table
+========================================================== */
+.ams-table-toolbar{
+  display:flex;
+  align-items:center;
+  gap:12px;
+  flex-wrap:wrap;
+  margin-bottom:14px;
+}
+.ams-search-wrap{
+  position:relative;
+  flex:1;
+  min-width:190px;
+  max-width:400px;
+}
+.ams-search-wrap svg{
+  position:absolute;
+  left:12px;
+  top:50%;
+  transform:translateY(-50%);
+  width:16px;
+  height:16px;
+  color:var(--m-muted);
+  pointer-events:none;
+}
+.ams-search-wrap input{
+  width:100%;
+  padding:11px 13px 11px 38px;
+  font-size:13.5px;
+  font-family:'Cairo',sans-serif;
+  background:var(--m-surface-2);
+}
+.ams-table-count{
+  font-size:12.5px;
+  color:var(--m-muted);
+  font-family:'Cairo',sans-serif;
+  font-weight:600;
+}
+
+.ams-table-scroll{
+  overflow:auto;
+  border:1px solid var(--m-border);
+  border-radius:14px;
+  background:#fff;
+  max-width:100%;
+}
+.ams-table-scroll table{
+  min-width:640px;
+}
+
+/* Grade badges (visual chips only - grade VALUES are computed by
+   the untouched calculateScore()) */
+.ams-badge{
+  display:inline-block;
+  min-width:26px;
+  padding:2px 9px;
+  border-radius:99px;
+  font-size:12px;
+  font-weight:800;
+  font-family:'Cairo',sans-serif;
+}
+.ams-badge-A{ background:#D8EEE2; color:#0F3D2E; }
+.ams-badge-B{ background:#E0F0E8; color:#1C5A42; }
+.ams-badge-C{ background:#FFF3D6; color:#8A6D1D; }
+.ams-badge-D{ background:#FFE8D2; color:#9A5A1D; }
+.ams-badge-E{ background:#FADEDA; color:#8C3B2E; }
+.ams-badge-F{ background:#F5D0CA; color:#7C2418; }
+
+/* ==========================================================
+   19. Students directory page
+========================================================== */
+.ams-dir-grid{
+  display:grid;
+  grid-template-columns:repeat(auto-fill,minmax(240px,1fr));
+  gap:16px;
+}
+.ams-student-card{
+  background:var(--m-surface);
+  border:1px solid var(--m-border);
+  border-radius:var(--m-radius);
+  padding:18px;
+  display:flex;
+  gap:14px;
+  align-items:center;
+  box-shadow:var(--m-shadow-1);
+  cursor:pointer;
+  transition:transform var(--m-speed) var(--m-ease), box-shadow var(--m-speed) var(--m-ease), border-color var(--m-speed);
+  animation:mFadeUp .35s var(--m-ease) both;
+}
+.ams-student-card:hover{
+  transform:translateY(-3px);
+  box-shadow:var(--m-shadow-2);
+  border-color:var(--m-jade);
+}
+.ams-student-card img,
+.ams-dir-avatar{
+  width:58px;
+  height:58px;
+  border-radius:14px;
+  object-fit:cover;
+  flex-shrink:0;
+  background:var(--m-jade-pale);
+  border:2px solid var(--m-jade-pale);
+}
+.ams-student-card h4{
+  font-family:'Cairo',sans-serif;
+  font-size:14.5px;
+  color:var(--m-emerald);
+  font-weight:800;
+  line-height:1.3;
+}
+.ams-student-card .ams-student-meta{
+  font-size:12px;
+  color:var(--m-muted);
+  font-family:'Cairo',sans-serif;
+}
+.ams-student-card .ams-student-id{
+  display:inline-block;
+  margin-top:5px;
+  font-size:11px;
+  font-weight:700;
+  background:var(--m-jade-pale);
+  color:var(--m-emerald);
+  padding:2px 9px;
+  border-radius:99px;
+  font-family:'IBM Plex Mono',monospace;
+}
+
+.ams-pagination{
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  gap:8px;
+  margin-top:22px;
+  flex-wrap:wrap;
+}
+.ams-pagination button{
+  min-width:38px;
+  height:38px;
+  padding:0 12px;
+  border-radius:11px;
+  background:var(--m-surface);
+  color:var(--m-emerald);
+  border:1.5px solid var(--m-border);
+  box-shadow:none;
+  font-family:'IBM Plex Mono',monospace;
+  font-size:13px;
+}
+.ams-pagination button:hover{
+  background:var(--m-jade-pale);
+  color:var(--m-emerald);
+  transform:none;
+}
+.ams-pagination button.ams-page-current{
+  background:linear-gradient(135deg,var(--m-emerald),var(--m-emerald-2));
+  color:#fff;
+  border-color:transparent;
+}
+.ams-pagination .ams-page-info{
+  font-size:12.5px;
+  color:var(--m-muted);
+  font-family:'Cairo',sans-serif;
+  margin:0 8px;
+}
+
+/* Profile modal (directory) */
+.ams-profile-head{
+  display:flex;
+  align-items:center;
+  gap:16px;
+  margin-bottom:16px;
+}
+.ams-profile-head img{
+  width:84px;
+  height:100px;
+  object-fit:cover;
+  border-radius:14px;
+  border:3px solid var(--m-jade-pale);
+  background:#eee;
+}
+.ams-profile-head h3{ margin:0; }
+.ams-profile-head .ams-student-id{
+  display:inline-block;
+  margin-top:6px;
+  font-size:11.5px;
+  font-weight:700;
+  background:var(--m-jade-pale);
+  color:var(--m-emerald);
+  padding:3px 11px;
+  border-radius:99px;
+  font-family:'IBM Plex Mono',monospace;
+}
+.ams-profile-rows{
+  display:flex;
+  flex-direction:column;
+  gap:0;
+  border:1px solid var(--m-border);
+  border-radius:12px;
+  overflow:hidden;
+  margin-bottom:18px;
+}
+.ams-profile-rows .ams-profile-row{
+  display:flex;
+  justify-content:space-between;
+  gap:12px;
+  padding:11px 15px;
+  font-size:13.5px;
+  font-family:'Cairo',sans-serif;
+  background:var(--m-surface);
+}
+.ams-profile-rows .ams-profile-row:nth-child(even){
+  background:var(--m-surface-2);
+}
+.ams-profile-rows .ams-profile-row span:first-child{
+  color:var(--m-muted);
+  font-weight:600;
+}
+.ams-profile-rows .ams-profile-row span:last-child{
+  color:var(--m-text);
+  font-weight:700;
+  text-align:right;
+}
+
+/* ==========================================================
+   20. Login page redesign (new markup classes)
+========================================================== */
+.ams-login-wrap{
+  min-height:100vh;
+  display:grid;
+  grid-template-columns:1.1fr 1fr;
+}
+@media(max-width:900px){
+  .ams-login-wrap{ grid-template-columns:1fr; }
+  .ams-login-hero{ display:none; }
+}
+.ams-login-hero{
+  background:
+    radial-gradient(circle at 20% 15%, rgba(63,179,126,.25), transparent 45%),
+    radial-gradient(circle at 85% 85%, rgba(47,158,110,.28), transparent 42%),
+    linear-gradient(150deg,#0C2E22,var(--m-emerald) 55%,var(--m-emerald-2));
+  color:#fff;
+  display:flex;
+  flex-direction:column;
+  justify-content:center;
+  padding:7vh 6vw;
+  position:relative;
+  overflow:hidden;
+}
+.ams-login-hero::after{
+  content:"";
+  position:absolute;
+  inset:0;
+  background-image:radial-gradient(circle at 1px 1px, rgba(255,255,255,.10) 1px, transparent 0);
+  background-size:26px 26px;
+  pointer-events:none;
+}
+.ams-login-hero img{
+  width:96px;
+  height:96px;
+  border-radius:50%;
+  background:#fff;
+  padding:4px;
+  border:3px solid var(--m-jade-bright);
+  object-fit:cover;
+  margin-bottom:26px;
+}
+.ams-login-hero h1{
+  color:#fff;
+  font-family:'Amiri',serif;
+  font-size:clamp(26px,3.2vw,40px);
+  line-height:1.25;
+  margin-bottom:14px;
+}
+.ams-login-hero .ams-login-ar{
+  font-family:'Amiri',serif;
+  font-size:clamp(18px,2vw,24px);
+  color:var(--m-jade-pale);
+  margin-bottom:18px;
+}
+.ams-login-hero p{
+  color:#CFE7D9;
+  font-size:15px;
+  max-width:420px;
+  margin-bottom:30px;
+}
+.ams-login-feature{
+  display:flex;
+  align-items:center;
+  gap:12px;
+  margin-bottom:14px;
+  color:#EAF6EF;
+  font-family:'Cairo',sans-serif;
+  font-size:14px;
+  font-weight:600;
+  position:relative;
+  z-index:1;
+}
+.ams-login-feature svg{
+  width:20px;
+  height:20px;
+  color:var(--m-jade-bright);
+  flex-shrink:0;
+}
+
+.ams-login-panel{
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  padding:36px 22px;
+  background:var(--m-bg);
+}
+.ams-login-panel .login-box{
+  width:min(420px,100%);
+  margin:0;
+  padding:38px 34px;
+  border-radius:var(--m-radius-lg) !important;
+}
+.ams-login-panel .login-box input{
+  padding:13px 15px;
+  border-radius:var(--m-radius-sm);
+}
+.ams-login-mobile-brand{
+  display:flex;
+  align-items:center;
+  gap:12px;
+  margin-bottom:24px;
+}
+.ams-login-mobile-brand img{
+  width:44px; height:44px; border-radius:50%;
+  background:#fff; padding:2px; object-fit:cover;
+  border:2px solid var(--m-jade);
+}
+.ams-login-mobile-brand strong{
+  font-family:'Cairo',sans-serif;
+  font-size:13px;
+  color:var(--m-emerald);
+  line-height:1.3;
+}
+@media(min-width:901px){
+  .ams-login-mobile-brand{ display:none; }
+}
+
+/* ==========================================================
+   21. Landing / index page redesign classes
+========================================================== */
+.ams-landing-hero{
+  text-align:center;
+  padding:clamp(60px,10vh,110px) 22px 50px;
+}
+.ams-landing-hero img{
+  width:110px;
+  height:110px;
+  border-radius:50%;
+  background:#fff;
+  padding:4px;
+  border:3px solid var(--m-jade);
+  object-fit:cover;
+  box-shadow:var(--m-shadow-2);
+  margin-bottom:26px;
+  animation:mFadeUp .5s var(--m-ease) both;
+}
+.ams-landing-hero h1{
+  font-size:clamp(28px,4.4vw,46px);
+  animation:mFadeUp .55s var(--m-ease) both;
+}
+.ams-landing-hero .ams-landing-ar{
+  font-family:'Amiri',serif;
+  color:var(--m-emerald-2);
+  font-size:clamp(16px,2.2vw,21px);
+  margin:10px 0 16px;
+  animation:mFadeUp .6s var(--m-ease) both;
+}
+.ams-landing-hero p{
+  animation:mFadeUp .65s var(--m-ease) both;
+}
+.ams-cta-row{
+  display:flex;
+  justify-content:center;
+  gap:14px;
+  flex-wrap:wrap;
+  margin-top:30px;
+  animation:mFadeUp .7s var(--m-ease) both;
+}
+.ams-cta-row button{ padding:14px 30px; font-size:14.5px; }
+.ams-feature-grid{
+  display:grid;
+  grid-template-columns:repeat(auto-fit,minmax(230px,1fr));
+  gap:18px;
+  max-width:1000px;
+  margin:20px auto 80px;
+  padding:0 22px;
+}
+.ams-feature-card{
+  background:var(--m-surface);
+  border:1px solid var(--m-border);
+  border-radius:var(--m-radius);
+  padding:24px 22px;
+  box-shadow:var(--m-shadow-1);
+  text-align:center;
+  animation:mFadeUp .5s var(--m-ease) both;
+  transition:transform var(--m-speed) var(--m-ease), box-shadow var(--m-speed);
+}
+.ams-feature-card:hover{
+  transform:translateY(-4px);
+  box-shadow:var(--m-shadow-2);
+}
+.ams-feature-card svg{
+  width:30px;
+  height:30px;
+  color:var(--m-jade);
+  margin-bottom:12px;
+}
+.ams-feature-card h3{
+  font-family:'Cairo',sans-serif;
+  font-size:16px;
+  margin-bottom:6px;
+}
+.ams-feature-card p{ font-size:13.5px; color:var(--m-muted); }
+
+/* ==========================================================
+   22. Section headers + small polish shared across pages
+========================================================== */
+.ams-section-head{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:14px;
+  flex-wrap:wrap;
+  margin:6px 0 18px;
+}
+.ams-section-head h2{
+  font-family:'Cairo',sans-serif;
+  font-size:20px;
+  color:var(--m-emerald);
+  font-weight:800;
+}
+
+/* Welcome message chip on the dashboard greeting */
+#welcomeMessage{
+  display:inline-block;
+  background:var(--m-jade-pale);
+  color:var(--m-emerald);
+  font-weight:700;
+  padding:2px 12px;
+  border-radius:99px;
+  font-size:12.5px;
+}
+
+/* Subtle hover lift for legacy nav buttons in old header (screen-only) */
+@media screen{
+.nav-btn{
+  border-radius:9px !important;
+  transition:all var(--m-speed) var(--m-ease);
+}
+.nav-btn:hover{
+  transform:translateY(-1px);
+  box-shadow:0 6px 14px rgba(0,0,0,.18);
+}
+}
+
+/* ==========================================================
+   23. DARK MODE  [NEW FEATURE]
+   Toggle lives in the dashboard topbar (js/ui.js). Scoped to
+   modern chrome + legacy surfaces. THE REPORT CARD IS FORCED
+   LIGHT below, so result print/PDF output never changes.
+   The whole section is SCREEN-ONLY: dark mode is irrelevant
+   to printing, and this guarantees printed output can never
+   pick up dark-theme overrides.
+========================================================== */
+@media screen{
+html[data-theme="dark"] body{
+  background-color:#0D1512;
+  background-image:radial-gradient(circle at 1px 1px, rgba(63,179,126,.10) 1px, transparent 0);
+  color:#E4EFE8;
+}
+
+html[data-theme="dark"]{
+  --m-bg:#0D1512;
+  --m-surface:#15211B;
+  --m-surface-2:#1A2A22;
+  --m-border:#284034;
+  --m-text:#E4EFE8;
+  --m-muted:#93AC9E;
+  --m-shadow-1:0 2px 6px rgba(0,0,0,.35);
+  --m-shadow-2:0 12px 32px rgba(0,0,0,.45);
+  --m-shadow-3:0 24px 60px rgba(0,0,0,.55);
+}
+
+html[data-theme="dark"] .ams-topbar{
+  background:rgba(21,33,27,.85);
+  border-bottom-color:var(--m-border);
+}
+html[data-theme="dark"] .ams-panel,
+html[data-theme="dark"] .ams-stat,
+html[data-theme="dark"] .ams-student-card,
+html[data-theme="dark"] .ams-feature-card,
+html[data-theme="dark"] .ams-modal,
+html[data-theme="dark"] .ams-toast{
+  background:var(--m-surface);
+  border-color:var(--m-border);
+  color:var(--m-text);
+}
+html[data-theme="dark"] .login-box,
+html[data-theme="dark"] .search-container,
+html[data-theme="dark"] .card-section,
+html[data-theme="dark"] .score-card,
+html[data-theme="dark"] #scoreTable,
+html[data-theme="dark"] .ams-table-scroll{
+  background:var(--m-surface);
+  border-color:var(--m-border);
+  color:var(--m-text);
+}
+html[data-theme="dark"] input,
+html[data-theme="dark"] select,
+html[data-theme="dark"] textarea{
+  background:#0E1914;
+  color:var(--m-text);
+  border-color:var(--m-border);
+}
+html[data-theme="dark"] input::placeholder{ color:#7B9184; }
+html[data-theme="dark"] table:not(#resultTable) tr:nth-child(even){ background:#16241D; }
+html[data-theme="dark"] table:not(#resultTable) tr:hover{ background:#1D3228; }
+html[data-theme="dark"] table:not(#resultTable) td{ border-bottom-color:var(--m-border); color:var(--m-text); }
+html[data-theme="dark"] h1,
+html[data-theme="dark"] h2,
+html[data-theme="dark"] h3{ color:#CFE9DA; }
+html[data-theme="dark"] .ams-greeting h1,
+html[data-theme="dark"] .ams-panel-title,
+html[data-theme="dark"] .ams-section-head h2,
+html[data-theme="dark"] .ams-topbar .ams-page-title{ color:#E9F6EE; }
+html[data-theme="dark"] p{ color:var(--m-muted); }
+html[data-theme="dark"] .ams-stat .ams-stat-value{ color:#EAF6EF; }
+html[data-theme="dark"] .ams-note{ background:var(--m-surface-2); }
+html[data-theme="dark"] .ams-profile-rows .ams-profile-row{ background:var(--m-surface); }
+html[data-theme="dark"] .ams-profile-rows .ams-profile-row:nth-child(even){ background:var(--m-surface-2); }
+html[data-theme="dark"] .ams-profile-rows .ams-profile-row span:first-child{ color:var(--m-muted); }
+html[data-theme="dark"] .ams-profile-rows .ams-profile-row span:last-child{ color:var(--m-text); }
+html[data-theme="dark"] .ams-login-panel{ background:#0B120F; }
+html[data-theme="dark"] .ams-form-row input,
+html[data-theme="dark"] .ams-form-row textarea{ background:#0E1914; }
+html[data-theme="dark"] .ams-qa{
+  background:var(--m-surface-2);
+  color:#DFF2E6;
+  border-color:var(--m-border);
+}
+html[data-theme="dark"] .ams-qa:hover{ background:#20342A; }
+html[data-theme="dark"] #welcomeMessage{ background:#1E332A; color:#BEE3CD; }
+html[data-theme="dark"] .ams-event .ams-event-title{ color:var(--m-text); }
+html[data-theme="dark"] .ams-cal-day{ color:var(--m-text); }
+html[data-theme="dark"] .ams-cal-day.ams-cal-other{ color:#4E6356; }
+html[data-theme="dark"] .ams-student-card h4{ color:#E9F6EE; }
+html[data-theme="dark"] .ams-pagination button{ background:var(--m-surface); color:#DFF2E6; }
+html[data-theme="dark"] .ams-cal-head strong{ color:#E9F6EE; }
+html[data-theme="dark"] .ams-note .ams-note-title{ color:#E9F6EE; }
+
+/* --- REPORT GUARD: report card always renders light (print parity) --- */
+html[data-theme="dark"] .report-container{
+  background:#fff !important;
+  color:#21201C !important;
+  border:1px solid #C7DED2 !important;
+}
+html[data-theme="dark"] .report-container h3{ color:#0F3D2E !important; }
+html[data-theme="dark"] .report-container td{ color:#21201C !important; border-color:#C7DED2 !important; }
+html[data-theme="dark"] .report-container table tr:nth-child(even){ background:#E8F3EE !important; }
+html[data-theme="dark"] .report-container p{ color:inherit; }
+} /* end @media screen - dark mode section */
+
+/* ==========================================================
+   24. Responsive behaviour for the app shell
+========================================================== */
+@media(max-width:1024px){
+  .ams-sidebar{
+    position:fixed;
+    left:0;
+    top:0;
+    margin-left:-284px;
+    box-shadow:var(--m-shadow-3);
+  }
+  html.ams-nav-open .ams-sidebar{ margin-left:0; }
+  .ams-hamburger{ display:inline-flex; }
+  .ams-scrim{
+    position:fixed;
+    inset:0;
+    background:rgba(10,25,18,.45);
+    z-index:45;
+    opacity:0;
+    pointer-events:none;
+    transition:opacity .25s var(--m-ease);
+  }
+  html.ams-nav-open .ams-scrim{
+    opacity:1;
+    pointer-events:auto;
+  }
+}
+
+@media(max-width:640px){
+  .ams-clock small{ display:none; }
+  .ams-page-pad{ padding:18px 14px 60px; }
+  .ams-panel{ padding:18px; }
+  #ams-toast-root{ bottom:14px; right:14px; }
+}
+
+/* ==========================================================
+   25. Print safety for NEW chrome
+   On student-result.html the legacy print rule already hides
+   every top-level body child except #reportContainer, and our
+   toast/modal roots are top-level - so nothing new can leak
+   into result printouts. Belt-and-braces anyway:
+========================================================== */
+@media print{
+  #ams-toast-root,
+  .ams-modal-overlay,
+  .ams-sidebar,
+  .ams-topbar,
+  .ams-scrim{
+    display:none !important;
+  }
+}

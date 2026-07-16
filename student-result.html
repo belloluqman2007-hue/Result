@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Check Result | Ameenullah School of Arabic and Islamic Studies</title>
+  <link rel="stylesheet" href="css/style.css">
+  <!-- NEW: modern visual upgrade layer (search panel only; the report
+       card and its print/PDF output are NOT visually altered) -->
+  <link rel="stylesheet" href="css/modern-ui.css">
+</head>
+<body>
+
+  <div class="search-container">
+    <h2>Check Result</h2>
+
+    <input type="text"  id="searchId" placeholder="Enter Student ID">
+
+    <select id="searchTerm">
+      <option value="" disabled selected>Select Term</option>
+      <option>1st Term</option>
+      <option>2nd Term</option>
+      <option>3rd Term</option>
+    </select>
+
+    <select id="searchSession">
+      <option value="" disabled selected>Select Session</option>
+      <option>2025/2026</option>
+      <option>2026/2027</option>
+      <option>2027/2028</option>
+      <option>2028/2029</option>
+      <option>2029/2030</option>
+    </select>
+
+<button onclick="searchResult()">Search</button>
+<button onclick="printResult()">Print Result</button>
+<button onclick="downloadPDF()" id="downloadBtn">Download PDF</button>
+</div>
+<div id="reportContainer" class="report-container">
+    <div class="report-header">
+      <img src="images/LOGO.JPG" class="school-logo">
+      <div class="school-details">
+<h1>مدرسة أمين اللّه للعلوم العربيّة الإسلاميّة</h1>
+      <h1>AMEENULLAH SCHOOL OF ARABIC AND ISLAMIC STUDIES</h1>
+      
+    
+    <p class="address">3, Temidire street, Off Ondo Road, Ijeb-Ode, Ogun State.</p>
+    <p class="contact">Tel: 08062445559, 08058306889  |  Email: madrasatuameenillah22@gmail.com</p>
+<p class="motto">MOTTO: KNOWLEDGE AND WORSHIP شعارنا: العلم والعبادة</p>
+<h2 class="school-line"> <span id="reportLevel">STUDENT REPORT SHEET كشف درجات الطّالب </span></h2>
+    
+</div>
+
+<img src="images/default.png"
+id="studentPhoto"
+class="student-passport"
+onerror="this.onerror=null; this.src='images/default.png';"
+alt="Student Photo">
+
+    </div>
+ 
+ <h3>Student Information</h3>
+
+<table class="student-info-table">
+
+<tr>
+    <td><strong>Name:</strong></td>
+    <td id="studentName"></td>
+
+    <td><strong>Class:</strong></td>
+    <td id="studentClass"></td>
+</tr>
+
+<tr>
+      <td><strong>Student ID:</strong></td>
+      <td id="studentId"></td>
+    
+    <td><strong>Term:</strong></td>
+    <td id="studentTerm"></td>
+</tr>
+
+<tr>
+    <td><strong>Position:</strong></td>
+    <td id="studentPosition"></td>
+
+        <td><strong>Session:</strong></td>
+    <td id="studentSession"></td>
+</tr>
+
+
+</table>
+  <table id="resultTable">
+    <tr>
+      <th>Subject</th>
+      <th>CA (40)</th>
+      <th>Exam (60)</th>
+      <th>Total</th>
+      <th>Grade</th>
+    </tr>
+  </table>
+
+<div class="bottom-section">
+<h3>Performance Summary</h3>
+
+<table class="summary-table">
+
+<tr>
+    <td><strong>Total Subjects</strong></td>
+    <td id="totalSubjects"></td>
+</tr>
+
+<tr>
+    <td><strong>Total Score</strong></td>
+    <td id="grandTotal"></td>
+</tr>
+
+
+
+
+
+
+<tr>
+    <td><strong>Teacher's Remark</strong></td>
+    <td id="teacherRemark"></td>
+</tr>
+
+<tr>
+    <td><strong>Principal's Remark</strong></td>
+    <td id="principalRemark"></td>
+</tr>
+
+</table>
+
+ 
+ 
+
+
+
+<div class="signature-section">
+  <div class="signature-box">
+    <img id="classTeacherSignature" class="signature-img" alt="" style="display:none;">
+    <p>______________________________</p>
+    <p><strong>Class Teacher's Signature</strong></p>
+  </div>
+
+  <div class="signature-box">
+    <img id="principalSignature" class="signature-img" alt="" style="display:none;">
+    <p> ______________________________</p>
+    <P><strong>Principal's Signature</strong></P>
+  </div>
+</div>
+</div>
+</div>
+
+<!-- NEW: shared UI helpers (turns alert() popups into toasts) - additive -->
+<script src="js/ui.js"></script>
+<script src="js/result.js"></script>
+</body>
+</html>

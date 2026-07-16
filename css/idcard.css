@@ -1,0 +1,348 @@
+/* ==========================================
+   ID CARD GENERATOR
+   Extends the Manuscript Ledger design system -
+   the card front reuses the same seal-ring photo
+   treatment as the report card's logo/passport.
+========================================== */
+
+.page{
+  display:flex;
+  gap:30px;
+  flex-wrap:wrap;
+  justify-content:center;
+  align-items:flex-start;
+  padding:30px 20px;
+}
+
+.controls{
+  width:420px;
+  max-width:100%;
+  margin:0;
+}
+
+.controls form{
+  display:flex;
+  flex-direction:column;
+}
+
+.controls label{
+  margin-top:12px;
+}
+
+.controls input[type="text"],
+.controls input[type="date"]{
+  width:100%;
+}
+
+.photoLabel{
+  display:flex;
+  flex-direction:column;
+  gap:6px;
+}
+
+.photoLabel input[type="file"]{
+  border:none;
+  padding:0;
+}
+
+.checkboxLabel{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  margin-top:14px;
+  font-size:13px;
+  color:var(--ink);
+  cursor:pointer;
+}
+
+.checkboxLabel input{
+  width:auto;
+  margin:0;
+}
+
+.buttons{
+  display:flex;
+  gap:10px;
+  margin-top:20px;
+}
+
+.hint{
+  margin-top:16px;
+  font-size:13px;
+  color:#666;
+  line-height:1.6;
+}
+
+/* ===== The card itself ===== */
+
+.preview{
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  gap:14px;
+  padding-top:10px;
+}
+
+.card{
+  width:340px;
+  height:214px;
+  perspective:1400px;
+  cursor:pointer;
+}
+
+.card-inner{
+  position:relative;
+  width:100%;
+  height:100%;
+  transition:transform .6s;
+  transform-style:preserve-3d;
+  box-shadow:0 20px 50px rgba(15,61,46,.35), 0 6px 16px rgba(0,0,0,.2);
+  border-radius:14px;
+}
+
+.card.flipped .card-inner{
+  transform:rotateY(180deg);
+}
+
+.card-front,
+.card-back{
+  position:absolute;
+  inset:0;
+  backface-visibility:hidden;
+  border-radius:14px;
+  overflow:hidden;
+}
+
+.card-front{
+  background:linear-gradient(150deg,var(--emerald) 0%,var(--emerald-2) 55%,var(--emerald-3) 100%);
+  padding:16px 18px;
+  display:flex;
+  flex-direction:column;
+  color:#fff;
+  position:relative;
+}
+
+.card-front::before{
+  content:"";
+  position:absolute;
+  inset:0;
+  background:radial-gradient(circle at 85% 15%, rgba(63,179,126,.35), transparent 55%);
+  pointer-events:none;
+}
+
+.card-front::after{
+  content:"";
+  position:absolute;
+  bottom:0;
+  left:0;
+  right:0;
+  height:7px;
+  background:linear-gradient(90deg,var(--gold),var(--gold-bright),var(--gold));
+}
+
+.brand{
+  font-family:'Cairo', sans-serif;
+  font-size:10px;
+  font-weight:800;
+  letter-spacing:.6px;
+  text-transform:uppercase;
+  line-height:1.3;
+  padding-right:60px;
+  color:var(--gold-bright);
+  text-shadow:0 1px 2px rgba(0,0,0,.3);
+}
+
+.photo{
+  position:absolute;
+  top:16px;
+  right:16px;
+  width:64px;
+  height:64px;
+  border-radius:50%;
+  background:#eee;
+  overflow:hidden;
+  z-index:1;
+  box-shadow:
+    0 0 0 3px rgba(255,255,255,.95),
+    0 0 0 5.5px var(--gold-bright),
+    0 6px 16px rgba(0,0,0,.4);
+}
+
+.photo img{
+  width:100%;
+  height:100%;
+  object-fit:cover;
+  display:block;
+}
+
+.details{
+  margin-top:auto;
+  position:relative;
+  z-index:1;
+}
+
+.details h2{
+  font-family:'Amiri', serif;
+  color:#fff;
+  font-size:21px;
+  font-weight:700;
+  margin-bottom:5px;
+  text-shadow:0 2px 4px rgba(0,0,0,.35);
+}
+
+.details .meta{
+  font-family:'IBM Plex Mono', monospace;
+  font-size:12px;
+  font-weight:600;
+  color:#fff;
+  margin-bottom:3px;
+}
+
+.details .meta strong{
+  font-family:'Cairo', sans-serif;
+  color:var(--gold-bright);
+  opacity:1;
+  font-weight:800;
+  margin-right:4px;
+}
+
+.footer{
+  display:flex;
+  justify-content:space-between;
+  align-items:flex-end;
+  margin-top:10px;
+  position:relative;
+  z-index:1;
+}
+
+.issued{
+  display:flex;
+  flex-direction:column;
+}
+
+.issued small{
+  font-size:8.5px;
+  text-transform:uppercase;
+  letter-spacing:.6px;
+  color:var(--gold-bright);
+  opacity:.9;
+  font-weight:700;
+}
+
+.issued strong{
+  font-family:'IBM Plex Mono', monospace;
+  font-size:12px;
+  font-weight:700;
+  color:#fff;
+}
+
+.qr{
+  width:36px;
+  height:36px;
+  background:var(--gold-bright);
+  color:var(--emerald);
+  border-radius:5px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  font-family:'IBM Plex Mono', monospace;
+  font-size:11px;
+  font-weight:800;
+  letter-spacing:.5px;
+  box-shadow:0 3px 8px rgba(0,0,0,.3);
+  position:relative;
+  z-index:1;
+}
+
+/* Back of the card */
+.card-back{
+  background:var(--parchment);
+  transform:rotateY(180deg);
+  padding:20px 22px;
+  display:flex;
+  flex-direction:column;
+  justify-content:center;
+  border-top:6px solid var(--emerald);
+}
+
+.card-back h3{
+  font-family:'Amiri', serif;
+  font-size:16px;
+  font-weight:700;
+  color:var(--emerald);
+  margin-bottom:9px;
+  padding-left:9px;
+  border-left:4px solid var(--gold);
+}
+
+.card-back p{
+  font-family:'Cairo', sans-serif;
+  font-size:11.5px;
+  font-weight:500;
+  color:var(--ink);
+  line-height:1.55;
+  margin-bottom:4px;
+}
+
+.card-back p.small{
+  font-size:9px;
+  color:#777;
+  margin-top:8px;
+  font-style:italic;
+}
+
+.flip-hint{
+  font-size:12px;
+  color:#888;
+  font-family:'Cairo', sans-serif;
+}
+
+@media(max-width:768px){
+  .page{
+    flex-direction:column;
+    align-items:center;
+  }
+}
+
+/* ==========================================
+   PRINT - only the card, at real ID-card size
+========================================== */
+@media print{
+  @page{
+    size:auto;
+    margin:10mm;
+  }
+
+  body > *:not(.page){
+    display:none !important;
+  }
+
+  .page{
+    display:block !important;
+  }
+
+  .controls,
+  .flip-hint{
+    display:none !important;
+  }
+
+  .preview{
+    display:block !important;
+  }
+
+  .card{
+    width:85.6mm;
+    height:53.98mm;
+    box-shadow:none;
+  }
+
+  .card-inner{
+    box-shadow:none;
+  }
+
+  .card-front,
+  .card-back{
+    box-shadow:none;
+  }
+}
+

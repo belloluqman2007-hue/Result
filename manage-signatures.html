@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Manage Signatures | Ameenullah School of Arabic and Islamic Studies</title>
+  <link rel="stylesheet" href="css/style.css">
+  <!-- NEW: modern visual upgrade layer (loaded after legacy css) -->
+  <link rel="stylesheet" href="css/modern-ui.css">
+  <style>
+    .signature-pad-wrap{
+      border:1.5px solid var(--line);
+      border-radius:4px;
+      background:#fff;
+      display:inline-block;
+      touch-action:none;
+    }
+    .signature-pad-wrap canvas{
+      display:block;
+      cursor:crosshair;
+    }
+    .sig-role-section{
+      margin-bottom:36px;
+      padding-bottom:28px;
+      border-bottom:1px solid var(--line);
+    }
+    .sig-role-section:last-child{
+      border-bottom:none;
+    }
+    .sig-tabs{
+      display:flex;
+      gap:10px;
+      margin-bottom:14px;
+    }
+    .sig-tab-btn{
+      background:var(--parchment-deep);
+      color:var(--emerald);
+      border:1px solid var(--line);
+    }
+    .sig-tab-btn.active{
+      background:var(--emerald);
+      color:var(--gold-pale);
+      border-color:var(--emerald);
+    }
+    .sig-panel{
+      display:none;
+    }
+    .sig-panel.active{
+      display:block;
+    }
+    .sig-preview{
+      max-width:260px;
+      max-height:110px;
+      border:1px solid var(--line);
+      border-radius:4px;
+      background:#fff;
+      padding:8px;
+      display:block;
+      margin-bottom:10px;
+    }
+    .sig-current{
+      margin-top:18px;
+      padding-top:14px;
+      border-top:1px dashed var(--line);
+    }
+  </style>
+</head>
+<body onload="checkAuth(); loadCurrentSignatures();">
+
+  <div class="search-container" style="width:800px;">
+    <a href="teacher-dashboard.html">&larr; Back to Dashboard</a>
+    <h2>Manage Signatures</h2>
+    <p style="margin-bottom:20px; font-size:14px; color:#555;">
+      Draw a signature with your mouse or finger, or upload a photo of a real
+      signature. It will be reused automatically on every printed and
+      downloaded report card - no more signing each one by hand.
+    </p>
+
+    <!-- CLASS TEACHER -->
+    <div class="sig-role-section">
+      <h3>Class Teacher's Signature</h3>
+
+      <div class="sig-tabs">
+        <button type="button" class="sig-tab-btn active" onclick="switchTab('class_teacher','draw')">Draw</button>
+        <button type="button" class="sig-tab-btn" onclick="switchTab('class_teacher','upload')">Upload Image</button>
+      </div>
+
+      <div id="class_teacher-draw-panel" class="sig-panel active">
+        <div class="signature-pad-wrap">
+          <canvas id="class_teacher-canvas" width="400" height="150"></canvas>
+        </div>
+        <div style="margin-top:10px;">
+          <button type="button" onclick="clearPad('class_teacher')">Clear</button>
+          <button type="button" onclick="saveDrawnSignature('class_teacher')">Save Drawn Signature</button>
+        </div>
+      </div>
+
+      <div id="class_teacher-upload-panel" class="sig-panel">
+        <input type="file" id="class_teacher-file" accept="image/png, image/jpeg">
+        <button type="button" onclick="saveUploadedSignature('class_teacher')">Save Uploaded Signature</button>
+      </div>
+
+      <div class="sig-current" id="class_teacher-current" style="display:none;">
+        <p style="font-size:13px; color:#555; margin-bottom:6px;">Current signature on file:</p>
+        <img id="class_teacher-preview" class="sig-preview" alt="Class Teacher signature">
+        <button type="button" onclick="deleteSignature('class_teacher')" style="background:#8C3B2E; border-color:#8C3B2E; color:#fdf3ef;">Remove Signature</button>
+      </div>
+    </div>
+
+    <!-- PRINCIPAL -->
+    <div class="sig-role-section">
+      <h3>Principal's Signature</h3>
+
+      <div class="sig-tabs">
+        <button type="button" class="sig-tab-btn active" onclick="switchTab('principal','draw')">Draw</button>
+        <button type="button" class="sig-tab-btn" onclick="switchTab('principal','upload')">Upload Image</button>
+      </div>
+
+      <div id="principal-draw-panel" class="sig-panel active">
+        <div class="signature-pad-wrap">
+          <canvas id="principal-canvas" width="400" height="150"></canvas>
+        </div>
+        <div style="margin-top:10px;">
+          <button type="button" onclick="clearPad('principal')">Clear</button>
+          <button type="button" onclick="saveDrawnSignature('principal')">Save Drawn Signature</button>
+        </div>
+      </div>
+
+      <div id="principal-upload-panel" class="sig-panel">
+        <input type="file" id="principal-file" accept="image/png, image/jpeg">
+        <button type="button" onclick="saveUploadedSignature('principal')">Save Uploaded Signature</button>
+      </div>
+
+      <div class="sig-current" id="principal-current" style="display:none;">
+        <p style="font-size:13px; color:#555; margin-bottom:6px;">Current signature on file:</p>
+        <img id="principal-preview" class="sig-preview" alt="Principal signature">
+        <button type="button" onclick="deleteSignature('principal')" style="background:#8C3B2E; border-color:#8C3B2E; color:#fdf3ef;">Remove Signature</button>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- NEW: shared UI helpers (toasts, dark mode) - additive -->
+  <script src="js/ui.js"></script>
+  <script src="js/app.js"></script>
+  <script src="js/signature.js"></script>
+</body>
+</html>
