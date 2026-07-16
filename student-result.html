@@ -8,6 +8,14 @@
   <!-- NEW: modern visual upgrade layer (search panel only; the report
        card and its print/PDF output are NOT visually altered) -->
   <link rel="stylesheet" href="css/modern-ui.css">
+
+  <!-- NEW (PWA conversion): makes the site installable as a phone/desktop
+       app with its own icon. Purely additive - no styling or behaviour
+       of this page is changed. -->
+  <link rel="manifest" href="manifest.webmanifest">
+  <meta name="theme-color" content="#2f5021">
+  <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
 </head>
 <body>
 
@@ -155,5 +163,8 @@ alt="Student Photo">
 <!-- NEW: shared UI helpers (turns alert() popups into toasts) - additive -->
 <script src="js/ui.js"></script>
 <script src="js/result.js"></script>
+
+  <!-- NEW (PWA conversion): registers the service worker + install button. Additive only. -->
+  <script src="js/pwa.js" defer></script>
 </body>
 </html>

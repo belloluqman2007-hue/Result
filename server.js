@@ -144,6 +144,16 @@ app.get("/students.html", requireLogin, (req, res) => {
     res.sendFile(path.join(__dirname, "students.html"));
 });
 
+// ----------------------------------------------------------------
+// NEW (PWA conversion): serve the app manifest with the correct
+// content type so every browser accepts it. ADDITIVE ONLY - no
+// existing route, page or query is modified. (Public, like login.)
+// ----------------------------------------------------------------
+app.get("/manifest.webmanifest", (req, res) => {
+    res.type("application/manifest+json");
+    res.sendFile(path.join(__dirname, "manifest.webmanifest"));
+});
+
 app.use(express.static(__dirname));
 
 /* ==================================================================

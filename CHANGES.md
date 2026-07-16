@@ -107,3 +107,34 @@ In every case the app itself (login, results, exams) keeps working — only the
 Notice Board / Events / Calendar widgets pause until the tables exist. When the
 tables are missing, those endpoints return a `503` with an explanatory message
 instead of a bare error.
+
+---
+
+## PWA conversion — website is now an installable app (additive)
+
+**New files**
+- `manifest.webmanifest` — app name, colors and icons (tells phones/PCs how to install it)
+- `sw.js` — service worker. Makes the site installable; caches ONLY static files
+  (css/js/images). Pages and all result data ALWAYS load live from the server,
+  so results can never be stale. Network code only — touches no route or query.
+- `offline.html` — friendly branded "You are offline" page (shown instead of the
+  browser error when there is no internet)
+- `js/pwa.js` — registers the service worker + shows an optional floating
+  "Install App" button when the browser offers installation
+- `icons/` — app icons (192, 512, maskable, apple-touch, favicon) generated from
+  `images/LOGO.JPG` (original logo file untouched)
+
+**Modified (additions only — nothing removed or renamed)**
+- `server.js` — one new route that serves the manifest with the correct content type
+- All 11 existing `.html` pages — two small commented blocks added
+  (manifest/theme/favicon links inside `<head>`, `js/pwa.js` before `</body>`)
+
+**Zero-risk guarantees**
+- Result module unchanged: no route, API, table, query, calculation or print logic touched
+- No CSS file changed → printing/report cards pixel-identical
+- If the browser has no PWA support, nothing happens and the site works exactly as before
+
+**How to install after deploying**
+- Android phone: open the site in Chrome → menu ⋮ → *Install app* / *Add to Home screen*
+- Windows PC: open the site in Chrome/Edge → click the install icon in the address bar
+(requires HTTPS — your Render site already has it)

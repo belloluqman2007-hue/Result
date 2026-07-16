@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Offline | Ameenullah School of Arabic and Islamic Studies</title>
+  <!--
+    NEW FILE (PWA conversion): shown by sw.js ONLY when the device has
+    no internet connection. Fully self-contained (inline styles) so it
+    works with zero network access. It changes no existing page.
+  -->
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: "Segoe UI", system-ui, Arial, sans-serif;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: linear-gradient(160deg, #2f5021 0%, #1d3514 100%);
+      color: #fff;
+      text-align: center;
+      padding: 24px;
+    }
+    .card {
+      background: #ffffff;
+      color: #2b2b2b;
+      border-radius: 20px;
+      padding: 40px 32px;
+      max-width: 420px;
+      width: 100%;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.35);
+    }
+    .card img {
+      width: 110px;
+      height: 110px;
+      object-fit: contain;
+      border-radius: 50%;
+      margin-bottom: 18px;
+      background: #2f5021;
+      padding: 4px;
+    }
+    h1 { font-size: 1.45rem; color: #2f5021; margin-bottom: 8px; }
+    .school { font-size: 0.8rem; color: #7a8f6a; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 16px; }
+    p { font-size: 0.95rem; line-height: 1.55; color: #555; margin-bottom: 24px; }
+    button {
+      background: #2f5021;
+      color: #fff;
+      border: none;
+      border-radius: 999px;
+      padding: 12px 34px;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.2s ease, transform 0.15s ease;
+    }
+    button:hover { background: #3c6729; transform: translateY(-1px); }
+    .icon { font-size: 2.4rem; margin-bottom: 6px; }
+  </style>
+
+  <!-- NEW (PWA conversion): makes the site installable as a phone/desktop
+       app with its own icon. Purely additive - no styling or behaviour
+       of this page is changed. -->
+  <link rel="manifest" href="manifest.webmanifest">
+  <meta name="theme-color" content="#2f5021">
+  <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+</head>
+<body>
+  <div class="card">
+    <img src="images/LOGO.JPG" alt="School Logo">
+    <div class="school">Ameenullah School of Arabic &amp; Islamic Studies</div>
+    <h1><span class="icon">📡</span><br>You are Offline</h1>
+    <p>No internet connection detected. Your school data is safe in the cloud &mdash; please check your network and try again.</p>
+    <button onclick="window.location.reload()">Try Again</button>
+  </div>
+</body>
+</html>

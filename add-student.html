@@ -7,6 +7,14 @@
   <link rel="stylesheet" href="css/style.css">
   <!-- NEW: modern visual upgrade layer (loaded after legacy css) -->
   <link rel="stylesheet" href="css/modern-ui.css">
+
+  <!-- NEW (PWA conversion): makes the site installable as a phone/desktop
+       app with its own icon. Purely additive - no styling or behaviour
+       of this page is changed. -->
+  <link rel="manifest" href="manifest.webmanifest">
+  <meta name="theme-color" content="#2f5021">
+  <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
 </head>
 <body onload="checkAuth(); loadClassesIntoSelects();">
   <div class="search-container">
@@ -60,5 +68,8 @@
   <script src="js/app.js"></script>
   <script src="js/subject.js"></script>
   <script src="js/student.js"></script>
+
+  <!-- NEW (PWA conversion): registers the service worker + install button. Additive only. -->
+  <script src="js/pwa.js" defer></script>
 </body>
 </html>

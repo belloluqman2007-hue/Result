@@ -5,6 +5,14 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Student Result</title>
   <link rel="stylesheet" href="css/style.css">
+
+  <!-- NEW (PWA conversion): makes the site installable as a phone/desktop
+       app with its own icon. Purely additive - no styling or behaviour
+       of this page is changed. -->
+  <link rel="manifest" href="manifest.webmanifest">
+  <meta name="theme-color" content="#2f5021">
+  <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
 </head>
 <body>
   
@@ -37,5 +45,8 @@
       </tr>
     </table>
   </div>
+
+  <!-- NEW (PWA conversion): registers the service worker + install button. Additive only. -->
+  <script src="js/pwa.js" defer></script>
 </body>
 </html>
