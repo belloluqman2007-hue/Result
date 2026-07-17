@@ -4,6 +4,46 @@
 
 ---
 
+# Fix Pack 9 — 17 July 2026 (cover fit + one-page exams + phone view)
+
+Requested fixes, all delivered and tested on desktop AND phone:
+
+1. First page shrinking -> FIXED. Phones now render the paper at its REAL
+   A4 size and zoom the VIEW out (like Word mobile). Typing, pagination
+   and printing measure identically on phone and laptop, so the cover no
+   longer gets squashed in the downloaded phone PDF.
+2. School name breaking to two lines -> FIXED. The long cover lines
+   (school names, address, tel, e-mail, motto, exam period) are fitted to
+   ONE line on every device (they only shrink where a device lacks the
+   real fonts; on the Windows laptop they stay exactly the school sizes).
+3. Instruction numbers flying to the left -> FIXED. The rules now carry
+   their numerals inside the text (١. ٢. ٣. ٤.) typed like the question
+   pages - automatic list numbers could drift to the wrong edge; these
+   cannot. Still fully editable by the teacher.
+4. Questions spilling to a second page -> FIXED. Each exam section keeps
+   exactly ONE question page: as the teacher types, the font shrinks
+   automatically so everything fits; when text is deleted it grows back.
+   Floor of 12pt, then the old warning chip appears. An explicit
+   "Insert Page Break" still allows more pages on purpose.
+5. NEW "Questions Font Size" selector (Step 1): Small 22 / Medium 26 /
+   Large 32 (= the school paper) / X-Large 36 / Huge 40. It never lets an
+   exam pass one page.
+6. Opening a saved exam now lands on Step 1, and Print / Download PDF
+   buttons are on Step 1 too.
+7. Cover margins widened (right 24mm, left 14mm) - more space on both
+   sides as requested.
+
+| File | Notes |
+|---|---|
+| create-exam.html | font-size select + Step-1 print buttons + typed-numeral instructions in the cover template |
+| js/exam.js | auto-fit one-page engine (autoFitOnePage), updateExamZoom (true A4 view on phones), fitOneLineText cover fitting, loadExam -> Step 1, font selector wiring |
+| css/exam.css | wider cover margins, .instruction-line, direction anchoring for the zoomed phone view, media block now keeps real A4 pages |
+| css/modern-ui.css, images/bismillah.png | unchanged since Pack 7/8 |
+
+Supersedes Pack 8.
+
+---
+
 # Fix Pack 8 — 17 July 2026 (many exams in ONE PDF)
 
 Requested: write several exams (each with its OWN exam information) in one

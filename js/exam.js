@@ -86,6 +86,33 @@ function initExam() {
     const firstCover = document.getElementById("coverPage");
     if (firstCover) buildCover(firstCover);
 
+    // NEW (cover text fits one line): once now, again when webfonts
+    // arrive, and on resize/rotate - keeps the cover exactly A4 everywhere.
+    fitAllCoverOneLiners();
+    if (document.fonts && document.fonts.ready) {
+        document.fonts.ready.then(fitAllCoverOneLiners);
+    }
+    let fitTimer = null;
+    window.addEventListener("resize", function () {
+        clearTimeout(fitTimer);
+        fitTimer = setTimeout(function () {
+            fitAllCoverOneLiners();
+            updateExamZoom();
+        }, 400);
+    });
+
+    // NEW (question font size feature): the teacher picks the starting
+    // size in Step 1; the auto-fit still shrinks it if questions spill.
+    const fontSel = document.getElementById("examFontSelect");
+    if (fontSel) {
+        fontSel.addEventListener("change", function () {
+            document.querySelectorAll("#examFlow .exam-body").forEach(function (b) {
+                b.style.fontSize = fontSel.value + "pt";
+            });
+            paginateExam();
+        });
+    }
+
     refreshAllPageHeaders();
     paginateExam();
 }
@@ -221,6 +248,62 @@ function buildCover(coverEl) {
     }
 }
 
+/* NEW (cover text fits one line on every device): phones do not have
+   Sakkal Majalla / Times New Roman, so the long cover lines wrapped and
+   the whole cover grew past the sheet (the downloaded PDF then squeezed
+   page 1 down). This shrinks ONLY the long one-liners until each fits its
+   width on ONE line. On the Windows laptop with the real fonts nothing
+   ever wraps, so nothing changes there. */
+function fitOneLineText(el, minPt) {
+    if (!el) return;
+    if (!el.dataset.basePt) {
+        el.dataset.basePt = ((parseFloat(getComputedStyle(el).fontSize) || 16) * 0.75).toFixed(2);
+    }
+    el.style.whiteSpace = "nowrap";
+    let pt = parseFloat(el.dataset.basePt);
+    el.style.fontSize = pt + "pt";
+    for (let i = 0; i < 6 && el.scrollWidth > el.clientWidth + 1 && pt > minPt; i++) {
+        pt = Math.max(minPt, pt * (el.clientWidth / el.scrollWidth) * 0.98);
+        el.style.fontSize = pt + "pt";
+    }
+}
+
+function fitCoverOneLiners(cover) {
+    [".cover-arabic-name", ".cover-english-name", ".cover-address",
+     ".cover-tel", ".cover-email", ".cover-motto", ".cover-exam-period"]
+    .forEach(function (sel) { fitOneLineText(cover.querySelector(sel), 12); });
+}
+
+function fitAllCoverOneLiners() {
+    document.querySelectorAll("#examFlow .exam-page.page-one").forEach(fitCoverOneLiners);
+}
+
+/* NEW (true A4 on every screen): on a narrow screen the whole flow keeps
+   its REAL A4 layout and the VIEW is zoomed out with one transform, so
+   typing, pagination, the auto font-fit and printing measure exactly the
+   same on phone and laptop. The margin trick keeps the layout height in
+   sync with the scaled-down view. */
+function updateExamZoom() {
+    const flow = document.getElementById("examFlow");
+    if (!flow || !flow.parentElement) return;
+    const main = flow.parentElement;
+    const pageEl = flow.querySelector(".exam-page");
+    const avail = main.clientWidth - 12;
+    const pw = pageEl ? pageEl.offsetWidth : 0;
+    if (pw > 0 && pw > avail) {
+        const s = avail / pw;
+        flow.style.transform = `scale(${s})`;
+        // .exam-pages is flex + align-items:center, so every page is
+        // horizontally centred; scaling about the same centre point keeps
+        // the zoomed page centred on the screen.
+        flow.style.transformOrigin = "center 0";
+        flow.style.marginBottom = (-(1 - s) * flow.scrollHeight) + "px";
+    } else {
+        flow.style.transform = "";
+        flow.style.marginBottom = "";
+    }
+}
+
 // The LAST cover in the document - the one "Generate Cover Page" fills.
 function lastCover() {
     const covers = document.querySelectorAll("#examFlow .exam-page.page-one");
@@ -284,6 +367,7 @@ function addExamSection() {
     flow.appendChild(cover);
     appendBodyPage(flow);          // its own question page, right after it
     fillCover(cover, true);        // start from the current wizard values
+    fitCoverOneLiners(cover);      // NEW (cover text fits one line)
     paginateExam();
     if (window.amsToast) {
         window.amsToast("New exam added at the end. Set its details in Step 1 and press \"Generate Cover Page\" - it fills the NEW cover.", "info", 7000);
@@ -447,14 +531,90 @@ function paginateExam() {
 
     refreshAllPageHeaders();
     checkAllPagesOverflow();
+    updateExamZoom(); // NEW (true A4 on every screen): page count changed
 }
 
-/* Lay out ONE section (cover + its question pages). Identical never-split
-   logic as before, but applied to this section only; pages are created /
-   removed between this cover and the next one. */
+/* NEW (one page per exam - auto font fit): readability floor for the
+   automatic shrink - below this, the overflow warning chip takes over. */
+const EXAM_MIN_PT = 12;
+
+/* The question font size the teacher picked in Step 1 (the page style
+   select). The auto-fit shrinks from there, never above it. */
+function examBaseFontPt() {
+    const s = document.getElementById("examFontSelect");
+    return s && s.value ? parseFloat(s.value) : 32;
+}
+
+/* Shrink (or grow back) ONE question page's font until its blocks fit the
+   page budget. Measured live, so wrapping is accounted for - the page
+   count NEVER grows from typing; only an explicit "Insert Page Break"
+   gives a section more than one page. */
+function autoFitOnePage(page) {
+    const content = page.querySelector(".page-content");
+    if (!content) return;
+    const base = examBaseFontPt();
+    const blocks = Array.from(content.children).filter(function (b) {
+        return !b.classList.contains("manual-page-break");
+    });
+    if (!blocks.length) { content.style.fontSize = base + "pt"; return; }
+
+    const budget = budgetFor(page);
+    let cur = Math.min(parseFloat(content.style.fontSize) || base, base);
+    content.style.fontSize = cur + "pt";
+
+    for (let i = 0; i < 8; i++) {
+        let used = 0;
+        blocks.forEach(function (b) { used += outerHeightPx(b); });
+
+        if (used > budget + 1) {
+            // too tall -> shrink proportionally (2% safety for font metrics)
+            const next = Math.max(EXAM_MIN_PT, cur * (budget / used) * 0.98);
+            if (Math.abs(next - cur) < 0.05) break;      // cannot improve
+            cur = next;
+            content.style.fontSize = cur + "pt";
+            if (cur <= EXAM_MIN_PT) break;               // floor: chip takes over
+            continue;
+        }
+        if (cur < base - 0.05) {
+            // fits with room -> grow back towards the chosen size
+            const next = Math.min(base, cur * (budget / Math.max(used, 1)));
+            if (next - cur < 0.05) break;
+            cur = next;
+            content.style.fontSize = cur + "pt";
+            continue;
+        }
+        break; // fits at the chosen size
+    }
+}
+
+/* Lay out ONE section (cover + its question pages).
+   CHANGED (one page per exam - auto font fit): a section WITHOUT manual
+   page breaks keeps exactly ONE question page - overflow shrinks the
+   font instead of creating a new page, exactly as the school's printed
+   papers (cover + one question page per exam). Sections where the
+   teacher inserted a page break keep the classic multi-page layout. */
 function paginateSegment(flow, seg) {
     if (!seg.bodies.length) {
         seg.bodies.push(appendBodyPage(flow, seg.cover));
+    }
+
+    const hasBreaks = seg.bodies.some(function (p) {
+        return !!p.querySelector(".manual-page-break");
+    });
+
+    if (!hasBreaks) {
+        // Merge every question of this section onto its single page, then
+        // auto-fit the font. (Moving the SAME nodes keeps the caret.)
+        const firstContent = seg.bodies[0].querySelector(".page-content");
+        seg.bodies.forEach(function (page, i) {
+            if (i === 0) return;
+            const c = page.querySelector(".page-content");
+            if (c) Array.from(c.children).forEach(function (b) { firstContent.appendChild(b); });
+            page.remove();
+        });
+        seg.bodies = [seg.bodies[0]];
+        autoFitOnePage(seg.bodies[0]);
+        return;
     }
 
     // Collect every block in document order, inside this section only.
@@ -1072,7 +1232,8 @@ function loadExam(id) {
 
             resetFlow(flowHtml);
             closeLoadPanel();
-            examGotoStep(2);
+            fitAllCoverOneLiners();
+            examGotoStep(1); // CHANGED: opened exams land on the details step
         })
         .catch(error => {
             console.log(error);

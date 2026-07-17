@@ -329,6 +329,12 @@ body{
 ========================================================== */
 .exam-flow{
   cursor:text;
+  /* FIX (true A4 on every screen): the pages are 210mm wide even on a
+     phone, so in an RTL container they would overflow to the LEFT and the
+     zoomed view would show them shifted off-screen. Anchor the flow LTR
+     (zoom math is direction-neutral physical pixels); every page keeps
+     its own RTL text behaviour. */
+  direction:ltr;
 }
 .exam-flow:focus{
   outline:none;
@@ -361,7 +367,9 @@ body{
   position:relative;
   display:flex;
   flex-direction:column;
-  padding:2mm 22mm 10mm 8mm; /* top / right / bottom / left - paper margins */
+  /* CHANGED (wider cover margins): more breathing room on BOTH sides -
+     right 24mm / left 14mm gives the paper a calmer, more formal frame. */
+  padding:3mm 24mm 12mm 14mm; /* top / right / bottom / left */
 }
 .page-one .cover-header{
   text-align:center;
@@ -403,7 +411,9 @@ body{
   height:5mm;
   width:auto;
   background:#000;
-  margin:0 -19.2mm 6mm -3.8mm;
+  /* bleeds past the text margins: ~4mm from each paper edge, like the
+     rule on the school's own papers */
+  margin:0 -20mm 6mm -10mm;
 }
 .page-one .cover-address{
   font-family:'Times New Roman',Times,serif;
@@ -483,8 +493,20 @@ body{
   line-height:1.35;
   margin:0 0 .5mm;
 }
+/* The paper's numbered rules are plain paragraphs with the number typed
+   INTO the line (١. ٢. ٣. ٤.) - an automatic list number can drift to the
+   wrong edge in some renderers (it did on the phone PDF); typed numbers
+   always stay at the right. (The old <ol> rule below is kept only for
+   covers saved by the previous version.) */
+.page-one .cover-instructions .instruction-line{
+  font-size:20pt;
+  font-weight:700;
+  line-height:1.58;
+  margin:0;
+  text-align:right;
+}
 .page-one .cover-instructions ol{
-  list-style-type:decimal;   /* the paper numbers the rules 1. 2. 3. 4. */
+  list-style-type:decimal;   /* legacy covers only */
   padding-right:1.4em;       /* physical (RTL page) - also html2canvas-safe */
   padding-left:0;
   margin:0;
@@ -654,6 +676,7 @@ body{
 
 .exam-page{
   width:210mm;
+  direction:rtl;   /* FIX (true A4 on every screen): see .exam-flow above */
   min-height:297mm;
   max-width:100%;
   background:#fff;
@@ -1110,41 +1133,18 @@ body{
   .exam-format-toolbar select{ flex:0 0 auto; }
 
   .exam-pages{ padding:12px 6px 40px; gap:16px; }
+
+  /* CHANGED (true A4 on every screen): pages now keep their REAL A4 size
+     even on a phone - js/exam.js (updateExamZoom) zooms the VIEW out with
+     one transform, so typing, pagination, the auto font-fit and printing
+     all measure identically on every device. The old per-element
+     proportional font scaling was removed: it made phones paginate
+     differently from the laptop and bloated the cover, which then got
+     squashed in the downloaded phone PDF. */
   .exam-page{
-    width:100% !important;
-    max-width:100%;
-    min-height:auto;
-    padding:7% 6%;   /* same proportions as the A4 print margins */
+    width:210mm !important;
+    max-width:none;
   }
-
-  /* CHANGED (school paper design): question pages have no header any
-     more, so the old .eph-* mobile rules were removed. Instead, the
-     cover and question fonts scale DOWN on small screens by roughly the
-     same factor the page itself shrinks (a phone is ~half the width of
-     an A4 page) - the on-screen look stays proportional to the printout.
-     Printing is NOT affected by any of this. */
-
-  .page-one .cover-bismillah{ width:22mm; }
-  .page-one .cover-logo{ width:21mm; }
-  .page-one .cover-divider{ height:2.6mm; }
-  .page-one .cover-arabic-name{ font-size:19pt; }
-  .page-one .cover-english-name{ font-size:9pt; }
-  .page-one .cover-address{ font-size:9pt; }
-  .page-one .cover-tel,
-  .page-one .cover-email{ font-size:11pt; }
-  .page-one .cover-motto{ font-size:10pt; }
-  .page-one .cover-exam-period{ font-size:11pt; }
-  .page-one .cover-info-table td{ font-size:11pt; }
-  .page-one .cover-info-table .blank-line-short{ width:24mm; }
-  .page-one .instructions-title,
-  .page-one .cover-instructions ol{ font-size:11pt; }
-  .page-one .cover-wish{ font-size:6pt; }
-  .page-one .cover-code{ font-size:9pt; }
-
-  .exam-body.spacing-compact{ font-size:14pt; }
-  .exam-body.spacing-normal{ font-size:17pt; }
-  .exam-body.spacing-relaxed{ font-size:19pt; }
-  .exam-body.spacing-spacious{ font-size:20pt; }
 
   .exam-next-page-wrap{ padding:0 10px 90px; } /* room for the floating button */
   .exam-next-page-wrap button{ width:100%; }
