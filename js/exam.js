@@ -1291,11 +1291,28 @@ function deleteExamFromPanel(id) {
    11. PRINT + PDF
 ========================================================================== */
 
-// Called by the "Print / Save as PDF" button. window.print() on computers;
-// a helpful tip on phones (where print is often blocked).
+// Called by the "Print / Save as PDF" button.
+// CHANGED (phone print fix): Android Chrome silently IGNORES window.print() -
+// pressing Print on the phone genuinely did nothing ("print is not
+// displaying anything"). On Android we now build the same A4 PDF and open
+// it, so printing/sharing happens from the phone's own PDF viewer. Other
+// devices keep the normal print dialog.
 function examPrint() {
+    if (/Android/i.test(navigator.userAgent)) {
+        downloadExamPDF(true); // true = open the PDF in the phone viewer
+        return;
+    }
+    paginateExam(); // fresh layout before printing, just in case
+    // The phone view-zoom (updateExamZoom) uses a transform + negative
+    // margin. Clear them around print so the paper always prints at the
+    // true A4 size (the @media print rules also force the same).
+    var flow = document.getElementById("examFlow");
+    var savedT = flow ? flow.style.transform : "";
+    var savedM = flow ? flow.style.marginBottom : "";
+    if (flow) { flow.style.transform = ""; flow.style.marginBottom = ""; }
     window.print();
-    if (/Android|iPhone|iPad|iPod/i.test(navigator.userAgent) && window.amsToast) {
+    if (flow) { flow.style.transform = savedT; flow.style.marginBottom = savedM; }
+    if (/iPhone|iPad|iPod/i.test(navigator.userAgent) && window.amsToast) {
         window.amsToast(
             "Phone tip: on mobile use the browser menu (\u22EE) \u2192 Share \u2192 Print.",
             "info",
@@ -1304,11 +1321,50 @@ function examPrint() {
     }
 }
 
+// NEW (device-proof PDF capture): on a phone the downloader used to
+// photograph each page exactly as the phone displayed it - and phones laid
+// the page out narrower and TALLER than real A4. One tall page then made the
+// old fit-shrinking shrink EVERY PDF page with fat white margins (the
+// "looks fine on the site, broken after download" bug). Fix: photograph a
+// hidden, exact full-size A4 COPY of each page instead (.pdf-capture-stage
+// in css/exam.css pins the copy to 210x297mm and crops at the page edge),
+// so phone, tablet and laptop now produce identical full-page PDFs and the
+// global fit below stays at 1 (no shrinking) by construction.
+function capturePageAsA4(page) {
+    var stage = document.createElement("div");
+    // ams-capturing on the stage reuses the same css rules, so screen-only
+    // chips/tools/the cover-delete button stay hidden in the copy too.
+    stage.className = "pdf-capture-stage ams-capturing";
+    stage.setAttribute("aria-hidden", "true");
+
+    var clone = page.cloneNode(true);
+    clone.removeAttribute("id");
+    // The copy lives in the same document for a moment - no duplicate ids.
+    clone.querySelectorAll("[id]").forEach(function (el) { el.removeAttribute("id"); });
+    stage.appendChild(clone);
+    document.body.appendChild(stage);
+
+    // Wait for web fonts so the Arabic text measures/paints exactly like on screen.
+    var fontsReady = (document.fonts && document.fonts.ready) || Promise.resolve();
+    return fontsReady.then(function () {
+        return html2canvas(clone, { scale: 2, backgroundColor: "#ffffff", useCORS: true });
+    }).then(function (cv) {
+        stage.remove();
+        return cv;
+    }, function (err) {
+        stage.remove();
+        throw err;
+    });
+}
+
 // Downloads the whole exam as ONE consistent A4 PDF. Since the engine now
 // lays pages out perfectly, the global fit is almost always exactly 1 -
 // the per-page scale still protects against any odd oversized block,
 // and every page shares it, so formatting stays identical page to page.
-function downloadExamPDF() {
+// CHANGED: openInViewer=true opens the finished PDF in the phone's own
+// PDF viewer instead of just downloading it (used by the Print button on
+// Android, where window.print() is ignored by the browser).
+function downloadExamPDF(openInViewer) {
     if (!window.jspdf || !window.html2canvas) {
         if (window.amsToast) window.amsToast("PDF generator is still loading - try again in a moment.", "info");
         return;
@@ -1345,7 +1401,9 @@ function downloadExamPDF() {
             finishPdf();
             return;
         }
-        html2canvas(pages[i], { scale: 2, backgroundColor: "#ffffff", useCORS: true })
+        // CHANGED (device-proof): capture the hidden A4 copy, not the
+        // on-screen (possibly phone-shrunken) page itself.
+        capturePageAsA4(pages[i])
             .then(function (cv) { canvases.push(cv); i++; captureNext(); })
             .catch(function () { i++; captureNext(); });
     }
@@ -1376,7 +1434,19 @@ function downloadExamPDF() {
             pdf.addImage(cv.toDataURL("image/jpeg", 0.95), "JPEG", (210 - finalW) / 2, 0, finalW, finalH);
         });
 
-        pdf.save("exam.pdf");
+        if (openInViewer && typeof pdf.output === "function") {
+            // Android print path: open the PDF so it can be printed/shared
+            // from the phone's viewer. Popup blocked? Fall back to download.
+            try {
+                var blobUrl = pdf.output("bloburl");
+                var win = window.open(blobUrl, "_blank");
+                if (!win) pdf.save("exam.pdf");
+            } catch (e) {
+                pdf.save("exam.pdf");
+            }
+        } else {
+            pdf.save("exam.pdf");
+        }
 
         if (window.amsToast) {
             if (shrunkPages > 0) {

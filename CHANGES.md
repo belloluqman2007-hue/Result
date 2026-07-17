@@ -357,3 +357,28 @@ the staff-only "select a class and download ALL results (ZIP)" tool.
 
 Result calculations, positions, grading, printing, saving and all result
 APIs remain completely untouched.
+
+---
+
+## Exam paper pack 10 - download PDF, phone print, saved exams (owner request)
+
+**"What the hell it is normal on the website but after download I saw this."**
+The downloaded phone PDF showed every page shrunk to ~89% with wide white
+margins and a dead white band at the bottom. Diagnosis (proven from the
+PDF's own numbers): the downloader photographed each page exactly as the
+phone displayed it - narrower and TALLER than real A4 - and one tall page
+made the fitting rule shrink ALL pages. Phones and laptops therefore got
+different PDFs.
+
+**"The print is not displaying anything."** Android Chrome silently ignores
+window.print(), so pressing Print on the phone did literally nothing.
+
+**"Let the open saved exam also be in step 1 not step 2."**
+
+| File | What happened |
+|---|---|
+| `js/exam.js` | NEW `capturePageAsA4()` - the downloader now photographs a hidden, exact full-size A4 copy of each page, so every device produces the same full-page PDF with NO shrinking. `examPrint()` on Android now builds and OPENS the PDF (print/share from the phone viewer); desktop/iOS keep the normal print dialog, with the view-zoom cleared around printing. `downloadExamPDF(openInViewer)` gains open-in-viewer mode. |
+| `css/exam.css` | NEW `.pdf-capture-stage` hidden A4 studio (pins the capture copy to 210x297mm, crops at the page edge). The @media print rules now also strip the phone view-zoom so it can never leak onto paper. |
+| `create-exam.html` | NEW "Open Saved Exam" button on Step 1 (the Step-2 button stays). |
+
+Result module: untouched. All routes, APIs and tables: unchanged.
