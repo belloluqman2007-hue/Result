@@ -252,3 +252,22 @@ the template from the Add Student page after deploying.
 proportional margins; button bars wrap; the formatting toolbar scrolls
 horizontally. Screen-only change inside @media screen — print/PDF output still
 produces exact A4 pages.
+
+---
+
+## Result design restore (owner request)
+
+**"I told you not to touch the result design."** — The result report design
+is 100% OFF-LIMITS. This update returns the per-student report (on screen,
+in print, and in PDF) to the ORIGINAL design exactly, while keeping only
+the staff-only "select a class and download ALL results (ZIP)" tool.
+
+| File | What happened |
+|---|---|
+| `student-result.html` | REVERTED to original design. Removed the modern CSS layer + PDF renderer scripts. Kept only: PWA icon tags (invisible), the Arabic-join fix for the school name, and the staff-only export box. |
+| `js/result.js` | REVERTED to original. "Download PDF" behaves exactly as before (browser print dialog -> "Save as PDF"). The only addition is the small staff-only Excel export wiring. |
+| `css/modern-ui.css` | Removed the on-screen card rounding rule; modern table styling is now forbidden from touching anything inside `.report-container`. |
+| `js/report-card.js` | The class-ZIP report replica now matches the original design EXACTLY (same rows, same cells, same photo behaviour). |
+
+Result calculations, positions, grading, printing, saving and all result
+APIs remain completely untouched.

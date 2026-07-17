@@ -173,15 +173,10 @@ input:focus, select:focus, textarea:focus{
 }
 }
 
-/* Report card: on SCREEN we may soften corners, but the PRINTED
-   result sheet must look EXACTLY as before - so any visual tweak
-   here is wrapped in @media screen and cannot affect printing. */
-@media screen{
-  .report-container{
-    outline:none !important;
-    border-radius:var(--m-radius) !important;
-  }
-}
+/* CHANGED (owner request): the report card design is 100% OFF-LIMITS.
+   No corner softening, no outline change, nothing - the report sheet
+   (on screen, in print, and in whole-class ZIP PDFs) renders with the
+   ORIGINAL css/style.css rules exactly as the school approved. */
 
 /* ---------- 6. Summary cards (dashboard legacy `.card`) ---------- */
 @media screen{
@@ -204,12 +199,12 @@ input:focus, select:focus, textarea:focus{
    SCREEN-ONLY: at print time legacy style.css rules alone apply,
    so printed report/exam tables are 100% unchanged. */
 @media screen{
-table:not(#resultTable){
+table:not(#resultTable):not(.report-container *){
   border-collapse:separate;
   border-spacing:0;
 }
 
-table:not(#resultTable) th{
+table:not(#resultTable):not(.report-container *) th{
   background:linear-gradient(135deg,var(--m-emerald),var(--m-emerald-2));
   border:none;
   padding:12px 10px;
@@ -218,16 +213,16 @@ table:not(#resultTable) th{
   z-index:2;
 }
 
-table:not(#resultTable) td{
+table:not(#resultTable):not(.report-container *) td{
   border:none;
   border-bottom:1px solid var(--m-border);
 }
 
-table:not(#resultTable) tr:last-child td{
+table:not(#resultTable):not(.report-container *) tr:last-child td{
   border-bottom:none;
 }
 
-table:not(#resultTable) tr:nth-child(even){
+table:not(#resultTable):not(.report-container *) tr:nth-child(even){
   background:var(--m-surface-2);
 }
 }
@@ -1558,9 +1553,9 @@ html[data-theme="dark"] textarea{
   border-color:var(--m-border);
 }
 html[data-theme="dark"] input::placeholder{ color:#7B9184; }
-html[data-theme="dark"] table:not(#resultTable) tr:nth-child(even){ background:#16241D; }
-html[data-theme="dark"] table:not(#resultTable) tr:hover{ background:#1D3228; }
-html[data-theme="dark"] table:not(#resultTable) td{ border-bottom-color:var(--m-border); color:var(--m-text); }
+html[data-theme="dark"] table:not(#resultTable):not(.report-container *) tr:nth-child(even){ background:#16241D; }
+html[data-theme="dark"] table:not(#resultTable):not(.report-container *) tr:hover{ background:#1D3228; }
+html[data-theme="dark"] table:not(#resultTable):not(.report-container *) td{ border-bottom-color:var(--m-border); color:var(--m-text); }
 html[data-theme="dark"] h1,
 html[data-theme="dark"] h2,
 html[data-theme="dark"] h3{ color:#CFE9DA; }

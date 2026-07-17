@@ -245,48 +245,17 @@ function printResult() {
   window.print();
 }
 
-/* CHANGED (Result PDF upgrade - request #7): "Download PDF" now produces
-   a REAL, high-quality PDF file directly (no print dialog needed, works
-   on phones too). The report design itself is not altered in any way -
-   we simply capture the on-screen report exactly as it looks.
-   Long reports are sliced across A4 pages, so nothing is scaled down
-   or cut off. Print remains available via the Print button above. */
 function downloadPDF() {
   const studentIdCell = document.getElementById("studentId");
-  const studentId = studentIdCell ? studentIdCell.textContent.trim() : "";
 
-  if (!studentId || studentId === "-") {
+  if (!studentIdCell || studentIdCell.textContent.trim() === "" || studentIdCell.textContent.trim() === "-") {
     alert("Please search for a student first before downloading.");
     return;
   }
 
-  const report = document.getElementById("reportContainer");
-  if (!report) return;
+  alert('In the dialog that opens, set "Destination" to "Save as PDF" and make sure "Background graphics" is turned on, so the colors and Arabic text come out correctly.');
 
-  if (!window.jspdf || !window.html2canvas || !window.amsCanvasToA4Pdf) {
-    // Very first seconds after page load - fall back to the old print flow.
-    alert('The PDF tools are still loading.\n\nIn the dialog that opens, set "Destination" to "Save as PDF" and make sure "Background graphics" is turned on.');
-    window.print();
-    return;
-  }
-
-  if (window.amsToast) {
-    window.amsToast("Building high-quality PDF…", "info", 2500);
-  }
-
-  // scale 2.5 = extra sharp text and crisp Arabic harakat in the PDF.
-  window.html2canvas(report, { scale: 2.5, backgroundColor: "#ffffff", useCORS: true })
-    .then(function (canvas) {
-      const pdf = window.amsCanvasToA4Pdf(canvas, 0.95);
-      pdf.save(studentId + "-result.pdf");
-      if (window.amsToast) {
-        window.amsToast("Result PDF downloaded ✓", "success", 4500);
-      }
-    })
-    .catch(function (err) {
-      console.log(err);
-      alert("Could not build the PDF - please use the Print button instead.");
-    });
+  window.print();
 }
 /* ====================================================================
    NEW (staff export by class): shows a small "Export results to Excel"

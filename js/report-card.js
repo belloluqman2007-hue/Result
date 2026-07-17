@@ -109,7 +109,9 @@
                 totalScore += Number(result.total);
             });
             average = data.length > 0 ? Number((totalScore / data.length).toFixed(2)) : 0;
-            tableRows += `<tr><td colspan="3"><strong>Average</strong></td><td><strong>${average}</strong></td><td></td></tr>`;
+            // FIX (exact-original parity): the original average row has
+            // NO trailing empty cell on 1st/2nd term reports.
+            tableRows += `<tr><td colspan="3"><strong>Average</strong></td><td><strong>${average}</strong></td></tr>`;
         }
 
         // Remarks - identical thresholds and wording to js/result.js
@@ -136,7 +138,7 @@
         <h2 class="school-line"> <span id="reportLevel">${esc(reportLevel)}</span></h2>
       </div>
       <img src="${esc(photoSrc)}" class="student-passport"
-           onerror="this.onerror=null; this.src='images/default.png';" loading="lazy" alt="Student Photo">
+           onerror="this.onerror=null; this.src='images/default.png';" alt="Student Photo">
     </div>
 
     <h3>Student Information</h3>

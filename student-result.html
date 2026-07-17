@@ -5,9 +5,6 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Check Result | Ameenullah School of Arabic and Islamic Studies</title>
   <link rel="stylesheet" href="css/style.css">
-  <!-- NEW: modern visual upgrade layer (search panel only; the report
-       card and its print/PDF output are NOT visually altered) -->
-  <link rel="stylesheet" href="css/modern-ui.css">
 
   <!-- NEW (PWA conversion): makes the site installable as a phone/desktop
        app with its own icon. Purely additive - no styling or behaviour
@@ -16,6 +13,15 @@
   <meta name="theme-color" content="#2f5021">
   <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+
+  <!-- FIX (Arabic repair only, request #1): keeps the Arabic school name
+       and report title naturally joined (letter-spacing disconnects
+       Arabic letters). NOTHING else is touched - the report design,
+       spacing, colours and print/PDF output are 100% the original. -->
+  <style>
+    [lang="ar"]{ font-family:'Amiri','Cairo',serif; letter-spacing:normal !important; }
+    #reportLevel{ letter-spacing:normal !important; }
+  </style>
 </head>
 <body>
 
@@ -44,24 +50,23 @@
 <button onclick="printResult()">Print Result</button>
 <button onclick="downloadPDF()" id="downloadBtn">Download PDF</button>
 
-<!-- NEW (staff export): export results by class to Excel, right here on
-     the Check Result page as requested. Hidden from the public - it only
-     appears when a staff member is logged in (wired up in js/result.js).
-     READ-ONLY: no result styling, layout or printing is touched. -->
+<!-- NEW (staff tools, additive + hidden from the public): only appears
+     when a staff member is logged in. Lets staff export results by
+     class to Excel, or open the Class Results page to pick a CLASS +
+     session + term and download ALL students' results in one ZIP
+     (each PDF uses the ORIGINAL report design below). READ-ONLY:
+     no result styling, layout, calculation or printing is touched. -->
 <div id="staffExport" style="display:none; margin-top:14px; padding:12px; border:1px dashed #2f5021; border-radius:10px;">
-  <strong style="font-size:14px; color:#2f5021;">Staff only: Export results to Excel</strong>
+  <strong style="font-size:14px; color:#2f5021;">Staff only: Export results</strong>
   <div style="display:flex; gap:8px; margin-top:8px; flex-wrap:wrap;">
     <select id="exportClass" style="flex:1; min-width:180px; padding:9px;">
       <option value="">All classes</option>
     </select>
     <button type="button" id="exportBtn">&#11015; Download Excel</button>
   </div>
-  <!-- NEW (whole-class results PDF, request #7): a SEPARATE option that
-       opens the Class Results page (choose Class + Session + Term -> one
-       combined PDF). The per-student "Download Result" above is unchanged. -->
   <div style="display:flex; gap:8px; margin-top:10px; flex-wrap:wrap; border-top:1px solid #e2e8e4; padding-top:10px;">
-    <a href="class-results.html" style="text-decoration:none;">
-      <button type="button">&#128196; Whole Class Results (PDF) &rarr;</button>
+    <a href="class-results.html" style="text-decoration:none; flex:1; min-width:220px;">
+      <button type="button" style="width:100%;">&#128196; Download All Class Results (ZIP) &rarr;</button>
     </a>
   </div>
 </div>
@@ -70,7 +75,7 @@
     <div class="report-header">
       <img src="images/LOGO.JPG" class="school-logo">
       <div class="school-details">
-<!-- NEW (Arabic repair, #1): lang="ar" keeps the Arabic school name
+<!-- FIX (Arabic repair, #1): lang="ar" keeps the Arabic school name
      naturally joined (the old letter-spacing disconnected it). -->
 <h1 lang="ar">مدرسة أمين اللّه للعلوم العربيّة الإسلاميّة</h1>
       <h1>AMEENULLAH SCHOOL OF ARABIC AND ISLAMIC STUDIES</h1>
@@ -164,7 +169,7 @@ alt="Student Photo">
 </table>
 
  
- 
+
 
 
 
@@ -184,14 +189,6 @@ alt="Student Photo">
 </div>
 </div>
 
-<!-- NEW: shared UI helpers (turns alert() popups into toasts) - additive -->
-<script src="js/ui.js"></script>
-<!-- NEW (Result PDF upgrade, request #7): local PDF tools + the shared
-     report renderer's A4 slicing helper - lets "Download PDF" produce a
-     real high-quality PDF file on any device. No CDN. -->
-<script src="js/vendor/jspdf.umd.min.js"></script>
-<script src="js/vendor/html2canvas.min.js"></script>
-<script src="js/report-card.js"></script>
 <script src="js/result.js"></script>
 
   <!-- NEW (PWA conversion): registers the service worker + install button. Additive only. -->
