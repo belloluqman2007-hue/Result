@@ -19,192 +19,256 @@
 </head>
 <body onload="checkAuth(); initExam();">
 
-  <div class="exam-toolbar-outer">
-    <a href="teacher-dashboard.html" class="nav-btn" style="margin:10px 0 0 10px; display:inline-block;">&larr; Back to Dashboard</a>
+  <!-- ==========================================================
+       NEW (sidebar layout - user request): ALL exam tools (exam
+       details, action buttons, formatting toolbar, harakat) now
+       live in a fixed left sidebar, so the exam pages themselves
+       use the WHOLE screen and can be read freely - exactly like
+       reading the final printed paper. On phones the sidebar
+       slides away behind the "☰ Exam Tools" button.
 
-    <div class="exam-meta-bar">
-      <div class="meta-field">
-        <label>Exam Title</label>
-        <input type="text" id="examTitle" placeholder="e.g. 2nd Term Exam - Tajweed">
-      </div>
+       Every original field, id, class and onclick below is kept -
+       only the surrounding layout changed.
+  ========================================================== -->
+  <button type="button" class="exam-side-toggle" id="examSideToggle" onclick="toggleExamSidebar()">
+    &#9776; Exam Tools
+  </button>
+  <div class="exam-side-scrim" id="examSideScrim" onclick="toggleExamSidebar(false)"></div>
 
-      <div class="meta-field">
-        <label>Class</label>
-        <select id="examClass"><option value="" disabled selected>Select Class</option></select>
-      </div>
+  <aside class="exam-toolbar-outer exam-sidebar" id="examSidebar">
+    <a href="teacher-dashboard.html" class="nav-btn exam-side-back">&larr; Back to Dashboard</a>
 
-      <div class="meta-field">
-        <label>Subject</label>
-        <select id="examSubject"><option value="" disabled selected>Select class first</option></select>
-      </div>
+    <!-- ===== STEP 1: exam details (wizard, request #6) ===== -->
+    <div id="examStep1">
 
-      <div class="meta-field">
-        <label>Term</label>
-        <select id="examTerm">
-          <option value="" disabled selected>Select Term</option>
-          <option>1st Term</option>
-          <option>2nd Term</option>
-          <option>3rd Term</option>
-        </select>
-      </div>
-
-      <div class="meta-field">
-        <label>Session</label>
-        <select id="examSession">
-          <option value="" disabled selected>Select Session</option>
-          <option>2025/2026</option>
-          <option>2026/2027</option>
-          <option>2027/2028</option>
-          <option>2028/2029</option>
-          <option>2029/2030</option>
-        </select>
-      </div>
-
-      <div class="meta-field">
-        <label>Duration</label>
-        <input type="text" id="examDuration" placeholder="e.g. ساعة واحدة" value="ساعة واحدة">
-      </div>
-
-      <div class="meta-field meta-actions">
-        <button type="button" onclick="generateCoverPage()">Generate Cover Page</button>
-      </div>
-    </div>
-
-    <div class="exam-actions-bar">
-      <button type="button" onclick="saveExam()">Save Exam</button>
-      <button type="button" onclick="openLoadPanel()">Open Saved Exam</button>
-      <button type="button" onclick="insertPageBreak()">+ New Page</button>
-      <button type="button" onclick="removeLastPage()">- Remove Last Page</button>
-      <!-- CHANGED (print fix): calls examPrint() in js/exam.js - identical
-           to window.print() on computers, plus a helpful tip on phones. -->
-      <button type="button" onclick="examPrint()">Print / Save as PDF</button>
-      <!-- NEW: phone-proof printing - downloads the whole exam as a PDF
-           that can be printed/shared from any phone -->
-      <button type="button" onclick="downloadExamPDF()">&#11015; Download PDF (phone)</button>
-    </div>
-
-    <!-- Rich text toolbar for the body -->
-    <div class="exam-format-toolbar">
-      <button type="button" onclick="format('bold')"><b>B</b></button>
-      <button type="button" onclick="format('italic')"><i>I</i></button>
-      <button type="button" onclick="format('underline')"><u>U</u></button>
-      <span class="divider"></span>
-      <button type="button" onclick="format('justifyLeft')">&#8676;</button>
-      <button type="button" onclick="format('justifyCenter')">&#8646;</button>
-      <button type="button" onclick="format('justifyRight')">&#8677;</button>
-      <span class="divider"></span>
-      <button type="button" onclick="format('insertUnorderedList')">&bull; List</button>
-      <button type="button" onclick="format('insertOrderedList')">1. List</button>
-      <span class="divider"></span>
-      <button type="button" onclick="insertTable()">Insert Table</button>
-      <span class="divider"></span>
-      <label class="toolbar-label">Spacing:</label>
-      <select id="spacingSelect" onchange="setSpacing()">
-        <option value="compact">Compact</option>
-        <option value="normal" selected>Normal</option>
-        <option value="relaxed">Relaxed</option>
-        <option value="spacious">Fill Page (Extra Spacious)</option>
-      </select>
-      <span class="divider"></span>
-      <button type="button" onclick="toggleDirection()" id="dirToggleBtn">RTL / LTR</button>
-      <select id="fontSizeSelect" onchange="setFontSize()">
-        <option value="3">Normal</option>
-        <option value="4">Large</option>
-        <option value="5">Larger</option>
-        <option value="6">X-Large</option>
-      </select>
-      <span class="divider"></span>
-      <button type="button" id="voiceBtn" onclick="toggleVoice()">&#127908; Voice Note</button>
-      <select id="voiceLang">
-        <option value="ar-SA">Arabic</option>
-        <option value="en-US">English</option>
-      </select>
-    </div>
-
-    <!-- Harakat palette: manual diacritic insertion, since true automatic
-         AI diacritization needs an external API key we don't have wired up -->
-    <div class="harakat-palette" id="harakatPalette">
-      <span class="harakat-label">Harakat:</span>
-      <button type="button" onclick="insertHarakat('\u064B')">ً</button>
-      <button type="button" onclick="insertHarakat('\u064C')">ٌ</button>
-      <button type="button" onclick="insertHarakat('\u064D')">ٍ</button>
-      <button type="button" onclick="insertHarakat('\u064E')">َ</button>
-      <button type="button" onclick="insertHarakat('\u064F')">ُ</button>
-      <button type="button" onclick="insertHarakat('\u0650')">ِ</button>
-      <button type="button" onclick="insertHarakat('\u0651')">ّ</button>
-      <button type="button" onclick="insertHarakat('\u0652')">ْ</button>
-      <button type="button" onclick="insertHarakat('\u0653')">ٓ</button>
-      <button type="button" onclick="insertHarakat('\u0640')">ـ</button>
-    </div>
-  </div>
-
-  <div class="exam-pages" id="examPages">
-
-    <!-- PAGE 1: auto-generated cover / letterhead -->
-    <div class="exam-page cover-page" id="coverPage">
-      <div class="cover-header">
-        <p class="bismillah">بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ</p>
-
-        <img src="images/LOGO.JPG" class="cover-logo" alt="School Logo">
-
-        <h1 class="cover-arabic-name">مَدْرَسَةُ أَمِينِ اللهِ لِلْعُلُومِ الْعَرَبِيَّةِ الْإِسْلَامِيَّةِ</h1>
-        <h2 class="cover-english-name">AMEENULLAH SCHOOL OF ARABIC AND ISLAMIC STUDIES</h2>
-
-        <div class="cover-divider"></div>
-
-        <p class="cover-address">3, Temidire Street off Ondo Benin Road, Ijebu-Ode, Ogun State, Nigeria.</p>
-        <p class="cover-contact">Tel: 08062445559, 08058306889.</p>
-        <p class="cover-contact">E-mail: <a href="mailto:madrasatuameenillah22@gmail.com">madrasatuameenillah22@gmail.com</a></p>
-        <p class="cover-motto">الشِّعَارُ: الْعِلْمُ وَالْعِبَادَةُ. &nbsp; MOTTO: KNOWLEDGE AND WORSHIP.</p>
-      </div>
-
-      <div class="cover-exam-details">
-        <p class="cover-exam-period" id="coverExamPeriod">امْتِحَانُ الْفَتْرَةِ ... لِلْعَامِ الدِّرَاسِيِّ ....\....</p>
-
-        <table class="cover-info-table">
-          <tr>
-            <td class="label">الاِسْمُ:</td>
-            <td class="blank-line" colspan="3"></td>
-          </tr>
-          <tr>
-            <td class="label">الْمَادَّةُ:</td>
-            <td class="value" id="coverSubject">-</td>
-            <td class="label">رَقْمُ الْقَبُولِ:</td>
-            <td class="blank-line-short"></td>
-          </tr>
-          <tr>
-            <td class="label">الْمُدَّةُ:</td>
-            <td class="value" id="coverDuration">ساعة واحدة</td>
-            <td class="label">الْفَصْلُ:</td>
-            <td class="value" id="coverClass">-</td>
-          </tr>
-        </table>
-
-        <div class="cover-instructions" id="coverInstructions" contenteditable="true">
-          <p class="instructions-title">إِرْشَادَاتُ الْاِمْتِحَانِ:</p>
-          <ol>
-            <li>لَا تَفْتَحْ حَتَّى تُؤْمَرَ بِذَلِكَ.</li>
-            <li>لَا تُضَيِّعْ هَذِهِ وَرَقَةَ السُّؤَالِ.</li>
-            <li>اِسْتَعِنْ بِاللَّهِ.</li>
-            <li>ثُمَّ ابْدَأْ.</li>
-          </ol>
+      <div class="exam-step-head">
+        <span class="exam-step-pill">Step 1 of 2</span>
+        <div>
+          <strong>Exam Details</strong>
+          <span class="exam-step-hint">Choose the class, subject, term and session - then continue to write the questions.</span>
         </div>
       </div>
 
-      <div class="cover-footer">
-        <p class="cover-wish">مع تمنياتي لكم بالنجاح.</p>
-        <p class="cover-code" id="coverCode">AMSAIS@2026/1447</p>
+      <div class="exam-meta-bar">
+        <div class="meta-field">
+          <label>Exam Title</label>
+          <input type="text" id="examTitle" placeholder="e.g. 2nd Term Exam - Tajweed">
+        </div>
+
+        <div class="meta-field">
+          <label>Class</label>
+          <select id="examClass"><option value="" disabled selected>Select Class</option></select>
+        </div>
+
+        <div class="meta-field">
+          <label>Subject</label>
+          <select id="examSubject"><option value="" disabled selected>Select class first</option></select>
+        </div>
+
+        <div class="meta-field">
+          <label>Term</label>
+          <select id="examTerm">
+            <option value="" disabled selected>Select Term</option>
+            <option>1st Term</option>
+            <option>2nd Term</option>
+            <option>3rd Term</option>
+          </select>
+        </div>
+
+        <div class="meta-field">
+          <label>Session</label>
+          <select id="examSession">
+            <option value="" disabled selected>Select Session</option>
+            <option>2025/2026</option>
+            <option>2026/2027</option>
+            <option>2027/2028</option>
+            <option>2028/2029</option>
+            <option>2029/2030</option>
+          </select>
+        </div>
+
+        <div class="meta-field">
+          <label>Duration</label>
+          <input type="text" id="examDuration" placeholder="e.g. ساعة واحدة" value="ساعة واحدة" lang="ar">
+        </div>
+
+        <div class="meta-field meta-actions">
+          <button type="button" onclick="generateCoverPage()">Generate Cover Page</button>
+        </div>
+
+        <!-- NEW (wizard): proceeds to the question editor (Step 2). -->
+        <div class="meta-field meta-actions">
+          <button type="button" class="exam-next-btn" onclick="examGotoStep(2)">Next: Write Questions &rarr;</button>
+        </div>
       </div>
+
     </div>
 
-    <!-- PAGE 2+: the actual exam body, Word-like editable area -->
-    <div class="exam-page body-page">
-      <div class="exam-body spacing-normal" id="examBody" contenteditable="true" dir="rtl">
-        <p>ابدأ كتابة الامتحان هنا...</p>
+    <!-- ===== STEP 2: the question editor tools (shown after "Next") ===== -->
+    <div id="examStep2" style="display:none;">
+
+      <div class="exam-step-head">
+        <span class="exam-step-pill">Step 2 of 2</span>
+        <div>
+          <strong>Write the Questions</strong>
+          <span class="exam-step-hint" id="examWizardSummary">Every page automatically carries the exam header.</span>
+        </div>
       </div>
+
+      <div class="exam-actions-bar">
+        <button type="button" onclick="saveExam()">Save Exam</button>
+        <button type="button" onclick="openLoadPanel()">Open Saved Exam</button>
+        <button type="button" onclick="insertPageBreak()">+ New Page</button>
+        <button type="button" onclick="removeLastPage()">- Remove Last Page</button>
+        <!-- CHANGED (print fix): calls examPrint() in js/exam.js - identical
+             to window.print() on computers, plus a helpful tip on phones. -->
+        <button type="button" onclick="examPrint()">Print / Save as PDF</button>
+        <!-- NEW: phone-proof printing - downloads the whole exam as a PDF
+             that can be printed/shared from any phone -->
+        <button type="button" onclick="downloadExamPDF()">&#11015; Download PDF (phone)</button>
+        <button type="button" class="exam-back-btn" onclick="examGotoStep(1)">&larr; Exam Details</button>
+      </div>
+
+      <!-- Rich text toolbar for the body -->
+      <div class="exam-format-toolbar">
+        <button type="button" onclick="format('bold')"><b>B</b></button>
+        <button type="button" onclick="format('italic')"><i>I</i></button>
+        <button type="button" onclick="format('underline')"><u>U</u></button>
+        <span class="divider"></span>
+        <button type="button" onclick="format('justifyLeft')">&#8676;</button>
+        <button type="button" onclick="format('justifyCenter')">&#8646;</button>
+        <button type="button" onclick="format('justifyRight')">&#8677;</button>
+        <span class="divider"></span>
+        <button type="button" onclick="format('insertUnorderedList')">&bull; List</button>
+        <button type="button" onclick="format('insertOrderedList')">1. List</button>
+        <span class="divider"></span>
+        <button type="button" onclick="insertTable()">Insert Table</button>
+        <span class="divider"></span>
+        <label class="toolbar-label">Spacing:</label>
+        <select id="spacingSelect" onchange="setSpacing()">
+          <option value="compact">Compact</option>
+          <option value="normal" selected>Normal</option>
+          <option value="relaxed">Relaxed</option>
+          <option value="spacious">Fill Page (Extra Spacious)</option>
+        </select>
+        <span class="divider"></span>
+        <button type="button" onclick="toggleDirection()" id="dirToggleBtn">RTL / LTR</button>
+        <select id="fontSizeSelect" onchange="setFontSize()">
+          <option value="3">Normal</option>
+          <option value="4">Large</option>
+          <option value="5">Larger</option>
+          <option value="6">X-Large</option>
+        </select>
+        <span class="divider"></span>
+        <button type="button" id="voiceBtn" onclick="toggleVoice()">&#127908; Voice Note</button>
+        <select id="voiceLang">
+          <option value="ar-SA">Arabic</option>
+          <option value="en-US">English</option>
+        </select>
+      </div>
+
+      <!-- Harakat palette: manual diacritic insertion, since true automatic
+           AI diacritization needs an external API key we don't have wired up -->
+      <div class="harakat-palette" id="harakatPalette">
+        <span class="harakat-label">Harakat:</span>
+        <button type="button" onclick="insertHarakat('\u064B')">ً</button>
+        <button type="button" onclick="insertHarakat('\u064C')">ٌ</button>
+        <button type="button" onclick="insertHarakat('\u064D')">ٍ</button>
+        <button type="button" onclick="insertHarakat('\u064E')">َ</button>
+        <button type="button" onclick="insertHarakat('\u064F')">ُ</button>
+        <button type="button" onclick="insertHarakat('\u0650')">ِ</button>
+        <button type="button" onclick="insertHarakat('\u0651')">ّ</button>
+        <button type="button" onclick="insertHarakat('\u0652')">ْ</button>
+        <button type="button" onclick="insertHarakat('\u0653')">ٓ</button>
+        <button type="button" onclick="insertHarakat('\u0640')">ـ</button>
+      </div>
+
+    </div>
+  </aside>
+
+  <!-- ===== MAIN AREA: the exam pages get the whole remaining screen ===== -->
+  <main class="exam-main">
+
+    <div class="exam-pages" id="examPages">
+
+      <!-- PAGE 1: auto-generated cover / letterhead -->
+      <div class="exam-page cover-page" id="coverPage">
+        <div class="cover-header">
+          <p class="bismillah" lang="ar">بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ</p>
+
+          <img src="images/LOGO.JPG" class="cover-logo" alt="School Logo">
+
+          <h1 class="cover-arabic-name" lang="ar">مَدْرَسَةُ أَمِينِ اللهِ لِلْعُلُومِ الْعَرَبِيَّةِ الْإِسْلَامِيَّةِ</h1>
+          <h2 class="cover-english-name">AMEENULLAH SCHOOL OF ARABIC AND ISLAMIC STUDIES</h2>
+
+          <div class="cover-divider"></div>
+
+          <p class="cover-address">3, Temidire Street off Ondo Benin Road, Ijebu-Ode, Ogun State, Nigeria.</p>
+          <p class="cover-contact">Tel: 08062445559, 08058306889.</p>
+          <p class="cover-contact">E-mail: <a href="mailto:madrasatuameenillah22@gmail.com">madrasatuameenillah22@gmail.com</a></p>
+          <p class="cover-motto"><span lang="ar">الشِّعَارُ: الْعِلْمُ وَالْعِبَادَةُ.</span> &nbsp; MOTTO: KNOWLEDGE AND WORSHIP.</p>
+        </div>
+
+        <div class="cover-exam-details">
+          <p class="cover-exam-period" id="coverExamPeriod" lang="ar">امْتِحَانُ الْفَتْرَةِ ... لِلْعَامِ الدِّرَاسِيِّ ....\....</p>
+
+          <table class="cover-info-table">
+            <tr>
+              <td class="label">الاِسْمُ:</td>
+              <td class="blank-line" colspan="3"></td>
+            </tr>
+            <tr>
+              <td class="label">الْمَادَّةُ:</td>
+              <td class="value" id="coverSubject">-</td>
+              <td class="label">رَقْمُ الْقَبُولِ:</td>
+              <td class="blank-line-short"></td>
+            </tr>
+            <tr>
+              <td class="label">الْمُدَّةُ:</td>
+              <td class="value" id="coverDuration">ساعة واحدة</td>
+              <td class="label">الْفَصْلُ:</td>
+              <td class="value" id="coverClass">-</td>
+            </tr>
+          </table>
+
+          <div class="cover-instructions" id="coverInstructions" contenteditable="true">
+            <p class="instructions-title">إِرْشَادَاتُ الْاِمْتِحَانِ:</p>
+            <ol>
+              <li>لَا تَفْتَحْ حَتَّى تُؤْمَرَ بِذَلِكَ.</li>
+              <li>لَا تُضَيِّعْ هَذِهِ وَرَقَةَ السُّؤَالِ.</li>
+              <li>اِسْتَعِنْ بِاللَّهِ.</li>
+              <li>ثُمَّ ابْدَأْ.</li>
+            </ol>
+          </div>
+        </div>
+
+        <div class="cover-footer">
+          <p class="cover-wish">مع تمنياتي لكم بالنجاح.</p>
+          <p class="cover-code" id="coverCode">AMSAIS@2026/1447</p>
+        </div>
+      </div>
+
+      <!-- PAGE 2+: the actual exam body, Word-like editable area.
+           NEW (request #6): every question page now carries an automatic
+           exam header (school name + class/subject/term/session) that the
+           editor keeps in sync - see refreshAllPageHeaders() in js/exam.js. -->
+      <div class="exam-page body-page">
+        <div class="exam-page-header" contenteditable="false"></div>
+        <div class="exam-body spacing-normal" id="examBody" contenteditable="true" dir="rtl">
+          <p>ابدأ كتابة الامتحان هنا...</p>
+        </div>
+      </div>
+
     </div>
 
-  </div>
+    <!-- NEW (wizard, request #6): the explicit "Next Page" control -
+         each click appends another question page (with its own header). -->
+    <div class="exam-next-page-wrap">
+      <button type="button" class="exam-next-btn" onclick="insertPageBreak()">+ Next Page &rarr;</button>
+      <p>Page 2, 3, 4... are added automatically with the exam header, so the final PDF is always ONE tidy document.</p>
+    </div>
+
+  </main>
 
   <!-- Load Saved Exam panel -->
   <div id="loadPanelOverlay" class="load-panel-overlay" style="display:none;">

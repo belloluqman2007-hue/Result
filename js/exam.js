@@ -11,6 +11,166 @@ function initExam() {
     preventToolbarFocusLoss();
 
     document.getElementById("examClass").addEventListener("change", loadExamSubjects);
+
+    // NEW (requests #2 & #6): draw the automatic page headers right away
+    // (they show placeholders until the exam details are chosen) and start
+    // watching for pages that get too full to fit one printed A4 sheet.
+    refreshAllPageHeaders();
+    var pagesBox = document.getElementById("examPages");
+    if (pagesBox) {
+        var overflowTimer = null;
+        pagesBox.addEventListener("input", function () {
+            clearTimeout(overflowTimer);
+            overflowTimer = setTimeout(checkAllPagesOverflow, 400);
+        });
+    }
+    checkAllPagesOverflow();
+}
+
+/* ====================================================================
+   NEW (sidebar layout - user request): opens/closes the tools sidebar.
+   On wide screens the sidebar is pinned and this barely matters; on
+   phones it slides the panel in/out over the exam pages.
+==================================================================== */
+function toggleExamSidebar(force) {
+    var side = document.getElementById("examSidebar");
+    var scrim = document.getElementById("examSideScrim");
+    if (!side) return;
+    var open = typeof force === "boolean"
+        ? force
+        : !side.classList.contains("exam-side-open");
+    side.classList.toggle("exam-side-open", open);
+    if (scrim) scrim.classList.toggle("exam-side-open", open);
+}
+
+// Comfort: on small screens the sidebar closes by itself after the
+// wizard moves on, revealing the whole exam page immediately.
+function examCloseSidebarOnMobile() {
+    if (window.innerWidth <= 1100) toggleExamSidebar(false);
+}
+
+/* ====================================================================
+   NEW (exam wizard - request #6): two guided steps.
+   Step 1 collects the details; Step 2 is the question editor. All the
+   original fields/buttons keep working - this only shows/hides the two
+   sections and, when moving forward, generates the cover page and the
+   automatic page headers.
+==================================================================== */
+function examGotoStep(step) {
+    var step1 = document.getElementById("examStep1");
+    var step2 = document.getElementById("examStep2");
+    if (!step1 || !step2) return;
+
+    if (step === 2) {
+        // Validates the details (generateCoverPage already alerts if any
+        // are missing). Only move on when all four are chosen.
+        var cls = document.getElementById("examClass").value;
+        var subject = document.getElementById("examSubject").value;
+        var term = document.getElementById("examTerm").value;
+        var session = document.getElementById("examSession").value;
+        if (!cls || !subject || !term || !session) {
+            if (window.amsToast) {
+                window.amsToast("Please choose Class, Subject, Term and Session first.", "error", 4500);
+            } else {
+                alert("Please select Class, Subject, Term, and Session before continuing.");
+            }
+            return;
+        }
+        generateCoverPage(); // also refreshes every page header + summary
+        step1.style.display = "none";
+        step2.style.display = "block";
+        examCloseSidebarOnMobile(); // NEW (sidebar layout)
+        var firstBody = document.querySelector(".body-page");
+        if (firstBody) firstBody.scrollIntoView({ behavior: "smooth", block: "start" });
+    } else {
+        step2.style.display = "none";
+        step1.style.display = "block";
+        window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+}
+
+// NEW: one-line summary of the chosen exam, shown at the top of Step 2.
+function updateWizardSummary() {
+    var el = document.getElementById("examWizardSummary");
+    if (!el) return;
+    var cls = document.getElementById("examClass").value;
+    var subject = document.getElementById("examSubject").value;
+    var term = document.getElementById("examTerm").value;
+    var session = document.getElementById("examSession").value;
+    if (cls && subject && term && session) {
+        el.textContent = cls + " \u00B7 " + subject + " \u00B7 " + term + " \u00B7 " + session +
+            " \u2014 every page automatically carries the exam header.";
+    }
+}
+
+/* ====================================================================
+   NEW (automatic exam header on EVERY question page - request #6):
+   the header is NOT editable (so it can't be damaged while typing) and
+   it is NOT part of what saveExam() stores - it is rebuilt from the
+   exam details every time, so editing the details updates all pages.
+==================================================================== */
+function examPageHeaderHTML() {
+    var cls = document.getElementById("examClass").value || "\u2026";
+    var subject = document.getElementById("examSubject").value || "\u2026";
+    var term = document.getElementById("examTerm").value || "\u2026";
+    var session = document.getElementById("examSession").value || "\u2026";
+
+    return '<div class="eph-names">' +
+        '<span class="eph-name-ar" lang="ar">مَدْرَسَةُ أَمِينِ اللهِ لِلْعُلُومِ الْعَرَبِيَّةِ الْإِسْلَامِيَّةِ</span>' +
+        '<span class="eph-name-en">AMEENULLAH SCHOOL OF ARABIC AND ISLAMIC STUDIES</span>' +
+        '</div>' +
+        '<div class="eph-line" dir="rtl">' +
+        '<span><b>الْفَصْلُ:</b> ' + cls + '</span>' +
+        '<span><b>الْمَادَّةُ:</b> ' + subject + '</span>' +
+        '<span><b>الْفَتْرَةُ:</b> ' + term + '</span>' +
+        '<span><b>الْعَامُ:</b> ' + session + '</span>' +
+        '</div>';
+}
+
+// Writes the same header into every .exam-page-header block.
+function refreshAllPageHeaders() {
+    var html = examPageHeaderHTML();
+    document.querySelectorAll(".exam-page-header").forEach(function (el) {
+        el.innerHTML = html;
+    });
+    updateWizardSummary();
+}
+
+/* ====================================================================
+   NEW (layout guard - request #2): a question page holds a fixed amount
+   of text. When the writer passes that, the page would have to shrink
+   to fit A4 - instead, we warn early on screen so they can continue on
+   a fresh page. Screen-only: the chip never prints and never lands in
+   the exported PDF.
+==================================================================== */
+function checkAllPagesOverflow() {
+    // 297mm sheet minus the body-page padding (20mm top + 20mm bottom)
+    var BODY_BUDGET_MM = 257;
+    document.querySelectorAll(".exam-page.body-page").forEach(function (page) {
+        var body = page.querySelector(".exam-body");
+        if (!body) return;
+        // page.offsetWidth corresponds to 210mm (or proportionally less
+        // on a phone), so this budget scales correctly on every screen.
+        var budgetPx = (BODY_BUDGET_MM / 210) * page.offsetWidth;
+        var header = page.querySelector(".exam-page-header");
+        if (header) budgetPx -= header.offsetHeight;
+
+        var over = body.scrollHeight > budgetPx + 4;
+        page.classList.toggle("page-overfull", over);
+
+        var chip = page.querySelector(".page-warn-chip");
+        if (over) {
+            if (!chip) {
+                chip = document.createElement("div");
+                chip.className = "page-warn-chip";
+                chip.contentEditable = "false";
+                chip.textContent = "\u26A0 This page is getting too full - tap '+ Next Page' to continue neatly on a fresh page.";
+                page.appendChild(chip);
+            }
+        } else if (chip) {
+            chip.remove();
+        }
+    });
 }
 
 // Prevent toolbar/harakat button clicks from stealing focus away from the
@@ -85,6 +245,10 @@ function generateCoverPage() {
         `امْتِحَانُ الْفَتْرَةِ ${termArabic} لِلْعَامِ الدِّرَاسِيِّ ${session}`;
 
     document.getElementById("coverCode").textContent = `AMSAIS@${session}`;
+
+    // NEW (request #6): keep every question page header in sync with the
+    // freshly chosen details, and update the Step-2 summary line.
+    refreshAllPageHeaders();
 }
 
 // ===== RICH TEXT TOOLBAR =====
@@ -211,12 +375,22 @@ function insertPageBreak() {
 
     const newPage = document.createElement("div");
     newPage.className = "exam-page body-page";
-    newPage.innerHTML = `<div class="exam-body spacing-${currentSpacing}" contenteditable="true" dir="rtl"><p><br></p></div>`;
+    // CHANGED (request #6): new pages are born WITH the automatic exam
+    // header (filled just below) - one consistent look on every page.
+    newPage.innerHTML =
+        `<div class="exam-page-header" contenteditable="false"></div>` +
+        `<div class="exam-body spacing-${currentSpacing}" contenteditable="true" dir="rtl"><p><br></p></div>`;
 
     pagesContainer.appendChild(newPage);
+    refreshAllPageHeaders(); // fill the new page's header immediately
     preventToolbarFocusLoss();
+    checkAllPagesOverflow();
+    examCloseSidebarOnMobile(); // NEW (sidebar layout): reveal the new page on phones
 
     newPage.scrollIntoView({ behavior: "smooth", block: "start" });
+    // Put the cursor straight into the new page so typing can continue.
+    const newBody = newPage.querySelector(".exam-body");
+    if (newBody) newBody.focus();
 }
 
 function removeLastPage() {
@@ -361,12 +535,21 @@ function loadExam(id) {
             bodyPagesData.forEach(html => {
                 const newPage = document.createElement("div");
                 newPage.className = "exam-page body-page";
-                newPage.innerHTML = `<div class="exam-body spacing-${document.getElementById("spacingSelect").value}" contenteditable="true" dir="rtl">${html}</div>`;
+                // CHANGED (request #6): loaded pages also get the automatic
+                // header (rebuilt from the exam details, not stored in the DB).
+                newPage.innerHTML =
+                    `<div class="exam-page-header" contenteditable="false"></div>` +
+                    `<div class="exam-body spacing-${document.getElementById("spacingSelect").value}" contenteditable="true" dir="rtl">${html}</div>`;
                 examPages.appendChild(newPage);
             });
 
+            refreshAllPageHeaders();
             preventToolbarFocusLoss();
+            checkAllPagesOverflow();
             closeLoadPanel();
+
+            // NEW (wizard): opening a saved exam jumps straight into the editor.
+            examGotoStep(2);
         })
         .catch(error => {
             console.log(error);
@@ -425,28 +608,72 @@ function downloadExamPDF() {
     }
     if (window.amsToast) window.amsToast("Building PDF\u2026 please wait.", "info", 2500);
 
-    var pdf = new window.jspdf.jsPDF({ unit: "mm", format: "a4" });
+    /* CHANGED (consistent one-document PDF - requests #2 & #6):
+       BEFORE, every page was fitted individually, so a slightly too-full
+       page came out with a different scale than the rest (inconsistent
+       pages). Now:
+         1) every page is captured first,
+         2) ONE global fit factor is computed (the smallest any page needs),
+         3) every page is drawn at that SAME scale, top-aligned and
+            horizontally centered.
+       Result: all pages share identical margins and text size, nothing
+       is ever cut off, and page 2 looks exactly like page 1. */
+    var pagesBox = document.getElementById("examPages");
+    if (pagesBox) pagesBox.classList.add("ams-capturing"); // hides screen-only warning chips
+
+    var canvases = [];
     var i = 0;
 
     function captureNext() {
         if (i >= pages.length) {
-            pdf.save("exam.pdf");
-            if (window.amsToast) window.amsToast("PDF downloaded \u2713 open it and print/share from your phone", "success", 6000);
+            finishPdf();
             return;
         }
         html2canvas(pages[i], { scale: 2, backgroundColor: "#ffffff", useCORS: true })
-            .then(function (cv) {
-                var wMm = 210;
-                var hMm = (cv.height * 210) / cv.width;
-                var finalW = wMm;
-                var finalH = Math.min(hMm, 297);
-                if (hMm > 297) finalW = (cv.width * 297) / cv.height; // shrink to fit one A4 page
-                if (i > 0) pdf.addPage();
-                pdf.addImage(cv.toDataURL("image/jpeg", 0.95), "JPEG", (210 - finalW) / 2, 0, finalW, finalH);
-                i++;
-                captureNext();
-            })
+            .then(function (cv) { canvases.push(cv); i++; captureNext(); })
             .catch(function () { i++; captureNext(); }); // skip a bad page, keep the rest
     }
+
+    function finishPdf() {
+        if (pagesBox) pagesBox.classList.remove("ams-capturing");
+
+        if (!canvases.length) {
+            if (window.amsToast) window.amsToast("Could not build the PDF - please try again.", "error");
+            return;
+        }
+
+        // One global fit for ALL pages: start at full A4 width (210mm).
+        var fits = canvases.map(function (cv) {
+            var hMmAtFullWidth = (cv.height * 210) / cv.width;
+            return hMmAtFullWidth > 297 ? 297 / hMmAtFullWidth : 1; // <1 means "page too tall"
+        });
+        var globalFit = Math.min.apply(null, fits.concat([1]));
+        var shrunkPages = fits.filter(function (f) { return f < 0.999; }).length;
+
+        var pdf = new window.jspdf.jsPDF({ unit: "mm", format: "a4" });
+
+        canvases.forEach(function (cv, idx) {
+            var hMmAtFullWidth = (cv.height * 210) / cv.width;
+            var finalW = 210 * globalFit;
+            var finalH = Math.min(hMmAtFullWidth * globalFit, 297);
+            if (idx > 0) pdf.addPage();
+            // Top-aligned like a normal document, centered left/right.
+            pdf.addImage(cv.toDataURL("image/jpeg", 0.95), "JPEG", (210 - finalW) / 2, 0, finalW, finalH);
+        });
+
+        pdf.save("exam.pdf");
+
+        if (window.amsToast) {
+            if (shrunkPages > 0) {
+                window.amsToast(
+                    "PDF downloaded \u2713 Note: " + shrunkPages + " page(s) were very full, so all pages were slightly shrunk to keep one consistent look. Next time use '+ Next Page' a little earlier for the largest print.",
+                    "info", 8000
+                );
+            } else {
+                window.amsToast("PDF downloaded \u2713 open it and print/share from your phone", "success", 6000);
+            }
+        }
+    }
+
     captureNext();
 }

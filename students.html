@@ -7,6 +7,8 @@
   <!-- Legacy stylesheet (unchanged) + new modern layer -->
   <link rel="stylesheet" href="css/style.css">
   <link rel="stylesheet" href="css/modern-ui.css">
+  <!-- NEW (Edit Profile modal, request #4): shared management styles. Additive. -->
+  <link rel="stylesheet" href="css/manage.css">
 
   <!-- NEW (PWA conversion): makes the site installable as a phone/desktop
        app with its own icon. Purely additive - no styling or behaviour
@@ -65,6 +67,11 @@
         <a href="create-exam.html">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
           Create Exam
+        </a>
+        <!-- NEW (whole-class results PDF, request #7) - additive nav item -->
+        <a href="class-results.html">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M16 13H8"/><path d="M16 17H8"/></svg>
+          Class Results
         </a>
         <a href="student-result.html">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
@@ -132,7 +139,83 @@
     <div class="ams-modal" id="amsProfileBox"></div>
   </div>
 
+  <!-- ==========================================================
+       NEW (Edit Student Profile, request #4): admin-only editing
+       form. Opens from the profile modal's "Edit Profile" button
+       and auto-loads the student's existing data. Saves via the
+       NEW POST /update-student/:studentId route. Nothing here
+       changes how results are stored or calculated.
+  ========================================================== -->
+  <div class="mng-modal-overlay" id="amsEditOverlay" style="display:none;" onclick="if(event.target===this)amsEditClose()">
+    <div class="mng-modal">
+      <h3>Edit Student Profile</h3>
+      <p class="mng-modal-sub">Update any field, then save. The student's saved results stay linked even if the Admission Number changes.</p>
+
+      <div class="mng-grid">
+        <div class="mng-field">
+          <label for="amsEditFullName">Full Name <span class="mng-req">*</span></label>
+          <input type="text" id="amsEditFullName" autocomplete="off">
+        </div>
+        <div class="mng-field">
+          <label for="amsEditAdmNo">Admission Number <span class="mng-req">*</span></label>
+          <input type="text" id="amsEditAdmNo" autocomplete="off">
+        </div>
+        <div class="mng-field">
+          <label for="amsEditGender">Gender <span class="mng-req">*</span></label>
+          <select id="amsEditGender">
+            <option value="">Select Gender</option>
+            <option>Male</option>
+            <option>Female</option>
+          </select>
+        </div>
+        <div class="mng-field">
+          <label for="amsEditDob">Date of Birth</label>
+          <input type="date" id="amsEditDob">
+        </div>
+        <div class="mng-field mng-span2">
+          <label for="amsEditClass">Class <span class="mng-req">*</span></label>
+          <select id="amsEditClass"></select>
+        </div>
+        <div class="mng-field">
+          <label for="amsEditParentName">Parent / Guardian Name</label>
+          <input type="text" id="amsEditParentName" autocomplete="off">
+        </div>
+        <div class="mng-field">
+          <label for="amsEditParentPhone">Parent Phone</label>
+          <input type="tel" id="amsEditParentPhone" autocomplete="off">
+        </div>
+        <div class="mng-field mng-span2">
+          <label for="amsEditAddress">Home Address</label>
+          <input type="text" id="amsEditAddress" autocomplete="off">
+        </div>
+      </div>
+
+      <div class="mng-section" style="margin-top:18px;">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+        Passport Photograph
+      </div>
+      <div class="mng-photo-row">
+        <img id="amsEditPhotoPreview" class="mng-photo-preview" src="images/default.png" alt="Current photo"
+             onerror="this.onerror=null; this.src='images/default.png';">
+        <label class="mng-photo-btn" for="amsEditPhoto">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m17 8-5-5-5 5"/><path d="M12 3v12"/></svg>
+          Change Photo (optional)
+        </label>
+        <input type="file" id="amsEditPhoto" accept="image/jpeg,image/png" style="display:none;">
+      </div>
+
+      <div class="mng-actions">
+        <button type="button" class="mng-btn" id="amsEditSaveBtn">Save Changes</button>
+        <button type="button" class="mng-btn mng-btn-ghost" onclick="amsEditClose()">Cancel</button>
+      </div>
+    </div>
+  </div>
+
   <script src="js/ui.js"></script>
+  <!-- FIX (pre-existing): the sidebar Logout button calls logout() from
+       js/app.js, but this page never loaded it - Logout silently did
+       nothing here. Loaded now. -->
+  <script src="js/app.js"></script>
   <script src="js/students.js"></script>
 
   <!-- NEW (PWA conversion): registers the service worker + install button. Additive only. -->

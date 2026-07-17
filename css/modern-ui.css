@@ -1656,3 +1656,25 @@ html[data-theme="dark"] .report-container p{ color:inherit; }
     display:none !important;
   }
 }
+
+/* ==========================================================
+   NEW (Arabic text repair - request #1)
+   ----------------------------------------------------------
+   letter-spacing (and Latin font stacks) break Arabic cursive
+   joining. Any element marked lang="ar" now keeps its natural
+   letter-joining and a real Arabic font stack, site-wide.
+   The report header bar (#reportLevel) mixes English + Arabic,
+   so its spacing is also neutralised. VISUAL ONLY.
+========================================================== */
+[lang="ar"]{
+  font-family:'Amiri','Cairo',serif;
+  letter-spacing:normal !important;
+}
+
+.school-details h1[lang="ar"]{
+  letter-spacing:normal !important;
+}
+
+#reportLevel{
+  letter-spacing:normal !important;
+}

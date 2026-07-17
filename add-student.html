@@ -7,6 +7,9 @@
   <link rel="stylesheet" href="css/style.css">
   <!-- NEW: modern visual upgrade layer (loaded after legacy css) -->
   <link rel="stylesheet" href="css/modern-ui.css">
+  <!-- NEW (redesign, request #5): shared management-page styles.
+       Additive only - every original id/name/handler below is kept. -->
+  <link rel="stylesheet" href="css/manage.css">
 
   <!-- NEW (PWA conversion): makes the site installable as a phone/desktop
        app with its own icon. Purely additive - no styling or behaviour
@@ -17,50 +20,160 @@
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
 </head>
 <body onload="checkAuth(); loadClassesIntoSelects();">
-  <div class="search-container">
-    <a href="teacher-dashboard.html">&larr; Back to Dashboard</a>
-    <h2>Add Student</h2>
 
-    <input type="text" id="studentId" placeholder="Student ID">
-    <input type="text" id="fullName" placeholder="Full Name">
-    <select id="gender">
-      <option value="">Select Gender</option>
-      <option>Male</option>
-      <option>Female</option>
-    </select>
+  <!-- ==========================================================
+       REDESIGNED (request #5): same form, same ids, same
+       saveStudent() / uploadBulkStudents() functions - just a
+       cleaner, sectioned, validated layout.
+  ========================================================== -->
+  <div class="mng-page">
 
-
-    <select id="className">
-      <option value="" disabled selected>Select Class</option>
-    </select>
-    <input type="DATE" id="dateOfBirth">
-
-    <label for="photo">Student Photo (optional)</label>
-    <input type="file" id="photo" accept="image/png, image/jpeg">
-
-    <button onclick="saveStudent()">Save Student</button>
-  </div>
-
-  <div class="search-container">
-    <h3>Bulk Add Students</h3>
-    <p style="margin-bottom:14px; font-size:14px; color:#555;">
-      Add many students at once instead of one by one. Download the template,
-      fill it in with your students, then upload it here.
-    </p>
-
-    <a id="downloadTemplateLink" href="/download-student-template" style="display:inline-block; margin-bottom:14px;">
-      &#8681; Download Student Template (.xlsx)
-    </a>
-
-    <div>
-      <input type="file" id="bulkFile" accept=".xlsx,.xls,.csv">
-      <button onclick="uploadBulkStudents()">Upload File</button>
+    <div class="mng-head">
+      <a class="mng-back" href="teacher-dashboard.html">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5"/><path d="m12 19-7-7 7-7"/></svg>
+        Dashboard
+      </a>
+      <div class="mng-head-text">
+        <h1>Add Student</h1>
+        <p>Register one student below, or upload a whole class from Excel.</p>
+      </div>
     </div>
 
-    <div id="bulkResults" style="margin-top:16px; display:none;">
-      <p id="bulkSummary" style="font-weight:600; margin-bottom:8px;"></p>
-      <ul id="bulkErrorList" style="font-size:13px; color:#8C3B2E; padding-left:20px;"></ul>
+    <!-- ===== CARD 1: single student ===== -->
+    <div class="mng-card">
+      <h2 class="mng-card-title">
+        <span class="mng-ico">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M19 8v6"/><path d="M22 11h-6"/></svg>
+        </span>
+        Register New Student
+      </h2>
+      <p class="mng-card-sub">Fields marked <span style="color:#8C3B2E; font-weight:800;">*</span> are required. Parent details are optional but recommended.</p>
+
+      <!-- Section: student identity -->
+      <div class="mng-section">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><circle cx="8.5" cy="12" r="2.5"/><path d="M13.5 10.5H18"/><path d="M13.5 14H18"/></svg>
+        Student Information
+      </div>
+      <div class="mng-grid">
+        <div class="mng-field">
+          <label for="studentId">Student ID / Admission No. <span class="mng-req">*</span></label>
+          <input type="text" id="studentId" placeholder="e.g. AM0001" autocomplete="off">
+          <span class="mng-err">Student ID is required.</span>
+        </div>
+        <div class="mng-field">
+          <label for="fullName">Full Name <span class="mng-req">*</span></label>
+          <input type="text" id="fullName" placeholder="e.g. Bello Fatima Ade" autocomplete="off">
+          <span class="mng-err">Full name is required.</span>
+        </div>
+        <div class="mng-field">
+          <label for="gender">Gender <span class="mng-req">*</span></label>
+          <select id="gender">
+            <option value="">Select Gender</option>
+            <option>Male</option>
+            <option>Female</option>
+          </select>
+          <span class="mng-err">Please select a gender.</span>
+        </div>
+        <div class="mng-field">
+          <label for="className">Class <span class="mng-req">*</span></label>
+          <select id="className">
+            <option value="" disabled selected>Select Class</option>
+          </select>
+          <span class="mng-err">Please select a class.</span>
+        </div>
+        <div class="mng-field">
+          <label for="dateOfBirth">Date of Birth <span class="mng-opt">(optional)</span></label>
+          <input type="date" id="dateOfBirth">
+        </div>
+      </div>
+
+      <!-- Section: parent / guardian (NEW, request #4/#5 - optional) -->
+      <div class="mng-section">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+        Parent / Guardian <span style="text-transform:none; letter-spacing:0; font-weight:600; color:#5F6E66;">(optional)</span>
+      </div>
+      <div class="mng-grid">
+        <div class="mng-field">
+          <label for="parentName">Parent / Guardian Name <span class="mng-opt">(optional)</span></label>
+          <input type="text" id="parentName" placeholder="e.g. Alhaji Bello Ade" autocomplete="off">
+        </div>
+        <div class="mng-field">
+          <label for="parentPhone">Parent Phone <span class="mng-opt">(optional)</span></label>
+          <input type="tel" id="parentPhone" placeholder="e.g. 0803 000 0000" autocomplete="off">
+        </div>
+        <div class="mng-field mng-span2">
+          <label for="address">Home Address <span class="mng-opt">(optional)</span></label>
+          <input type="text" id="address" placeholder="e.g. 12, Ita-Osu, Ijebu-Ode" autocomplete="off">
+        </div>
+      </div>
+
+      <!-- Section: passport photograph -->
+      <div class="mng-section">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+        Passport Photograph <span style="text-transform:none; letter-spacing:0; font-weight:600; color:#5F6E66;">(optional)</span>
+      </div>
+      <div class="mng-photo-row">
+        <img id="photoPreview" class="mng-photo-preview" src="images/default.png" alt="Photo preview"
+             onerror="this.onerror=null; this.src='images/default.png';">
+        <label class="mng-photo-btn" for="photo">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m17 8-5-5-5 5"/><path d="M12 3v12"/></svg>
+          Choose Photo (JPG/PNG)
+        </label>
+        <!-- original input kept with the SAME id - just visually hidden now -->
+        <input type="file" id="photo" accept="image/png, image/jpeg" style="display:none;">
+      </div>
+
+      <!-- Actions -->
+      <div class="mng-actions">
+        <button type="button" class="mng-btn" onclick="saveStudent()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><path d="M17 21v-8H7v8"/><path d="M7 3v5h8"/></svg>
+          Save Student
+        </button>
+        <!-- NEW: one-click form reset (pure client-side comfort) -->
+        <button type="button" class="mng-btn mng-btn-ghost" onclick="clearStudentForm()">
+          Clear Form
+        </button>
+      </div>
     </div>
+
+    <!-- ===== CARD 2: bulk upload ===== -->
+    <div class="mng-card">
+      <h2 class="mng-card-title">
+        <span class="mng-ico">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M16 13H8"/><path d="M16 17H8"/><path d="M10 9H8"/></svg>
+        </span>
+        Bulk Add Students (Excel)
+      </h2>
+      <p class="mng-card-sub">Add many students at once instead of one by one.</p>
+
+      <div class="mng-steps">
+        <div class="mng-step"><b>1</b> Download the template</div>
+        <div class="mng-step"><b>2</b> Fill in your students</div>
+        <div class="mng-step"><b>3</b> Upload the file here</div>
+      </div>
+
+      <a id="downloadTemplateLink" href="/download-student-template" class="mng-btn mng-btn-ghost mng-btn-sm" style="margin-bottom:18px;">
+        &#8681; Download Student Template (.xlsx)
+      </a>
+
+      <div class="mng-photo-row">
+        <label class="mng-photo-btn" for="bulkFile">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m17 8-5-5-5 5"/><path d="M12 3v12"/></svg>
+          <span id="bulkFileLabel">Choose Filled Template (.xlsx)</span>
+        </label>
+        <!-- original inputs/button kept with SAME ids - browse button styled -->
+        <input type="file" id="bulkFile" accept=".xlsx,.xls,.csv" style="display:none;">
+        <button type="button" class="mng-btn" onclick="uploadBulkStudents()">
+          Upload File
+        </button>
+      </div>
+
+      <div id="bulkResults" style="margin-top:16px; display:none;">
+        <p id="bulkSummary" style="font-weight:600; margin-bottom:8px;"></p>
+        <ul id="bulkErrorList" style="font-size:13px; color:#8C3B2E; padding-left:20px;"></ul>
+      </div>
+    </div>
+
   </div>
 
   <!-- NEW: shared UI helpers (toasts, dark mode, export) - additive -->

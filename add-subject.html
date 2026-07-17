@@ -7,6 +7,9 @@
   <link rel="stylesheet" href="css/style.css">
   <!-- NEW: modern visual upgrade layer (loaded after legacy css) -->
   <link rel="stylesheet" href="css/modern-ui.css">
+  <!-- NEW (redesign, request #3/#5): shared management-page styles.
+       Additive only - every original id/name/handler below is kept. -->
+  <link rel="stylesheet" href="css/manage.css">
 
   <!-- NEW (PWA conversion): makes the site installable as a phone/desktop
        app with its own icon. Purely additive - no styling or behaviour
@@ -18,72 +21,151 @@
 </head>
 <body onload="checkAuth(); loadClassesIntoSelects(); loadAllClasses(); loadAllSubjects();">
 
-  <div class="search-container">
-    <a href="teacher-dashboard.html">&larr; Back to Dashboard</a>
-    <h2>Add Class</h2>
-    <input type="text" id="newClassName" placeholder="Class Name (e.g. الأوّل الثّانويّ)">
-    <button onclick="addClass()">Add Class</button>
+  <div class="mng-page">
+
+    <div class="mng-head">
+      <a class="mng-back" href="teacher-dashboard.html">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5"/><path d="m12 19-7-7 7-7"/></svg>
+        Dashboard
+      </a>
+      <div class="mng-head-text">
+        <h1>Classes &amp; Subjects</h1>
+        <p>Create classes, then attach subjects to them. You can edit or delete any entry.</p>
+      </div>
+    </div>
+
+    <div class="mng-two-col">
+
+      <!-- ===== CARD: classes ===== -->
+      <div class="mng-card">
+        <h2 class="mng-card-title">
+          <span class="mng-ico">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-6 9 6v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M9 22V12h6v10"/></svg>
+          </span>
+          Classes
+        </h2>
+        <p class="mng-card-sub">Classes appear in every dropdown across the system.</p>
+
+        <div class="mng-grid" style="grid-template-columns:1fr auto; align-items:end;">
+          <div class="mng-field">
+            <label for="newClassName">New Class Name</label>
+            <input type="text" id="newClassName" placeholder="Class Name (e.g. الأوّل الثّانويّ)" lang="ar">
+          </div>
+          <button type="button" class="mng-btn" onclick="addClass()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14"/><path d="M5 12h14"/></svg>
+            Add
+          </button>
+        </div>
+
+        <!-- Container keeps the ORIGINAL id (allClassesTable); rows are
+             rendered as modern cards by js/subject.js. -->
+        <div class="mng-list" id="allClassesTable"></div>
+        <div class="mng-count-line" id="classCountLine"></div>
+      </div>
+
+      <!-- ===== CARD: subjects ===== -->
+      <div class="mng-card">
+        <h2 class="mng-card-title">
+          <span class="mng-ico">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+          </span>
+          Subjects
+        </h2>
+        <p class="mng-card-sub">Each subject belongs to one class.</p>
+
+        <div class="mng-grid" style="grid-template-columns:1fr;">
+          <div class="mng-field">
+            <label for="subjectName">Subject Name</label>
+            <select id="subjectName" onchange="toggleCustomSubject()">
+              <option value="" disabled selected>Select Subject</option>
+              <option lang="ar">القرآن الكريم</option>
+              <option lang="ar">الفقه</option>
+              <option lang="ar">الحديث</option>
+              <option lang="ar">التّجويد</option>
+              <option lang="ar">التّربية الإسلاميّة</option>
+              <option lang="ar">التّاريخ الإسلاميّ</option>
+              <option lang="ar">النّحو</option>
+              <option lang="ar">الإملاء</option>
+              <option lang="ar">الخط</option>
+              <option>Arabic Grammar</option>
+              <option>Arabic Language</option>
+              <option>English Language</option>
+              <option>Mathematics</option>
+              <option>Basic Science</option>
+              <option>Agricultural Science</option>
+              <option>Physics</option>
+              <option>Chemistry</option>
+              <option>Biology</option>
+              <option>Economics</option>
+              <option>Geography</option>
+              <option>Civic Education</option>
+              <option>Computer Studies</option>
+              <option>Literature</option>
+              <option value="__other__">Other (type manually)</option>
+            </select>
+          </div>
+          <div class="mng-field" id="customSubjectWrap" style="display:none;">
+            <label for="customSubjectName">Custom Subject Name</label>
+            <input type="text" id="customSubjectName" placeholder="Type subject name">
+          </div>
+          <div class="mng-field">
+            <label for="subjectClass">For Class</label>
+            <select id="subjectClass">
+              <option value="" disabled selected>Select Class</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="mng-actions" style="margin-top:16px;">
+          <button type="button" class="mng-btn" onclick="addSubject()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14"/><path d="M5 12h14"/></svg>
+            Add Subject
+          </button>
+        </div>
+
+        <!-- NEW: live search makes long subject lists manageable -->
+        <div class="mng-search" style="margin-top:18px;">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+          <input type="text" id="subjSearchInput" placeholder="Search subjects or classes..." oninput="renderSubjectsList()">
+        </div>
+
+        <!-- Container keeps the ORIGINAL id (allSubjectsTable). -->
+        <div class="mng-list" id="allSubjectsTable"></div>
+        <div class="mng-count-line" id="subjCountLine"></div>
+      </div>
+
+    </div>
   </div>
 
-  <div class="search-container">
-    <h3>Existing Classes</h3>
-    <table id="allClassesTable">
-      <tr>
-        <th>Class</th>
-        <th>Action</th>
-      </tr>
-    </table>
-  </div>
+  <!-- ==========================================================
+       NEW (request #3): Edit Subject modal. Opens from the pencil
+       button on any subject row; saves via PUT /update-subject/:id.
+  ========================================================== -->
+  <div class="mng-modal-overlay" id="subjectEditOverlay" style="display:none;" onclick="if(event.target===this)closeSubjectEdit()">
+    <div class="mng-modal">
+      <h3>Edit Subject</h3>
+      <p class="mng-modal-sub">Rename the subject or move it to another class.</p>
 
-  <div class="search-container">
-    <h2>Add Subject</h2>
+      <input type="hidden" id="editSubjectId">
 
-    <select id="subjectName" onchange="toggleCustomSubject()">
-      <option value="" disabled selected>Select Subject</option>
-      <option>القرآن الكريم</option>
-      <option>الفقه</option>
-      <option>الحديث</option>
-      <option>التّجويد</option>
-      <option>التّربية الإسلاميّة</option>
-      <option>التّاريخ الإسلاميّ</option>
-      <option>النّحو</option>
-      <option>الإملاء</option>
-      <option>الخط</option>
-      <option>Arabic Grammar</option>
-      <option>Arabic Language</option>
-      <option>English Language</option>
-      <option>Mathematics</option>
-      <option>Basic Science</option>
-      <option>Agricultural Science</option>
-      <option>Physics</option>
-      <option>Chemistry</option>
-      <option>Biology</option>
-      <option>Economics</option>
-      <option>Geography</option>
-      <option>Civic Education</option>
-      <option>Computer Studies</option>
-      <option>Literature</option>
-      <option value="__other__">Other (type manually)</option>
-    </select>
+      <div class="mng-grid" style="grid-template-columns:1fr;">
+        <div class="mng-field">
+          <label for="editSubjectName">Subject Name</label>
+          <input type="text" id="editSubjectName" placeholder="Subject name">
+        </div>
+        <div class="mng-field">
+          <label for="editSubjectClass">Class</label>
+          <select id="editSubjectClass">
+            <option value="" disabled>Select Class</option>
+          </select>
+        </div>
+      </div>
 
-    <input type="text" id="customSubjectName" placeholder="Type subject name" style="display:none;">
-
-    <select id="subjectClass">
-      <option value="" disabled selected>Select Class</option>
-    </select>
-
-    <button onclick="addSubject()">Add Subject</button>
-  </div>
-
-  <div class="search-container">
-    <h3>Existing Subjects</h3>
-    <table id="allSubjectsTable">
-      <tr>
-        <th>Subject</th>
-        <th>Class</th>
-        <th>Action</th>
-      </tr>
-    </table>
+      <div class="mng-actions">
+        <button type="button" class="mng-btn" onclick="saveSubjectEdit()">Save Changes</button>
+        <button type="button" class="mng-btn mng-btn-ghost" onclick="closeSubjectEdit()">Cancel</button>
+      </div>
+    </div>
   </div>
 
   <!-- NEW: shared UI helpers (toasts, dark mode) - additive -->

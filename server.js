@@ -145,6 +145,15 @@ app.get("/students.html", requireLogin, (req, res) => {
 });
 
 // ----------------------------------------------------------------
+// NEW (whole-class results page): serves the broadsheet page where
+// staff pick Class + Session + Term and download ONE combined PDF.
+// READ-ONLY: the page only SELECTs existing results. Additive.
+// ----------------------------------------------------------------
+app.get("/class-results.html", requireLogin, (req, res) => {
+    res.sendFile(path.join(__dirname, "class-results.html"));
+});
+
+// ----------------------------------------------------------------
 // NEW (PWA conversion): serve the app manifest with the correct
 // content type so every browser accepts it. ADDITIVE ONLY - no
 // existing route, page or query is modified. (Public, like login.)
@@ -246,6 +255,88 @@ function setupAddonTables(attempt) {
 }
 
 setupAddonTables(1);
+
+/* ==================================================================
+   NEW (student profile fields - request #4): parent_name,
+   parent_phone, address columns on the students table.
+   ------------------------------------------------------------------
+   Why this is here: the requested "Edit Student Profile" feature
+   (parent name, parent phone, address) needs somewhere to live.
+   This is the ONLY structural change in this update, and it is:
+     - ADDITIVE: three NULL-able columns are APPENDED; no existing
+       table, column, route or query is renamed or changed.
+     - GUARDED: it first ASKS information_schema which columns exist,
+       so it runs the ALTER once only and never errors on re-boots.
+     - GRACEFUL: if the DB user has no ALTER privilege, the app keeps
+       working exactly as before; editing of the 3 new fields is
+       simply skipped (flag below stays false).
+   The result system is untouched by this.
+================================================================== */
+let studentProfileColsReady = false;
+
+function ensureStudentProfileColumns(attempt) {
+    const conn = addonConnection();
+    conn.connect((err) => {
+        if (err) {
+            conn.destroy();
+            return profileColsRetry(attempt, err);
+        }
+        conn.query(
+            `SELECT COUNT(*) AS c
+             FROM information_schema.COLUMNS
+             WHERE TABLE_SCHEMA = DATABASE()
+               AND TABLE_NAME = 'students'
+               AND COLUMN_NAME IN ('parent_name', 'parent_phone', 'address')`,
+            (qErr, rows) => {
+                if (qErr) {
+                    conn.end();
+                    return profileColsRetry(attempt, qErr);
+                }
+                if (rows && rows[0] && Number(rows[0].c) === 3) {
+                    conn.end();
+                    studentProfileColsReady = true;
+                    console.log("Student profile columns ready (parent_name, parent_phone, address).");
+                    return;
+                }
+                // Columns missing - add them in ONE idempotent statement.
+                conn.query(
+                    `ALTER TABLE students
+                        ADD COLUMN parent_name  VARCHAR(255) NULL,
+                        ADD COLUMN parent_phone VARCHAR(50)  NULL,
+                        ADD COLUMN address      VARCHAR(255) NULL`,
+                    (aErr) => {
+                        conn.end();
+                        if (aErr) {
+                            // Another boot raced us and added them first - treat as done.
+                            if (aErr.code === "ER_DUP_FIELDNAME") {
+                                studentProfileColsReady = true;
+                                console.log("Student profile columns ready (added by a parallel boot).");
+                                return;
+                            }
+                            return profileColsRetry(attempt, aErr);
+                        }
+                        studentProfileColsReady = true;
+                        console.log("Student profile columns added (parent_name, parent_phone, address).");
+                    }
+                );
+            }
+        );
+    });
+}
+
+function profileColsRetry(attempt, err) {
+    const reason = err.code || err.message || err;
+    if (attempt >= 3) {
+        console.log("Student profile setup warning: could not add the 3 profile columns. Reason:", reason);
+        console.log("  -> Everything keeps working; only Parent Name / Parent Phone / Address editing stays off.");
+        console.log("  -> Fix: run the SQL in sql/student_profile_columns.sql, then restart.");
+        return;
+    }
+    console.log(`Student profile setup: attempt ${attempt} failed (${reason}); retrying in 4s...`);
+    setTimeout(() => ensureStudentProfileColumns(attempt + 1), 4000);
+}
+
+ensureStudentProfileColumns(1);
 
 // Friendly fallback for add-on endpoints when the add-on tables do not
 // exist yet (setup above failed and sql/addon_tables.sql was not run).
@@ -370,12 +461,32 @@ app.get("/recent-activity", requireLogin, async (req, res) => {
 // (Named /students to complement - not replace - the existing
 //  single-student route /student/:studentId, which is untouched.)
 app.get("/students", requireLogin, (req, res) => {
+    // NEW (student profile fields): when the 3 profile columns exist,
+    // include them so the profile viewer / edit form is complete.
+    // If they don't (older DB), fall back to the ORIGINAL query -
+    // the response shape stays backward compatible either way.
+    const baseCols = "student_id, full_name, gender, class_name, date_of_birth, photo_path";
+    const cols = studentProfileColsReady
+        ? baseCols + ", parent_name, parent_phone, address"
+        : baseCols;
+
     connection.query(
-        `SELECT student_id, full_name, gender, class_name, date_of_birth, photo_path
-         FROM students
-         ORDER BY class_name, full_name`,
+        `SELECT ${cols} FROM students ORDER BY class_name, full_name`,
         (err, rows) => {
             if (err) {
+                // Safety net: columns vanished/flag wrong - retry with the original list.
+                if (err.code === "ER_BAD_FIELD_ERROR" && cols !== baseCols) {
+                    return connection.query(
+                        `SELECT ${baseCols} FROM students ORDER BY class_name, full_name`,
+                        (err2, rows2) => {
+                            if (err2) {
+                                console.log(err2);
+                                return res.status(500).send("Database Error");
+                            }
+                            res.json(rows2);
+                        }
+                    );
+                }
                 console.log(err);
                 return res.status(500).send("Database Error");
             }
@@ -1190,6 +1301,68 @@ app.delete("/delete-subject/:id", requireLogin, (req, res) => {
     );
 });
 
+// ----------------------------------------------------------------
+// NEW (subject editing - request #3): rename a subject or move it to
+// another class. ADDITIVE - complements (never changes) the existing
+// /add-subject and /delete-subject routes.
+// ----------------------------------------------------------------
+app.put("/update-subject/:id", requireLogin, (req, res) => {
+    const id = req.params.id;
+    const { subject_name, class_name } = req.body;
+
+    if (!subject_name || !class_name) {
+        return res.status(400).json({ message: "Subject name and class are both required." });
+    }
+
+    connection.query(
+        "UPDATE subjects SET subject_name = ?, class_name = ? WHERE id = ?",
+        [subject_name, class_name, id],
+        (err, result) => {
+            if (err) {
+                console.log(err);
+                return res.status(500).json({ message: "Error updating subject" });
+            }
+            if (result.affectedRows === 0) {
+                return res.status(404).json({ message: "Subject not found." });
+            }
+            res.json({ message: "Subject updated successfully" });
+        }
+    );
+});
+
+// ----------------------------------------------------------------
+// NEW (whole-class results PDF - request #7): returns the RAW saved
+// result rows for one class + term + session so the Class Results
+// page can render a broadsheet and export ONE combined PDF.
+// 100% READ-ONLY - it only SELECTs from the results table; it never
+// writes, and it does not change any result calculation. The existing
+// per-student "Download Result" feature is completely untouched.
+// ----------------------------------------------------------------
+app.get("/class-results", requireLogin, (req, res) => {
+    const className = (req.query["class"] || "").trim();
+    const term = (req.query.term || "").trim();
+    const session = (req.query.session || "").trim();
+
+    if (!className || !term || !session) {
+        return res.status(400).json({ message: "Class, Term and Session are all required." });
+    }
+
+    connection.query(
+        `SELECT student_id, student_name, class_name, subject, total, grade
+         FROM results
+         WHERE class_name = ? AND term = ? AND session = ?
+         ORDER BY student_name, subject`,
+        [className, term, session],
+        (err, rows) => {
+            if (err) {
+                console.log(err);
+                return res.status(500).json({ message: "Database Error" });
+            }
+            res.json(rows);
+        }
+    );
+});
+
 app.get("/dashboard-summary", requireLogin, (req, res) => {
     connection.query(
 `
@@ -1225,31 +1398,178 @@ SELECT
             ? `images/students/${req.file.filename}`
             : null;
 
-        const sql =`
-        INSERT INTO students
-        (student_id, full_name, gender, class_name, date_of_birth, photo_path)
-        VALUES (?,?,?,?,?,?)
-        `;
+        // NEW (student profile fields): the redesigned Add Student form can
+        // optionally send parent_name / parent_phone / address. When they
+        // are present AND the columns exist, we store them too; otherwise
+        // the ORIGINAL insert below runs unchanged (backward compatible).
+        const parentName  = (req.body.parent_name  || "").trim();
+        const parentPhone = (req.body.parent_phone || "").trim();
+        const address     = (req.body.address      || "").trim();
+        const hasParentData = studentProfileColsReady && (parentName || parentPhone || address);
 
-        connection.query(
-            sql,
-            [
-                student_id,
-                full_name,
-                gender,
-                class_name,
-                date_of_birth,
-                photoPath
-            ],
-            (err, result) => {
-                if(err) {
-                    console.log(err);
-                    res.status(500).send("Error saving student");
-                } else {
+        if (hasParentData) {
+            connection.query(
+                `INSERT INTO students
+                 (student_id, full_name, gender, class_name, date_of_birth, photo_path,
+                  parent_name, parent_phone, address)
+                 VALUES (?,?,?,?,?,?,?,?,?)`,
+                [student_id, full_name, gender, class_name, date_of_birth, photoPath,
+                 parentName || null, parentPhone || null, address || null],
+                (err) => {
+                    if (err) {
+                        // Columns unexpectedly missing - fall back to the original insert.
+                        if (err.code === "ER_BAD_FIELD_ERROR") {
+                            return insertStudentOriginal();
+                        }
+                        console.log(err);
+                        return res.status(500).send("Error saving student");
+                    }
                     res.send("Student saved successfully");
                 }
-            }
-        );
+            );
+            return;
+        }
+
+        insertStudentOriginal();
+
+        // ORIGINAL insert - untouched behaviour for all existing clients.
+        function insertStudentOriginal() {
+            const sql =`
+            INSERT INTO students
+            (student_id, full_name, gender, class_name, date_of_birth, photo_path)
+            VALUES (?,?,?,?,?,?)
+            `;
+
+            connection.query(
+                sql,
+                [
+                    student_id,
+                    full_name,
+                    gender,
+                    class_name,
+                    date_of_birth,
+                    photoPath
+                ],
+                (err, result) => {
+                    if(err) {
+                        console.log(err);
+                        res.status(500).send("Error saving student");
+                    } else {
+                        res.send("Student saved successfully");
+                    }
+                }
+            );
+        }
+    });
+
+    // ----------------------------------------------------------------
+    // NEW (student profile editing - request #4): lets the ADMIN edit
+    // every profile field of an existing student:
+    //   Full Name, Admission Number (student_id), Gender, Date of Birth,
+    //   Class, Parent Name, Parent Phone, Address, Passport Photograph.
+    // ADDITIVE: no existing route is changed. Admin-only, like
+    // /delete-student. Parent fields are only written when the guarded
+    // columns exist (see ensureStudentProfileColumns above).
+    //
+    // FormData note: the client sends "student_id" BEFORE the photo
+    // file, because multer uses it to name the saved image file.
+    //
+    // Admission Number changes are handled safely: the students row is
+    // updated together with results.student_id (plain text link), so a
+    // renamed student keeps all of their saved results. Nothing about
+    // result VALUES or calculations is touched - only the id text.
+    // ----------------------------------------------------------------
+    app.post("/update-student/:studentId", requireLogin, requireAdmin, upload.single("photo"), (req, res) => {
+        const origId = (req.params.studentId || "").trim();
+
+        const fullName = (req.body.full_name || "").trim();
+        const gender   = (req.body.gender || "").trim();
+        const className = (req.body.class_name || "").trim();
+        const dateOfBirth = (req.body.date_of_birth || "").trim() || null;
+        const newId = (req.body.student_id || origId).trim() || origId;
+
+        if (!fullName || !gender || !className) {
+            return res.status(400).json({ message: "Full Name, Gender and Class are required." });
+        }
+        if (gender !== "Male" && gender !== "Female") {
+            return res.status(400).json({ message: "Gender must be Male or Female." });
+        }
+        if (!newId) {
+            return res.status(400).json({ message: "Admission Number cannot be empty." });
+        }
+
+        const photoPath = req.file ? `images/students/${req.file.filename}` : null;
+
+        const parentName  = (req.body.parent_name  || "").trim();
+        const parentPhone = (req.body.parent_phone || "").trim();
+        const address     = (req.body.address      || "").trim();
+
+        // Build the SET list dynamically so we never write to columns
+        // that do not exist on older databases.
+        const sets = ["full_name = ?", "gender = ?", "class_name = ?", "date_of_birth = ?"];
+        const vals = [fullName, gender, className, dateOfBirth];
+
+        if (studentProfileColsReady) {
+            sets.push("parent_name = ?", "parent_phone = ?", "address = ?");
+            vals.push(parentName || null, parentPhone || null, address || null);
+        }
+        if (photoPath) {
+            sets.push("photo_path = ?");
+            vals.push(photoPath);
+        }
+        if (newId !== origId) {
+            sets.push("student_id = ?");
+            vals.push(newId);
+        }
+
+        function runUpdate() {
+            connection.query(
+                `UPDATE students SET ${sets.join(", ")} WHERE student_id = ?`,
+                vals.concat([origId]),
+                (err, result) => {
+                    if (err) {
+                        console.log(err);
+                        return res.status(500).json({ message: "Database error while updating student." });
+                    }
+                    if (result.affectedRows === 0) {
+                        return res.status(404).json({ message: "No student found with that Admission Number." });
+                    }
+                    res.json({ message: "Student profile updated.", student_id: newId });
+                }
+            );
+        }
+
+        if (newId !== origId) {
+            // Make sure the new Admission Number is not already taken.
+            connection.query(
+                "SELECT student_id FROM students WHERE student_id = ?",
+                [newId],
+                (err, rows) => {
+                    if (err) {
+                        console.log(err);
+                        return res.status(500).json({ message: "Database error while checking Admission Number." });
+                    }
+                    if (rows.length > 0) {
+                        return res.status(400).json({ message: `Admission Number "${newId}" is already used by another student.` });
+                    }
+                    // Re-link any saved results to the new id FIRST, so no
+                    // result is ever left pointing at a missing student.
+                    connection.query(
+                        "UPDATE results SET student_id = ? WHERE student_id = ?",
+                        [newId, origId],
+                        (err2) => {
+                            if (err2) {
+                                console.log(err2);
+                                return res.status(500).json({ message: "Database error while re-linking results." });
+                            }
+                            runUpdate();
+                        }
+                    );
+                }
+            );
+        } else {
+            runUpdate();
+        }
     });
 
     // ----------------------------------------------------------------

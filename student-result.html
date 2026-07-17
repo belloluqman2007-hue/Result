@@ -56,19 +56,29 @@
     </select>
     <button type="button" id="exportBtn">&#11015; Download Excel</button>
   </div>
+  <!-- NEW (whole-class results PDF, request #7): a SEPARATE option that
+       opens the Class Results page (choose Class + Session + Term -> one
+       combined PDF). The per-student "Download Result" above is unchanged. -->
+  <div style="display:flex; gap:8px; margin-top:10px; flex-wrap:wrap; border-top:1px solid #e2e8e4; padding-top:10px;">
+    <a href="class-results.html" style="text-decoration:none;">
+      <button type="button">&#128196; Whole Class Results (PDF) &rarr;</button>
+    </a>
+  </div>
 </div>
 </div>
 <div id="reportContainer" class="report-container">
     <div class="report-header">
       <img src="images/LOGO.JPG" class="school-logo">
       <div class="school-details">
-<h1>مدرسة أمين اللّه للعلوم العربيّة الإسلاميّة</h1>
+<!-- NEW (Arabic repair, #1): lang="ar" keeps the Arabic school name
+     naturally joined (the old letter-spacing disconnected it). -->
+<h1 lang="ar">مدرسة أمين اللّه للعلوم العربيّة الإسلاميّة</h1>
       <h1>AMEENULLAH SCHOOL OF ARABIC AND ISLAMIC STUDIES</h1>
       
     
     <p class="address">3, Temidire street, Off Ondo Road, Ijeb-Ode, Ogun State.</p>
     <p class="contact">Tel: 08062445559, 08058306889  |  Email: madrasatuameenillah22@gmail.com</p>
-<p class="motto">MOTTO: KNOWLEDGE AND WORSHIP شعارنا: العلم والعبادة</p>
+<p class="motto">MOTTO: KNOWLEDGE AND WORSHIP <span lang="ar">شعارنا: العلم والعبادة</span></p>
 <h2 class="school-line"> <span id="reportLevel">STUDENT REPORT SHEET كشف درجات الطّالب </span></h2>
     
 </div>

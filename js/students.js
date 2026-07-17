@@ -18,6 +18,16 @@
     var filtered = [];         /* after search + filters */
     var currentPage = 1;
     var PAGE_SIZE = 12;
+    var isAdminUser = false;   /* NEW (edit profile): filled from /me once */
+    var editingStudent = null; /* NEW: the student currently in the edit form */
+
+    /* NEW (edit profile): check once whether the logged-in staff member
+       is the admin - only admins see the Edit button (the server also
+       enforces this, so it's belt-and-braces). */
+    fetch("/me")
+        .then(function (r) { return r.json(); })
+        .then(function (me) { isAdminUser = !!(me && me.loggedIn && me.role === "admin"); })
+        .catch(function () { isAdminUser = false; });
 
     /* ---------- data loading ---------- */
     function loadStudents() {
@@ -193,10 +203,16 @@
                 '<div class="ams-profile-row"><span>Class</span><span class="pv-class"></span></div>' +
                 '<div class="ams-profile-row"><span>Gender</span><span class="pv-gender"></span></div>' +
                 '<div class="ams-profile-row"><span>Date of Birth</span><span class="pv-dob"></span></div>' +
+                /* NEW (request #4): parent/guardian details on the profile */
+                '<div class="ams-profile-row"><span>Parent Name</span><span class="pv-parent"></span></div>' +
+                '<div class="ams-profile-row"><span>Parent Phone</span><span class="pv-phone"></span></div>' +
+                '<div class="ams-profile-row"><span>Address</span><span class="pv-address"></span></div>' +
             "</div>" +
             '<div class="ams-modal-actions">' +
                 '<button type="button" class="m-btn-ghost" onclick="amsProfileClose()">Close</button>' +
                 '<a href="student-result.html"><button type="button">Open Result Checker</button></a>' +
+                /* NEW (request #4): Edit Profile (admin only - wired below) */
+                '<button type="button" class="m-btn-sm" id="amsEditBtn">&#9998; Edit Profile</button>' +
                 /* NEW (student management): photo upload + delete buttons,
                    wired up right after the modal is shown. */
                 '<button type="button" class="m-btn-sm" id="amsPhotoBtn">&#128247; Add / Change Photo</button>' +
@@ -210,6 +226,17 @@
         box.querySelector(".pv-class").textContent = s.class_name || "-";
         box.querySelector(".pv-gender").textContent = s.gender || "-";
         box.querySelector(".pv-dob").textContent = dob;
+        /* NEW (request #4): parent fields may be missing on older rows */
+        box.querySelector(".pv-parent").textContent = s.parent_name || "-";
+        box.querySelector(".pv-phone").textContent = s.parent_phone || "-";
+        box.querySelector(".pv-address").textContent = s.address || "-";
+
+        /* ---------- NEW (request #4): Edit Profile (admin only) ---------- */
+        var editBtn = box.querySelector("#amsEditBtn");
+        if (editBtn) {
+            editBtn.style.display = isAdminUser ? "" : "none";
+            editBtn.addEventListener("click", function () { openEditProfile(s); });
+        }
 
         /* ---------- NEW (student management): Add/Change Photo ----------
            Excel bulk upload cannot carry photos, so photos for imported
@@ -290,6 +317,154 @@
         document.getElementById("amsProfileOverlay").style.display = "none";
     };
 
+    /* ==========================================================
+       NEW (Edit Student Profile - request #4)
+       ----------------------------------------------------------
+       Opens a modal whose form is PRE-FILLED with the student's
+       existing data and saves through the NEW admin route
+       POST /update-student/:studentId. Photo is optional - when
+       no new photo is picked, the current one is kept.
+       The FormData sends "student_id" BEFORE the photo file,
+       because multer names the saved image using that field.
+    ========================================================== */
+    function openEditProfile(s) {
+        editingStudent = s;
+
+        document.getElementById("amsEditFullName").value = s.full_name || "";
+        document.getElementById("amsEditAdmNo").value = s.student_id || "";
+        document.getElementById("amsEditGender").value = s.gender || "";
+
+        /* date inputs need yyyy-mm-dd */
+        var dobVal = "";
+        if (s.date_of_birth) {
+            var d = new Date(s.date_of_birth);
+            if (!isNaN(d)) {
+                dobVal = d.getFullYear() + "-" +
+                    String(d.getMonth() + 1).padStart(2, "0") + "-" +
+                    String(d.getDate()).padStart(2, "0");
+            }
+        }
+        document.getElementById("amsEditDob").value = dobVal;
+
+        document.getElementById("amsEditParentName").value = s.parent_name || "";
+        document.getElementById("amsEditParentPhone").value = s.parent_phone || "";
+        document.getElementById("amsEditAddress").value = s.address || "";
+
+        var photoInput = document.getElementById("amsEditPhoto");
+        photoInput.value = "";
+        var preview = document.getElementById("amsEditPhotoPreview");
+        preview.src = s.photo_path || "images/default.png";
+
+        /* class dropdown: live list, student's current class preselected */
+        var classSelect = document.getElementById("amsEditClass");
+        fetch("/classes")
+            .then(function (r) { return r.json(); })
+            .then(function (classes) {
+                classSelect.innerHTML = "";
+                (classes || []).forEach(function (c) {
+                    var opt = document.createElement("option");
+                    opt.value = c.class_name;
+                    opt.textContent = c.class_name;
+                    classSelect.appendChild(opt);
+                });
+                /* keep the saved class selectable even if it was deleted
+                   from the class list since the student was registered */
+                if (s.class_name && !Array.from(classSelect.options).some(function (o) { return o.value === s.class_name; })) {
+                    var extra = document.createElement("option");
+                    extra.value = s.class_name;
+                    extra.textContent = s.class_name;
+                    classSelect.appendChild(extra);
+                }
+                classSelect.value = s.class_name || "";
+            })
+            .catch(function () {
+                classSelect.innerHTML = "";
+                var opt = document.createElement("option");
+                opt.value = s.class_name || "";
+                opt.textContent = s.class_name || "-";
+                classSelect.appendChild(opt);
+            });
+
+        document.getElementById("amsEditOverlay").style.display = "flex";
+    }
+
+    window.amsEditClose = function () {
+        document.getElementById("amsEditOverlay").style.display = "none";
+        editingStudent = null;
+    };
+
+    function saveEditProfile() {
+        if (!editingStudent) return;
+
+        var fullName = document.getElementById("amsEditFullName").value.trim();
+        var admNo = document.getElementById("amsEditAdmNo").value.trim();
+        var gender = document.getElementById("amsEditGender").value;
+        var dob = document.getElementById("amsEditDob").value;
+        var cls = document.getElementById("amsEditClass").value;
+        var parentName = document.getElementById("amsEditParentName").value.trim();
+        var parentPhone = document.getElementById("amsEditParentPhone").value.trim();
+        var address = document.getElementById("amsEditAddress").value.trim();
+        var photoInput = document.getElementById("amsEditPhoto");
+
+        if (!fullName || !admNo || !gender || !cls) {
+            window.amsToast("Full Name, Admission Number, Gender and Class are required.", "error", 4500);
+            return;
+        }
+
+        var fd = new FormData();
+        fd.append("student_id", admNo);            /* BEFORE photo: multer names the file with this */
+        fd.append("full_name", fullName);
+        fd.append("gender", gender);
+        fd.append("class_name", cls);
+        fd.append("date_of_birth", dob);
+        fd.append("parent_name", parentName);
+        fd.append("parent_phone", parentPhone);
+        fd.append("address", address);
+        if (photoInput.files.length > 0) {
+            fd.append("photo", photoInput.files[0]);
+        }
+
+        var saveBtn = document.getElementById("amsEditSaveBtn");
+        saveBtn.disabled = true;
+
+        fetch("/update-student/" + encodeURIComponent(editingStudent.student_id), {
+            method: "POST",
+            body: fd
+        })
+            .then(function (r) {
+                return r.json().then(function (j) { return { ok: r.ok, status: r.status, j: j }; });
+            })
+            .then(function (out) {
+                saveBtn.disabled = false;
+                if (out.status === 401 || out.status === 403) {
+                    window.amsToast("Only the admin account can edit student profiles.", "error", 5000);
+                    return;
+                }
+                if (!out.ok) {
+                    window.amsToast(out.j.message || "Could not save changes.", "error", 5000);
+                    return;
+                }
+                window.amsToast("Profile updated \u2713", "success");
+                window.amsEditClose();
+                window.amsProfileClose(); /* close stale profile view too */
+                loadStudents();           /* refresh the directory grid */
+            })
+            .catch(function () {
+                saveBtn.disabled = false;
+                window.amsToast("Network error while saving. Please try again.", "error");
+            });
+    }
+
+    document.getElementById("amsEditSaveBtn").addEventListener("click", saveEditProfile);
+
+    /* live preview when a replacement photo is chosen */
+    document.getElementById("amsEditPhoto").addEventListener("change", function () {
+        var photoInput = document.getElementById("amsEditPhoto");
+        if (photoInput.files && photoInput.files[0]) {
+            document.getElementById("amsEditPhotoPreview").src = URL.createObjectURL(photoInput.files[0]);
+        }
+    });
+
     /* ---------- export current (filtered) view to CSV ---------- */
     window.amsDirExport = function () {
         window.amsExportObjectsCSV(filtered, [
@@ -303,7 +478,10 @@
 
     /* close the profile modal with Escape */
     document.addEventListener("keydown", function (e) {
-        if (e.key === "Escape") window.amsProfileClose();
+        if (e.key === "Escape") {
+            window.amsProfileClose();
+            window.amsEditClose(); /* NEW (request #4) */
+        }
     });
 
     document.addEventListener("DOMContentLoaded", loadStudents);

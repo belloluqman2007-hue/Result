@@ -181,6 +181,10 @@
   margin-top:auto;
   position:relative;
   z-index:1;
+  /* FIX (layout, request #2): reserve the right-hand column occupied by
+     the passport photo ring, so a long student name never slides under
+     it and gets partially hidden. Visual only - print/PDF keep working. */
+  padding-right:92px;
 }
 
 .details h2{
@@ -190,6 +194,9 @@
   font-weight:700;
   margin-bottom:5px;
   text-shadow:0 2px 4px rgba(0,0,0,.35);
+  /* FIX (layout, request #2): wrap very long names instead of
+     overflowing the card edge. */
+  overflow-wrap:break-word;
 }
 
 .details .meta{

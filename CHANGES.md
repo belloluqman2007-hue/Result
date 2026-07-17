@@ -1,6 +1,41 @@
 # UI Modernization — Change Log
 
 **Project:** Ameenullah School — Result Management System
+
+---
+
+# Improvement Pack 4 — 17 July 2026 (the 8-point request)
+
+Everything below is **additive or visual-only**. No route, table, result
+calculation, report card or print logic was renamed or removed.
+
+| # | Request | What was done | Files |
+|---|---|---|---|
+| 1 | Broken Arabic / RTL everywhere | Removed the `letter-spacing:10px` that disconnected the Arabic school name on exam covers; added site-wide `[lang="ar"]` guards (correct Arabic font, no letter-spacing); wrapped Arabic phrases on the report header in `lang="ar"` | `css/exam.css`, `css/modern-ui.css`, `student-result.html`, `create-exam.html` |
+| 2 | Layout cut-offs / inconsistent PDF pages | Exam PDF now uses ONE global scale + same margins on every page (nothing cut, all pages identical); on-screen "page too full" warning chip; ID card name no longer slides under the photo circle | `js/exam.js`, `css/exam.css`, `css/idcard.css` |
+| 2b | "Put the exam tools in a sidebar" | All exam controls moved into a fixed left sidebar (slides away on phones behind a "☰ Exam Tools" button) so exam pages use the whole screen | `create-exam.html`, `css/exam.css`, `js/exam.js` |
+| 3 | Subject create / edit / delete | Subjects now editable via a modal (rename / move class); delete asks for a modern confirmation; live search + counts | `server.js` (`PUT /update-subject/:id` — NEW), `add-subject.html`, `js/subject.js` |
+| 4 | Edit student profile | Admin can edit: Full Name, Admission Number, Gender, DOB, Class, Parent Name, Parent Phone, Address + Passport Photo. Form auto-loads existing data. Admission-number changes safely re-link saved results | `server.js` (`POST /update-student/:studentId` — NEW), `students.html`, `js/students.js` |
+| 5 | Form redesigns | Add Student page rebuilt with sections, icons, inline validation, photo preview, Clear button, styled bulk upload; Classes & Subjects page rebuilt as modern cards | `add-student.html`, `js/student.js`, `add-subject.html`, `css/manage.css` (NEW) |
+| 6 | Exam wizard + header on every page | Step 1 (details) → "Next" → Step 2 (write questions); "+ Next Page" appends pages that automatically carry the exam header (school, class, subject, term, session); one consistent PDF | `create-exam.html`, `js/exam.js`, `css/exam.css` |
+| 7 | Download whole class results | New **read-only** route `GET /class-results?class&term&session`; new page `class-results.html` renders a broadsheet (totals, averages, positions — display-only) and exports ONE A4 PDF with the school header on every page. The per-student "Download Result" is untouched | `server.js`, `class-results.html` (NEW), `js/class-results.js` (NEW) |
+| 8 | Global modern UI | New shared component stylesheet used by all redesigned pages (cards, buttons, modals, validation, responsiveness) | `css/manage.css` (NEW) |
+
+**Only necessary DB change:** three NULL-able columns appended to `students`
+(`parent_name, parent_phone, address`) via a guarded, idempotent startup
+migration (checks `information_schema` first; manual fallback in
+`sql/student_profile_columns.sql`). Nothing existing was altered.
+
+Extra small fix included: the Students Directory **Logout** button now works
+(the page loads `js/app.js` — it previously didn't).
+
+Safety re-verified: `node --check` passes on every edited JS file; server
+boots cleanly; result entry/calculation/report code paths were NOT modified;
+the per-student download, print and export flows are untouched.
+
+---
+---
+
 **Date:** 16 July 2026
 **Goal:** Transform the look & feel into a modern, premium school ERP and add safe new modules — **without breaking or changing any existing functionality, especially the Result Module.**
 
