@@ -485,7 +485,8 @@ body{
 }
 .page-one .cover-instructions ol{
   list-style-type:decimal;   /* the paper numbers the rules 1. 2. 3. 4. */
-  padding-inline-start:1.4em;
+  padding-right:1.4em;       /* physical (RTL page) - also html2canvas-safe */
+  padding-left:0;
   margin:0;
   font-size:20pt;
   font-weight:700;
@@ -515,6 +516,31 @@ body{
 }
 /* Page 1 now has NO question area - questions live on page 2 and beyond,
    exactly like the school's printed papers. */
+
+/* NEW (multi-exam in one PDF): small round remove button on every EXTRA
+   cover (never on page 1) that deletes that exam section (cover + its
+   questions). Screen only - never printed, never in the downloaded PDF. */
+.cover-remove{
+  position:absolute;
+  top:4mm;
+  left:4mm;
+  z-index:6;
+  width:26px;
+  height:26px;
+  border-radius:50%;
+  border:1.5px solid #B23A2E;
+  background:#FFF6F5;
+  color:#B23A2E;
+  font-size:16px;
+  font-weight:800;
+  line-height:1;
+  padding:0;
+  cursor:pointer;
+}
+.cover-remove:hover{
+  background:#B23A2E;
+  color:#fff;
+}
 
 /* ----- Word-style forced page break marker (screen only) ----- */
 .manual-page-break{
@@ -621,7 +647,8 @@ body{
    they must never print or enter the PDF */
 .ams-capturing .page-warn-chip,
 .ams-capturing .manual-page-break,
-.ams-capturing .img-tools{
+.ams-capturing .img-tools,
+.ams-capturing .cover-remove{  /* NEW (multi-exam) */
   display:none !important;
 }
 
@@ -825,11 +852,19 @@ body{
 }
 .exam-body ol,
 .exam-body ul{
-  padding-inline-start:1.3em;
+  padding-right:1.3em;       /* physical (RTL page) - also html2canvas-safe */
+  padding-left:0;
 }
 
+/* FIX (school paper design): the legacy global "p{font-size:16px}" rule
+   in style.css overrode everything inside the exam body (inheritance
+   loses to ANY element rule), silently capping the paper's 32pt style.
+   These two inherit lines let the spacing class on the container decide
+   every paragraph/list item inside it. */
 .exam-body p,
 .exam-body li{
+  font-size:inherit;
+  line-height:inherit;
   margin-bottom:10px;
 }
 
@@ -1022,7 +1057,8 @@ body{
      for forced-break markers and the image editing tools. */
   .page-warn-chip,
   .manual-page-break,
-  .img-tools{
+  .img-tools,
+  .cover-remove{      /* NEW (multi-exam): section delete button - screen only */
     display:none !important;
   }
   .exam-page.page-overfull{

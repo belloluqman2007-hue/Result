@@ -80,6 +80,12 @@ function initExam() {
         });
     }
 
+    // NEW (multi-exam in one PDF): page 1's cover markup is stamped in
+    // from #examCoverTemplate (extra covers get the same stamp), so the
+    // template stays the single source for every cover.
+    const firstCover = document.getElementById("coverPage");
+    if (firstCover) buildCover(firstCover);
+
     refreshAllPageHeaders();
     paginateExam();
 }
@@ -200,10 +206,30 @@ function updateWizardSummary() {
 }
 
 /* ==========================================================================
-   4. PAGE-1 LETTERHEAD + AUTOMATIC PAGE HEADERS
+   4. COVER PAGES + MULTI-EXAM SECTIONS
 ========================================================================== */
 
-function generateCoverPage() {
+// NEW (multi-exam in one PDF): stamp the pristine cover markup (from
+// #examCoverTemplate) into an EMPTY cover page. One source of truth for
+// the first cover AND every extra "Add Another Exam" cover. Value hooks
+// are .js-cover-* classes (not ids) because a document can hold MANY
+// covers at once.
+function buildCover(coverEl) {
+    const tpl = document.getElementById("examCoverTemplate");
+    if (tpl && !coverEl.querySelector(".cover-header")) {
+        coverEl.appendChild(tpl.content.cloneNode(true));
+    }
+}
+
+// The LAST cover in the document - the one "Generate Cover Page" fills.
+function lastCover() {
+    const covers = document.querySelectorAll("#examFlow .exam-page.page-one");
+    return covers[covers.length - 1] || null;
+}
+
+// Fill ONE cover from the wizard fields. silent=true just skips an
+// incomplete wizard (used when auto-filling a brand-new section).
+function fillCover(cover, silent) {
     const cls = document.getElementById("examClass").value;
     const subject = document.getElementById("examSubject").value;
     const term = document.getElementById("examTerm").value;
@@ -211,30 +237,75 @@ function generateCoverPage() {
     const duration = document.getElementById("examDuration").value.trim();
 
     if (!cls || !subject || !term || !session) {
-        alert("Please select Class, Subject, Term, and Session before generating the cover page.");
+        if (!silent) {
+            alert("Please select Class, Subject, Term, and Session before generating the cover page.");
+        }
         return;
     }
 
-    // CHANGED (school paper design): values end with a full stop exactly
-    // like the printed school exam sheets (e.g. "شَرْحُ التَّوْحِيدِ.").
+    // Values end with a full stop exactly like the printed school exam
+    // sheets (e.g. "شَرْحُ التَّوْحِيدِ.").
     const dot = function (v) { return /[.؟!]\s*$/.test(v) ? v : v + "."; };
-    document.getElementById("coverClass").textContent = dot(cls);
-    document.getElementById("coverSubject").textContent = dot(subject);
-    document.getElementById("coverDuration").textContent = duration ? dot(duration) : "-";
+    cover.querySelector(".js-cover-class").textContent = dot(cls);
+    cover.querySelector(".js-cover-subject").textContent = dot(subject);
+    cover.querySelector(".js-cover-duration").textContent = duration ? dot(duration) : "-";
 
-    // CHANGED (school paper design): the paper shows the session as
-    // "END-YEAR\HIJRI" (e.g. 2026\1447) and the footer as
-    // "AMSAIS@2026/1447". Hijri year = Gregorian end year - 579.
+    // The paper shows the session as "END-YEAR\HIJRI" (e.g. 2026\1447)
+    // and the footer as "AMSAIS@2026/1447". Hijri = Gregorian end year - 579.
     const endYear = (session.split("/")[1] || session).trim();
     const hijri = String(parseInt(endYear, 10) - 579);
     const termArabic = TERM_ARABIC[term] || term;
-    document.getElementById("coverExamPeriod").textContent =
+    cover.querySelector(".js-cover-period").textContent =
         `اِمْتِحَانُ الْفَتْرَةِ ${termArabic} لِلْعَامِ الدِّرَاسِيِّ ${endYear}\\${hijri}`;
+    cover.querySelector(".js-cover-code").textContent = `AMSAIS@${endYear}/${hijri}`;
+}
 
-    document.getElementById("coverCode").textContent = `AMSAIS@${endYear}/${hijri}`;
-
+function generateCoverPage() {
+    // CHANGED (multi-exam in one PDF): fills the NEWEST cover (the last
+    // one). With a single exam that is page 1, exactly as before.
+    const cover = lastCover();
+    if (!cover) return;
+    if (!cover.querySelector(".cover-header")) buildCover(cover);
+    fillCover(cover, false);
     refreshAllPageHeaders();
     paginateExam(); // chrome height changed -> re-fit the blocks
+}
+
+// NEW (multi-exam in one PDF): append a NEW cover page + its own empty
+// question page at the END of the document. The teacher then changes the
+// details in Step 1 and presses "Generate Cover Page" - it fills the NEW
+// cover. Repeat for every exam, then print/download ONE pdf with covers
+// on pages 1, 3, 5... exactly like the school's own exam booklets.
+function addExamSection() {
+    const flow = document.getElementById("examFlow");
+    const cover = document.createElement("div");
+    cover.className = "exam-page page-one";
+    buildCover(cover);
+    flow.appendChild(cover);
+    appendBodyPage(flow);          // its own question page, right after it
+    fillCover(cover, true);        // start from the current wizard values
+    paginateExam();
+    if (window.amsToast) {
+        window.amsToast("New exam added at the end. Set its details in Step 1 and press \"Generate Cover Page\" - it fills the NEW cover.", "info", 7000);
+    }
+    if (typeof examGotoStep === "function") examGotoStep(1);
+    cover.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+// NEW (multi-exam in one PDF): remove an EXTRA cover together with the
+// question pages that belong to it (everything up to the next cover).
+function removeExamSection(btn) {
+    const cover = btn.closest(".exam-page.page-one");
+    if (!cover) return;
+    if (!confirm("Remove this whole exam section - its cover page AND the questions under it?")) return;
+    let n = cover.nextElementSibling;
+    while (n && !n.classList.contains("page-one")) {
+        const dead = n;
+        n = n.nextElementSibling;
+        dead.remove();
+    }
+    cover.remove();
+    paginateExam();
 }
 
 // CHANGED (school paper design): the real school exam paper has NO header
@@ -291,12 +362,18 @@ function placeBlock(block, page) {
 
 // Build one more question page - a plain content zone only, no header
 // (CHANGED (school paper design): question pages carry no school header).
-function appendBodyPage(flow) {
+// NEW (multi-exam in one PDF): when paginating a middle section the page
+// is inserted right after `afterEl`; by default it goes to the end.
+function appendBodyPage(flow, afterEl) {
     const page = document.createElement("div");
     page.className = "exam-page body-page";
     const spacing = document.getElementById("spacingSelect").value;
     page.innerHTML = `<div class="page-content exam-body spacing-${spacing}"></div>`;
-    flow.appendChild(page);
+    if (afterEl && afterEl.parentNode === flow) {
+        flow.insertBefore(page, afterEl.nextElementSibling);
+    } else {
+        flow.appendChild(page);
+    }
     return page;
 }
 
@@ -307,6 +384,30 @@ function appendBodyPage(flow) {
 // body page has exactly one content zone - but never add one to the cover.
 function ensureExamStructure(flow) {
     flow.querySelectorAll(".exam-page-header").forEach(function (h) { h.remove(); });
+
+    // NEW (multi-exam in one PDF): every cover gets its template stamped
+    // in; the FIRST cover carries the #coverPage id (saved exams rely on
+    // it); every cover EXCEPT the first gets a small screen-only remove
+    // button so a mistaken section can be deleted again.
+    const covers = Array.from(flow.querySelectorAll(".exam-page.page-one"));
+    covers.forEach(function (cover, i) {
+        buildCover(cover);
+        if (i === 0) {
+            if (!document.getElementById("coverPage")) cover.id = "coverPage";
+            const stray = cover.querySelector(".cover-remove");
+            if (stray) stray.remove();
+        } else if (!cover.querySelector(".cover-remove")) {
+            const btn = document.createElement("button");
+            btn.type = "button";
+            btn.className = "cover-remove";
+            btn.contentEditable = "false";
+            btn.title = "Remove this whole exam section (cover + its questions)";
+            btn.textContent = "\u00D7";
+            btn.addEventListener("click", function () { removeExamSection(btn); });
+            cover.appendChild(btn);
+        }
+    });
+
     flow.querySelectorAll(".exam-page").forEach(function (page) {
         if (page.classList.contains("page-one")) return; // cover stays pure
         if (!page.querySelector(".page-content")) {
@@ -326,40 +427,61 @@ function paginateExam() {
 
     ensureExamStructure(flow);
 
-    const pages = Array.from(flow.querySelectorAll(".exam-page"));
+    // NEW (multi-exam in one PDF): the paper is laid out per EXAM
+    // SECTION - one cover plus the question pages that belong to it.
+    // A question can never travel into another exam's section: covers
+    // are hard boundaries just like the school's printed booklets
+    // (cover, questions, cover, questions...).
+    const segments = [];
+    let cur = null;
+    flow.querySelectorAll(".exam-page").forEach(function (page) {
+        if (page.classList.contains("page-one")) {
+            cur = { cover: page, bodies: [] };
+            segments.push(cur);
+        } else if (cur) {
+            cur.bodies.push(page);
+        }
+    });
 
-    // Collect every block in document order, across all pages.
+    segments.forEach(function (seg) { paginateSegment(flow, seg); });
+
+    refreshAllPageHeaders();
+    checkAllPagesOverflow();
+}
+
+/* Lay out ONE section (cover + its question pages). Identical never-split
+   logic as before, but applied to this section only; pages are created /
+   removed between this cover and the next one. */
+function paginateSegment(flow, seg) {
+    if (!seg.bodies.length) {
+        seg.bodies.push(appendBodyPage(flow, seg.cover));
+    }
+
+    // Collect every block in document order, inside this section only.
     const blocks = [];
-    pages.forEach(function (page) {
+    seg.bodies.forEach(function (page) {
         const content = page.querySelector(".page-content");
         if (content) {
             Array.from(content.children).forEach(function (b) { blocks.push(b); });
         }
     });
 
-    // CHANGED (school paper design): page 1 is a pure cover with no content
-    // zone, so placement starts on the FIRST page that has one; if none
-    // exists yet (e.g. brand-new exam), a body page is created.
-    let pageIdx = pages.findIndex(function (p) { return !!p.querySelector(".page-content"); });
-    if (pageIdx < 0) {
-        pages.push(appendBodyPage(flow));
-        pageIdx = pages.length - 1;
-    }
-    let remaining = budgetFor(pages[pageIdx]);
+    let pageIdx = 0;
+    let remaining = budgetFor(seg.bodies[0]);
 
     blocks.forEach(function (block) {
         // A forced page break: the marker itself hops to the top of the
         // next page and everything after it follows onto that page.
         if (block.classList.contains("manual-page-break")) {
             pageIdx++;
-            if (!pages[pageIdx]) pages.push(appendBodyPage(flow));
-            placeBlock(block, pages[pageIdx]);
-            remaining = budgetFor(pages[pageIdx]);
+            if (!seg.bodies[pageIdx]) seg.bodies.push(appendBodyPage(flow, seg.bodies[pageIdx - 1]));
+            placeBlock(block, seg.bodies[pageIdx]);
+            remaining = budgetFor(seg.bodies[pageIdx]);
             return;
         }
 
         const h = outerHeightPx(block);
-        const budget = budgetFor(pages[pageIdx]);
+        const budget = budgetFor(seg.bodies[pageIdx]);
         const pageAlreadyHasBlocks = remaining < budget - 0.5;
 
         if (h > budget + 1) {
@@ -367,52 +489,50 @@ function paginateExam() {
             // (it will overflow - the warning chip explains what to do).
             if (pageAlreadyHasBlocks) {
                 pageIdx++;
-                if (!pages[pageIdx]) pages.push(appendBodyPage(flow));
+                if (!seg.bodies[pageIdx]) seg.bodies.push(appendBodyPage(flow, seg.bodies[pageIdx - 1]));
             }
-            placeBlock(block, pages[pageIdx]);
+            placeBlock(block, seg.bodies[pageIdx]);
 
             // Following blocks continue on a fresh page.
             pageIdx++;
-            if (!pages[pageIdx]) pages.push(appendBodyPage(flow));
-            remaining = budgetFor(pages[pageIdx]);
+            if (!seg.bodies[pageIdx]) seg.bodies.push(appendBodyPage(flow, seg.bodies[pageIdx - 1]));
+            remaining = budgetFor(seg.bodies[pageIdx]);
         } else if (h > remaining + 1) {
             // THE IMPORTANT RULE: doesn't fit in the remaining space,
             // so the WHOLE question moves to the next page - never split.
             pageIdx++;
-            if (!pages[pageIdx]) pages.push(appendBodyPage(flow));
-            placeBlock(block, pages[pageIdx]);
-            remaining = budgetFor(pages[pageIdx]) - h;
+            if (!seg.bodies[pageIdx]) seg.bodies.push(appendBodyPage(flow, seg.bodies[pageIdx - 1]));
+            placeBlock(block, seg.bodies[pageIdx]);
+            remaining = budgetFor(seg.bodies[pageIdx]) - h;
         } else {
-            placeBlock(block, pages[pageIdx]);
+            placeBlock(block, seg.bodies[pageIdx]);
             remaining -= h;
         }
     });
 
-    // Remove trailing pages that hold nothing (empty pages vanish
-    // automatically; a page with a forced break marker is kept).
-    for (let i = pages.length - 1; i > 0; i--) {
-        const content = pages[i].querySelector(".page-content");
+    // Remove trailing pages OF THIS SECTION that hold nothing (empty
+    // pages vanish automatically; a page with a forced break marker is
+    // kept) - but always keep at least one question page per section.
+    for (let i = seg.bodies.length - 1; i > 0; i--) {
+        const content = seg.bodies[i].querySelector(".page-content");
         const hasMarker = content && content.querySelector(".manual-page-break");
         const hasBlocks = content && content.children.length > 0;
         const isUsed = hasBlocks && Array.from(content.children).some(c =>
             !c.classList.contains("manual-page-break") || hasMarker
         );
         if (!content || (!content.children.length)) {
-            pages[i].remove();
+            seg.bodies[i].remove();
+            seg.bodies.pop();
         } else if (!isUsed && !hasMarker) {
-            pages[i].remove();
+            seg.bodies[i].remove();
+            seg.bodies.pop();
         } else {
             break;
         }
     }
-
-    // CHANGED (school paper design): the cover has no content zone, so the
-    // cleanup above could leave the paper with NO editable page at all -
-    // always keep at least one body page for the teacher to type into.
-    if (!flow.querySelector(".page-content")) appendBodyPage(flow);
-
-    refreshAllPageHeaders();
-    checkAllPagesOverflow();
+    if (!seg.bodies.some(function (p) { return p.querySelector(".page-content"); })) {
+        seg.bodies.push(appendBodyPage(flow, seg.bodies.length ? seg.bodies[seg.bodies.length - 1] : seg.cover));
+    }
 }
 
 /* Overflow warning (screen-only): only reachable when a SINGLE block is
@@ -789,11 +909,25 @@ function toggleVoice() {
 
 function serializeFlow() {
     deselectExamImage(); // never persist the on-screen image tools
-    let html = "";
-    document.querySelectorAll("#examFlow .page-content").forEach(function (content) {
-        html += content.innerHTML;
-    });
-    return html;
+    const flow = document.getElementById("examFlow");
+    const covers = flow.querySelectorAll(".exam-page.page-one");
+
+    if (covers.length <= 1) {
+        // Single exam - the classic format: questions only, one string.
+        let html = "";
+        flow.querySelectorAll(".page-content").forEach(function (content) {
+            html += content.innerHTML;
+        });
+        return html;
+    }
+
+    // NEW (multi-exam in one PDF): save the WHOLE flow - every cover with
+    // its own exam information and every question zone - cleaned of the
+    // screen-only helpers. Loading brings back all sections exactly.
+    const clone = flow.cloneNode(true);
+    clone.querySelectorAll(".page-warn-chip, .img-tools, .cover-remove").forEach(function (el) { el.remove(); });
+    clone.querySelectorAll(".page-overfull").forEach(function (el) { el.classList.remove("page-overfull"); });
+    return clone.innerHTML;
 }
 
 function saveExam() {
@@ -803,7 +937,10 @@ function saveExam() {
     const term = document.getElementById("examTerm").value;
     const session = document.getElementById("examSession").value;
     const duration = document.getElementById("examDuration").value.trim();
-    const instructions = document.getElementById("coverInstructions").innerHTML;
+    // CHANGED (multi-exam in one PDF): the classic "instructions" column
+    // stores the FIRST cover's instructions; extra covers keep their own
+    // inside the saved flow (see serializeFlow).
+    const instructions = document.querySelector("#coverPage .js-cover-instructions").innerHTML;
 
     if (!title || !cls || !subject || !term || !session) {
         alert("Please fill in the Exam Title and all the fields in the details step before saving.");
@@ -908,8 +1045,12 @@ function loadExam(id) {
                     subjectSelect.value = exam.subject;
                 });
 
-            if (exam.instructions) {
-                document.getElementById("coverInstructions").innerHTML = exam.instructions;
+            // CHANGED (multi-exam in one PDF): multi-exam saves carry each
+            // cover's own instructions inside the flow itself, so the
+            // classic instructions column is only applied to single exams.
+            const isMultiSave = exam.body_html && exam.body_html.indexOf("page-one") !== -1;
+            if (exam.instructions && !isMultiSave) {
+                document.querySelector("#coverPage .js-cover-instructions").innerHTML = exam.instructions;
             }
 
             generateCoverPage();
@@ -939,15 +1080,29 @@ function loadExam(id) {
         });
 }
 
-// Replace the whole question flow with new HTML and lay it out afresh.
+// Replace the question flow with new HTML and lay it out afresh.
+// NEW (multi-exam in one PDF): multi-exam saves contain the whole flow
+// (every cover + questions) - they restore wholesale. Classic single-exam
+// saves (questions only) load exactly as before.
 function resetFlow(flowHtml) {
     const flow = document.getElementById("examFlow");
+    const isMulti = flowHtml && flowHtml.indexOf("page-one") !== -1;
 
-    // Drop every page except the cover (page one).
+    if (isMulti) {
+        flow.innerHTML = flowHtml;
+        paginateExam(); // re-stamps covers, re-adds remove buttons, re-fits
+        return;
+    }
+
+    // Drop any extra covers and every question page, keep the first cover.
+    const covers = Array.from(flow.querySelectorAll(".exam-page.page-one"));
+    covers.forEach(function (cover, i) { if (i > 0) cover.remove(); });
     flow.querySelectorAll(".exam-page:not(.page-one)").forEach(p => p.remove());
+    const firstCover = flow.querySelector(".exam-page.page-one");
+    if (firstCover) buildCover(firstCover);
 
-    // CHANGED (school paper design): the cover is pure chrome now, so the
-    // loaded questions go onto a fresh body page, never onto page 1.
+    // The cover is pure chrome, so the loaded questions go onto a fresh
+    // body page, never onto page 1.
     const firstBody = appendBodyPage(flow);
     firstBody.querySelector(".page-content").innerHTML =
         flowHtml && flowHtml.trim() !== "" ? flowHtml : "<p><br></p>";

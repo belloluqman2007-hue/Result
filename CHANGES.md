@@ -4,6 +4,30 @@
 
 ---
 
+# Fix Pack 8 — 17 July 2026 (many exams in ONE PDF)
+
+Requested: write several exams (each with its OWN exam information) in one
+document - cover on page 1, questions, the cover appears again on page 3
+with the new information, more questions under it, and so on - and
+print/download everything as ONE pdf. Delivered:
+
+| File | Change |
+|---|---|
+| create-exam.html | NEW: "Add Another Exam" button on the Step-2 bar. The cover markup now lives once in <template id="examCoverTemplate"> and is stamped into every cover; value hooks became .js-cover-* classes because one document can hold many covers. |
+| js/exam.js | NEW: addExamSection() appends a fresh cover page + its own question page at the end; "Generate Cover Page" always fills the NEWEST cover, so each section gets its own class/subject/term/session. NEW: the pagination engine lays out every exam section independently - questions can never travel past their cover; tall sections grow extra pages between their cover and the next one, and the never-split rule is unchanged. NEW: small round x button on every extra cover removes that whole section. NEW: multi-exam documents save the whole flow (all covers + questions) and reload intact; single-exam exams keep the old save format, so all previously saved exams still open untouched. |
+| css/exam.css | NEW: .cover-remove button (screen only, hidden in print/PDF). FIX (school paper design): the legacy global p{font-size:16px} in style.css was overriding the paper's 32pt question style for plain paragraphs - exam text now inherits the spacing class size exactly (this also fixes the small header line in last week's phone print). |
+| css/modern-ui.css | (same file as Pack 7 - exam cover table stays classic) |
+| images/bismillah.png | (same as Pack 7) |
+
+How it works for the teacher: finish exam 1 -> "Add Another Exam" -> the
+cover appears again at the end -> change Class/Subject/Term/Session in
+Step 1 -> "Generate Cover Page" (fills the NEW cover) -> "Next" and write
+its questions. Repeat. Print / Download as one PDF: covers on pages 1, 3,
+5... just like the school's printed booklets. This zip SUPERSEDES
+Pack 7 - it includes everything from it.
+
+---
+
 # Fix Pack 7 — 17 July 2026 (exam paper rebuilt to the school's real design)
 
 The Create Exam page now produces papers that match the school's own

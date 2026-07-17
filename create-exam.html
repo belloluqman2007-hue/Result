@@ -111,6 +111,11 @@
              page break - pages themselves are created automatically. -->
         <button type="button" onclick="insertPageBreak()">&#8626; Page Break</button>
         <button type="button" onclick="removeLastPage()">&#9003; Undo Break</button>
+        <!-- NEW (multi-exam in one PDF): adds ANOTHER cover page + its own
+             question page at the end of the document. Change the details
+             in Step 1 and press "Generate Cover Page" again - it fills the
+             NEW cover. Repeat for every exam, then print ONE pdf. -->
+        <button type="button" onclick="addExamSection()">&#128462; Add Another Exam</button>
         <button type="button" onclick="examPrint()">Print / Save as PDF</button>
         <button type="button" onclick="downloadExamPDF()">&#11015; Download PDF (phone)</button>
         <button type="button" class="exam-back-btn" onclick="examGotoStep(1)">&larr; Exam Details</button>
@@ -215,6 +220,68 @@
        typing; exam.js measures the content and moves whole question
        blocks onto new pages automatically - a single question is NEVER
        split across two pages. -->
+  <!-- NEW (multi-exam in one PDF): the pristine cover markup. exam.js
+       stamps this into page 1 AND into every extra cover added with
+       "Add Another Exam". Value hooks are .js-cover-* CLASSES (not ids),
+       because one document may hold many covers at once. -->
+  <template id="examCoverTemplate">
+      <div class="cover-header" contenteditable="false">
+        <img src="images/bismillah.png" class="cover-bismillah" alt="بسم الله الرحمن الرحيم">
+
+        <img src="images/LOGO.JPG" class="cover-logo" alt="School Logo">
+
+        <h1 class="cover-arabic-name" lang="ar">مَدْرَسَةُ أَمِينِ اللهِ لِلْعُلُومِ الْعَرَبِيَّةِ الْإِسْلَامِيَّةِ</h1>
+        <h2 class="cover-english-name" dir="ltr">AMEENULLAH SCHOOL OF ARABIC AND ISLAMIC STUDIES</h2>
+
+        <div class="cover-divider"></div>
+
+        <p class="cover-address" dir="ltr">3, Temidire Street off Ondo Benin Road, Ijebu-Ode, Ogun State, Nigeria.</p>
+        <p class="cover-tel" dir="ltr">Tel: 08062445559, 08058306889.</p>
+        <p class="cover-email" dir="ltr">E-mail: <a href="mailto:madrasatuameenillah22@gmail.com">madrasatuameenillah22@gmail.com</a></p>
+        <p class="cover-motto"><span class="motto-ar" lang="ar">الشِّعَارُ: الْعِلْمُ وَالْعِبَادَةُ.</span><span class="motto-en" dir="ltr">MOTTO: KNOWLEDGE AND WORSHIP.</span></p>
+      </div>
+
+      <div class="cover-exam-details" contenteditable="false">
+        <p class="cover-exam-period js-cover-period" lang="ar">اِمْتِحَانُ الْفَتْرَةِ ... لِلْعَامِ الدِّرَاسِيِّ ....\....</p>
+
+        <table class="cover-info-table">
+          <tr>
+            <td class="label">الْإِسْـــمُ:</td>
+            <td class="blank-line" colspan="3"></td>
+          </tr>
+          <tr>
+            <td class="label">الْمَــــــادَّةُ:</td>
+            <td class="value js-cover-subject">-</td>
+            <td class="label">رَقْمُ الْقَبُولِ:</td>
+            <td class="blank-line-short"></td>
+          </tr>
+          <tr>
+            <td class="label">الْمُـــــدَّةُ:</td>
+            <td class="value js-cover-duration" colspan="3">سَاعَةٌ وَاحِدَةٌ.</td>
+          </tr>
+          <tr>
+            <td class="label">الْفَصْلُ:</td>
+            <td class="value js-cover-class" colspan="3">-</td>
+          </tr>
+        </table>
+      </div>
+
+      <div class="cover-instructions js-cover-instructions" contenteditable="true">
+        <p class="instructions-title">إِرْشَادَاتُ الْاِمْتِحَانِ:</p>
+        <ol>
+          <li>لَا تَفْتَحْ حَتَّى تُؤْمَرَ بِذَلِكَ.</li>
+          <li>لَا تُضَيِّعْ هَذِهِ وَرَقَةَ السُّؤَالِ.</li>
+          <li>اِسْتَعِنْ بِاللَّهِ.</li>
+          <li>ثُمَّ ابْدَأَ.</li>
+        </ol>
+      </div>
+
+      <div class="cover-footer" contenteditable="false">
+        <p class="cover-wish" lang="ar">مع تمنياتي لكم بالنجاح.</p>
+        <p class="cover-code js-cover-code" dir="ltr">AMSAIS@2026/1447</p>
+      </div>
+  </template>
+
   <main class="exam-main">
 
     <div class="exam-pages exam-flow" id="examFlow" contenteditable="true" dir="rtl">
@@ -226,63 +293,7 @@
            motto row, exam period, name/subject/admission/duration/class
            lines and the numbered instructions. It is PURE chrome: NO
            questions are typed on page 1; questions start on page 2. -->
-      <div class="exam-page page-one" id="coverPage">
-        <div class="cover-header" contenteditable="false">
-          <img src="images/bismillah.png" class="cover-bismillah" alt="بسم الله الرحمن الرحيم">
-
-          <img src="images/LOGO.JPG" class="cover-logo" alt="School Logo">
-
-          <h1 class="cover-arabic-name" lang="ar">مَدْرَسَةُ أَمِينِ اللهِ لِلْعُلُومِ الْعَرَبِيَّةِ الْإِسْلَامِيَّةِ</h1>
-          <h2 class="cover-english-name" dir="ltr">AMEENULLAH SCHOOL OF ARABIC AND ISLAMIC STUDIES</h2>
-
-          <div class="cover-divider"></div>
-
-          <p class="cover-address" dir="ltr">3, Temidire Street off Ondo Benin Road, Ijebu-Ode, Ogun State, Nigeria.</p>
-          <p class="cover-tel" dir="ltr">Tel: 08062445559, 08058306889.</p>
-          <p class="cover-email" dir="ltr">E-mail: <a href="mailto:madrasatuameenillah22@gmail.com">madrasatuameenillah22@gmail.com</a></p>
-          <p class="cover-motto"><span class="motto-ar" lang="ar">الشِّعَارُ: الْعِلْمُ وَالْعِبَادَةُ.</span><span class="motto-en" dir="ltr">MOTTO: KNOWLEDGE AND WORSHIP.</span></p>
-        </div>
-
-        <div class="cover-exam-details" contenteditable="false">
-          <p class="cover-exam-period" id="coverExamPeriod" lang="ar">اِمْتِحَانُ الْفَتْرَةِ ... لِلْعَامِ الدِّرَاسِيِّ ....\....</p>
-
-          <table class="cover-info-table">
-            <tr>
-              <td class="label">الْإِسْـــمُ:</td>
-              <td class="blank-line" colspan="3"></td>
-            </tr>
-            <tr>
-              <td class="label">الْمَــــــادَّةُ:</td>
-              <td class="value" id="coverSubject">-</td>
-              <td class="label">رَقْمُ الْقَبُولِ:</td>
-              <td class="blank-line-short"></td>
-            </tr>
-            <tr>
-              <td class="label">الْمُـــــدَّةُ:</td>
-              <td class="value" id="coverDuration" colspan="3">سَاعَةٌ وَاحِدَةٌ.</td>
-            </tr>
-            <tr>
-              <td class="label">الْفَصْلُ:</td>
-              <td class="value" id="coverClass" colspan="3">-</td>
-            </tr>
-          </table>
-        </div>
-
-        <div class="cover-instructions" id="coverInstructions" contenteditable="true">
-          <p class="instructions-title">إِرْشَادَاتُ الْاِمْتِحَانِ:</p>
-          <ol>
-            <li>لَا تَفْتَحْ حَتَّى تُؤْمَرَ بِذَلِكَ.</li>
-            <li>لَا تُضَيِّعْ هَذِهِ وَرَقَةَ السُّؤَالِ.</li>
-            <li>اِسْتَعِنْ بِاللَّهِ.</li>
-            <li>ثُمَّ ابْدَأَ.</li>
-          </ol>
-        </div>
-
-        <div class="cover-footer" contenteditable="false">
-          <p class="cover-wish" lang="ar">مع تمنياتي لكم بالنجاح.</p>
-          <p class="cover-code" id="coverCode" dir="ltr">AMSAIS@2026/1447</p>
-        </div>
-      </div>
+      <div class="exam-page page-one" id="coverPage"></div>
 
       <!-- PAGE 2 (auto-managed): a PLAIN question page - no school header,
            exactly like the school's real papers (CHANGED (school paper
