@@ -1,3 +1,27 @@
+/* ==========================================================================
+   EXAM BUILDER  (js/exam.js)
+   --------------------------------------------------------------------------
+   CHANGED (auto pagination - request #1):
+   The exam is now ONE continuous editable document (#examFlow) that the
+   system lays out onto A4 pages automatically - like Microsoft Word.
+
+     - The teacher simply types; blocks (paragraphs, lists, tables,
+       images) are measured and placed on the current page.
+     - If a block does not fit in the remaining space, the WHOLE block
+       moves to the next page. A single question is NEVER split.
+     - New pages appear automatically (each with the exam header) and
+       empty trailing pages disappear automatically.
+     - "Page Break" inserts a Word-style forced break (Ctrl+Enter feel).
+
+   Kept intact: all original function names (initExam, generateCoverPage,
+   saveExam, openLoadPanel, loadExam, deleteExamFromPanel, insertPageBreak,
+   removeLastPage, examPrint, downloadExamPDF, format, insertTable,
+   setSpacing, toggleDirection, setFontSize, toggleVoice, insertHarakat),
+   the /save-exam + /exams + /exam/:id routes and the exams table format.
+   Old saved exams (per-page JSON array) load seamlessly - their pages
+   are merged into the flow and re-paginated automatically.
+========================================================================== */
+
 let currentExamId = null;
 
 const TERM_ARABIC = {
@@ -6,183 +30,73 @@ const TERM_ARABIC = {
     "3rd Term": "الثَّالِثَة"
 };
 
+/* ==========================================================================
+   1. INITIALISATION
+========================================================================== */
+
 function initExam() {
     loadExamClasses();
     preventToolbarFocusLoss();
 
     document.getElementById("examClass").addEventListener("change", loadExamSubjects);
 
-    // NEW (requests #2 & #6): draw the automatic page headers right away
-    // (they show placeholders until the exam details are chosen) and start
-    // watching for pages that get too full to fit one printed A4 sheet.
-    refreshAllPageHeaders();
-    var pagesBox = document.getElementById("examPages");
-    if (pagesBox) {
-        var overflowTimer = null;
-        pagesBox.addEventListener("input", function () {
-            clearTimeout(overflowTimer);
-            overflowTimer = setTimeout(checkAllPagesOverflow, 400);
+    const flow = document.getElementById("examFlow");
+
+    // Re-paginate shortly after every edit (debounced for speed).
+    let paginateTimer = null;
+    flow.addEventListener("input", function () {
+        clearTimeout(paginateTimer);
+        paginateTimer = setTimeout(paginateExam, 300);
+    });
+
+    // Images load asynchronously - re-measure once they arrive.
+    flow.addEventListener("load", function (e) {
+        if (e.target && e.target.tagName === "IMG") paginateExam();
+    }, true);
+
+    // Rotating the phone / resizing the window changes page width → re-fit.
+    let resizeTimer = null;
+    window.addEventListener("resize", function () {
+        clearTimeout(resizeTimer);
+        resizeTimer = setTimeout(paginateExam, 500);
+    });
+
+    // Image tools: click an image to select it, click away to deselect.
+    flow.addEventListener("click", handleFlowClick);
+    document.addEventListener("click", function (e) {
+        if (!e.target.closest(".exam-img") && !e.target.closest(".img-tools")) {
+            deselectExamImage();
+        }
+    });
+
+    // File picker for "Image" toolbar button.
+    const imgInput = document.getElementById("examImageInput");
+    if (imgInput) {
+        imgInput.addEventListener("change", function () {
+            if (imgInput.files && imgInput.files[0]) {
+                insertExamImage(imgInput.files[0]);
+            }
+            imgInput.value = "";
         });
     }
-    checkAllPagesOverflow();
+
+    refreshAllPageHeaders();
+    paginateExam();
 }
 
-/* ====================================================================
-   NEW (sidebar layout - user request): opens/closes the tools sidebar.
-   On wide screens the sidebar is pinned and this barely matters; on
-   phones it slides the panel in/out over the exam pages.
-==================================================================== */
-function toggleExamSidebar(force) {
-    var side = document.getElementById("examSidebar");
-    var scrim = document.getElementById("examSideScrim");
-    if (!side) return;
-    var open = typeof force === "boolean"
-        ? force
-        : !side.classList.contains("exam-side-open");
-    side.classList.toggle("exam-side-open", open);
-    if (scrim) scrim.classList.toggle("exam-side-open", open);
-}
-
-// Comfort: on small screens the sidebar closes by itself after the
-// wizard moves on, revealing the whole exam page immediately.
-function examCloseSidebarOnMobile() {
-    if (window.innerWidth <= 1100) toggleExamSidebar(false);
-}
-
-/* ====================================================================
-   NEW (exam wizard - request #6): two guided steps.
-   Step 1 collects the details; Step 2 is the question editor. All the
-   original fields/buttons keep working - this only shows/hides the two
-   sections and, when moving forward, generates the cover page and the
-   automatic page headers.
-==================================================================== */
-function examGotoStep(step) {
-    var step1 = document.getElementById("examStep1");
-    var step2 = document.getElementById("examStep2");
-    if (!step1 || !step2) return;
-
-    if (step === 2) {
-        // Validates the details (generateCoverPage already alerts if any
-        // are missing). Only move on when all four are chosen.
-        var cls = document.getElementById("examClass").value;
-        var subject = document.getElementById("examSubject").value;
-        var term = document.getElementById("examTerm").value;
-        var session = document.getElementById("examSession").value;
-        if (!cls || !subject || !term || !session) {
-            if (window.amsToast) {
-                window.amsToast("Please choose Class, Subject, Term and Session first.", "error", 4500);
-            } else {
-                alert("Please select Class, Subject, Term, and Session before continuing.");
-            }
-            return;
-        }
-        generateCoverPage(); // also refreshes every page header + summary
-        step1.style.display = "none";
-        step2.style.display = "block";
-        examCloseSidebarOnMobile(); // NEW (sidebar layout)
-        var firstBody = document.querySelector(".body-page");
-        if (firstBody) firstBody.scrollIntoView({ behavior: "smooth", block: "start" });
-    } else {
-        step2.style.display = "none";
-        step1.style.display = "block";
-        window.scrollTo({ top: 0, behavior: "smooth" });
-    }
-}
-
-// NEW: one-line summary of the chosen exam, shown at the top of Step 2.
-function updateWizardSummary() {
-    var el = document.getElementById("examWizardSummary");
-    if (!el) return;
-    var cls = document.getElementById("examClass").value;
-    var subject = document.getElementById("examSubject").value;
-    var term = document.getElementById("examTerm").value;
-    var session = document.getElementById("examSession").value;
-    if (cls && subject && term && session) {
-        el.textContent = cls + " \u00B7 " + subject + " \u00B7 " + term + " \u00B7 " + session +
-            " \u2014 every page automatically carries the exam header.";
-    }
-}
-
-/* ====================================================================
-   NEW (automatic exam header on EVERY question page - request #6):
-   the header is NOT editable (so it can't be damaged while typing) and
-   it is NOT part of what saveExam() stores - it is rebuilt from the
-   exam details every time, so editing the details updates all pages.
-==================================================================== */
-function examPageHeaderHTML() {
-    var cls = document.getElementById("examClass").value || "\u2026";
-    var subject = document.getElementById("examSubject").value || "\u2026";
-    var term = document.getElementById("examTerm").value || "\u2026";
-    var session = document.getElementById("examSession").value || "\u2026";
-
-    return '<div class="eph-names">' +
-        '<span class="eph-name-ar" lang="ar">مَدْرَسَةُ أَمِينِ اللهِ لِلْعُلُومِ الْعَرَبِيَّةِ الْإِسْلَامِيَّةِ</span>' +
-        '<span class="eph-name-en">AMEENULLAH SCHOOL OF ARABIC AND ISLAMIC STUDIES</span>' +
-        '</div>' +
-        '<div class="eph-line" dir="rtl">' +
-        '<span><b>الْفَصْلُ:</b> ' + cls + '</span>' +
-        '<span><b>الْمَادَّةُ:</b> ' + subject + '</span>' +
-        '<span><b>الْفَتْرَةُ:</b> ' + term + '</span>' +
-        '<span><b>الْعَامُ:</b> ' + session + '</span>' +
-        '</div>';
-}
-
-// Writes the same header into every .exam-page-header block.
-function refreshAllPageHeaders() {
-    var html = examPageHeaderHTML();
-    document.querySelectorAll(".exam-page-header").forEach(function (el) {
-        el.innerHTML = html;
-    });
-    updateWizardSummary();
-}
-
-/* ====================================================================
-   NEW (layout guard - request #2): a question page holds a fixed amount
-   of text. When the writer passes that, the page would have to shrink
-   to fit A4 - instead, we warn early on screen so they can continue on
-   a fresh page. Screen-only: the chip never prints and never lands in
-   the exported PDF.
-==================================================================== */
-function checkAllPagesOverflow() {
-    // 297mm sheet minus the body-page padding (20mm top + 20mm bottom)
-    var BODY_BUDGET_MM = 257;
-    document.querySelectorAll(".exam-page.body-page").forEach(function (page) {
-        var body = page.querySelector(".exam-body");
-        if (!body) return;
-        // page.offsetWidth corresponds to 210mm (or proportionally less
-        // on a phone), so this budget scales correctly on every screen.
-        var budgetPx = (BODY_BUDGET_MM / 210) * page.offsetWidth;
-        var header = page.querySelector(".exam-page-header");
-        if (header) budgetPx -= header.offsetHeight;
-
-        var over = body.scrollHeight > budgetPx + 4;
-        page.classList.toggle("page-overfull", over);
-
-        var chip = page.querySelector(".page-warn-chip");
-        if (over) {
-            if (!chip) {
-                chip = document.createElement("div");
-                chip.className = "page-warn-chip";
-                chip.contentEditable = "false";
-                chip.textContent = "\u26A0 This page is getting too full - tap '+ Next Page' to continue neatly on a fresh page.";
-                page.appendChild(chip);
-            }
-        } else if (chip) {
-            chip.remove();
-        }
-    });
-}
-
-// Prevent toolbar/harakat button clicks from stealing focus away from the
+// Prevent toolbar/palette button clicks from stealing focus away from the
 // editable area, so the text cursor position is preserved when formatting.
 function preventToolbarFocusLoss() {
-    document.querySelectorAll(".exam-format-toolbar button, .harakat-palette button")
-        .forEach(btn => {
-            btn.addEventListener("mousedown", e => e.preventDefault());
-        });
+    document.querySelectorAll(
+        ".exam-format-toolbar button, .harakat-palette button, .math-palette button, .img-tools button"
+    ).forEach(btn => {
+        btn.addEventListener("mousedown", e => e.preventDefault());
+    });
 }
 
-// ===== CLASS / SUBJECT LOADING (self-contained, doesn't touch dashboard selects) =====
+/* ==========================================================================
+   2. CLASS / SUBJECT LOADING (self-contained)
+========================================================================== */
 
 function loadExamClasses() {
     fetch("/classes")
@@ -222,7 +136,72 @@ function loadExamSubjects() {
         .catch(error => console.log(error));
 }
 
-// ===== COVER PAGE GENERATION =====
+/* ==========================================================================
+   3. WIZARD (Step 1 details -> Step 2 editor) + sidebar
+========================================================================== */
+
+function toggleExamSidebar(force) {
+    var side = document.getElementById("examSidebar");
+    var scrim = document.getElementById("examSideScrim");
+    if (!side) return;
+    var open = typeof force === "boolean"
+        ? force
+        : !side.classList.contains("exam-side-open");
+    side.classList.toggle("exam-side-open", open);
+    if (scrim) scrim.classList.toggle("exam-side-open", open);
+}
+
+function examCloseSidebarOnMobile() {
+    if (window.innerWidth <= 1100) toggleExamSidebar(false);
+}
+
+function examGotoStep(step) {
+    var step1 = document.getElementById("examStep1");
+    var step2 = document.getElementById("examStep2");
+    if (!step1 || !step2) return;
+
+    if (step === 2) {
+        var cls = document.getElementById("examClass").value;
+        var subject = document.getElementById("examSubject").value;
+        var term = document.getElementById("examTerm").value;
+        var session = document.getElementById("examSession").value;
+        if (!cls || !subject || !term || !session) {
+            if (window.amsToast) {
+                window.amsToast("Please choose Class, Subject, Term and Session first.", "error", 4500);
+            } else {
+                alert("Please select Class, Subject, Term, and Session before continuing.");
+            }
+            return;
+        }
+        generateCoverPage(); // fills page-1 letterhead + every page header
+        step1.style.display = "none";
+        step2.style.display = "block";
+        examCloseSidebarOnMobile();
+        var firstPage = document.querySelector(".exam-page");
+        if (firstPage) firstPage.scrollIntoView({ behavior: "smooth", block: "start" });
+    } else {
+        step2.style.display = "none";
+        step1.style.display = "block";
+        window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+}
+
+function updateWizardSummary() {
+    var el = document.getElementById("examWizardSummary");
+    if (!el) return;
+    var cls = document.getElementById("examClass").value;
+    var subject = document.getElementById("examSubject").value;
+    var term = document.getElementById("examTerm").value;
+    var session = document.getElementById("examSession").value;
+    if (cls && subject && term && session) {
+        el.textContent = cls + " \u00B7 " + subject + " \u00B7 " + term + " \u00B7 " + session +
+            " \u2014 pages are created automatically as you write.";
+    }
+}
+
+/* ==========================================================================
+   4. PAGE-1 LETTERHEAD + AUTOMATIC PAGE HEADERS
+========================================================================== */
 
 function generateCoverPage() {
     const cls = document.getElementById("examClass").value;
@@ -246,20 +225,318 @@ function generateCoverPage() {
 
     document.getElementById("coverCode").textContent = `AMSAIS@${session}`;
 
-    // NEW (request #6): keep every question page header in sync with the
-    // freshly chosen details, and update the Step-2 summary line.
     refreshAllPageHeaders();
+    paginateExam(); // chrome height changed -> re-fit the blocks
 }
 
-// ===== RICH TEXT TOOLBAR =====
+// The header that appears at the top of every question page (2, 3, 4...).
+function examPageHeaderHTML() {
+    var cls = document.getElementById("examClass").value || "\u2026";
+    var subject = document.getElementById("examSubject").value || "\u2026";
+    var term = document.getElementById("examTerm").value || "\u2026";
+    var session = document.getElementById("examSession").value || "\u2026";
+
+    return '<div class="eph-names">' +
+        '<span class="eph-name-ar" lang="ar">مَدْرَسَةُ أَمِينِ اللهِ لِلْعُلُومِ الْعَرَبِيَّةِ الْإِسْلَامِيَّةِ</span>' +
+        '<span class="eph-name-en">AMEENULLAH SCHOOL OF ARABIC AND ISLAMIC STUDIES</span>' +
+        '</div>' +
+        '<div class="eph-line" dir="rtl">' +
+        '<span><b>الْفَصْلُ:</b> ' + cls + '</span>' +
+        '<span><b>الْمَادَّةُ:</b> ' + subject + '</span>' +
+        '<span><b>الْفَتْرَةُ:</b> ' + term + '</span>' +
+        '<span><b>الْعَامُ:</b> ' + session + '</span>' +
+        '</div>';
+}
+
+function refreshAllPageHeaders() {
+    var html = examPageHeaderHTML();
+    document.querySelectorAll(".exam-page-header").forEach(function (el) {
+        el.innerHTML = html;
+    });
+    updateWizardSummary();
+}
+
+/* ==========================================================================
+   5. THE AUTOMATIC PAGINATION ENGINE  (request #1 - the heart of it all)
+   --------------------------------------------------------------------------
+   A "block" is a direct child of a page's .page-content zone:
+   a paragraph, a list, a table or an image block. Blocks are moved
+   BETWEEN pages, never re-created, so the text cursor is preserved.
+========================================================================== */
+
+// Usable height of one A4 page: 297mm minus the page's vertical padding
+// (20mm top + 20mm bottom, matching .exam-page padding).
+const PAGE_CONTENT_MM = 257;
+
+// How tall (px) may the content zone of THIS page be on the current screen?
+function budgetFor(page) {
+    let budget = (PAGE_CONTENT_MM / 210) * page.offsetWidth;
+    // Subtract everything above the content zone (page header / letterhead).
+    Array.from(page.children).forEach(function (child) {
+        if (!child.classList.contains("page-content") &&
+            !child.classList.contains("page-warn-chip")) {
+            budget -= child.offsetHeight + marginV(child);
+        }
+    });
+    return Math.max(budget, 40);
+}
+
+function marginV(el) {
+    const cs = getComputedStyle(el);
+    return (parseFloat(cs.marginTop) || 0) + (parseFloat(cs.marginBottom) || 0);
+}
+
+function outerHeightPx(el) {
+    return el.offsetHeight + marginV(el);
+}
+
+function placeBlock(block, page) {
+    const content = page.querySelector(".page-content");
+    if (block.parentNode !== content) {
+        content.appendChild(block); // moves the SAME node - caret survives
+    }
+}
+
+// Build one more question page (with its automatic header).
+function appendBodyPage(flow) {
+    const page = document.createElement("div");
+    page.className = "exam-page body-page";
+    const spacing = document.getElementById("spacingSelect").value;
+    page.innerHTML =
+        '<div class="exam-page-header" contenteditable="false"></div>' +
+        `<div class="page-content exam-body spacing-${spacing}"></div>`;
+    flow.appendChild(page);
+    return page;
+}
+
+// Make sure the structure is sane before laying out.
+function ensureExamStructure(flow) {
+    flow.querySelectorAll(".exam-page").forEach(function (page) {
+        if (!page.querySelector(".exam-page-header") && page.classList.contains("body-page")) {
+            const header = document.createElement("div");
+            header.className = "exam-page-header";
+            header.contentEditable = "false";
+            page.insertBefore(header, page.firstChild);
+        }
+        if (!page.querySelector(".page-content")) {
+            const content = document.createElement("div");
+            const spacing = document.getElementById("spacingSelect").value;
+            content.className = `page-content exam-body spacing-${spacing}`;
+            page.appendChild(content);
+        }
+    });
+}
+
+function paginateExam() {
+    const flow = document.getElementById("examFlow");
+    if (!flow) return;
+
+    deselectExamImageIfDeleted();
+
+    ensureExamStructure(flow);
+
+    const pages = Array.from(flow.querySelectorAll(".exam-page"));
+
+    // Collect every block in document order, across all pages.
+    const blocks = [];
+    pages.forEach(function (page) {
+        const content = page.querySelector(".page-content");
+        if (content) {
+            Array.from(content.children).forEach(function (b) { blocks.push(b); });
+        }
+    });
+
+    let pageIdx = 0;
+    let remaining = budgetFor(pages[pageIdx]);
+
+    blocks.forEach(function (block) {
+        // A forced page break: the marker itself hops to the top of the
+        // next page and everything after it follows onto that page.
+        if (block.classList.contains("manual-page-break")) {
+            pageIdx++;
+            if (!pages[pageIdx]) pages.push(appendBodyPage(flow));
+            placeBlock(block, pages[pageIdx]);
+            remaining = budgetFor(pages[pageIdx]);
+            return;
+        }
+
+        const h = outerHeightPx(block);
+        const budget = budgetFor(pages[pageIdx]);
+        const pageAlreadyHasBlocks = remaining < budget - 0.5;
+
+        if (h > budget + 1) {
+            // Block taller than a whole page: give it a page of its own
+            // (it will overflow - the warning chip explains what to do).
+            if (pageAlreadyHasBlocks) {
+                pageIdx++;
+                if (!pages[pageIdx]) pages.push(appendBodyPage(flow));
+            }
+            placeBlock(block, pages[pageIdx]);
+
+            // Following blocks continue on a fresh page.
+            pageIdx++;
+            if (!pages[pageIdx]) pages.push(appendBodyPage(flow));
+            remaining = budgetFor(pages[pageIdx]);
+        } else if (h > remaining + 1) {
+            // THE IMPORTANT RULE: doesn't fit in the remaining space,
+            // so the WHOLE question moves to the next page - never split.
+            pageIdx++;
+            if (!pages[pageIdx]) pages.push(appendBodyPage(flow));
+            placeBlock(block, pages[pageIdx]);
+            remaining = budgetFor(pages[pageIdx]) - h;
+        } else {
+            placeBlock(block, pages[pageIdx]);
+            remaining -= h;
+        }
+    });
+
+    // Remove trailing pages that hold nothing (empty pages vanish
+    // automatically; a page with a forced break marker is kept).
+    for (let i = pages.length - 1; i > 0; i--) {
+        const content = pages[i].querySelector(".page-content");
+        const hasMarker = content && content.querySelector(".manual-page-break");
+        const hasBlocks = content && content.children.length > 0;
+        const isUsed = hasBlocks && Array.from(content.children).some(c =>
+            !c.classList.contains("manual-page-break") || hasMarker
+        );
+        if (!content || (!content.children.length)) {
+            pages[i].remove();
+        } else if (!isUsed && !hasMarker) {
+            pages[i].remove();
+        } else {
+            break;
+        }
+    }
+
+    refreshAllPageHeaders();
+    checkAllPagesOverflow();
+}
+
+/* Overflow warning (screen-only): only reachable when a SINGLE block is
+   taller than a page - it can never be split, so we flag it instead. */
+function checkAllPagesOverflow() {
+    document.querySelectorAll(".exam-page").forEach(function (page) {
+        const content = page.querySelector(".page-content");
+        if (!content) return;
+        const budget = budgetFor(page);
+
+        let used = 0;
+        Array.from(content.children).forEach(function (b) {
+            if (!b.classList.contains("manual-page-break")) used += outerHeightPx(b);
+        });
+
+        const over = used > budget + 4;
+        page.classList.toggle("page-overfull", over);
+
+        let chip = page.querySelector(".page-warn-chip");
+        if (over) {
+            if (!chip) {
+                chip = document.createElement("div");
+                chip.className = "page-warn-chip";
+                chip.contentEditable = "false";
+                chip.textContent = "\u26A0 One question here is taller than a whole page - try shrinking its image, spacing or font.";
+                page.appendChild(chip);
+            }
+        } else if (chip) {
+            chip.remove();
+        }
+    });
+}
+
+/* ==========================================================================
+   6. PAGE BREAKS (Word-style, Ctrl+Enter feel)
+========================================================================== */
+
+// Kept name (was "+ New Page"): now inserts a forced page break at the
+// text cursor - the engine does the actual page creation.
+function insertPageBreak() {
+    const flow = document.getElementById("examFlow");
+    const marker = document.createElement("div");
+    marker.className = "manual-page-break";
+    marker.contentEditable = "false";
+    marker.setAttribute("data-break", "1");
+
+    // Try to insert at the caret; otherwise append at the end of the flow.
+    const sel = window.getSelection();
+    let inserted = false;
+    if (sel && sel.rangeCount) {
+        const node = sel.getRangeAt(0).startContainer;
+        const hostBlock = (node.nodeType === 1 ? node : node.parentElement) &&
+            (node.nodeType === 1 ? node : node.parentElement).closest(".page-content > *");
+        if (hostBlock) {
+            // Split: everything from the caret moves after the marker.
+            const range = sel.getRangeAt(0);
+            range.deleteContents();
+            const afterRange = range.cloneRange();
+            afterRange.selectNodeContents(hostBlock);
+            afterRange.setStart(range.endContainer, range.endOffset);
+            const tail = afterRange.extractContents();
+            hostBlock.parentNode.insertBefore(marker, hostBlock.nextSibling);
+            if (tail.textContent.trim() !== "" || tail.querySelector && tail.querySelector("img,table,ul,ol")) {
+                const tailBlock = document.createElement("p");
+                tailBlock.appendChild(tail);
+                marker.parentNode.insertBefore(tailBlock, marker.nextSibling);
+            }
+            inserted = true;
+        }
+    }
+
+    if (!inserted) {
+        const contents = flow.querySelectorAll(".page-content");
+        contents[contents.length - 1].appendChild(marker);
+    }
+
+    paginateExam();
+
+    // Move the caret to the start of the brand-new page so the teacher
+    // can keep typing immediately (Word behaviour).
+    const newPageContent = marker.closest(".page-content");
+    if (newPageContent) {
+        let firstEditable = marker.nextElementSibling;
+        if (!firstEditable) {
+            firstEditable = document.createElement("p");
+            firstEditable.innerHTML = "<br>";
+            newPageContent.insertBefore(firstEditable, marker.nextSibling);
+        }
+        const range = document.createRange();
+        range.selectNodeContents(firstEditable);
+        range.collapse(true);
+        const selection = window.getSelection();
+        selection.removeAllRanges();
+        selection.addRange(range);
+        marker.closest(".exam-page").scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+}
+
+// Kept name (was "- Remove Last Page"): removes the most recent forced
+// break. Pages themselves are automatic, so there is nothing else to undo.
+function removeLastPage() {
+    const markers = document.querySelectorAll("#examFlow .manual-page-break");
+    if (!markers.length) {
+        if (window.amsToast) {
+            window.amsToast("Pages are created automatically as you write - there is no manual page break to remove.", "info", 5000);
+        } else {
+            alert("No manual page break to remove.");
+        }
+        return;
+    }
+    markers[markers.length - 1].remove();
+    paginateExam();
+}
+
+/* ==========================================================================
+   7. RICH TEXT TOOLBAR (original + upgrades from request #2)
+========================================================================== */
 
 function format(command) {
     document.execCommand(command, false, null);
+    paginateExamSoon();
 }
 
 function setFontSize() {
     const size = document.getElementById("fontSizeSelect").value;
     document.execCommand("fontSize", false, size);
+    paginateExamSoon();
 }
 
 function setSpacing() {
@@ -268,18 +545,14 @@ function setSpacing() {
         body.classList.remove("spacing-compact", "spacing-normal", "spacing-relaxed", "spacing-spacious");
         body.classList.add(`spacing-${spacing}`);
     });
+    paginateExamSoon();
 }
 
 function toggleDirection() {
-    // Applies to whichever body page currently has focus; falls back to the first one.
-    const active = document.activeElement;
-    const body = active && active.classList && active.classList.contains("exam-body")
-        ? active
-        : document.querySelector(".exam-body");
-
-    if (!body) return;
-
-    body.dir = body.dir === "rtl" ? "ltr" : "rtl";
+    // Applies to the whole flow (all page contents share one direction).
+    const flow = document.getElementById("examFlow");
+    flow.dir = flow.dir === "rtl" ? "ltr" : "rtl";
+    paginateExamSoon();
 }
 
 function insertTable() {
@@ -302,15 +575,144 @@ function insertTable() {
     html += "</table><p><br></p>";
 
     document.execCommand("insertHTML", false, html);
+    paginateExamSoon();
 }
 
-// ===== HARAKAT PALETTE (manual diacritic insertion) =====
-
+// HARAKAT palette (manual diacritic insertion)
 function insertHarakat(char) {
     document.execCommand("insertText", false, char);
+    paginateExamSoon();
 }
 
-// ===== VOICE NOTE (browser-native speech recognition, no API key needed) =====
+/* NEW (editor upgrade, request #2): maths/science symbol palette */
+function toggleMathPalette() {
+    const pal = document.getElementById("mathPalette");
+    pal.style.display = pal.style.display === "none" ? "flex" : "none";
+}
+
+function insertSymbol(symbol) {
+    document.execCommand("insertText", false, symbol);
+    paginateExamSoon();
+}
+
+// Debounced re-pagination used by toolbar actions.
+let paginateSoonTimer = null;
+function paginateExamSoon() {
+    clearTimeout(paginateSoonTimer);
+    paginateSoonTimer = setTimeout(paginateExam, 200);
+}
+
+/* ==========================================================================
+   8. IMAGES IN THE EXAM  (NEW - request #2)
+   Insert, click-to-select, resize (buttons or corner grip), align, delete.
+========================================================================== */
+
+function insertExamImage(file) {
+    const reader = new FileReader();
+    reader.onload = function (e) {
+        downscaleImage(e.target.result, file.type, 1500, function (dataUrl) {
+            const html =
+                '<p class="img-block" style="text-align:center;">' +
+                `<img class="exam-img" src="${dataUrl}" style="width:60%;">` +
+                "</p><p><br></p>";
+            document.execCommand("insertHTML", false, html);
+            paginateExam();
+        });
+    };
+    reader.readAsDataURL(file);
+}
+
+// Big phone photos would make the exam file huge and the PDF slow
+// (performance, request #8) - shrink to a sensible width first.
+function downscaleImage(dataUrl, mimeType, maxWidth, done) {
+    const img = new Image();
+    img.onload = function () {
+        if (img.width <= maxWidth && dataUrl.length < 1500000) {
+            done(dataUrl); // small enough already
+            return;
+        }
+        const scale = Math.min(1, maxWidth / img.width);
+        const canvas = document.createElement("canvas");
+        canvas.width = Math.round(img.width * scale);
+        canvas.height = Math.round(img.height * scale);
+        canvas.getContext("2d").drawImage(img, 0, 0, canvas.width, canvas.height);
+        // JPEG keeps the exam lean; PNG stays PNG when it was small+sharp.
+        done(canvas.toDataURL("image/jpeg", 0.88));
+    };
+    img.onerror = function () { done(dataUrl); };
+    img.src = dataUrl;
+}
+
+let selectedExamImage = null;
+
+function handleFlowClick(e) {
+    const img = e.target.closest(".exam-img");
+    if (img) {
+        e.preventDefault();
+        selectExamImage(img);
+        return;
+    }
+    const toolBtn = e.target.closest(".img-tools button");
+    if (toolBtn && selectedExamImage) {
+        const action = toolBtn.getAttribute("data-action");
+        applyImageAction(selectedExamImage, action);
+    }
+}
+
+function selectExamImage(img) {
+    deselectExamImage();
+    selectedExamImage = img;
+    img.classList.add("exam-img-selected");
+
+    const tools = document.createElement("div");
+    tools.className = "img-tools";
+    tools.contentEditable = "false";
+    tools.innerHTML =
+        '<button type="button" data-action="smaller" title="Smaller">&#8722;</button>' +
+        '<button type="button" data-action="bigger" title="Bigger">+</button>' +
+        '<button type="button" data-action="left" title="Align left">&#8676;</button>' +
+        '<button type="button" data-action="center" title="Center">&#8646;</button>' +
+        '<button type="button" data-action="right" title="Align right">&#8677;</button>' +
+        '<button type="button" data-action="delete" title="Remove image" class="img-tools-del">&#10005;</button>';
+
+    const block = img.closest(".img-block") || img.parentElement;
+    block.style.position = "relative";
+    block.appendChild(tools);
+    preventToolbarFocusLoss();
+}
+
+function deselectExamImage() {
+    document.querySelectorAll(".img-tools").forEach(t => t.remove());
+    document.querySelectorAll(".exam-img-selected").forEach(i => i.classList.remove("exam-img-selected"));
+    selectedExamImage = null;
+}
+
+function deselectExamImageIfDeleted() {
+    if (selectedExamImage && !document.body.contains(selectedExamImage)) {
+        selectedExamImage = null;
+    }
+}
+
+function applyImageAction(img, action) {
+    const block = img.closest(".img-block") || img.parentElement;
+    const current = parseFloat(img.style.width) || 60;
+
+    if (action === "smaller") img.style.width = Math.max(10, current - 10) + "%";
+    else if (action === "bigger") img.style.width = Math.min(100, current + 10) + "%";
+    else if (action === "left") block.style.textAlign = "left";
+    else if (action === "center") block.style.textAlign = "center";
+    else if (action === "right") block.style.textAlign = "right";
+    else if (action === "delete") {
+        const p = block.closest("p") || block;
+        p.remove();
+        deselectExamImage();
+    }
+    paginateExam();
+}
+
+/* ==========================================================================
+   9. VOICE NOTE (browser-native speech recognition)
+========================================================================== */
 
 let recognition = null;
 let isRecording = false;
@@ -338,7 +740,7 @@ function toggleVoice() {
     recognition.onstart = function () {
         isRecording = true;
         voiceBtn.classList.add("recording");
-        voiceBtn.textContent = "\u23F9 Stop Recording";
+        voiceBtn.textContent = "\u23F9 Stop";
     };
 
     recognition.onresult = function (event) {
@@ -348,6 +750,7 @@ function toggleVoice() {
         }
         if (transcript.trim() !== "") {
             document.execCommand("insertText", false, transcript + " ");
+            paginateExamSoon();
         }
     };
 
@@ -361,48 +764,28 @@ function toggleVoice() {
     recognition.onend = function () {
         isRecording = false;
         voiceBtn.classList.remove("recording");
-        voiceBtn.innerHTML = "&#127908; Voice Note";
+        voiceBtn.innerHTML = "&#127908; Voice";
     };
 
     recognition.start();
 }
 
-// ===== PAGE MANAGEMENT =====
+/* ==========================================================================
+   10. SAVE / LOAD
+   New storage shape: body_html = the flow HTML as ONE string (manual page
+   break markers included). Old exams stored a JSON array of page strings -
+   loadExam() joins them back into the flow and re-paginates, so nothing
+   old breaks.
+========================================================================== */
 
-function insertPageBreak() {
-    const pagesContainer = document.getElementById("examPages");
-    const currentSpacing = document.getElementById("spacingSelect").value;
-
-    const newPage = document.createElement("div");
-    newPage.className = "exam-page body-page";
-    // CHANGED (request #6): new pages are born WITH the automatic exam
-    // header (filled just below) - one consistent look on every page.
-    newPage.innerHTML =
-        `<div class="exam-page-header" contenteditable="false"></div>` +
-        `<div class="exam-body spacing-${currentSpacing}" contenteditable="true" dir="rtl"><p><br></p></div>`;
-
-    pagesContainer.appendChild(newPage);
-    refreshAllPageHeaders(); // fill the new page's header immediately
-    preventToolbarFocusLoss();
-    checkAllPagesOverflow();
-    examCloseSidebarOnMobile(); // NEW (sidebar layout): reveal the new page on phones
-
-    newPage.scrollIntoView({ behavior: "smooth", block: "start" });
-    // Put the cursor straight into the new page so typing can continue.
-    const newBody = newPage.querySelector(".exam-body");
-    if (newBody) newBody.focus();
+function serializeFlow() {
+    deselectExamImage(); // never persist the on-screen image tools
+    let html = "";
+    document.querySelectorAll("#examFlow .page-content").forEach(function (content) {
+        html += content.innerHTML;
+    });
+    return html;
 }
-
-function removeLastPage() {
-    const bodyPages = document.querySelectorAll(".body-page");
-    if (bodyPages.length <= 1) {
-        alert("At least one exam page is required.");
-        return;
-    }
-    bodyPages[bodyPages.length - 1].remove();
-}
-
-// ===== SAVE / LOAD =====
 
 function saveExam() {
     const title = document.getElementById("examTitle").value.trim();
@@ -414,12 +797,9 @@ function saveExam() {
     const instructions = document.getElementById("coverInstructions").innerHTML;
 
     if (!title || !cls || !subject || !term || !session) {
-        alert("Please fill in the Exam Title and all the fields in the top bar before saving.");
+        alert("Please fill in the Exam Title and all the fields in the details step before saving.");
         return;
     }
-
-    const bodyPages = Array.from(document.querySelectorAll(".body-page .exam-body"))
-        .map(el => el.innerHTML);
 
     const payload = {
         id: currentExamId,
@@ -430,7 +810,7 @@ function saveExam() {
         session,
         duration,
         instructions,
-        body_html: JSON.stringify(bodyPages)
+        body_html: serializeFlow() // single flow string (was: JSON page array)
     };
 
     fetch("/save-exam", {
@@ -440,7 +820,8 @@ function saveExam() {
     })
     .then(response => response.json())
     .then(data => {
-        alert(data.message);
+        if (window.amsToast) window.amsToast(data.message, "success", 4000);
+        else alert(data.message);
         if (data.id) currentExamId = data.id;
     })
     .catch(error => {
@@ -503,7 +884,6 @@ function loadExam(id) {
 
             document.getElementById("examClass").value = exam.class_name;
 
-            // Load subjects for this class, then select the saved subject once loaded
             fetch(`/subjects?class=${encodeURIComponent(exam.class_name)}`)
                 .then(response => response.json())
                 .then(subjects => {
@@ -512,6 +892,10 @@ function loadExam(id) {
                     subjects.forEach(subject => {
                         subjectSelect.innerHTML += `<option value="${subject.subject_name}">${subject.subject_name}</option>`;
                     });
+                    // Keep a saved subject selectable even if it is disabled now.
+                    if (exam.subject && !Array.from(subjectSelect.options).some(o => o.value === exam.subject)) {
+                        subjectSelect.innerHTML += `<option value="${exam.subject}">${exam.subject}</option>`;
+                    }
                     subjectSelect.value = exam.subject;
                 });
 
@@ -521,40 +905,42 @@ function loadExam(id) {
 
             generateCoverPage();
 
-            // Rebuild body pages
-            let bodyPagesData;
+            // Merge whatever was stored into ONE flow string.
+            let flowHtml;
             try {
-                bodyPagesData = JSON.parse(exam.body_html);
+                const parsed = JSON.parse(exam.body_html);
+                if (Array.isArray(parsed)) {
+                    flowHtml = parsed.join("");       // legacy: page-array format
+                } else if (typeof parsed === "string") {
+                    flowHtml = parsed;                 // JSON-encoded single string
+                } else {
+                    flowHtml = exam.body_html;
+                }
             } catch (e) {
-                bodyPagesData = [exam.body_html];
+                flowHtml = exam.body_html;             // plain string (new format)
             }
 
-            const examPages = document.getElementById("examPages");
-            document.querySelectorAll(".body-page").forEach(el => el.remove());
-
-            bodyPagesData.forEach(html => {
-                const newPage = document.createElement("div");
-                newPage.className = "exam-page body-page";
-                // CHANGED (request #6): loaded pages also get the automatic
-                // header (rebuilt from the exam details, not stored in the DB).
-                newPage.innerHTML =
-                    `<div class="exam-page-header" contenteditable="false"></div>` +
-                    `<div class="exam-body spacing-${document.getElementById("spacingSelect").value}" contenteditable="true" dir="rtl">${html}</div>`;
-                examPages.appendChild(newPage);
-            });
-
-            refreshAllPageHeaders();
-            preventToolbarFocusLoss();
-            checkAllPagesOverflow();
+            resetFlow(flowHtml);
             closeLoadPanel();
-
-            // NEW (wizard): opening a saved exam jumps straight into the editor.
             examGotoStep(2);
         })
         .catch(error => {
             console.log(error);
             alert("Error loading exam.");
         });
+}
+
+// Replace the whole question flow with new HTML and lay it out afresh.
+function resetFlow(flowHtml) {
+    const flow = document.getElementById("examFlow");
+
+    // Drop every page except the letterhead (page one).
+    flow.querySelectorAll(".exam-page:not(.page-one)").forEach(p => p.remove());
+
+    const pageOneContent = document.querySelector(".page-one .page-content");
+    pageOneContent.innerHTML = flowHtml && flowHtml.trim() !== "" ? flowHtml : "<p><br></p>";
+
+    paginateExam();
 }
 
 function deleteExamFromPanel(id) {
@@ -572,12 +958,13 @@ function deleteExamFromPanel(id) {
             alert("Error deleting exam.");
         });
 }
-/* ====================================================================
-   NEW (print fix): called by the "Print / Save as PDF" button.
-   Identical to window.print() on computers. On phones - where browsers
-   silently ignore window.print() - it shows a helpful tip instead of
-   leaving the user with a dead button.
-   ==================================================================== */
+
+/* ==========================================================================
+   11. PRINT + PDF
+========================================================================== */
+
+// Called by the "Print / Save as PDF" button. window.print() on computers;
+// a helpful tip on phones (where print is often blocked).
 function examPrint() {
     window.print();
     if (/Android|iPhone|iPad|iPod/i.test(navigator.userAgent) && window.amsToast) {
@@ -589,37 +976,38 @@ function examPrint() {
     }
 }
 
-/* ====================================================================
-   NEW (PDF download - the fix for printing on phones):
-   Phone browsers block window.print(), so this renders EVERY exam page
-   into one real PDF (one A4 page per exam page). Works fully on phones:
-   the PDF downloads/opens and can be printed or shared from there.
-   Pages are captured one after another to keep phone memory low.
-   ==================================================================== */
+// Downloads the whole exam as ONE consistent A4 PDF. Since the engine now
+// lays pages out perfectly, the global fit is almost always exactly 1 -
+// the per-page scale still protects against any odd oversized block,
+// and every page shares it, so formatting stays identical page to page.
 function downloadExamPDF() {
     if (!window.jspdf || !window.html2canvas) {
         if (window.amsToast) window.amsToast("PDF generator is still loading - try again in a moment.", "info");
         return;
     }
-    var pages = document.querySelectorAll(".exam-page");
+
+    paginateExam(); // fresh layout before rendering, just in case
+
+    var pages = Array.from(document.querySelectorAll(".exam-page")).filter(function (page) {
+        // Skip pages with no visible content (safety net; engine prunes them).
+        var content = page.querySelector(".page-content");
+        if (!content) return true; // letterhead always prints
+        var hasMeaningful = Array.from(content.children).some(function (b) {
+            if (b.classList.contains("manual-page-break")) return false;
+            return (b.textContent || "").trim() !== "" || b.querySelector("img,table,ul,ol");
+        });
+        return hasMeaningful || page.classList.contains("page-one");
+    });
+
     if (!pages.length) {
-        if (window.amsToast) window.amsToast("Generate the exam page first.", "info");
+        if (window.amsToast) window.amsToast("Write the exam first.", "info");
         return;
     }
     if (window.amsToast) window.amsToast("Building PDF\u2026 please wait.", "info", 2500);
 
-    /* CHANGED (consistent one-document PDF - requests #2 & #6):
-       BEFORE, every page was fitted individually, so a slightly too-full
-       page came out with a different scale than the rest (inconsistent
-       pages). Now:
-         1) every page is captured first,
-         2) ONE global fit factor is computed (the smallest any page needs),
-         3) every page is drawn at that SAME scale, top-aligned and
-            horizontally centered.
-       Result: all pages share identical margins and text size, nothing
-       is ever cut off, and page 2 looks exactly like page 1. */
-    var pagesBox = document.getElementById("examPages");
-    if (pagesBox) pagesBox.classList.add("ams-capturing"); // hides screen-only warning chips
+    var flow = document.getElementById("examFlow");
+    flow.classList.add("ams-capturing"); // hides screen-only chips/tools
+    deselectExamImage();
 
     var canvases = [];
     var i = 0;
@@ -631,21 +1019,21 @@ function downloadExamPDF() {
         }
         html2canvas(pages[i], { scale: 2, backgroundColor: "#ffffff", useCORS: true })
             .then(function (cv) { canvases.push(cv); i++; captureNext(); })
-            .catch(function () { i++; captureNext(); }); // skip a bad page, keep the rest
+            .catch(function () { i++; captureNext(); });
     }
 
     function finishPdf() {
-        if (pagesBox) pagesBox.classList.remove("ams-capturing");
+        flow.classList.remove("ams-capturing");
 
         if (!canvases.length) {
             if (window.amsToast) window.amsToast("Could not build the PDF - please try again.", "error");
             return;
         }
 
-        // One global fit for ALL pages: start at full A4 width (210mm).
+        // ONE global fit for ALL pages: identical margins + text size.
         var fits = canvases.map(function (cv) {
             var hMmAtFullWidth = (cv.height * 210) / cv.width;
-            return hMmAtFullWidth > 297 ? 297 / hMmAtFullWidth : 1; // <1 means "page too tall"
+            return hMmAtFullWidth > 297 ? 297 / hMmAtFullWidth : 1;
         });
         var globalFit = Math.min.apply(null, fits.concat([1]));
         var shrunkPages = fits.filter(function (f) { return f < 0.999; }).length;
@@ -657,7 +1045,6 @@ function downloadExamPDF() {
             var finalW = 210 * globalFit;
             var finalH = Math.min(hMmAtFullWidth * globalFit, 297);
             if (idx > 0) pdf.addPage();
-            // Top-aligned like a normal document, centered left/right.
             pdf.addImage(cv.toDataURL("image/jpeg", 0.95), "JPEG", (210 - finalW) / 2, 0, finalW, finalH);
         });
 
@@ -666,8 +1053,8 @@ function downloadExamPDF() {
         if (window.amsToast) {
             if (shrunkPages > 0) {
                 window.amsToast(
-                    "PDF downloaded \u2713 Note: " + shrunkPages + " page(s) were very full, so all pages were slightly shrunk to keep one consistent look. Next time use '+ Next Page' a little earlier for the largest print.",
-                    "info", 8000
+                    "PDF downloaded \u2713 One block was too tall for its page, so all pages were slightly shrunk to keep one consistent look.",
+                    "info", 7000
                 );
             } else {
                 window.amsToast("PDF downloaded \u2713 open it and print/share from your phone", "success", 6000);

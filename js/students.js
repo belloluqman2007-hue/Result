@@ -120,6 +120,7 @@
 
             var img = document.createElement("img");
             img.alt = s.full_name || "Student photo";
+            img.loading = "lazy"; /* NEW (performance, request #8) */
             img.src = s.photo_path || "images/default.jpg"; /* default.jpg exists in /images */
             img.onerror = function () { this.onerror = null; this.src = "images/default.jpg"; };
 

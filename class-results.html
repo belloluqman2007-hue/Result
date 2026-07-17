@@ -145,11 +145,28 @@
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg>
               Download Whole Class (PDF)
             </button>
+            <!-- NEW (request #5): every student's individual report sheet,
+                 gathered into ONE zip file of PDFs. -->
+            <button type="button" class="mng-btn" id="crZipBtn" onclick="crDownloadAllZip()" disabled>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8v13H3V8"/><path d="M1 3h22v5H1z"/><path d="M10 12h4"/></svg>
+              Download All Student Results (ZIP)
+            </button>
             <button type="button" class="mng-btn mng-btn-ghost" id="crPrintBtn" onclick="window.print()" disabled>
               Print
             </button>
           </div>
           <div class="mng-count-line" id="crStatusLine" style="margin-top:14px;"></div>
+
+          <!-- NEW (request #5): progress while the zip is being built -->
+          <div id="crZipProgress" style="display:none; margin-top:14px;">
+            <div style="height:10px; border-radius:999px; background:#E6EDE9; overflow:hidden;">
+              <div id="crZipBar" style="height:100%; width:0%; border-radius:999px; background:linear-gradient(90deg,#1C5A42,#2F9E6E); transition:width .25s ease;"></div>
+            </div>
+            <div style="display:flex; align-items:center; gap:12px; margin-top:8px; flex-wrap:wrap;">
+              <span id="crZipText" style="font-size:12.5px; font-weight:700; color:#0F3D2E;"></span>
+              <button type="button" class="mng-btn mng-btn-sm mng-btn-ghost" onclick="crZipCancel()">Cancel</button>
+            </div>
+          </div>
         </div>
 
         <!-- On-screen broadsheet preview -->
@@ -163,9 +180,13 @@
   <!-- NEW: shared UI helpers (toasts, dark mode) - additive -->
   <script src="js/ui.js"></script>
   <script src="js/app.js"></script>
-  <!-- NEW (PDF download): local copies of jsPDF + html2canvas. No CDN. -->
+  <!-- NEW (PDF download): local copies of jsPDF + html2canvas + JSZip
+       (the zip powers "Download All Student Results"). No CDN. -->
   <script src="js/vendor/jspdf.umd.min.js"></script>
   <script src="js/vendor/html2canvas.min.js"></script>
+  <script src="js/vendor/jszip.min.js"></script>
+  <!-- NEW (shared report card renderer - same design as the live report) -->
+  <script src="js/report-card.js"></script>
   <script src="js/class-results.js"></script>
 
   <!-- NEW (PWA conversion): registers the service worker + install button. Additive only. -->

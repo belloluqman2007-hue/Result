@@ -71,48 +71,20 @@
           </span>
           Subjects
         </h2>
-        <p class="mng-card-sub">Each subject belongs to one class.</p>
+        <!-- CHANGED (request #3): NOTHING is hardcoded anymore - the
+             subject list comes fully from the database. Type any name;
+             suggestions appear from subjects you already created. -->
+        <p class="mng-card-sub">Type a subject name, tick the classes it belongs to, and add. Toggle the switch to hide a subject from dropdowns without deleting it.</p>
 
         <div class="mng-grid" style="grid-template-columns:1fr;">
           <div class="mng-field">
             <label for="subjectName">Subject Name</label>
-            <select id="subjectName" onchange="toggleCustomSubject()">
-              <option value="" disabled selected>Select Subject</option>
-              <option lang="ar">القرآن الكريم</option>
-              <option lang="ar">الفقه</option>
-              <option lang="ar">الحديث</option>
-              <option lang="ar">التّجويد</option>
-              <option lang="ar">التّربية الإسلاميّة</option>
-              <option lang="ar">التّاريخ الإسلاميّ</option>
-              <option lang="ar">النّحو</option>
-              <option lang="ar">الإملاء</option>
-              <option lang="ar">الخط</option>
-              <option>Arabic Grammar</option>
-              <option>Arabic Language</option>
-              <option>English Language</option>
-              <option>Mathematics</option>
-              <option>Basic Science</option>
-              <option>Agricultural Science</option>
-              <option>Physics</option>
-              <option>Chemistry</option>
-              <option>Biology</option>
-              <option>Economics</option>
-              <option>Geography</option>
-              <option>Civic Education</option>
-              <option>Computer Studies</option>
-              <option>Literature</option>
-              <option value="__other__">Other (type manually)</option>
-            </select>
-          </div>
-          <div class="mng-field" id="customSubjectWrap" style="display:none;">
-            <label for="customSubjectName">Custom Subject Name</label>
-            <input type="text" id="customSubjectName" placeholder="Type subject name">
+            <input type="text" id="subjectName" list="subjectNameSuggestions" placeholder="e.g. التّجويد or Mathematics" autocomplete="off" dir="auto">
+            <datalist id="subjectNameSuggestions"></datalist>
           </div>
           <div class="mng-field">
-            <label for="subjectClass">For Class</label>
-            <select id="subjectClass">
-              <option value="" disabled selected>Select Class</option>
-            </select>
+            <label>Assign to Class(es) <span class="mng-opt">(tick one or more)</span></label>
+            <div id="assignClassList" class="mng-assign-list"></div>
           </div>
         </div>
 

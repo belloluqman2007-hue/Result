@@ -550,3 +550,103 @@ table.broadsheet tr:nth-child(even) td{ background:#F4FAF7; }
   .mng-btn{ width:100%; }
   .mng-btn.mng-btn-sm{ width:auto; }
 }
+
+/* ==========================================================
+   NEW (subject management, request #3): assign-to-classes tick
+   chips, enable/disable switch, disabled-row styling.
+========================================================== */
+.mng-assign-list{
+  display:flex;
+  flex-wrap:wrap;
+  gap:8px;
+  padding:12px;
+  border:1.5px solid var(--m-border,#D9E8E0);
+  border-radius:var(--m-radius-sm,10px);
+  background:var(--m-surface-2,#F6FAF8);
+  max-height:170px;
+  overflow-y:auto;
+}
+.mng-assign-chip{
+  display:inline-flex;
+  align-items:center;
+  gap:7px;
+  padding:8px 13px;
+  border-radius:999px;
+  border:1.5px solid var(--m-border,#D9E8E0);
+  background:#fff;
+  font-size:13px;
+  font-weight:700;
+  color:var(--m-emerald,#0F3D2E);
+  cursor:pointer;
+  transition:background var(--m-speed,.22s), border-color var(--m-speed,.22s);
+  user-select:none;
+}
+.mng-assign-chip input{
+  accent-color:var(--m-jade,#2F9E6E);
+  width:15px;
+  height:15px;
+  margin:0;
+  cursor:pointer;
+}
+.mng-assign-chip:has(input:checked){
+  background:var(--m-jade-pale,#D8EEE2);
+  border-color:var(--m-jade,#2F9E6E);
+}
+
+/* Enable/disable switch */
+.mng-switch{
+  width:40px;
+  height:23px;
+  border-radius:999px;
+  border:1.5px solid var(--m-border,#D9E8E0);
+  background:#E6EDE9;
+  position:relative;
+  cursor:pointer;
+  padding:0;
+  transition:background var(--m-speed,.22s), border-color var(--m-speed,.22s);
+}
+.mng-switch span{
+  position:absolute;
+  top:2px;
+  left:2px;
+  width:16px;
+  height:16px;
+  border-radius:50%;
+  background:#fff;
+  box-shadow:0 1px 4px rgba(0,0,0,.25);
+  transition:left var(--m-speed,.22s) var(--m-ease);
+}
+.mng-switch.mng-switch-on{
+  background:var(--m-jade,#2F9E6E);
+  border-color:var(--m-jade,#2F9E6E);
+}
+.mng-switch.mng-switch-on span{
+  left:19px;
+}
+
+/* Disabled subject rows */
+.mng-row-off{
+  opacity:.55;
+}
+.mng-off-tag{
+  display:inline-block;
+  margin-left:8px;
+  font-size:10px;
+  font-weight:800;
+  text-transform:uppercase;
+  letter-spacing:.6px;
+  color:var(--m-brick,#8C3B2E);
+  background:#FBE9E4;
+  border-radius:999px;
+  padding:2px 8px;
+  vertical-align:middle;
+}
+
+/* Hidden staging zone (renders report cards off-screen for ZIP/PDF) */
+.ams-staging{
+  position:fixed;
+  left:-12000px;
+  top:0;
+  z-index:-1;
+  background:#fff;
+}

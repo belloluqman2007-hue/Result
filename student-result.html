@@ -186,6 +186,12 @@ alt="Student Photo">
 
 <!-- NEW: shared UI helpers (turns alert() popups into toasts) - additive -->
 <script src="js/ui.js"></script>
+<!-- NEW (Result PDF upgrade, request #7): local PDF tools + the shared
+     report renderer's A4 slicing helper - lets "Download PDF" produce a
+     real high-quality PDF file on any device. No CDN. -->
+<script src="js/vendor/jspdf.umd.min.js"></script>
+<script src="js/vendor/html2canvas.min.js"></script>
+<script src="js/report-card.js"></script>
 <script src="js/result.js"></script>
 
   <!-- NEW (PWA conversion): registers the service worker + install button. Additive only. -->

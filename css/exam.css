@@ -351,6 +351,151 @@ body{
 }
 
 /* ==========================================================
+   NEW (auto pagination - request #1): the continuous flow and
+   the compact Page 1. The teacher types in ONE long document;
+   exam.js splits it into real A4 pages automatically.
+========================================================== */
+.exam-flow{
+  cursor:text;
+}
+.exam-flow:focus{
+  outline:none;
+}
+
+/* Content zones no longer stretch the page - the ENGINE sizes pages */
+.exam-flow .exam-body{
+  min-height:0 !important;
+}
+.exam-flow .page-content{
+  outline:none;
+}
+
+/* ----- Page 1: compact letterhead + exam info + instructions,
+   then the questions start on the SAME page (request #1). ----- */
+.page-one{
+  position:relative;
+  padding:20mm 18mm;
+}
+.page-one::before{
+  content:"";
+  position:absolute;
+  top:7mm;
+  left:7mm;
+  right:7mm;
+  bottom:7mm;
+  border:3px double #000;
+  border-radius:5px;
+  pointer-events:none;
+}
+.page-one .bismillah{ font-size:15px; margin-bottom:6px; }
+.page-one .cover-logo{ width:64px; height:64px; margin-bottom:6px; }
+.page-one .cover-arabic-name{ font-size:23px; margin-bottom:2px; }
+.page-one .cover-english-name{ font-size:13px; margin-bottom:6px; }
+.page-one .cover-divider{ height:3px; margin:6px auto 8px; }
+.page-one .cover-address,
+.page-one .cover-contact{ font-size:12px; font-weight:600; }
+.page-one .cover-exam-period{ font-size:17px; margin:8px 0 10px; }
+.page-one .cover-info-table{ margin-bottom:12px; }
+.page-one .cover-info-table td{ font-size:15px; line-height:2; padding:4px; }
+.page-one .cover-instructions{ margin-bottom:8px; }
+.page-one .cover-instructions ol{ font-size:14px; line-height:1.9; }
+.page-one .instructions-title{ font-size:15px; margin-bottom:4px; }
+.page-one .cover-footer{
+  display:flex;
+  justify-content:space-between;
+  align-items:baseline;
+}
+.page-one .cover-wish{ margin-top:6px; }
+.page-one .cover-code{ margin-top:0; }
+/* The question section is visually separated under the letterhead */
+.page-one .page-content{
+  border-top:2px solid #000;
+  margin-top:10px;
+  padding-top:10px;
+}
+
+/* ----- Word-style forced page break marker (screen only) ----- */
+.manual-page-break{
+  border-top:2px dashed #B9C8BF;
+  margin:16px 0 14px;
+  position:relative;
+  height:0;
+}
+.manual-page-break::after{
+  content:"Page Break";
+  position:absolute;
+  top:-9px;
+  left:50%;
+  transform:translateX(-50%);
+  background:#fff;
+  padding:0 10px;
+  font-family:'Cairo', sans-serif;
+  font-size:10px;
+  font-weight:800;
+  letter-spacing:1px;
+  text-transform:uppercase;
+  color:#8AA398;
+}
+
+/* ----- Images inside the exam (NEW - request #2) ----- */
+.exam-img{
+  max-width:100%;
+  border-radius:4px;
+  cursor:pointer;
+}
+.exam-img.exam-img-selected{
+  outline:3px solid #2F9E6E;
+  outline-offset:2px;
+}
+.img-block{ margin:10px 0; }
+.img-tools{
+  position:absolute;
+  top:-14px;
+  right:0;
+  display:flex;
+  gap:3px;
+  background:#0F3D2E;
+  border-radius:10px;
+  padding:4px 6px;
+  box-shadow:0 6px 16px rgba(0,0,0,.3);
+  z-index:5;
+}
+.img-tools button{
+  background:transparent;
+  border:none;
+  color:#fff;
+  font-size:13px;
+  font-weight:800;
+  padding:3px 7px;
+  cursor:pointer;
+  border-radius:6px;
+}
+.img-tools button:hover{ background:rgba(255,255,255,.18); }
+.img-tools .img-tools-del{ color:#FFB3A3; }
+
+/* ----- Maths symbol palette (NEW - request #2) ----- */
+.math-palette{
+  display:flex;
+  align-items:center;
+  gap:4px;
+  padding:8px 16px;
+  background:#fff;
+  border-top:1px solid var(--line);
+  flex-wrap:wrap;
+}
+.math-palette button{
+  background:var(--parchment-deep);
+  color:var(--emerald);
+  border:1px solid var(--line);
+  font-size:15px;
+  padding:4px 10px;
+  min-width:34px;
+  border-radius:6px;
+  cursor:pointer;
+}
+.math-palette button:hover{ background:var(--gold-pale, #F3E9D2); }
+
+/* ==========================================================
    NEW (overflow guard - request #2): visual warning (screen
    only) when a question page holds more than one printed sheet.
 ========================================================== */
@@ -370,8 +515,11 @@ body{
   font-weight:700;
   text-align:center;
 }
-/* The chip is a screen aid - it must never print or enter the PDF */
-.ams-capturing .page-warn-chip{
+/* The chip, page-break markers and image tools are screen aids -
+   they must never print or enter the PDF */
+.ams-capturing .page-warn-chip,
+.ams-capturing .manual-page-break,
+.ams-capturing .img-tools{
   display:none !important;
 }
 
@@ -741,8 +889,11 @@ body{
   }
 
   /* NEW (overflow guard): the warning chip and page outline are screen
-     aids only - they must not appear in the printed exam. */
-  .page-warn-chip{
+     aids only - they must not appear in the printed exam. The same goes
+     for forced-break markers and the image editing tools. */
+  .page-warn-chip,
+  .manual-page-break,
+  .img-tools{
     display:none !important;
   }
   .exam-page.page-overfull{

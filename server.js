@@ -338,6 +338,73 @@ function profileColsRetry(attempt, err) {
 
 ensureStudentProfileColumns(1);
 
+/* ==================================================================
+   NEW (subject enable/disable - request #3): is_active column on the
+   subjects table. Same guarded/idempotent pattern as above: check
+   information_schema first, add once, fall back gracefully. When the
+   column is missing the app behaves exactly as before (all subjects
+   visible everywhere).
+================================================================== */
+let subjectActiveColReady = false;
+
+function ensureSubjectActiveColumn(attempt) {
+    const conn = addonConnection();
+    conn.connect((err) => {
+        if (err) {
+            conn.destroy();
+            return subjectActiveRetry(attempt, err);
+        }
+        conn.query(
+            `SELECT COUNT(*) AS c
+             FROM information_schema.COLUMNS
+             WHERE TABLE_SCHEMA = DATABASE()
+               AND TABLE_NAME = 'subjects'
+               AND COLUMN_NAME = 'is_active'`,
+            (qErr, rows) => {
+                if (qErr) {
+                    conn.end();
+                    return subjectActiveRetry(attempt, qErr);
+                }
+                if (rows && rows[0] && Number(rows[0].c) === 1) {
+                    conn.end();
+                    subjectActiveColReady = true;
+                    console.log("Subject is_active column ready.");
+                    return;
+                }
+                conn.query(
+                    `ALTER TABLE subjects ADD COLUMN is_active TINYINT(1) NOT NULL DEFAULT 1`,
+                    (aErr) => {
+                        conn.end();
+                        if (aErr) {
+                            if (aErr.code === "ER_DUP_FIELDNAME") {
+                                subjectActiveColReady = true;
+                                console.log("Subject is_active column ready (added by a parallel boot).");
+                                return;
+                            }
+                            return subjectActiveRetry(attempt, aErr);
+                        }
+                        subjectActiveColReady = true;
+                        console.log("Subject is_active column added.");
+                    }
+                );
+            }
+        );
+    });
+}
+
+function subjectActiveRetry(attempt, err) {
+    const reason = err.code || err.message || err;
+    if (attempt >= 3) {
+        console.log("Subject setup warning: could not add the is_active column. Reason:", reason);
+        console.log("  -> Everything keeps working; the Enable/Disable switch just stays off.");
+        return;
+    }
+    console.log(`Subject setup: attempt ${attempt} failed (${reason}); retrying in 4s...`);
+    setTimeout(() => ensureSubjectActiveColumn(attempt + 1), 4000);
+}
+
+ensureSubjectActiveColumn(1);
+
 // Friendly fallback for add-on endpoints when the add-on tables do not
 // exist yet (setup above failed and sql/addon_tables.sql was not run).
 function addonTableMissing(res, err, verb) {
@@ -1056,8 +1123,12 @@ app.get("/signatures", (req, res) => {
 app.post("/save-signature", requireLogin, uploadSignature.single("signature"), (req, res) => {
     const role = req.body.role;
 
-    if (!role || (role !== "class_teacher" && role !== "principal")) {
-        return res.status(400).json({ message: "Role must be 'class_teacher' or 'principal'." });
+    // CHANGED (signature management, request #4): four staff roles are
+    // now accepted instead of two. Same route, same storage, same
+    // signatures table - only the allowed role list grew.
+    const ALLOWED_SIGNATURE_ROLES = ["class_teacher", "principal", "vice_principal", "head_teacher"];
+    if (!role || !ALLOWED_SIGNATURE_ROLES.includes(role)) {
+        return res.status(400).json({ message: "Role must be one of: " + ALLOWED_SIGNATURE_ROLES.join(", ") + "." });
     }
 
     if (!req.file) {
@@ -1232,24 +1303,43 @@ app.delete("/delete-class/:id", requireLogin, (req, res) => {
 app.get("/subjects", requireLogin, (req, res) => {
     const className = req.query.class;
 
-    let sql = "SELECT * FROM subjects";
-    let params = [];
+    // CHANGED (subject enable/disable, request #3): dropdowns (score
+    // entry, exam builder) now only show ACTIVE subjects. When the
+    // is_active column does not exist yet (older DB), the query falls
+    // back to the ORIGINAL behaviour - every subject is returned.
+    // No row, no saved result and no calculation is affected.
+    function runQuery(filterActive) {
+        let sql = "SELECT * FROM subjects";
+        let params = [];
+        const clauses = [];
 
-    if (className) {
-        sql += " WHERE class_name = ?";
-        params.push(className);
+        if (className) {
+            clauses.push("class_name = ?");
+            params.push(className);
+        }
+        if (filterActive) {
+            clauses.push("(is_active = 1)");
+        }
+        if (clauses.length) {
+            sql += " WHERE " + clauses.join(" AND ");
+        }
+
+        sql += " ORDER BY subject_name";
+
+        connection.query(sql, params, (err, results) => {
+            if (err) {
+                if (err.code === "ER_BAD_FIELD_ERROR" && filterActive) {
+                    subjectActiveColReady = false;
+                    return runQuery(false); // graceful fallback to original query
+                }
+                console.log(err);
+                return res.status(500).send("Database Error");
+            }
+            res.json(results);
+        });
     }
 
-    sql += " ORDER BY subject_name";
-
-    connection.query(sql, params, (err, results) => {
-        if (err) {
-            console.log(err);
-            res.status(500).send("Database Error");
-        } else {
-            res.json(results);
-        }
-    });
+    runQuery(subjectActiveColReady);
 });
 
 app.post("/add-subject", requireLogin, (req, res) => {
@@ -1309,14 +1399,25 @@ app.delete("/delete-subject/:id", requireLogin, (req, res) => {
 app.put("/update-subject/:id", requireLogin, (req, res) => {
     const id = req.params.id;
     const { subject_name, class_name } = req.body;
+    // CHANGED (subject enable/disable, request #3): optional is_active
+    // flag (1 = visible in dropdowns, 0 = hidden/managed-off). Only
+    // written when the guarded column exists.
+    const hasActiveFlag = subjectActiveColReady && (req.body.is_active === 0 || req.body.is_active === 1);
 
     if (!subject_name || !class_name) {
         return res.status(400).json({ message: "Subject name and class are both required." });
     }
 
+    const sets = ["subject_name = ?", "class_name = ?"];
+    const vals = [subject_name, class_name];
+    if (hasActiveFlag) {
+        sets.push("is_active = ?");
+        vals.push(req.body.is_active);
+    }
+
     connection.query(
-        "UPDATE subjects SET subject_name = ?, class_name = ? WHERE id = ?",
-        [subject_name, class_name, id],
+        `UPDATE subjects SET ${sets.join(", ")} WHERE id = ?`,
+        vals.concat([id]),
         (err, result) => {
             if (err) {
                 console.log(err);

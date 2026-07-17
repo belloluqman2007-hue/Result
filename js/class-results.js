@@ -18,6 +18,8 @@
     "use strict";
 
     var lastSheet = null; /* { className, term, session, subjects[], students[] } */
+    var amsSignaturesCache = []; /* NEW (request #6): for PDF footers */
+    var zipCancelled = false;    /* NEW (request #5) */
 
     function notify(msg, type, ms) {
         if (window.amsToast) window.amsToast(msg, type || "info", ms || 4500);
@@ -133,14 +135,35 @@
     }
 
     function pdfHeaderHTML(sheet, pageLabel) {
+        // CHANGED (request #6): school logo added to every PDF page.
         return '<div class="bs-head-doc">' +
+            '<div style="display:flex; align-items:center; gap:14px; justify-content:center;">' +
+            '<img src="images/LOGO.JPG" alt="" style="width:58px; height:58px; object-fit:cover; border-radius:50%; border:2px solid #0F3D2E;">' +
+            '<div>' +
             '<div class="bs-ar" lang="ar">مَدْرَسَةُ أَمِينِ اللهِ لِلْعُلُومِ الْعَرَبِيَّةِ الْإِسْلَامِيَّةِ</div>' +
             '<div class="bs-en">AMEENULLAH SCHOOL OF ARABIC AND ISLAMIC STUDIES</div>' +
+            "</div>" +
+            "</div>" +
             '<div class="bs-meta"><b>Class Results Broadsheet</b> &nbsp;\u2022&nbsp; ' +
             escapeHTML(sheet.className) + " \u2022 " + escapeHTML(sheet.term) + " \u2022 " +
             escapeHTML(sheet.session) +
-            (pageLabel ? " \u2022 " + pageLabel : "") +
+            (pageLabel ? " &nbsp;\u2022&nbsp; <b>" + pageLabel + "</b>" : "") +
             "</div></div>";
+    }
+
+    // CHANGED (request #6): signatures footer for the final PDF page.
+    function pdfSignaturesHTML() {
+        const teacher = amsSignaturesCache.find(s => s.role === "class_teacher");
+        const principal = amsSignaturesCache.find(s => s.role === "principal");
+        const box = (sig, label) =>
+            '<div style="text-align:center; width:220px;">' +
+            (sig ? `<img src="${sig.signature_path}" alt="" style="height:46px; object-fit:contain; display:block; margin:0 auto;">` : '<div style="height:46px;"></div>') +
+            '<div style="border-top:1.5px solid #333; margin-top:4px; padding-top:4px; font-size:11.5px; font-weight:700;">' + label + "</div>" +
+            "</div>";
+        return '<div style="display:flex; justify-content:space-between; margin-top:34px; padding:0 30px;">' +
+            box(teacher, "Class Teacher's Signature") +
+            box(principal, "Principal's Signature") +
+            "</div>";
     }
 
     /* ---------- generate on screen ---------- */
@@ -193,6 +216,7 @@
 
                 document.getElementById("crPdfBtn").disabled = false;
                 document.getElementById("crPrintBtn").disabled = false;
+                document.getElementById("crZipBtn").disabled = false; /* NEW (request #5) */
             })
             .catch(function () {
                 document.getElementById("crGenerateBtn").disabled = false;
@@ -236,14 +260,18 @@
                 return;
             }
             var range = chunks[c];
-            var pageLabel = chunks.length > 1 ? "Page " + (c + 1) + " of " + chunks.length : "";
+            var isLast = c === chunks.length - 1;
+            // CHANGED (request #6): page numbering on EVERY page.
+            var pageLabel = "Page " + (c + 1) + " of " + chunks.length;
             stage.innerHTML =
                 '<div style="background:#fff; padding:26px 26px 18px; box-sizing:border-box;">' +
                 pdfHeaderHTML(lastSheet, pageLabel) +
                 buildTableHTML(lastSheet, range[0], range[1]) +
-                '<div style="text-align:center; font-size:11px; color:#555; margin-top:10px; font-family:Cairo,sans-serif;">' +
+                // CHANGED (request #6): signatures close the final page.
+                (isLast ? pdfSignaturesHTML() : "") +
+                '<div style="text-align:center; font-size:11px; color:#555; margin-top:14px; font-family:Cairo,sans-serif;">' +
                 "Generated " + new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }) +
-                " \u2022 Ameenullah School Result System</div>" +
+                " \u2022 Ameenullah School Result System \u2022 " + pageLabel + "</div>" +
                 "</div>";
 
             // Let the browser paint before measuring/capturing.
@@ -290,5 +318,167 @@
         captureNext();
     };
 
-    document.addEventListener("DOMContentLoaded", loadClasses);
+    /* ==========================================================
+       NEW (request #5): Download All Student Results (ZIP)
+       ----------------------------------------------------------
+       For every student in the generated broadsheet we render the
+       EXACT report sheet used on the Check Result page (shared
+       renderer in js/report-card.js), capture it, and add it to
+       one zip archive: Student1.pdf, Student2.pdf, ...
+       Everything happens on the device - the server only serves
+       the normal read-only endpoints it already had.
+    ========================================================== */
+    var zipRunning = false;
+
+    window.crZipCancel = function () {
+        if (zipRunning) {
+            zipCancelled = true;
+            var t = document.getElementById("crZipText");
+            if (t) t.textContent = "Cancelling\u2026";
+        }
+    };
+
+    function crZipSetProgress(done, total, label) {
+        var wrap = document.getElementById("crZipProgress");
+        var bar = document.getElementById("crZipBar");
+        var text = document.getElementById("crZipText");
+        wrap.style.display = "block";
+        bar.style.width = (total ? Math.round((done / total) * 100) : 0) + "%";
+        text.textContent = label || ("Building report " + done + " of " + total + "\u2026");
+    }
+
+    function crZipHideProgress() {
+        document.getElementById("crZipProgress").style.display = "none";
+        document.getElementById("crZipBar").style.width = "0%";
+    }
+
+    function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+    window.crDownloadAllZip = async function () {
+        if (!lastSheet) {
+            notify("Generate the broadsheet first.", "info");
+            return;
+        }
+        if (zipRunning) return; // already building
+
+        if (!window.JSZip || !window.jspdf || !window.html2canvas ||
+            !window.amsBuildReportCard || !window.amsCanvasToA4Pdf) {
+            notify("PDF tools are still loading - try again in a moment.", "info");
+            return;
+        }
+
+        zipRunning = true;
+        zipCancelled = false;
+
+        var zip = new window.JSZip();
+        var skipped = [];
+        var total = lastSheet.students.length;
+
+        // Off-screen staging area with a fixed report width.
+        var stage = document.createElement("div");
+        stage.className = "ams-staging";
+        stage.style.width = "900px";
+        document.body.appendChild(stage);
+
+        // Signatures are identical for every report - fetch once (#8 speed).
+        var signatures = amsSignaturesCache;
+        if (!signatures.length) {
+            try {
+                signatures = await fetch("/signatures").then(r => r.json());
+            } catch (e) { signatures = []; }
+        }
+
+        try {
+            for (var i = 0; i < total; i++) {
+                if (zipCancelled) break;
+
+                var stu = lastSheet.students[i];
+                crZipSetProgress(i, total, "Building report " + (i + 1) + " of " + total +
+                    " \u2014 " + stu.name);
+
+                try {
+                    var pack = await window.amsFetchReportPack(
+                        stu.id, lastSheet.term, lastSheet.session, signatures
+                    );
+
+                    if (!pack.rows.length) {
+                        skipped.push(stu.name + " (no results found)");
+                        continue;
+                    }
+
+                    stage.innerHTML = "";
+                    var card = window.amsBuildReportCard(pack, lastSheet.term, lastSheet.session);
+                    stage.appendChild(card);
+
+                    await window.amsWaitForImages(card, 4000);
+
+                    var canvas = await html2canvas(card, {
+                        scale: 2,
+                        backgroundColor: "#ffffff",
+                        useCORS: true
+                    });
+
+                    var pdf = window.amsCanvasToA4Pdf(canvas, 0.95);
+                    var blob = pdf.output("blob");
+
+                    var safe = (stu.id + "-" + stu.name).replace(/[\\/:*?"<>|]+/g, "_");
+                    zip.file((i + 1) + ". " + safe + ".pdf", blob);
+                } catch (err) {
+                    console.log("Report failed for", stu.name, err);
+                    skipped.push(stu.name + " (error)");
+                }
+
+                // Let the phone breathe between students (#8 performance).
+                await sleep(60);
+            }
+
+            if (zipCancelled) {
+                notify("Zip download cancelled.", "info");
+                return;
+            }
+
+            var builtCount = total - skipped.length;
+            if (builtCount === 0) {
+                notify("No report could be built for this class.", "error");
+                return;
+            }
+
+            crZipSetProgress(total, total, "Packing " + builtCount + " PDF(s) into one zip\u2026");
+            var zipBlob = await zip.generateAsync({
+                type: "blob",
+                compression: "STORE" // PDFs are already compressed - faster packing
+            });
+
+            var a = document.createElement("a");
+            a.href = URL.createObjectURL(zipBlob);
+            var safeName = (lastSheet.className + "-" + lastSheet.term + "-" + lastSheet.session)
+                .replace(/[\\/:*?"<>|]+/g, "_");
+            a.download = "all-results-" + safeName + ".zip";
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+
+            notify(
+                "ZIP downloaded \u2713 " + builtCount + " student report(s) in one file." +
+                (skipped.length ? " Skipped: " + skipped.join(", ") : ""),
+                skipped.length ? "info" : "success",
+                9000
+            );
+        } finally {
+            zipRunning = false;
+            zipCancelled = false;
+            stage.remove();
+            crZipHideProgress();
+        }
+    };
+
+    document.addEventListener("DOMContentLoaded", function () {
+        loadClasses();
+        // NEW (request #6): signatures for the broadsheet PDF footer.
+        fetch("/signatures")
+            .then(r => r.json())
+            .then(sigs => { amsSignaturesCache = Array.isArray(sigs) ? sigs : []; })
+            .catch(() => {});
+    });
 })();

@@ -19,17 +19,7 @@
 </head>
 <body onload="checkAuth(); initExam();">
 
-  <!-- ==========================================================
-       NEW (sidebar layout - user request): ALL exam tools (exam
-       details, action buttons, formatting toolbar, harakat) now
-       live in a fixed left sidebar, so the exam pages themselves
-       use the WHOLE screen and can be read freely - exactly like
-       reading the final printed paper. On phones the sidebar
-       slides away behind the "☰ Exam Tools" button.
-
-       Every original field, id, class and onclick below is kept -
-       only the surrounding layout changed.
-  ========================================================== -->
+  <!-- Sidebar with ALL exam tools (the pages keep the whole screen) -->
   <button type="button" class="exam-side-toggle" id="examSideToggle" onclick="toggleExamSidebar()">
     &#9776; Exam Tools
   </button>
@@ -38,7 +28,7 @@
   <aside class="exam-toolbar-outer exam-sidebar" id="examSidebar">
     <a href="teacher-dashboard.html" class="nav-btn exam-side-back">&larr; Back to Dashboard</a>
 
-    <!-- ===== STEP 1: exam details (wizard, request #6) ===== -->
+    <!-- ===== STEP 1: exam details (wizard) ===== -->
     <div id="examStep1">
 
       <div class="exam-step-head">
@@ -96,7 +86,6 @@
           <button type="button" onclick="generateCoverPage()">Generate Cover Page</button>
         </div>
 
-        <!-- NEW (wizard): proceeds to the question editor (Step 2). -->
         <div class="meta-field meta-actions">
           <button type="button" class="exam-next-btn" onclick="examGotoStep(2)">Next: Write Questions &rarr;</button>
         </div>
@@ -104,36 +93,38 @@
 
     </div>
 
-    <!-- ===== STEP 2: the question editor tools (shown after "Next") ===== -->
+    <!-- ===== STEP 2: the question editor tools ===== -->
     <div id="examStep2" style="display:none;">
 
       <div class="exam-step-head">
         <span class="exam-step-pill">Step 2 of 2</span>
         <div>
           <strong>Write the Questions</strong>
-          <span class="exam-step-hint" id="examWizardSummary">Every page automatically carries the exam header.</span>
+          <span class="exam-step-hint" id="examWizardSummary">Pages are created automatically as you write.</span>
         </div>
       </div>
 
       <div class="exam-actions-bar">
         <button type="button" onclick="saveExam()">Save Exam</button>
         <button type="button" onclick="openLoadPanel()">Open Saved Exam</button>
-        <button type="button" onclick="insertPageBreak()">+ New Page</button>
-        <button type="button" onclick="removeLastPage()">- Remove Last Page</button>
-        <!-- CHANGED (print fix): calls examPrint() in js/exam.js - identical
-             to window.print() on computers, plus a helpful tip on phones. -->
+        <!-- CHANGED (auto pagination, request #1): this now inserts a Word-style
+             page break - pages themselves are created automatically. -->
+        <button type="button" onclick="insertPageBreak()">&#8626; Page Break</button>
+        <button type="button" onclick="removeLastPage()">&#9003; Undo Break</button>
         <button type="button" onclick="examPrint()">Print / Save as PDF</button>
-        <!-- NEW: phone-proof printing - downloads the whole exam as a PDF
-             that can be printed/shared from any phone -->
         <button type="button" onclick="downloadExamPDF()">&#11015; Download PDF (phone)</button>
         <button type="button" class="exam-back-btn" onclick="examGotoStep(1)">&larr; Exam Details</button>
       </div>
 
-      <!-- Rich text toolbar for the body -->
+      <!-- Rich text toolbar -->
       <div class="exam-format-toolbar">
         <button type="button" onclick="format('bold')"><b>B</b></button>
         <button type="button" onclick="format('italic')"><i>I</i></button>
         <button type="button" onclick="format('underline')"><u>U</u></button>
+        <span class="divider"></span>
+        <!-- NEW (editor upgrade, request #2): super/subscript for math -->
+        <button type="button" onclick="format('superscript')" title="Superscript (x²)">x&sup2;</button>
+        <button type="button" onclick="format('subscript')" title="Subscript (x₂)">x&#8322;</button>
         <span class="divider"></span>
         <button type="button" onclick="format('justifyLeft')">&#8676;</button>
         <button type="button" onclick="format('justifyCenter')">&#8646;</button>
@@ -143,6 +134,12 @@
         <button type="button" onclick="format('insertOrderedList')">1. List</button>
         <span class="divider"></span>
         <button type="button" onclick="insertTable()">Insert Table</button>
+        <!-- NEW (editor upgrade, request #2): insert an image into the exam -->
+        <button type="button" onclick="document.getElementById('examImageInput').click()">&#128247; Image</button>
+        <input type="file" id="examImageInput" accept="image/*" style="display:none;">
+        <span class="divider"></span>
+        <!-- NEW (editor upgrade, request #2): maths/science symbols -->
+        <button type="button" onclick="toggleMathPalette()" id="mathToggleBtn">&sum; Symbols</button>
         <span class="divider"></span>
         <label class="toolbar-label">Spacing:</label>
         <select id="spacingSelect" onchange="setSpacing()">
@@ -160,15 +157,41 @@
           <option value="6">X-Large</option>
         </select>
         <span class="divider"></span>
-        <button type="button" id="voiceBtn" onclick="toggleVoice()">&#127908; Voice Note</button>
+        <button type="button" id="voiceBtn" onclick="toggleVoice()">&#127908; Voice</button>
         <select id="voiceLang">
           <option value="ar-SA">Arabic</option>
           <option value="en-US">English</option>
         </select>
       </div>
 
-      <!-- Harakat palette: manual diacritic insertion, since true automatic
-           AI diacritization needs an external API key we don't have wired up -->
+      <!-- NEW (editor upgrade, request #2): mathematical symbol palette -->
+      <div class="math-palette" id="mathPalette" style="display:none;">
+        <span class="harakat-label">Symbols:</span>
+        <button type="button" onclick="insertSymbol('+')">+</button>
+        <button type="button" onclick="insertSymbol('\u2212')">&minus;</button>
+        <button type="button" onclick="insertSymbol('\u00D7')">&times;</button>
+        <button type="button" onclick="insertSymbol('\u00F7')">&divide;</button>
+        <button type="button" onclick="insertSymbol('=')">=</button>
+        <button type="button" onclick="insertSymbol('\u2260')">&ne;</button>
+        <button type="button" onclick="insertSymbol('\u2264')">&le;</button>
+        <button type="button" onclick="insertSymbol('\u2265')">&ge;</button>
+        <button type="button" onclick="insertSymbol('\u00B1')">&plusmn;</button>
+        <button type="button" onclick="insertSymbol('\u221A')">&radic;</button>
+        <button type="button" onclick="insertSymbol('\u221E')">&infin;</button>
+        <button type="button" onclick="insertSymbol('\u03C0')">&pi;</button>
+        <button type="button" onclick="insertSymbol('\u03B8')">&theta;</button>
+        <button type="button" onclick="insertSymbol('\u2220')">&ang;</button>
+        <button type="button" onclick="insertSymbol('\u2211')">&sum;</button>
+        <button type="button" onclick="insertSymbol('\u00BD')">&frac12;</button>
+        <button type="button" onclick="insertSymbol('\u00BC')">&frac14;</button>
+        <button type="button" onclick="insertSymbol('\u00BE')">&frac34;</button>
+        <button type="button" onclick="insertSymbol('\u00B0')">&deg;</button>
+        <button type="button" onclick="insertSymbol('%')">%</button>
+        <button type="button" onclick="insertSymbol('\u00B2')">&sup2;</button>
+        <button type="button" onclick="insertSymbol('\u00B3')">&sup3;</button>
+      </div>
+
+      <!-- Harakat palette: manual diacritic insertion -->
       <div class="harakat-palette" id="harakatPalette">
         <span class="harakat-label">Harakat:</span>
         <button type="button" onclick="insertHarakat('\u064B')">ً</button>
@@ -186,14 +209,20 @@
     </div>
   </aside>
 
-  <!-- ===== MAIN AREA: the exam pages get the whole remaining screen ===== -->
+  <!-- ===== MAIN AREA: the exam pages get the whole remaining screen =====
+       CHANGED (auto pagination, request #1): #examFlow is ONE continuous
+       editable area spanning every page. The teacher simply keeps
+       typing; exam.js measures the content and moves whole question
+       blocks onto new pages automatically - a single question is NEVER
+       split across two pages. -->
   <main class="exam-main">
 
-    <div class="exam-pages" id="examPages">
+    <div class="exam-pages exam-flow" id="examFlow" contenteditable="true" dir="rtl">
 
-      <!-- PAGE 1: auto-generated cover / letterhead -->
-      <div class="exam-page cover-page" id="coverPage">
-        <div class="cover-header">
+      <!-- PAGE 1: compact letterhead + exam info + instructions,
+           then the questions START on the same page (request #1). -->
+      <div class="exam-page page-one" id="coverPage">
+        <div class="cover-header" contenteditable="false">
           <p class="bismillah" lang="ar">بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ</p>
 
           <img src="images/LOGO.JPG" class="cover-logo" alt="School Logo">
@@ -203,13 +232,11 @@
 
           <div class="cover-divider"></div>
 
-          <p class="cover-address">3, Temidire Street off Ondo Benin Road, Ijebu-Ode, Ogun State, Nigeria.</p>
-          <p class="cover-contact">Tel: 08062445559, 08058306889.</p>
-          <p class="cover-contact">E-mail: <a href="mailto:madrasatuameenillah22@gmail.com">madrasatuameenillah22@gmail.com</a></p>
-          <p class="cover-motto"><span lang="ar">الشِّعَارُ: الْعِلْمُ وَالْعِبَادَةُ.</span> &nbsp; MOTTO: KNOWLEDGE AND WORSHIP.</p>
+          <p class="cover-address">3, Temidire Street off Ondo Benin Road, Ijebu-Ode, Ogun State, Nigeria. &nbsp; Tel: 08062445559, 08058306889.</p>
+          <p class="cover-contact">E-mail: <a href="mailto:madrasatuameenillah22@gmail.com">madrasatuameenillah22@gmail.com</a> &nbsp;·&nbsp; <span lang="ar">الشِّعَارُ: الْعِلْمُ وَالْعِبَادَةُ</span></p>
         </div>
 
-        <div class="cover-exam-details">
+        <div class="cover-exam-details" contenteditable="false">
           <p class="cover-exam-period" id="coverExamPeriod" lang="ar">امْتِحَانُ الْفَتْرَةِ ... لِلْعَامِ الدِّرَاسِيِّ ....\....</p>
 
           <table class="cover-info-table">
@@ -230,42 +257,42 @@
               <td class="value" id="coverClass">-</td>
             </tr>
           </table>
-
-          <div class="cover-instructions" id="coverInstructions" contenteditable="true">
-            <p class="instructions-title">إِرْشَادَاتُ الْاِمْتِحَانِ:</p>
-            <ol>
-              <li>لَا تَفْتَحْ حَتَّى تُؤْمَرَ بِذَلِكَ.</li>
-              <li>لَا تُضَيِّعْ هَذِهِ وَرَقَةَ السُّؤَالِ.</li>
-              <li>اِسْتَعِنْ بِاللَّهِ.</li>
-              <li>ثُمَّ ابْدَأْ.</li>
-            </ol>
-          </div>
         </div>
 
-        <div class="cover-footer">
-          <p class="cover-wish">مع تمنياتي لكم بالنجاح.</p>
+        <div class="cover-instructions" id="coverInstructions" contenteditable="true">
+          <p class="instructions-title">إِرْشَادَاتُ الْاِمْتِحَانِ:</p>
+          <ol>
+            <li>لَا تَفْتَحْ حَتَّى تُؤْمَرَ بِذَلِكَ.</li>
+            <li>لَا تُضَيِّعْ هَذِهِ وَرَقَةَ السُّؤَالِ.</li>
+            <li>اِسْتَعِنْ بِاللَّهِ.</li>
+            <li>ثُمَّ ابْدَأْ.</li>
+          </ol>
+        </div>
+
+        <div class="cover-footer" contenteditable="false">
+          <p class="cover-wish" lang="ar">مع تمنياتي لكم بالنجاح.</p>
           <p class="cover-code" id="coverCode">AMSAIS@2026/1447</p>
         </div>
-      </div>
 
-      <!-- PAGE 2+: the actual exam body, Word-like editable area.
-           NEW (request #6): every question page now carries an automatic
-           exam header (school name + class/subject/term/session) that the
-           editor keeps in sync - see refreshAllPageHeaders() in js/exam.js. -->
-      <div class="exam-page body-page">
-        <div class="exam-page-header" contenteditable="false"></div>
-        <div class="exam-body spacing-normal" id="examBody" contenteditable="true" dir="rtl">
+        <!-- Questions flow starts right here on Page 1 (request #1) -->
+        <div class="page-content exam-body spacing-normal">
           <p>ابدأ كتابة الامتحان هنا...</p>
         </div>
       </div>
 
+      <!-- PAGE 2 (auto-managed): created with an empty content zone; the
+           engine removes it until the writing actually reaches it. -->
+      <div class="exam-page body-page">
+        <div class="exam-page-header" contenteditable="false"></div>
+        <div class="page-content exam-body spacing-normal"></div>
+      </div>
+
     </div>
 
-    <!-- NEW (wizard, request #6): the explicit "Next Page" control -
-         each click appends another question page (with its own header). -->
+    <!-- Word-style page break helper (pages themselves are automatic) -->
     <div class="exam-next-page-wrap">
-      <button type="button" class="exam-next-btn" onclick="insertPageBreak()">+ Next Page &rarr;</button>
-      <p>Page 2, 3, 4... are added automatically with the exam header, so the final PDF is always ONE tidy document.</p>
+      <button type="button" class="exam-next-btn" onclick="insertPageBreak()">&#8626; Insert Page Break</button>
+      <p>Pages are added automatically as you write - a question is never split across two pages. Use a page break only when you want to force a question to start on a fresh page.</p>
     </div>
 
   </main>

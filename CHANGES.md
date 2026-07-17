@@ -4,6 +4,31 @@
 
 ---
 
+# Improvement Pack 5 — 17 July 2026 (the "polished prompt" / Word-like engine)
+
+All 10 points delivered. Still additive-first: no route was renamed, no
+existing query was rewritten for a different purpose, result calculations
+and the live report pages keep working exactly as before.
+
+| # | Request | Delivered |
+|---|---|---|
+| 1 | Word-like exam generator | **Auto-pagination engine** (`js/exam.js`): the exam is now ONE continuous editable document. Blocks (paragraph/list/table/image) are measured against the real A4 height; a block that doesn't fit moves WHOLE to the next page — **a question is never split**. Pages appear/disappear automatically and every question page carries the exam header. Page 1 = compact letterhead + logo + student info + subject/class/duration + instructions + questions start. "Page Break" = Word-style forced break. |
+| 2 | Professional editor | Upgraded built-in editor (offline, no new server deps): images (insert, click-select, resize, align, delete, auto-downscale for speed), maths symbol palette, super/subscript, tables, lists, alignment, font sizes, RTL/LTR, Arabic harakat palette, voice typing, page break. |
+| 3 | Subject management | Hardcoded subject list **removed** — everything reads from the DB. Type any subject, tick **multiple classes** to assign at once, **enable/disable** switch (hides from dropdowns, keeps data), edit, delete with confirm, live search, duplicate-assignment guard. New nullable `is_active` column (guarded auto-migration). |
+| 4 | Signature management | Redesigned "School Signatures" settings page: **Principal, Vice Principal, Head Teacher, Class Teacher** — draw or upload (transparent PNG), live checkerboard preview, replace, remove. Same `/signatures` routes; report cards still auto-stamp Principal + Class Teacher. |
+| 5 | Whole class result → ZIP | New **"Download All Student Results (ZIP)"**: every student's individual report sheet rendered with the **exact current design** (shared renderer `js/report-card.js`), converted to its own PDF, packed into ONE zip (`1. AM0001-Name.pdf …`) with progress bar + cancel. |
+| 6 | Whole class report polish | Broadsheet PDF now has the **school logo on every page, "Page x of y" numbering, automatic page breaks, Class Teacher + Principal signature blocks** on the final page. |
+| 7 | Result PDF quality | "Download PDF" on Check Result now produces a **real high-quality PDF** (2.5× capture, crisp Arabic, A4 slicing so nothing is scaled/cut) — design untouched; Print still available. |
+| 8 | Performance | Off-screen zip staging with image pre-wait, signatures fetched once per zip, exam images downscaled to ≤1500px, lazy-loaded student photos, STORE compression for zipping (PDFs are pre-compressed), debounced re-pagination. |
+| 9 | Mobile | Auto-engine measures from the live page width (works at any screen size); image tools are button-based (touch friendly); sidebar exam tools remain off-canvas on phones. |
+| 10 | Code quality | New shared module `js/report-card.js` (single source of report rendering); signature roles generated from one config array; pagination isolated in clearly commented sections of `js/exam.js`. |
+
+DB changes: `subjects.is_active` (guarded, nullable-equivalent default 1).
+Everything else: files only. Backward compatibility verified: old saved
+exams (page-array format) load, merge and re-paginate automatically.
+
+---
+
 # Improvement Pack 4 — 17 July 2026 (the 8-point request)
 
 Everything below is **additive or visual-only**. No route, table, result

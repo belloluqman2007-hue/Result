@@ -67,8 +67,31 @@ function loadAllClasses() {
         .then(classes => {
             amsClassesCache = classes || [];
             renderClassesList();
+            renderAssignClassList(); // NEW (request #3): subject->classes checkboxes
         })
         .catch(error => console.log(error));
+}
+
+/* ---------- NEW (request #3): "Assign to classes" tick boxes ---------- */
+function renderAssignClassList() {
+    const box = document.getElementById("assignClassList");
+    if (!box) return;
+    box.innerHTML = "";
+
+    if (!amsClassesCache.length) {
+        box.innerHTML = '<div class="mng-empty">Add a class first - subjects are assigned to classes.</div>';
+        return;
+    }
+
+    amsClassesCache.forEach(cls => {
+        const label = document.createElement("label");
+        label.className = "mng-assign-chip";
+        label.innerHTML =
+            '<input type="checkbox" value="' + String(cls.class_name).replace(/"/g, "&quot;") + '">' +
+            '<span lang="ar" dir="auto"></span>';
+        label.querySelector("span").textContent = cls.class_name;
+        box.appendChild(label);
+    });
 }
 
 // CHANGED: card-style rows instead of a bare table. The container
@@ -166,62 +189,77 @@ function loadClassesIntoSelects() {
 
 // ===== SUBJECTS =====
 
+// Kept for backward compatibility with the pre-redesign page: the old
+// "Other (type manually)" dropdown no longer exists, so this is now a
+// guarded no-op. (Subjects are typed freely from the start - request #3.)
 function toggleCustomSubject() {
-    const select = document.getElementById("subjectName");
-    const customInput = document.getElementById("customSubjectName");
-    // CHANGED (redesign): the input now sits inside a wrapper block
-    // (customSubjectWrap). Toggle the wrapper when it exists, otherwise
-    // fall back to toggling the raw input exactly like before.
-    const wrap = document.getElementById("customSubjectWrap");
-
-    if (select.value === "__other__") {
-        if (wrap) wrap.style.display = "block";
-        customInput.style.display = "inline-block";
-        customInput.focus();
-    } else {
-        if (wrap) wrap.style.display = "none";
-        customInput.style.display = "none";
-        customInput.value = "";
-    }
+    return;
 }
 
+// CHANGED (request #3): type ANY subject name (nothing hardcoded),
+// tick ONE OR MORE classes, and the subject is assigned to all of them.
 function addSubject() {
-    const select = document.getElementById("subjectName");
-    let subjectName = select.value;
+    const nameInput = document.getElementById("subjectName");
+    const subjectName = nameInput.value.trim();
 
-    if (subjectName === "__other__") {
-        subjectName = document.getElementById("customSubjectName").value.trim();
+    const checked = Array.from(
+        document.querySelectorAll("#assignClassList input[type=checkbox]:checked")
+    ).map(cb => cb.value);
+
+    if (!subjectName) {
+        amsNotify("Please type a subject name.", "error");
+        nameInput.focus();
+        return;
     }
-
-    const subjectClass = document.getElementById("subjectClass").value;
-
-    if (!subjectName || subjectName === "" || subjectClass === "") {
-        amsNotify("Please select (or type) a subject name and select a class.", "error");
+    if (!checked.length) {
+        amsNotify("Please tick at least one class for this subject.", "error");
         return;
     }
 
-    fetch("/add-subject", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-            subject_name: subjectName,
-            class_name: subjectClass
+    // Skip class assignments that already exist (avoids duplicates).
+    const wanted = checked.filter(cls =>
+        !amsSubjectsCache.some(s =>
+            s.class_name === cls &&
+            String(s.subject_name).trim().toLowerCase() === subjectName.toLowerCase()
+        )
+    );
+    const skipped = checked.length - wanted.length;
+
+    if (!wanted.length) {
+        amsNotify(`"${subjectName}" is already assigned to the selected class(es).`, "info");
+        return;
+    }
+
+    // Reuse the existing /add-subject route once per class (additive).
+    let done = 0;
+    let failed = 0;
+    wanted.forEach(cls => {
+        fetch("/add-subject", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ subject_name: subjectName, class_name: cls })
         })
-    })
-    .then(response => response.json())
-    .then(data => {
-        amsNotify(data.message, data.message.toLowerCase().includes("success") ? "success" : "error");
-        document.getElementById("subjectName").value = "";
-        document.getElementById("customSubjectName").value = "";
-        document.getElementById("customSubjectName").style.display = "none";
-        const wrap = document.getElementById("customSubjectWrap");
-        if (wrap) wrap.style.display = "none";
-        document.getElementById("subjectClass").value = "";
-        loadAllSubjects();
-    })
-    .catch(error => {
-        console.log(error);
-        amsNotify("Error adding subject.", "error");
+        .then(response => response.json())
+        .then(() => { done++; })
+        .catch(() => { failed++; })
+        .finally(() => {
+            if (done + failed === wanted.length) {
+                if (failed) {
+                    amsNotify(`Saved ${done} of ${wanted.length} assignment(s). Please retry.`, "error");
+                } else {
+                    amsNotify(
+                        skipped > 0
+                            ? `"${subjectName}" assigned to ${done} class(es). ${skipped} duplicate(s) skipped.`
+                            : `"${subjectName}" assigned to ${done} class(es).`,
+                        "success"
+                    );
+                }
+                nameInput.value = "";
+                document.querySelectorAll("#assignClassList input[type=checkbox]:checked")
+                    .forEach(cb => { cb.checked = false; });
+                loadAllSubjects();
+            }
+        });
     });
 }
 
@@ -231,8 +269,29 @@ function loadAllSubjects() {
         .then(subjects => {
             amsSubjectsCache = subjects || [];
             renderSubjectsList();
+            fillSubjectSuggestions(); // NEW (request #3): datalist from the DB
         })
         .catch(error => console.log(error));
+}
+
+// NEW (request #3): name suggestions come from REAL subjects already
+// in the database - not from a hardcoded list.
+function fillSubjectSuggestions() {
+    const dl = document.getElementById("subjectNameSuggestions");
+    if (!dl) return;
+    const unique = [];
+    amsSubjectsCache.forEach(s => {
+        if (s.subject_name && unique.indexOf(s.subject_name) === -1) {
+            unique.push(s.subject_name);
+        }
+    });
+    unique.sort((a, b) => String(a).localeCompare(String(b)));
+    dl.innerHTML = "";
+    unique.forEach(name => {
+        const opt = document.createElement("option");
+        opt.value = name;
+        dl.appendChild(opt);
+    });
 }
 
 // CHANGED: modern, searchable card rows with Edit + Delete buttons.
@@ -256,13 +315,23 @@ function renderSubjectsList() {
         box.innerHTML = "";
         list.forEach(subject => {
             const row = document.createElement("div");
-            row.className = "mng-row";
+            // NEW (request #3): disabled subjects are dimmed and get a switch.
+            const isActive = subject.is_active === undefined || subject.is_active === null
+                ? true
+                : Number(subject.is_active) === 1;
+            row.className = "mng-row" + (isActive ? "" : " mng-row-off");
 
             const main = document.createElement("div");
             main.className = "mng-row-main";
             main.textContent = subject.subject_name;
             // Subjects can be Arabic or English - dir="auto" keeps both tidy.
             main.setAttribute("dir", "auto");
+            if (!isActive) {
+                const offTag = document.createElement("span");
+                offTag.className = "mng-off-tag";
+                offTag.textContent = "disabled";
+                main.appendChild(offTag);
+            }
 
             const chip = document.createElement("span");
             chip.className = "mng-chip";
@@ -270,6 +339,18 @@ function renderSubjectsList() {
 
             const actions = document.createElement("div");
             actions.className = "mng-row-actions";
+
+            // NEW (request #3): Enable/Disable switch
+            const toggle = document.createElement("button");
+            toggle.type = "button";
+            toggle.className = "mng-switch" + (isActive ? " mng-switch-on" : "");
+            toggle.title = isActive ? "Disable subject (hide from dropdowns)" : "Enable subject";
+            toggle.setAttribute("aria-pressed", isActive ? "true" : "false");
+            toggle.innerHTML = "<span></span>";
+            toggle.addEventListener("click", function () {
+                toggleSubjectActive(subject, !isActive);
+            });
+            actions.appendChild(toggle);
 
             // NEW (request #3): Edit button -> opens the edit modal.
             const editBtn = document.createElement("button");
@@ -322,6 +403,32 @@ function deleteSubject(id) {
                 amsNotify("Error deleting subject.", "error");
             });
         });
+}
+
+/* ---------- NEW (request #3): Enable / Disable a subject ---------- */
+function toggleSubjectActive(subject, makeActive) {
+    fetch(`/update-subject/${subject.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+            subject_name: subject.subject_name,
+            class_name: subject.class_name,
+            is_active: makeActive ? 1 : 0
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        amsNotify(
+            makeActive ? `"${subject.subject_name}" is now visible in dropdowns.` :
+                         `"${subject.subject_name}" is hidden from dropdowns (kept in the database).`,
+            "success"
+        );
+        loadAllSubjects();
+    })
+    .catch(error => {
+        console.log(error);
+        amsNotify("Error updating subject.", "error");
+    });
 }
 
 /* ---------- NEW (request #3): Edit Subject modal ---------- */
