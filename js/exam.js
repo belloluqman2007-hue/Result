@@ -215,44 +215,34 @@ function generateCoverPage() {
         return;
     }
 
-    document.getElementById("coverClass").textContent = cls;
-    document.getElementById("coverSubject").textContent = subject;
-    document.getElementById("coverDuration").textContent = duration || "-";
+    // CHANGED (school paper design): values end with a full stop exactly
+    // like the printed school exam sheets (e.g. "شَرْحُ التَّوْحِيدِ.").
+    const dot = function (v) { return /[.؟!]\s*$/.test(v) ? v : v + "."; };
+    document.getElementById("coverClass").textContent = dot(cls);
+    document.getElementById("coverSubject").textContent = dot(subject);
+    document.getElementById("coverDuration").textContent = duration ? dot(duration) : "-";
 
+    // CHANGED (school paper design): the paper shows the session as
+    // "END-YEAR\HIJRI" (e.g. 2026\1447) and the footer as
+    // "AMSAIS@2026/1447". Hijri year = Gregorian end year - 579.
+    const endYear = (session.split("/")[1] || session).trim();
+    const hijri = String(parseInt(endYear, 10) - 579);
     const termArabic = TERM_ARABIC[term] || term;
     document.getElementById("coverExamPeriod").textContent =
-        `امْتِحَانُ الْفَتْرَةِ ${termArabic} لِلْعَامِ الدِّرَاسِيِّ ${session}`;
+        `اِمْتِحَانُ الْفَتْرَةِ ${termArabic} لِلْعَامِ الدِّرَاسِيِّ ${endYear}\\${hijri}`;
 
-    document.getElementById("coverCode").textContent = `AMSAIS@${session}`;
+    document.getElementById("coverCode").textContent = `AMSAIS@${endYear}/${hijri}`;
 
     refreshAllPageHeaders();
     paginateExam(); // chrome height changed -> re-fit the blocks
 }
 
-// The header that appears at the top of every question page (2, 3, 4...).
-function examPageHeaderHTML() {
-    var cls = document.getElementById("examClass").value || "\u2026";
-    var subject = document.getElementById("examSubject").value || "\u2026";
-    var term = document.getElementById("examTerm").value || "\u2026";
-    var session = document.getElementById("examSession").value || "\u2026";
-
-    return '<div class="eph-names">' +
-        '<span class="eph-name-ar" lang="ar">مَدْرَسَةُ أَمِينِ اللهِ لِلْعُلُومِ الْعَرَبِيَّةِ الْإِسْلَامِيَّةِ</span>' +
-        '<span class="eph-name-en">AMEENULLAH SCHOOL OF ARABIC AND ISLAMIC STUDIES</span>' +
-        '</div>' +
-        '<div class="eph-line" dir="rtl">' +
-        '<span><b>الْفَصْلُ:</b> ' + cls + '</span>' +
-        '<span><b>الْمَادَّةُ:</b> ' + subject + '</span>' +
-        '<span><b>الْفَتْرَةُ:</b> ' + term + '</span>' +
-        '<span><b>الْعَامُ:</b> ' + session + '</span>' +
-        '</div>';
-}
-
+// CHANGED (school paper design): the real school exam paper has NO header
+// on the question pages - page 1 is a pure cover and pages 2+ are plain
+// question pages (verified against the school's own printed papers).
+// examPageHeaderHTML() was removed; refreshAllPageHeaders() is kept (same
+// name, called from several places) and now only refreshes the wizard.
 function refreshAllPageHeaders() {
-    var html = examPageHeaderHTML();
-    document.querySelectorAll(".exam-page-header").forEach(function (el) {
-        el.innerHTML = html;
-    });
     updateWizardSummary();
 }
 
@@ -264,9 +254,11 @@ function refreshAllPageHeaders() {
    BETWEEN pages, never re-created, so the text cursor is preserved.
 ========================================================================== */
 
-// Usable height of one A4 page: 297mm minus the page's vertical padding
-// (20mm top + 20mm bottom, matching .exam-page padding).
-const PAGE_CONTENT_MM = 257;
+// Usable height of one A4 question page: 297mm minus the page's vertical
+// padding. CHANGED (school paper design): body pages now use the paper's
+// real margins (12mm top + 12mm bottom), so a page holds ~10 questions,
+// exactly like the school's printed papers.
+const PAGE_CONTENT_MM = 273;
 
 // How tall (px) may the content zone of THIS page be on the current screen?
 function budgetFor(page) {
@@ -297,27 +289,26 @@ function placeBlock(block, page) {
     }
 }
 
-// Build one more question page (with its automatic header).
+// Build one more question page - a plain content zone only, no header
+// (CHANGED (school paper design): question pages carry no school header).
 function appendBodyPage(flow) {
     const page = document.createElement("div");
     page.className = "exam-page body-page";
     const spacing = document.getElementById("spacingSelect").value;
-    page.innerHTML =
-        '<div class="exam-page-header" contenteditable="false"></div>' +
-        `<div class="page-content exam-body spacing-${spacing}"></div>`;
+    page.innerHTML = `<div class="page-content exam-body spacing-${spacing}"></div>`;
     flow.appendChild(page);
     return page;
 }
 
 // Make sure the structure is sane before laying out.
+// CHANGED (school paper design): page 1 is a PURE cover (no .page-content
+// on purpose) and body pages have no .exam-page-header. Strip any legacy
+// headers left over from old saved exams / old markup, and guarantee every
+// body page has exactly one content zone - but never add one to the cover.
 function ensureExamStructure(flow) {
+    flow.querySelectorAll(".exam-page-header").forEach(function (h) { h.remove(); });
     flow.querySelectorAll(".exam-page").forEach(function (page) {
-        if (!page.querySelector(".exam-page-header") && page.classList.contains("body-page")) {
-            const header = document.createElement("div");
-            header.className = "exam-page-header";
-            header.contentEditable = "false";
-            page.insertBefore(header, page.firstChild);
-        }
+        if (page.classList.contains("page-one")) return; // cover stays pure
         if (!page.querySelector(".page-content")) {
             const content = document.createElement("div");
             const spacing = document.getElementById("spacingSelect").value;
@@ -346,7 +337,14 @@ function paginateExam() {
         }
     });
 
-    let pageIdx = 0;
+    // CHANGED (school paper design): page 1 is a pure cover with no content
+    // zone, so placement starts on the FIRST page that has one; if none
+    // exists yet (e.g. brand-new exam), a body page is created.
+    let pageIdx = pages.findIndex(function (p) { return !!p.querySelector(".page-content"); });
+    if (pageIdx < 0) {
+        pages.push(appendBodyPage(flow));
+        pageIdx = pages.length - 1;
+    }
     let remaining = budgetFor(pages[pageIdx]);
 
     blocks.forEach(function (block) {
@@ -407,6 +405,11 @@ function paginateExam() {
             break;
         }
     }
+
+    // CHANGED (school paper design): the cover has no content zone, so the
+    // cleanup above could leave the paper with NO editable page at all -
+    // always keep at least one body page for the teacher to type into.
+    if (!flow.querySelector(".page-content")) appendBodyPage(flow);
 
     refreshAllPageHeaders();
     checkAllPagesOverflow();
@@ -482,7 +485,13 @@ function insertPageBreak() {
     }
 
     if (!inserted) {
-        const contents = flow.querySelectorAll(".page-content");
+        // FIX (school paper design): cover has no content zone - make sure
+        // one exists before appending the marker.
+        let contents = flow.querySelectorAll(".page-content");
+        if (!contents.length) {
+            appendBodyPage(flow);
+            contents = flow.querySelectorAll(".page-content");
+        }
         contents[contents.length - 1].appendChild(marker);
     }
 
@@ -934,11 +943,14 @@ function loadExam(id) {
 function resetFlow(flowHtml) {
     const flow = document.getElementById("examFlow");
 
-    // Drop every page except the letterhead (page one).
+    // Drop every page except the cover (page one).
     flow.querySelectorAll(".exam-page:not(.page-one)").forEach(p => p.remove());
 
-    const pageOneContent = document.querySelector(".page-one .page-content");
-    pageOneContent.innerHTML = flowHtml && flowHtml.trim() !== "" ? flowHtml : "<p><br></p>";
+    // CHANGED (school paper design): the cover is pure chrome now, so the
+    // loaded questions go onto a fresh body page, never onto page 1.
+    const firstBody = appendBodyPage(flow);
+    firstBody.querySelector(".page-content").innerHTML =
+        flowHtml && flowHtml.trim() !== "" ? flowHtml : "<p><br></p>";
 
     paginateExam();
 }

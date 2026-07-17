@@ -219,42 +219,51 @@
 
     <div class="exam-pages exam-flow" id="examFlow" contenteditable="true" dir="rtl">
 
-      <!-- PAGE 1: compact letterhead + exam info + instructions,
-           then the questions START on the same page (request #1). -->
+      <!-- PAGE 1: THE COVER PAGE.
+           CHANGED (school paper design): rebuilt as an exact on-screen
+           replica of the school's own printed exam papers - bismillah
+           banner, logo, school names, thick black rule, address/tel/e-mail,
+           motto row, exam period, name/subject/admission/duration/class
+           lines and the numbered instructions. It is PURE chrome: NO
+           questions are typed on page 1; questions start on page 2. -->
       <div class="exam-page page-one" id="coverPage">
         <div class="cover-header" contenteditable="false">
-          <p class="bismillah" lang="ar">بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ</p>
+          <img src="images/bismillah.png" class="cover-bismillah" alt="بسم الله الرحمن الرحيم">
 
           <img src="images/LOGO.JPG" class="cover-logo" alt="School Logo">
 
           <h1 class="cover-arabic-name" lang="ar">مَدْرَسَةُ أَمِينِ اللهِ لِلْعُلُومِ الْعَرَبِيَّةِ الْإِسْلَامِيَّةِ</h1>
-          <h2 class="cover-english-name">AMEENULLAH SCHOOL OF ARABIC AND ISLAMIC STUDIES</h2>
+          <h2 class="cover-english-name" dir="ltr">AMEENULLAH SCHOOL OF ARABIC AND ISLAMIC STUDIES</h2>
 
           <div class="cover-divider"></div>
 
-          <p class="cover-address">3, Temidire Street off Ondo Benin Road, Ijebu-Ode, Ogun State, Nigeria. &nbsp; Tel: 08062445559, 08058306889.</p>
-          <p class="cover-contact">E-mail: <a href="mailto:madrasatuameenillah22@gmail.com">madrasatuameenillah22@gmail.com</a> &nbsp;·&nbsp; <span lang="ar">الشِّعَارُ: الْعِلْمُ وَالْعِبَادَةُ</span></p>
+          <p class="cover-address" dir="ltr">3, Temidire Street off Ondo Benin Road, Ijebu-Ode, Ogun State, Nigeria.</p>
+          <p class="cover-tel" dir="ltr">Tel: 08062445559, 08058306889.</p>
+          <p class="cover-email" dir="ltr">E-mail: <a href="mailto:madrasatuameenillah22@gmail.com">madrasatuameenillah22@gmail.com</a></p>
+          <p class="cover-motto"><span class="motto-ar" lang="ar">الشِّعَارُ: الْعِلْمُ وَالْعِبَادَةُ.</span><span class="motto-en" dir="ltr">MOTTO: KNOWLEDGE AND WORSHIP.</span></p>
         </div>
 
         <div class="cover-exam-details" contenteditable="false">
-          <p class="cover-exam-period" id="coverExamPeriod" lang="ar">امْتِحَانُ الْفَتْرَةِ ... لِلْعَامِ الدِّرَاسِيِّ ....\....</p>
+          <p class="cover-exam-period" id="coverExamPeriod" lang="ar">اِمْتِحَانُ الْفَتْرَةِ ... لِلْعَامِ الدِّرَاسِيِّ ....\....</p>
 
           <table class="cover-info-table">
             <tr>
-              <td class="label">الاِسْمُ:</td>
+              <td class="label">الْإِسْـــمُ:</td>
               <td class="blank-line" colspan="3"></td>
             </tr>
             <tr>
-              <td class="label">الْمَادَّةُ:</td>
+              <td class="label">الْمَــــــادَّةُ:</td>
               <td class="value" id="coverSubject">-</td>
               <td class="label">رَقْمُ الْقَبُولِ:</td>
               <td class="blank-line-short"></td>
             </tr>
             <tr>
-              <td class="label">الْمُدَّةُ:</td>
-              <td class="value" id="coverDuration">ساعة واحدة</td>
+              <td class="label">الْمُـــــدَّةُ:</td>
+              <td class="value" id="coverDuration" colspan="3">سَاعَةٌ وَاحِدَةٌ.</td>
+            </tr>
+            <tr>
               <td class="label">الْفَصْلُ:</td>
-              <td class="value" id="coverClass">-</td>
+              <td class="value" id="coverClass" colspan="3">-</td>
             </tr>
           </table>
         </div>
@@ -265,26 +274,24 @@
             <li>لَا تَفْتَحْ حَتَّى تُؤْمَرَ بِذَلِكَ.</li>
             <li>لَا تُضَيِّعْ هَذِهِ وَرَقَةَ السُّؤَالِ.</li>
             <li>اِسْتَعِنْ بِاللَّهِ.</li>
-            <li>ثُمَّ ابْدَأْ.</li>
+            <li>ثُمَّ ابْدَأَ.</li>
           </ol>
         </div>
 
         <div class="cover-footer" contenteditable="false">
           <p class="cover-wish" lang="ar">مع تمنياتي لكم بالنجاح.</p>
-          <p class="cover-code" id="coverCode">AMSAIS@2026/1447</p>
-        </div>
-
-        <!-- Questions flow starts right here on Page 1 (request #1) -->
-        <div class="page-content exam-body spacing-normal">
-          <p>ابدأ كتابة الامتحان هنا...</p>
+          <p class="cover-code" id="coverCode" dir="ltr">AMSAIS@2026/1447</p>
         </div>
       </div>
 
-      <!-- PAGE 2 (auto-managed): created with an empty content zone; the
-           engine removes it until the writing actually reaches it. -->
+      <!-- PAGE 2 (auto-managed): a PLAIN question page - no school header,
+           exactly like the school's real papers (CHANGED (school paper
+           design)). The engine adds/removes these automatically as the
+           teacher writes; a question is never split across two pages. -->
       <div class="exam-page body-page">
-        <div class="exam-page-header" contenteditable="false"></div>
-        <div class="page-content exam-body spacing-normal"></div>
+        <div class="page-content exam-body spacing-normal">
+          <p>ابدأ كتابة الامتحان هنا...</p>
+        </div>
       </div>
 
     </div>

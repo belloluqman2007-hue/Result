@@ -4,6 +4,28 @@
 
 ---
 
+# Fix Pack 7 — 17 July 2026 (exam paper rebuilt to the school's real design)
+
+The Create Exam page now produces papers that match the school's own
+printed exam papers one-for-one (measured from a real AMSAIS exam PDF):
+page 1 is a PURE cover page and pages 2+ are plain question pages.
+Everything is additive/backward compatible — no route, table or column
+was touched; the result module was NOT touched.
+
+| File | Change |
+|---|---|
+| create-exam.html | CHANGED (school paper design): page 1 rebuilt as the exact cover — bismillah banner image, full logo with motto banner, school names, thick black bar, address/tel/e-mail lines, motto row (English left, Arabic right), exam period, name/subject/admission-no/duration/class lines, numbered instructions, "AMSAIS@2026/1447" footer. NO questions on page 1 any more. Latin lines got dir="ltr" so "3," and full stops never jump sides. |
+| js/exam.js | CHANGED: cover generator now writes the session as "2026\1447" (Hijri = end year - 579) and footer "AMSAIS@2026/1447"; subject/class/duration values end with "." like the paper. CHANGED: question pages no longer get a school header (the real papers have none); legacy headers from old exams are stripped automatically. FIX: pagination starts on the first question page (the cover is chrome- only now) and always keeps at least one question page. Body page margins 12mm so ~10 questions fill a page like the real papers. |
+| css/exam.css | CHANGED: cover styled in Sakkal Majalla Bold (ships with Windows/Office — prints EXACTLY like the school papers; Amiri fallback on phones) + Times New Roman Bold for English lines; questions 32pt bold with Arabic-Indic numerals (١. ٢. ٣.); spacing selector still works; printed cover fills the sheet with the footer pinned to the bottom. FIX: two-class ".exam-page.page-one" selector so the paper margins are not silently overridden by the generic page rule. |
+| css/modern-ui.css | CHANGED: the exam cover info table is excluded from the modern table skin (keeps plain white rows with black writing lines). |
+| images/bismillah.png | NEW: the bismillah banner taken from the school's own exam paper. |
+
+Verified: exact A4 cover with footer at 287mm (paper: 286mm), all lines
+fit on one line, heading + 10 questions fill page 2, auto-pagination
+(never-split rule) untouched.
+
+---
+
 # Improvement Pack 5 — 17 July 2026 (the "polished prompt" / Word-like engine)
 
 All 10 points delivered. Still additive-first: no route was renamed, no

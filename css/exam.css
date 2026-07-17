@@ -312,42 +312,14 @@ body{
 }
 
 /* ==========================================================
-   NEW (automatic header on every question page - request #6):
-   school name + Class / Subject / Term / Session. It sits above
-   the editable body and cannot itself be edited.
+   CHANGED (school paper design): question pages on the school's real
+   exam papers carry NO header at all - page 1 is a pure cover and
+   pages 2+ are plain question pages. exam.js no longer creates these
+   header blocks (and strips legacy ones); this rule hides any stray
+   leftover from very old markup. The .eph-* rules were removed.
 ========================================================== */
 .exam-page-header{
-  text-align:center;
-  border-bottom:2px solid #000;
-  padding-bottom:8px;
-  margin-bottom:14px;
-  user-select:text;
-}
-.eph-names{ line-height:1.25; }
-.eph-name-ar{
-  display:block;
-  font-family:'Amiri', serif;
-  font-size:18px;
-  font-weight:700;
-  letter-spacing:normal; /* Arabic must join naturally */
-}
-.eph-name-en{
-  display:block;
-  font-family:'Cairo', sans-serif;
-  font-size:10px;
-  font-weight:800;
-  letter-spacing:1.2px;
-}
-.eph-line{
-  display:flex;
-  justify-content:center;
-  flex-wrap:wrap;
-  gap:6px 18px;
-  margin-top:6px;
-  font-family:'Amiri', serif;
-  font-size:15px;
-  font-weight:700;
-  letter-spacing:normal;
+  display:none !important;
 }
 
 /* ==========================================================
@@ -370,49 +342,179 @@ body{
   outline:none;
 }
 
-/* ----- Page 1: compact letterhead + exam info + instructions,
-   then the questions start on the SAME page (request #1). ----- */
-.page-one{
+/* ==========================================================================
+   CHANGED (school paper design): PAGE 1 = PURE COVER PAGE, rebuilt to
+   match the school's own printed exam papers one-for-one (measured from
+   a real AMSAIS exam PDF):
+   - Sakkal Majalla Bold for all Arabic (ships with Windows/Office, so it
+     prints EXACTLY like the school's papers; phones fall back to Amiri).
+   - Times New Roman Bold for the English lines.
+   - Arabic name 36pt, info rows 20pt, thick full-width black rule,
+     generous line spacing, footer "AMSAIS@2026/1447".
+   - NO border frame, NO questions on page 1.
+   The old compact letterhead and the double border frame were removed.
+========================================================================== */
+/* NOTE: this needs the two-class selector - plain ".page-one" would lose
+   to the later ".exam-page{padding:18mm 16mm}" rule (equal specificity,
+   later wins), which silently broke the paper margins. */
+.exam-page.page-one{
   position:relative;
-  padding:20mm 18mm;
+  display:flex;
+  flex-direction:column;
+  padding:2mm 22mm 10mm 8mm; /* top / right / bottom / left - paper margins */
 }
-.page-one::before{
-  content:"";
-  position:absolute;
-  top:7mm;
-  left:7mm;
-  right:7mm;
-  bottom:7mm;
-  border:3px double #000;
-  border-radius:5px;
-  pointer-events:none;
+.page-one .cover-header{
+  text-align:center;
 }
-.page-one .bismillah{ font-size:15px; margin-bottom:6px; }
-.page-one .cover-logo{ width:64px; height:64px; margin-bottom:6px; }
-.page-one .cover-arabic-name{ font-size:23px; margin-bottom:2px; }
-.page-one .cover-english-name{ font-size:13px; margin-bottom:6px; }
-.page-one .cover-divider{ height:3px; margin:6px auto 8px; }
-.page-one .cover-address,
-.page-one .cover-contact{ font-size:12px; font-weight:600; }
-.page-one .cover-exam-period{ font-size:17px; margin:8px 0 10px; }
-.page-one .cover-info-table{ margin-bottom:12px; }
-.page-one .cover-info-table td{ font-size:15px; line-height:2; padding:4px; }
-.page-one .cover-instructions{ margin-bottom:8px; }
-.page-one .cover-instructions ol{ font-size:14px; line-height:1.9; }
-.page-one .instructions-title{ font-size:15px; margin-bottom:4px; }
-.page-one .cover-footer{
+.page-one .cover-bismillah{
+  display:block;
+  width:42mm;
+  margin:0 auto 3mm;
+}
+.page-one .cover-logo{
+  display:block;
+  width:40mm;
+  height:auto;
+  object-fit:contain;
+  border-radius:0;   /* the real crest incl. the motto banner shows fully */
+  margin:0 auto 2mm;
+}
+.page-one .cover-arabic-name{
+  font-family:'Sakkal Majalla','Traditional Arabic','Amiri',serif;
+  font-size:36pt;
+  font-weight:700;
+  line-height:1.25;
+  letter-spacing:normal;
+  text-align:center;
+  margin:1mm 0 2mm;
+}
+.page-one .cover-english-name{
+  font-family:'Times New Roman',Times,serif;
+  font-size:16pt;
+  font-weight:700;
+  letter-spacing:.4px;
+  line-height:1.3;
+  text-align:center;
+  margin:0 0 5mm;
+}
+/* The thick solid black bar under the school names (bleeds past the text
+   margins to the rule's real position on the paper). */
+.page-one .cover-divider{
+  height:5mm;
+  width:auto;
+  background:#000;
+  margin:0 -19.2mm 6mm -3.8mm;
+}
+.page-one .cover-address{
+  font-family:'Times New Roman',Times,serif;
+  font-size:16pt;
+  font-weight:700;
+  line-height:1.3;
+  text-align:center;
+  margin:0 0 3mm;
+}
+.page-one .cover-tel,
+.page-one .cover-email{
+  font-family:'Times New Roman',Times,serif;
+  font-size:20pt;
+  font-weight:700;
+  line-height:1.25;
+  text-align:center;
+  margin:0 0 1mm;
+}
+.page-one .cover-email a{
+  color:#0563C1;          /* Word-style hyperlink, exactly like the paper */
+  text-decoration:underline;
+}
+.page-one .cover-motto{
   display:flex;
   justify-content:space-between;
   align-items:baseline;
+  font-family:'Times New Roman',Times,serif;
+  font-size:18pt;   /* the paper's motto line mixes 18-20pt - 18 keeps it on one line */
+  font-weight:700;
+  line-height:1.25;
+  margin:0 0 4mm;
 }
-.page-one .cover-wish{ margin-top:6px; }
-.page-one .cover-code{ margin-top:0; }
-/* The question section is visually separated under the letterhead */
-.page-one .page-content{
-  border-top:2px solid #000;
-  margin-top:10px;
-  padding-top:10px;
+.page-one .cover-motto .motto-ar{
+  font-family:'Sakkal Majalla','Traditional Arabic','Amiri',serif;
 }
+.page-one .cover-exam-period{
+  font-family:'Sakkal Majalla','Traditional Arabic','Amiri',serif;
+  font-size:20pt;
+  font-weight:700;
+  line-height:1.35;
+  text-align:center;
+  margin:0 0 5mm;
+}
+.page-one .cover-info-table{
+  margin:0 0 1mm;
+}
+/* FIX (school paper design): neutralize the app-wide zebra striping from
+   style.css (tr:nth-child(even)/tr:hover) on the cover table only - the
+   printed paper has plain white rows. */
+.page-one .cover-info-table tr:nth-child(even),
+.page-one .cover-info-table tr:hover{
+  background:transparent;
+}
+.page-one .cover-info-table td{
+  font-family:'Sakkal Majalla','Traditional Arabic','Amiri',serif;
+  font-size:20pt;
+  font-weight:700;
+  line-height:1.55;
+  padding:.5mm 2px;
+  text-align:right;
+  border:none;
+}
+.page-one .cover-info-table .blank-line{
+  border-bottom:2px solid #000;
+}
+.page-one .cover-info-table .blank-line-short{
+  border-bottom:2px solid #000;
+  width:45mm;
+}
+.page-one .cover-instructions{
+  font-family:'Sakkal Majalla','Traditional Arabic','Amiri',serif;
+  margin:0;
+}
+.page-one .instructions-title{
+  font-size:20pt;
+  font-weight:700;
+  line-height:1.35;
+  margin:0 0 .5mm;
+}
+.page-one .cover-instructions ol{
+  list-style-type:decimal;   /* the paper numbers the rules 1. 2. 3. 4. */
+  padding-inline-start:1.4em;
+  margin:0;
+  font-size:20pt;
+  font-weight:700;
+  line-height:1.58;
+}
+/* Footer pinned to the bottom of the sheet like the real paper:
+   tiny Arabic wish at the left edge, bold code centred. */
+.page-one .cover-footer{
+  margin-top:auto;
+}
+.page-one .cover-wish{
+  font-family:'Sakkal Majalla','Traditional Arabic','Amiri',serif;
+  font-size:10pt;
+  font-weight:700;
+  line-height:1.2;
+  text-align:left;
+  margin:0;
+}
+.page-one .cover-code{
+  font-family:'Sakkal Majalla','Times New Roman',serif;
+  font-size:16pt;
+  font-weight:700;
+  line-height:1.3;
+  color:#000;
+  text-align:center;
+  margin:2mm 0 0;
+}
+/* Page 1 now has NO question area - questions live on page 2 and beyond,
+   exactly like the school's printed papers. */
 
 /* ----- Word-style forced page break marker (screen only) ----- */
 .manual-page-break{
@@ -701,15 +803,29 @@ body{
 
 /* ===== Body pages ===== */
 .body-page{
-  padding:20mm 18mm;
+  padding:12mm 18mm; /* CHANGED (school paper design): matches the paper's margins */
 }
 
+/* CHANGED (school paper design): the questions are set in Sakkal Majalla
+   Bold at 32pt with wide line spacing, exactly like the school's printed
+   exam papers (Sakkal Majalla is part of Windows/Office, so the teacher's
+   laptop prints identically; phones fall back to Amiri). Numbered lists
+   use Arabic-Indic numerals (١. ٢. ٣.) like the real papers. */
 .exam-body{
   min-height:250mm;
   outline:none;
-  font-family:'Amiri', 'Cairo', serif;
-  font-size:15px;
-  line-height:1.9;
+  font-family:'Sakkal Majalla','Traditional Arabic','Amiri','Cairo',serif;
+  font-weight:700;
+  font-size:32pt;
+  line-height:2;
+}
+
+.exam-body ol{
+  list-style-type:arabic-indic; /* ١. ٢. ٣. like the school's papers */
+}
+.exam-body ol,
+.exam-body ul{
+  padding-inline-start:1.3em;
 }
 
 .exam-body p,
@@ -717,27 +833,29 @@ body{
   margin-bottom:10px;
 }
 
+/* The spacing selector still works - every step stays in the same
+   paper style, only the density changes. */
 .exam-body.spacing-compact{
-  line-height:1.4;
-  font-size:14px;
+  line-height:1.6;
+  font-size:26pt;
 }
 .exam-body.spacing-compact p,
 .exam-body.spacing-compact li{
-  margin-bottom:4px;
+  margin-bottom:6px;
 }
 
 .exam-body.spacing-normal{
-  line-height:1.9;
-  font-size:15px;
+  line-height:2;      /* 67pt per question - the paper's exact pitch */
+  font-size:32pt;
 }
 .exam-body.spacing-normal p,
 .exam-body.spacing-normal li{
-  margin-bottom:10px;
+  margin-bottom:4px;
 }
 
 .exam-body.spacing-relaxed{
-  line-height:2.4;
-  font-size:16px;
+  line-height:2.6;
+  font-size:34pt;
 }
 .exam-body.spacing-relaxed p,
 .exam-body.spacing-relaxed li{
@@ -745,8 +863,8 @@ body{
 }
 
 .exam-body.spacing-spacious{
-  line-height:3.2;
-  font-size:17px;
+  line-height:3.1;
+  font-size:36pt;
 }
 .exam-body.spacing-spacious p,
 .exam-body.spacing-spacious li{
@@ -884,6 +1002,17 @@ body{
     break-after:auto;
   }
 
+  /* CHANGED (school paper design): the printed cover keeps its flex
+     layout and fills the sheet, so "AMSAIS@2026/1447" sits at the very
+     bottom of page 1 exactly like the school's real papers. 296mm stays
+     a hair under the 297mm sheet, so no blank page ever spills. */
+  .exam-page.page-one{
+    display:flex !important;
+    flex-direction:column;
+    min-height:296mm !important;
+    height:296mm !important;
+  }
+
   .load-panel-overlay{
     display:none !important;
   }
@@ -952,9 +1081,34 @@ body{
     padding:7% 6%;   /* same proportions as the A4 print margins */
   }
 
-  .exam-page-header .eph-line{ font-size:13px; gap:4px 10px; }
-  .eph-name-ar{ font-size:15px; }
-  .eph-name-en{ font-size:8.5px; }
+  /* CHANGED (school paper design): question pages have no header any
+     more, so the old .eph-* mobile rules were removed. Instead, the
+     cover and question fonts scale DOWN on small screens by roughly the
+     same factor the page itself shrinks (a phone is ~half the width of
+     an A4 page) - the on-screen look stays proportional to the printout.
+     Printing is NOT affected by any of this. */
+
+  .page-one .cover-bismillah{ width:22mm; }
+  .page-one .cover-logo{ width:21mm; }
+  .page-one .cover-divider{ height:2.6mm; }
+  .page-one .cover-arabic-name{ font-size:19pt; }
+  .page-one .cover-english-name{ font-size:9pt; }
+  .page-one .cover-address{ font-size:9pt; }
+  .page-one .cover-tel,
+  .page-one .cover-email{ font-size:11pt; }
+  .page-one .cover-motto{ font-size:10pt; }
+  .page-one .cover-exam-period{ font-size:11pt; }
+  .page-one .cover-info-table td{ font-size:11pt; }
+  .page-one .cover-info-table .blank-line-short{ width:24mm; }
+  .page-one .instructions-title,
+  .page-one .cover-instructions ol{ font-size:11pt; }
+  .page-one .cover-wish{ font-size:6pt; }
+  .page-one .cover-code{ font-size:9pt; }
+
+  .exam-body.spacing-compact{ font-size:14pt; }
+  .exam-body.spacing-normal{ font-size:17pt; }
+  .exam-body.spacing-relaxed{ font-size:19pt; }
+  .exam-body.spacing-spacious{ font-size:20pt; }
 
   .exam-next-page-wrap{ padding:0 10px 90px; } /* room for the floating button */
   .exam-next-page-wrap button{ width:100%; }
