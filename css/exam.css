@@ -987,6 +987,33 @@ body{
   z-index:100;
 }
 
+/* NEW (pack 18): the "open at Step 1 or Step 2?" chooser sits on top of
+   the saved-exams list and reuses its theme. */
+.load-step-overlay{
+  z-index:120;
+}
+.load-step-panel{
+  width:420px;
+  text-align:center;
+}
+.load-step-panel .load-step-name{
+  color:#1C5A42;
+  font-weight:700;
+  margin:2px 0 18px;
+  word-break:break-word;
+}
+.load-step-actions{
+  display:flex;
+  gap:12px;
+  justify-content:center;
+  flex-wrap:wrap;
+  margin-bottom:18px;
+}
+.load-step-actions button{
+  flex:1;
+  min-width:150px;
+}
+
 .load-panel{
   background:#fff;
   border-radius:8px;

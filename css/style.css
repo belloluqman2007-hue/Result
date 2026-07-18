@@ -933,7 +933,13 @@ nav a{
   /* Hide every top-level child of body except the report itself.
      display:none removes it from layout entirely, unlike visibility:hidden,
      which still reserves blank space where the element used to be. */
-  body > *:not(#reportContainer){
+  /* FIX (pack 18): this result-print guard used to hide EVERY body child that
+     was not #reportContainer - including .exam-main on create-exam.html (this
+     stylesheet is also loaded there). The exam page prints via window.print()
+     too, so its pages vanished / came out second-page-less in Chrome's print
+     dialog. The exam editor's <main> now carries a .no-result-print marker so
+     this rule can no longer touch it. */
+  body > *:not(#reportContainer):not(.no-result-print){
     display:none !important;
   }
 

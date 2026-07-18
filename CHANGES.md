@@ -628,3 +628,24 @@ and every staff query: completely untouched.
 Verified in a real browser + live DB: multi-exam booklet renders uniform & readable (screenshots), saved exam lands on Step 2, Word/PDF downloads fire, cover header has air, calendar PDF fills the whole page, compact view hides the letterhead, receipt upload/portal visibility/alerts/routes all work, register auto-loads with the duplicate-date warning, student history + PDF verified, and the settings INSERT now succeeds on the live database.
 
 Result calculations, grading, positions, report card generation, printing and every staff result query: completely untouched.
+
+---
+
+## PACK 18 (2026-07-18) - owner requests
+
+**"Remove the school calendar in the admin dashboard"** /
+**"About the exam let me be able to decide either to go to step 1 or 2"** /
+**"The font size is not working for the first page if written exam and the second is not displaying on print"**
+
+| File | What happened |
+|---|---|
+| `teacher-dashboard.html` | REMOVED (owner request): the "School Calendar" card (pack 16 amsPubCalCard) and its four script includes (html2canvas / jsPDF / calendar-render / teacher-calendar - nothing else on the page used them). The calendar itself is untouched: it still lives in Madrasah Calendar studio and the parent portal keeps its own view + PDF. Nav link stays. |
+| `css/style.css` | FIX (print bug - real root cause): the result-module print guard `body > *:not(#reportContainer){display:none !important}` also fires on create-exam.html (this stylesheet loads there too) and HID the whole exam editor in Chrome's print dialog, so later exam pages printed blank/missing. The guard now skips anything marked `.no-result-print`. Result-card printing itself is byte-for-byte the same rule as before. |
+| `create-exam.html` | The exam editor <main> now carries the `.no-result-print` marker (protects it from the result print guard above). NEW: a small chooser overlay ("Open saved exam" -> Step 1 - Details / Step 2 - Write Questions / Cancel). |
+| `css/exam.css` | Styles for the new step chooser (stacks above the saved-exams list, same theme). |
+| `js/exam.js` | NEW: opening a saved exam first asks where to go - Step 1 or Step 2 (loadExam now takes a step; untouched callers still default to Step 2). FIX (font picker): paragraphs sized earlier via the old toolbar (<font size> tags) or paste kept locked inline sizes and ignored the exam-wide Font Size - those locks are now stripped when a size is picked, so the chosen size really wins on every question page. FIX: saved Term/Session/Class are injected as options the same way pack 17 did for Subject, so choosing Step 2 can never bounce back to Step 1 on old saved exams. |
+| `sw.js` | Cache v6. |
+
+Verified in a real browser: print dialog now shows the exam pages (2-page written exam -> both pages print, cover intact), font-size picker changes every paragraph incl. previously-locked ones, chooser opens with the exam name and both steps land correctly, Cancel works, dashboard renders clean without the calendar card.
+
+Result calculations, grading, positions, report card generation, printing and every staff result query: completely untouched.

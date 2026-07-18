@@ -327,7 +327,10 @@
       </div>
   </template>
 
-  <main class="exam-main">
+  <!-- FIX (pack 18): .no-result-print marker keeps the result-module print
+       guard in css/style.css (which is also loaded on this page) from hiding
+       the exam editor when the user opens Chrome's print dialog. -->
+  <main class="exam-main no-result-print">
 
     <div class="exam-pages exam-flow" id="examFlow" contenteditable="true" dir="rtl">
 
@@ -359,6 +362,22 @@
     </div>
 
   </main>
+
+  <!-- NEW (pack 18 - owner: "let me be able to decide either to go to step
+       1 or 2"): when the Open button of a saved exam is clicked, this small
+       chooser asks where to open it - Step 1 (details) or Step 2 (writing).
+       It stacks on top of the saved-exams list. -->
+  <div id="loadStepOverlay" class="load-panel-overlay load-step-overlay" style="display:none;">
+    <div class="load-panel load-step-panel">
+      <h3>Open saved exam</h3>
+      <p id="loadStepExamName" class="load-step-name"></p>
+      <div class="load-step-actions">
+        <button type="button" id="loadStepBtn1">Step 1 &ndash; Details</button>
+        <button type="button" id="loadStepBtn2">Step 2 &ndash; Write Questions</button>
+      </div>
+      <button type="button" onclick="closeLoadStepPanel()" class="close-btn">Cancel</button>
+    </div>
+  </div>
 
   <!-- Load Saved Exam panel -->
   <div id="loadPanelOverlay" class="load-panel-overlay" style="display:none;">

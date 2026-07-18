@@ -111,6 +111,15 @@ function initExam() {
     const fontSelTools = document.getElementById("examFontSelectTools");
     function applyExamFontFrom(val, other) {
         document.querySelectorAll("#examFlow .exam-body").forEach(function (b) {
+            /* FIX (pack 18 - owner: "font size is not working for the first
+               page if written exam"): paragraphs/words sized earlier through
+               the legacy toolbar (which still emits <font size> tags) or by
+               paste kept their locked inline size and ignored this picker.
+               Unlock them first so the chosen exam-wide size really wins. */
+            b.querySelectorAll("font[size]").forEach(function (f) { f.removeAttribute("size"); });
+            b.querySelectorAll("[style]").forEach(function (el) {
+                if (el.style && el.style.fontSize) el.style.fontSize = "";
+            });
             b.style.fontSize = val + "pt";
         });
         if (other && other.value !== val) other.value = val;
@@ -1193,7 +1202,7 @@ function openLoadPanel() {
                 row.insertCell(3).textContent = exam.term;
                 row.insertCell(4).textContent = exam.session;
                 row.insertCell(5).innerHTML = `
-                    <button type="button" onclick="loadExam(${exam.id})">Open</button>
+                    <button type="button" onclick="askLoadExamStep(${exam.id}, this)">Open</button>
                     <button type="button" onclick="deleteExamFromPanel(${exam.id})" style="background:#8C3B2E; border-color:#8C3B2E; color:#fff;">Delete</button>
                 `;
             });
@@ -1210,7 +1219,41 @@ function closeLoadPanel() {
     document.getElementById("loadPanelOverlay").style.display = "none";
 }
 
-function loadExam(id) {
+/* NEW (pack 18 - owner request): opening a saved exam first ASKS where to
+   take the teacher - Step 1 (details) or Step 2 (writing). Until pack 17
+   a saved exam always jumped straight to Step 2. */
+let pendingLoadExamId = null;
+
+function askLoadExamStep(id, btn) {
+    pendingLoadExamId = id;
+    const row = btn && btn.closest ? btn.closest("tr") : null;
+    const name = row && row.cells && row.cells[0] ? row.cells[0].textContent : "";
+    document.getElementById("loadStepExamName").textContent = name;
+    const ovl = document.getElementById("loadStepOverlay");
+    const b1 = document.getElementById("loadStepBtn1");
+    const b2 = document.getElementById("loadStepBtn2");
+    b1.onclick = function () { chooseLoadExamStep(1); };
+    b2.onclick = function () { chooseLoadExamStep(2); };
+    ovl.style.display = "flex";
+}
+
+function closeLoadStepPanel() {
+    document.getElementById("loadStepOverlay").style.display = "none";
+    pendingLoadExamId = null;
+}
+
+function chooseLoadExamStep(step) {
+    const id = pendingLoadExamId;
+    document.getElementById("loadStepOverlay").style.display = "none";
+    pendingLoadExamId = null;
+    if (!id) return;
+    loadExam(id, step);
+}
+
+// CHANGED (pack 18): loadExam() now takes the wizard step to land on
+// (1 = details, 2 = writing). Plain loadExam(id) calls keep the old
+// straight-to-Step-2 behaviour (default = 2).
+function loadExam(id, gotoStep) {
     fetch(`/exam/${id}`)
         .then(response => response.json())
         .then(exam => {
@@ -1234,6 +1277,19 @@ function loadExam(id) {
                 }
                 subjectSelect.value = exam.subject;
             }
+
+            // FIX (pack 18): same trick for Term/Session (and Class) - an
+            // exam saved in an old session/term that is no longer in the
+            // static lists made the Step-2 gate fail and stranded the
+            // teacher back on Step 1. Keep saved values selectable.
+            [["examTerm", exam.term], ["examSession", exam.session], ["examClass", exam.class_name]].forEach(function (pair) {
+                const sel = document.getElementById(pair[0]);
+                const val = pair[1];
+                if (sel && val && !Array.from(sel.options).some(o => o.value === val)) {
+                    sel.innerHTML += `<option value="${val}">${val}</option>`;
+                }
+                if (sel && val) sel.value = val;
+            });
 
             fetch(`/subjects?class=${encodeURIComponent(exam.class_name)}`)
                 .then(response => response.json())
@@ -1282,7 +1338,9 @@ function loadExam(id) {
             // editing goes straight to Step 2 (the writing/editing tools),
             // not back to the details step. The wizard fields are already
             // filled from the saved record, so the step-2 gate passes.
-            examGotoStep(2);
+            // CHANGED (pack 18 - owner request): the chooser now decides -
+            // Step 1 (details) or Step 2 (writing). Default stays Step 2.
+            examGotoStep(gotoStep === 1 ? 1 : 2);
         })
         .catch(error => {
             console.log(error);
