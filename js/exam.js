@@ -510,11 +510,37 @@ function ensureExamStructure(flow) {
 
     flow.querySelectorAll(".exam-page").forEach(function (page) {
         if (page.classList.contains("page-one")) return; // cover stays pure
-        if (!page.querySelector(".page-content")) {
+        const contents = Array.from(page.querySelectorAll(".page-content"));
+        if (!contents.length) {
             const content = document.createElement("div");
             const spacing = document.getElementById("spacingSelect").value;
             content.className = `page-content exam-body spacing-${spacing}`;
             page.appendChild(content);
+        } else if (contents.length > 1) {
+            /* FIX (pack 19 - owner: "the second exam shows only two lines"):
+               some saved exams ended up with ONE body zone per typed line on
+               the same page. The paginator only reads the FIRST .page-content
+               of a page, so every extra zone (the rest of the questions) was
+               silently dropped from screen AND print - leaving intro + one
+               question. Merge all zones into the first one; untouched for
+               pages that already have a single zone. */
+            for (let i = 1; i < contents.length; i++) {
+                const empty = !contents[i].textContent.trim() && !contents[i].querySelector("img,table");
+                if (!empty) {
+                    // keep every merged zone on its OWN line: zones that hold
+                    // loose inline fragments (font/span without a block) are
+                    // wrapped in a block so lines can never glue together.
+                    const hasBlock = !!contents[i].querySelector("p,div,ol,ul,table,blockquote,h1,h2,h3,h4,h5,h6,li");
+                    if (hasBlock) {
+                        while (contents[i].firstChild) contents[0].appendChild(contents[i].firstChild);
+                    } else {
+                        const line = document.createElement("div");
+                        while (contents[i].firstChild) line.appendChild(contents[i].firstChild);
+                        contents[0].appendChild(line);
+                    }
+                }
+                contents[i].remove();
+            }
         }
     });
 }

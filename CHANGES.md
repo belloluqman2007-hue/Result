@@ -649,3 +649,16 @@ Result calculations, grading, positions, report card generation, printing and ev
 Verified in a real browser: print dialog now shows the exam pages (2-page written exam -> both pages print, cover intact), font-size picker changes every paragraph incl. previously-locked ones, chooser opens with the exam name and both steps land correctly, Cancel works, dashboard renders clean without the calendar card.
 
 Result calculations, grading, positions, report card generation, printing and every staff result query: completely untouched.
+
+---
+
+## PACK 19 (2026-07-18) - owner report
+
+**"If I write the first exam and second exam and more it will just display just two lines of all the questions except only the first question that will be okay"**
+
+| File | What happened |
+|---|---|
+| `js/exam.js` | FIX (root cause found on the owner's REAL saved exam, loaded straight from the live database and reproduced): that exam's second section was saved with ONE body zone per typed line (intro, question 1, question 2 ... each in its own .page-content). The paginator only reads the FIRST body zone of a page, so everything beyond it (the rest of the exam's questions) silently vanished from both the screen and the print/PDF - leaving exactly "intro + one question", i.e. the two lines the owner described. ensureExamStructure() now MERGES all extra body zones of a page into the first one, wrapping loose inline fragments in a block so separate lines never glue together, and skipping empty zones. Pages that already have a single zone are untouched. Verified: the owner's real two-exam booklet (Tajweed) now prints covers + ALL questions of BOTH exams on phone-sized app PDF; earlier multi-exam scenarios re-verified unchanged. |
+| `sw.js` | Cache v7. |
+
+Result calculations, grading, positions, report card generation, printing and every staff result query: completely untouched.

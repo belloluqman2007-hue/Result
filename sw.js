@@ -16,7 +16,7 @@
        route, query, or calculation. It is 100% additive.
    ==================================================================== */
 
-const CACHE_NAME = "ameenullah-shell-v6"; // FIX (pack 18): refresh for dashboard calendar removal + exam print/font/step-chooser fixes // FIX (pack 17): refresh for exam engine/calendar/receipts // FIX (pack 16): refresh for the staff calendar viewer // FIX (pack 15): refresh for portal/calendar/finance v2 // FIX (pack 13): force refresh of old cached assets
+const CACHE_NAME = "ameenullah-shell-v7"; // FIX (pack 19): multi-body merge for saved multi-exam booklets // FIX (pack 18): refresh for dashboard calendar removal + exam print/font/step-chooser fixes // FIX (pack 17): refresh for exam engine/calendar/receipts // FIX (pack 16): refresh for the staff calendar viewer // FIX (pack 15): refresh for portal/calendar/finance v2 // FIX (pack 13): force refresh of old cached assets
 
 // Files made available immediately (used by the offline page).
 const PRECACHE = ["offline.html", "images/LOGO.JPG", "icons/icon-192.png"];
