@@ -69,6 +69,81 @@
       </div>
     </section>
 
+    <!-- NEW (pack 15): My Fees & Balance - per fee TYPE, with printable
+         statement. "Let them access the amount they have paid and know
+         their balance and be able to print it." -->
+    <section class="pt-card portal-no-print" id="ptFeesCard" style="display:none;">
+      <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+        <h2 style="margin:0;">&#128184; My Fees &amp; Balance</h2>
+        <span style="margin-left:auto;">
+          <button class="mg-btn-light" id="ptStmtBtn" type="button">&#11015; Statement (PDF)</button>
+        </span>
+      </div>
+      <p class="pt-hint" id="ptFeesHint">Fees set by the school for your class.</p>
+      <div id="ptFees"></div>
+    </section>
+
+    <!-- NEW (pack 15): Where to pay - bank accounts the admin added. -->
+    <section class="pt-card portal-no-print" id="ptBankCard" style="display:none;">
+      <h2>&#127974; Where to Pay</h2>
+      <p class="pt-hint">Pay into ANY of these official school accounts, keep your proof, then upload it below.</p>
+      <div id="ptBanks"></div>
+    </section>
+
+    <!-- NEW (pack 15): upload payment proof (screenshot/PDF). -->
+    <section class="pt-card portal-no-print">
+      <h2>&#128395;&#65039; Send Payment Proof</h2>
+      <p class="pt-hint">After paying by transfer/bank, upload the screenshot or PDF of your payment here. The school reviews and confirms it.</p>
+      <form id="ptProofForm" class="pt-form-grid" enctype="multipart/form-data">
+        <div>
+          <label for="ptPayType">Fee Type</label>
+          <select id="ptPayType"></select>
+        </div>
+        <div>
+          <label for="ptPayTerm">Term</label>
+          <select id="ptPayTerm">
+            <option>1st Term</option><option>2nd Term</option><option>3rd Term</option>
+          </select>
+        </div>
+        <div>
+          <label for="ptPaySession">Session</label>
+          <select id="ptPaySession"></select>
+        </div>
+        <div>
+          <label for="ptPayAmount">Amount Paid (&#8358;)</label>
+          <input type="number" id="ptPayAmount" min="1" placeholder="e.g. 25000" required>
+        </div>
+        <div>
+          <label for="ptPayNote">Note (optional)</label>
+          <input type="text" id="ptPayNote" placeholder="e.g. transfer from GTBank">
+        </div>
+        <div>
+          <label for="ptEvidence">Screenshot / PDF of payment</label>
+          <input type="file" id="ptEvidence" accept="image/png, image/jpeg, application/pdf" required>
+        </div>
+        <button class="mg-btn" type="submit" id="ptProofBtn">&#9201; Send for Review</button>
+        <div class="pt-msg" id="ptProofMsg"></div>
+      </form>
+      <div id="ptMySubs" style="margin-top:16px;"></div>
+    </section>
+
+    <!-- NEW (pack 15): the madrasah calendar - appears ONLY when the
+         admin publishes it; disappears on unpublish/delete. -->
+    <section class="pt-card portal-no-print" id="ptCalCard" style="display:none;">
+      <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+        <h2 style="margin:0;">&#128197; School Calendar</h2>
+        <span style="margin-left:auto;">
+          <button class="mg-btn-light" id="ptCalPdfBtn" type="button">&#11015; Download PDF</button>
+        </span>
+      </div>
+      <p class="pt-hint" id="ptCalHint">The official term calendar from the school.</p>
+    </section>
+
+    <!-- NEW (pack 15): calendar sheet renders here (read-only). -->
+    <section class="pt-card portal-no-print" id="ptCalWrap" style="display:none; overflow-x:auto; padding:10px;">
+      <div id="ptCalHolder"></div>
+    </section>
+
     <!-- Report sheet viewer (design = the original/frozen report card) -->
     <section class="pt-card" id="ptReportCardWrap" style="display:none;">
       <div class="portal-no-print" style="display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-bottom:14px;">
@@ -83,6 +158,11 @@
 
   </main>
 
+  <!-- NEW (pack 15): PDF libs + fee statement maker + calendar renderer -->
+  <script src="js/vendor/html2canvas.min.js"></script>
+  <script src="js/vendor/jspdf.umd.min.js"></script>
+  <script src="js/ams-pdf.js"></script>
+  <script src="js/calendar-render.js"></script>
   <!-- EXISTING frozen report-card builder (unchanged file, reused) -->
   <script src="js/report-card.js"></script>
   <!-- NEW (pack 13): portal logic -->

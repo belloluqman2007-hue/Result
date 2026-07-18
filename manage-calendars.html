@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Madrasah Calendar | Ameenullah School of Arabic and Islamic Studies</title>
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/modern-ui.css">
+  <link rel="stylesheet" href="css/manage.css">
+  <!-- NEW (pack 13/15): shared manager styles + calendar sheet styles -->
+  <link rel="stylesheet" href="css/school.css">
+
+  <link rel="manifest" href="manifest.webmanifest">
+  <meta name="theme-color" content="#2f5021">
+  <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+</head>
+<body onload="checkAuth(); initCalendarPage();">
+  <!-- NEW (pack 15): create the termly madrasah calendar exactly like the
+       school paper, publish it to the parent portal, print/download it on
+       ONE page. Only ONE calendar can be published at a time. -->
+  <div class="mng-page">
+
+    <div class="mng-head">
+      <a class="mng-back" href="teacher-dashboard.html">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5"/><path d="m12 19-7-7 7-7"/></svg>
+        Dashboard
+      </a>
+      <div class="mng-head-text">
+        <h1>&#128197; Madrasah Calendar</h1>
+        <p>Create the term calendar on the official letterhead, print it on one page, or download it as PDF. <b>Publish</b> = parents see it on their portal; <b>Unpublish/Delete</b> = it disappears. Only one calendar can be live at a time.</p>
+      </div>
+    </div>
+
+    <!-- Saved calendars -->
+    <div class="mg-card" style="margin-bottom:18px;">
+      <h3>&#128193; Saved Calendars</h3>
+      <div class="mg-table-wrap">
+        <table class="mg-table" id="calListTable">
+          <thead><tr><th>Title</th><th>Last Updated</th><th>Status</th><th>Actions</th></tr></thead>
+          <tbody><tr><td colspan="4" style="text-align:center; color:#5B6B62;">Loading...</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Editor -->
+    <div class="mg-card" style="margin-bottom:18px;">
+      <h3>&#9999;&#65039; <span id="calEditorTitle">New Calendar</span></h3>
+      <input type="hidden" id="calId" value="">
+
+      <div class="mg-toolbar">
+        <div class="mg-field" style="flex:1 1 260px;">
+          <label for="calName">Calendar Name (for your list)</label>
+          <input type="text" id="calName" placeholder="e.g. First Term 2026/2027 Calendar">
+        </div>
+        <div class="mg-field">
+          <label for="calOurRef">Our Ref</label>
+          <input type="text" id="calOurRef" placeholder="optional">
+        </div>
+        <div class="mg-field">
+          <label for="calYourRef">Your Ref</label>
+          <input type="text" id="calYourRef" placeholder="optional">
+        </div>
+        <div class="mg-field">
+          <label for="calDocDate">Date</label>
+          <input type="text" id="calDocDate" placeholder="e.g. 02/05/2026">
+        </div>
+      </div>
+
+      <div class="mg-toolbar">
+        <div class="mg-field" style="flex:1 1 100%;">
+          <label for="calTitleLine">Title Line (under the refs)</label>
+          <input type="text" id="calTitleLine">
+        </div>
+        <div class="mg-field">
+          <label for="calWeeksCol">Activities Column Header</label>
+          <input type="text" id="calWeeksCol">
+        </div>
+      </div>
+
+      <h3 style="margin-top:6px;">&#128203; Activities (weeks)</h3>
+      <div class="mg-table-wrap" style="margin-bottom:10px;">
+        <table class="mg-table" id="calRowsTable">
+          <thead><tr><th style="width:70px;">Week</th><th>Activity</th><th style="width:130px;">Day(s)</th><th style="width:130px;">Date</th><th style="width:50px;"></th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <button class="mg-btn-light" type="button" onclick="calAddRow()">&#10133; Add Activity Row</button>
+
+      <div class="mg-toolbar" style="margin-top:14px;">
+        <div class="mg-field" style="flex:1 1 320px;"><label for="calNoteLabel">Bottom Note (e.g. new session begins)</label><input type="text" id="calNoteLabel"></div>
+        <div class="mg-field"><label for="calNoteDays">Note Day</label><input type="text" id="calNoteDays"></div>
+        <div class="mg-field"><label for="calNoteDate">Note Date</label><input type="text" id="calNoteDate"></div>
+      </div>
+
+      <h3 style="margin-top:6px;">&#9200; Lesson Times</h3>
+      <div class="mg-table-wrap" style="margin-bottom:10px;">
+        <table class="mg-table" id="calLessonsTable">
+          <thead><tr><th>Lesson</th><th style="width:220px;">Time</th><th style="width:50px;"></th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <div class="mg-toolbar">
+        <button class="mg-btn-light" type="button" onclick="calAddLesson()">&#10133; Add Lesson Row</button>
+        <div class="mg-field"><label for="calLessonsTitle">Lessons Title</label><input type="text" id="calLessonsTitle"></div>
+      </div>
+
+      <h3 style="margin-top:6px;">&#9998; Signatures</h3>
+      <div class="mg-toolbar">
+        <div class="mg-field"><label for="calSig1Title">Left Title</label><input type="text" id="calSig1Title"></div>
+        <div class="mg-field">
+          <label for="calSig1Role">Left Signature</label>
+          <select id="calSig1Role">
+            <option value="">(blank line)</option>
+            <option value="head_teacher">Saved Head Teacher signature</option>
+            <option value="principal">Saved Principal signature</option>
+            <option value="vice_principal">Saved Vice Principal signature</option>
+            <option value="class_teacher">Saved Class Teacher signature</option>
+          </select>
+        </div>
+        <div class="mg-field"><label for="calSig2Title">Right Title</label><input type="text" id="calSig2Title"></div>
+        <div class="mg-field">
+          <label for="calSig2Role">Right Signature</label>
+          <select id="calSig2Role">
+            <option value="">(blank line)</option>
+            <option value="principal">Saved Principal signature</option>
+            <option value="head_teacher">Saved Head Teacher signature</option>
+            <option value="vice_principal">Saved Vice Principal signature</option>
+            <option value="class_teacher">Saved Class Teacher signature</option>
+          </select>
+        </div>
+      </div>
+
+      <div style="display:flex; gap:10px; flex-wrap:wrap; margin-top:14px;">
+        <button class="mg-btn-light" type="button" onclick="calPreview()">&#128260; Update Preview</button>
+        <button class="mg-btn" type="button" onclick="calSave()">&#128190; Save Calendar</button>
+        <button class="mg-btn-light" type="button" onclick="window.print()">&#128424;&#65039; Print (1 page)</button>
+        <button class="mg-btn-light" type="button" onclick="calDownloadPDF()">&#11015; Download PDF</button>
+        <button class="mg-btn-light mg-btn-danger" type="button" onclick="calNew()">&#10010; New / Reset</button>
+      </div>
+      <div class="mg-msg" id="calMsg"></div>
+    </div>
+
+    <!-- Live A4 preview / print area -->
+    <h3 style="color:#0F3D2E;">&#128065;&#65039; Preview (this is EXACTLY what prints)</h3>
+    <div id="calPreviewWrap" style="overflow-x:auto; padding-bottom:20px;"></div>
+  </div>
+
+  <!-- PDF libraries (local vendor) -->
+  <script src="js/vendor/html2canvas.min.js"></script>
+  <script src="js/vendor/jspdf.umd.min.js"></script>
+  <script src="js/ui.js"></script>
+  <script src="js/app.js"></script>
+  <!-- NEW (pack 15): shared calendar sheet renderer + editor logic -->
+  <script src="js/calendar-render.js"></script>
+  <script src="js/calendar-editor.js"></script>
+  <script src="js/pwa.js" defer></script>
+</body>
+</html>

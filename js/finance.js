@@ -89,6 +89,7 @@ function initFinance() {
 
   document.getElementById("payStudent").addEventListener("change", loadStudentPayments);
   fillSessionList("finSessionList", "finSession"); // NEW (pack 14)
+  loadFeeTypes(); // NEW (pack 15)
 }
 
 /* ------------------------------ fee structure ------------------------ */
@@ -98,9 +99,11 @@ function loadFeeStructure() {
   var tbody = document.querySelector("#feeTable tbody");
   tbody.innerHTML = '<tr><td colspan="2" style="text-align:center; color:#5B6B62;">Loading...</td></tr>';
 
+  var feeType = currentFeeType(); // CHANGED (pack 15)
   Promise.all([
     fetch("/classes").then(function (r) { return r.json(); }),
-    fetch("/fee-structure?term=" + encodeURIComponent(ts.term) + "&session=" + encodeURIComponent(ts.session))
+    fetch("/fee-structure2?term=" + encodeURIComponent(ts.term) + "&session=" + encodeURIComponent(ts.session) +
+          "&fee_type=" + encodeURIComponent(feeType))
       .then(function (r) { return r.json(); })
   ])
     .then(function (res) {
@@ -151,10 +154,10 @@ function saveFeeStructure() {
   inputs.forEach(function (input) {
     chain = chain.then(function () {
       if (failed) return;
-      return fetch("/fee-structure", {
+      return fetch("/fee-structure2", { // CHANGED (pack 15): per fee TYPE
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ class_name: input.dataset.className, term: ts.term, session: ts.session, amount: Number(input.value) })
+        body: JSON.stringify({ fee_type: currentFeeType(), class_name: input.dataset.className, term: ts.term, session: ts.session, amount: Number(input.value) })
       }).then(function (r) {
         if (!r.ok) failed = true; else savedCount++;
       });
@@ -164,7 +167,7 @@ function saveFeeStructure() {
   chain
     .then(function () {
       if (failed) finNotify("Some fees could not be saved (admin account required).", false);
-      else finNotify("\u2705 " + savedCount + " class fees saved for " + ts.term + " - " + ts.session, true);
+      else finNotify("\u2705 " + savedCount + " class fees saved [" + currentFeeType() + "] for " + ts.term + " - " + ts.session, true);
     })
     .catch(function () { finNotify("Network error - fees NOT saved.", false); });
 }
@@ -199,6 +202,7 @@ function savePayment() {
     student_id: document.getElementById("payStudent").value,
     term: ts.term,
     session: ts.session,
+    fee_type: currentPayType(), // NEW (pack 15)
     amount: Number(document.getElementById("payAmount").value),
     method: document.getElementById("payMethod").value,
     note: document.getElementById("payNote").value.trim()
@@ -241,13 +245,13 @@ function loadStudentPayments() {
       rows = Array.isArray(rows) ? rows : [];
       finPayRows = rows; // NEW (pack 14): kept for PDF / receipts
       if (!rows.length) {
-        tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; color:#5B6B62;">No payments yet for this term.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; color:#5B6B62;">No payments yet for this term.</td></tr>';
       } else {
         tbody.innerHTML = "";
         rows.forEach(function (row) {
           var tr = document.createElement("tr");
           var dt = row.paid_at ? String(row.paid_at).slice(0, 10) : "-";
-          [dt, naira(row.amount), row.method, row.received_by].forEach(function (v) {
+          [dt, row.fee_type || "School Fee", naira(row.amount), row.method, row.received_by].forEach(function (v) {
             var td = document.createElement("td");
             td.textContent = v || "-";
             tr.appendChild(td);
@@ -279,22 +283,36 @@ function loadStudentPayments() {
       }
     })
     .catch(function () {
-      tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; color:#B3261E;">Could not load payments.</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; color:#B3261E;">Could not load payments.</td></tr>';
     });
 
-  // balance
+  // CHANGED (pack 15): balances come from v2 (per fee TYPE).
   var cls = document.getElementById("payClass").value;
-  fetch("/fee-balance?term=" + encodeURIComponent(ts.term) + "&session=" + encodeURIComponent(ts.session) +
+  fetch("/fee-balance-v2?term=" + encodeURIComponent(ts.term) + "&session=" + encodeURIComponent(ts.session) +
         "&class_name=" + encodeURIComponent(cls))
     .then(function (r) { return r.json(); })
     .then(function (rows) {
-      var rec = (Array.isArray(rows) ? rows : []).find(function (r2) { return r2.student_id === sid; });
-      finPayBalance = rec || null; // NEW (pack 14)
-      if (!rec) { balanceBox.textContent = ""; return; }
-      var bal = Number(rec.balance);
-      balanceBox.textContent =
-        "Fee: " + naira(rec.fee) + "  |  Paid: " + naira(rec.paid) + "  |  Balance: " + naira(bal) +
-        (bal <= 0 && Number(rec.fee) > 0 ? "  \u2705 (fully paid)" : "");
+      rows = (Array.isArray(rows) ? rows : []).filter(function (r2) { return r2.student_id === sid; });
+      var selType = currentPayType();
+      var rec = rows.find(function (r2) { return r2.fee_type === selType; }) || null;
+      finPayBalance = rec;
+      if (!rec) { balanceBox.textContent = "No " + selType + " has been set for this class yet."; }
+      else {
+        var bal = Number(rec.balance);
+        balanceBox.textContent = rec.fee_type + " - Fee: " + naira(rec.fee) + "  |  Paid: " + naira(rec.paid) +
+          "  |  Balance: " + naira(bal) + (bal <= 0 && Number(rec.fee) > 0 ? "  \u2705 (fully paid)" : "");
+      }
+      var brk = document.getElementById("payTypeBreak");
+      if (rows.length) {
+        brk.innerHTML = rows.map(function (r2) {
+          var line = document.createElement("div");
+          line.textContent = "\u2022 " + r2.fee_type + ": fee " + naira(r2.fee) + " | paid " + naira(r2.paid) + " | balance " + naira(r2.balance);
+          if (r2.fee_type === selType) { line.style.fontWeight = "700"; line.style.color = "#1C5A42"; }
+          return line.outerHTML;
+        }).join("");
+      } else {
+        brk.innerHTML = "<i>No fees set for this class for " + ts.term + " - " + ts.session + " yet (see Fee Structure tab).</i>";
+      }
     })
     .catch(function () { balanceBox.textContent = ""; });
 }
@@ -421,6 +439,7 @@ function downloadReceipt(row) {
     studentName: meta.studentName,
     studentId: meta.studentId,
     className: meta.className,
+    feeType: row.fee_type || "School Fee",
     term: ts.term,
     session: ts.session,
     amount: row.amount,
@@ -450,6 +469,7 @@ function downloadPaymentsPDF() {
   var rows = finPayRows.map(function (r) {
     return [
       r.paid_at ? String(r.paid_at).slice(0, 10) : "-",
+      r.fee_type || "School Fee",
       naira(r.amount),
       r.method || "-",
       r.received_by || "-",
@@ -470,4 +490,201 @@ function downloadPaymentsPDF() {
     balance: fee - paid
   });
   d.save("payments-" + sid + "-" + ts.term.replace(/\s+/g, "") + ".pdf");
+}
+
+
+/* ======================== NEW (pack 15) ===============================
+   Fee TYPES management + Parent payment proof review (approve/reject).
+   ==================================================================== */
+var finTypes = [];
+
+function currentFeeType() {
+  var sel = document.getElementById("finType");
+  return sel && sel.value ? sel.value : "School Fee";
+}
+function currentPayType() {
+  var sel = document.getElementById("payType");
+  return sel && sel.value ? sel.value : "School Fee";
+}
+
+function loadFeeTypes() {
+  fetch("/fee-types")
+    .then(function (r) { return r.ok ? r.json() : []; })
+    .then(function (rows) {
+      finTypes = Array.isArray(rows) ? rows : [];
+      fillTypeSelects();
+      renderTypeChips();
+      refreshSubsBadge();
+    })
+    .catch(function () { /* dropdowns stay empty */ });
+}
+
+function fillTypeSelects() {
+  ["finType", "payType"].forEach(function (id) {
+    var sel = document.getElementById(id);
+    if (!sel) return;
+    var current = sel.value;
+    sel.innerHTML = "";
+    finTypes.forEach(function (t) {
+      var opt = document.createElement("option");
+      opt.value = t.name;
+      opt.textContent = t.name;
+      sel.appendChild(opt);
+    });
+    if (current && finTypes.some(function (t) { return t.name === current; })) sel.value = current;
+  });
+}
+
+function toggleTypeMgr() {
+  var w = document.getElementById("typeMgr");
+  w.style.display = w.style.display === "none" ? "block" : "none";
+}
+
+function renderTypeChips() {
+  var box = document.getElementById("typeChips");
+  if (!box) return;
+  box.innerHTML = "";
+  finTypes.forEach(function (t) {
+    var chip = document.createElement("span");
+    chip.style.cssText = "display:inline-flex; align-items:center; gap:6px; background:#F0F7F3; border:1.5px solid #D9E8E0; border-radius:999px; padding:6px 12px; font-size:12.5px; font-weight:700; color:#0F3D2E;";
+    chip.textContent = t.name;
+    var x = document.createElement("button");
+    x.type = "button";
+    x.textContent = "\u00D7";
+    x.title = "Remove type";
+    x.style.cssText = "border:none; background:none; color:#B3261E; font-size:15px; cursor:pointer; font-weight:800;";
+    x.addEventListener("click", function () {
+      if (!confirm("Remove the fee type '" + t.name + "'? (Old payments stay recorded.)")) return;
+      fetch("/fee-type/" + t.id, { method: "DELETE" })
+        .then(function (r) {
+          if (r.ok) { finNotify("Fee type removed.", true); loadFeeTypes(); }
+          else finNotify("Could not remove (admin account required).", false);
+        })
+        .catch(function () { finNotify("Network error.", false); });
+    });
+    chip.appendChild(x);
+    box.appendChild(chip);
+  });
+}
+
+function addFeeType() {
+  var name = document.getElementById("newTypeName").value.trim();
+  if (!name) { finNotify("Type the fee type name first (e.g. Uniform Fee).", false); return; }
+  fetch("/fee-type", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name: name })
+  })
+    .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, d: d }; }); })
+    .then(function (res) {
+      if (res.ok) {
+        finNotify("\u2705 Fee type added: " + name, true);
+        document.getElementById("newTypeName").value = "";
+        loadFeeTypes();
+      } else {
+        finNotify(res.d.message || "Could not add.", false);
+      }
+    })
+    .catch(function () { finNotify("Network error.", false); });
+}
+
+/* ---------------- Parent payment proofs (approve/reject) ------------- */
+function refreshSubsBadge() {
+  fetch("/payment-submissions?status=pending").then(function (r) { return r.ok ? r.json() : []; }).then(function (pend) {
+    var badge = document.getElementById("subsBadge");
+    if (!badge) return;
+    var n = Array.isArray(pend) ? pend.length : 0;
+    badge.style.display = n ? "inline-block" : "none";
+    badge.textContent = n;
+  }).catch(function () {});
+}
+
+function loadSubmissions() {
+  var status = document.getElementById("subsStatus") ? document.getElementById("subsStatus").value : "pending";
+  var tbody = document.querySelector("#subsTable tbody");
+  tbody.innerHTML = '<tr><td colspan="8" style="text-align:center; color:#5B6B62;">Loading...</td></tr>';
+  refreshSubsBadge();
+  fetch("/payment-submissions" + (status ? "?status=" + encodeURIComponent(status) : ""))
+    .then(function (r) { return r.ok ? r.json() : []; })
+    .then(function (rows) {
+      rows = Array.isArray(rows) ? rows : [];
+      if (!rows.length) {
+        tbody.innerHTML = '<tr><td colspan="8" style="text-align:center; color:#5B6B62;">No parent payment uploads' + (status ? " (" + status + ")" : "") + ".</td></tr>";
+        return;
+      }
+      tbody.innerHTML = "";
+      rows.forEach(function (row) {
+        var tr = document.createElement("tr");
+        var dt = row.created_at ? String(row.created_at).slice(0, 10) : "-";
+
+        function td(v) { var c = document.createElement("td"); c.textContent = (v === null || v === undefined || v === "") ? "-" : v; return c; }
+        tr.appendChild(td(dt));
+        var tdName = td("");
+        var b = document.createElement("b"); b.textContent = row.full_name || row.student_id;
+        tdName.appendChild(b);
+        tdName.appendChild(document.createTextNode(" (" + row.student_id + ")"));
+        tr.appendChild(tdName);
+        tr.appendChild(td(row.class_name));
+        tr.appendChild(td(row.fee_type || "School Fee"));
+        tr.appendChild(td(naira(row.amount)));
+
+        var tdProof = document.createElement("td");
+        if (row.evidence_path) {
+          var a = document.createElement("a");
+          a.href = "/" + row.evidence_path;
+          a.target = "_blank";
+          a.textContent = row.evidence_path.toLowerCase().endsWith(".pdf") ? "\u{1F4C4} PDF" : "\u{1F5BC} Image";
+          tdProof.appendChild(a);
+        } else tdProof.textContent = "none";
+        tr.appendChild(tdProof);
+
+        var tdStatus = document.createElement("td");
+        tdStatus.innerHTML = row.status === "approved" ? '<span class="sc-chip sc-chip-live">approved</span>'
+           : row.status === "rejected" ? '<span class="sc-chip" style="background:#FBE9E7; color:#B3261E;">rejected</span>'
+           : '<span class="sc-chip sc-chip-soon">pending</span>';
+        tr.appendChild(tdStatus);
+
+        var tdAct = document.createElement("td");
+        tdAct.style.whiteSpace = "nowrap";
+        if (row.status === "pending") {
+          var okBtn = document.createElement("button");
+          okBtn.className = "mg-btn";
+          okBtn.type = "button";
+          okBtn.style.padding = "7px 12px";
+          okBtn.textContent = "\u2705 Approve";
+          okBtn.addEventListener("click", function () { reviewSub(row, true); });
+          tdAct.appendChild(okBtn);
+
+          var noBtn = document.createElement("button");
+          noBtn.className = "mg-btn-light mg-btn-danger";
+          noBtn.type = "button";
+          noBtn.style.marginLeft = "6px";
+          noBtn.style.padding = "7px 12px";
+          noBtn.textContent = "\u274C Reject";
+          noBtn.addEventListener("click", function () { reviewSub(row, false); });
+          tdAct.appendChild(noBtn);
+        } else {
+          tdAct.textContent = row.reviewed_by ? "by " + row.reviewed_by : "-";
+        }
+        tr.appendChild(tdAct);
+        tbody.appendChild(tr);
+      });
+    })
+    .catch(function () {
+      tbody.innerHTML = '<tr><td colspan="8" style="text-align:center; color:#B3261E;">Could not load (admin account required).</td></tr>';
+    });
+}
+
+function reviewSub(row, approve) {
+  var msg = approve
+    ? "Approve " + naira(row.amount) + " (" + (row.fee_type || "School Fee") + ") for " + (row.full_name || row.student_id) + "? It becomes a real payment."
+    : "Reject this payment proof from " + (row.full_name || row.student_id) + "?";
+  if (!confirm(msg)) return;
+  fetch("/payment-submission/" + row.id + (approve ? "/approve" : "/reject"), { method: "POST" })
+    .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, d: d }; }); })
+    .then(function (res) {
+      finNotify(res.d.message || (res.ok ? "Done." : "Failed."), res.ok);
+      if (res.ok) loadSubmissions();
+    })
+    .catch(function () { finNotify("Network error.", false); });
 }

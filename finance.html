@@ -59,15 +59,37 @@
     <div class="mg-tabs">
       <button class="mg-tab active" type="button" onclick="finSwitchTab('fees', this)">&#127979; Fee Structure</button>
       <button class="mg-tab" type="button" onclick="finSwitchTab('pay', this)">&#128184; Payments</button>
+      <button class="mg-tab" type="button" onclick="finSwitchTab('subs', this)">&#128395;&#65039; Parent Payments <span id="subsBadge" style="display:none; background:#D64541; color:#fff; border-radius:999px; padding:1px 8px; font-size:11px;"></span></button>
       <button class="mg-tab" type="button" onclick="finSwitchTab('exp', this)">&#128177; Expenses</button>
       <button class="mg-tab" type="button" onclick="finSwitchTab('sum', this)">&#128202; Summary</button>
     </div>
 
     <!-- Fee structure -->
     <div class="mg-panel active" id="finPanelFees">
+      <!-- NEW (pack 15): fee TYPES - school fee, developmental fee, exam
+           fee, and any custom ones the admin creates. -->
+      <div class="mg-toolbar" style="margin-bottom:8px;">
+        <div class="mg-field">
+          <label for="finType">Fee Type</label>
+          <select id="finType" onchange="loadFeeStructure()"></select>
+        </div>
+        <button class="mg-btn-light" type="button" onclick="toggleTypeMgr()">&#128193; Manage Fee Types</button>
+      </div>
+      <div id="typeMgr" style="display:none; margin-bottom:14px;" class="mg-card">
+        <h3>&#128193; Fee Types</h3>
+        <div class="mg-toolbar">
+          <div class="mg-field">
+            <label for="newTypeName">New Fee Type</label>
+            <input type="text" id="newTypeName" placeholder="e.g. Uniform Fee">
+          </div>
+          <button class="mg-btn" type="button" onclick="addFeeType()">&#10133; Add</button>
+        </div>
+        <div id="typeChips" style="display:flex; gap:8px; flex-wrap:wrap;"></div>
+        <p class="mg-note">Removing a type only hides it from this picker - old payments stay recorded.</p>
+      </div>
       <div class="mg-toolbar">
         <button class="mg-btn-light" type="button" onclick="loadFeeStructure()">Load Classes &amp; Fees</button>
-        <button class="mg-btn" type="button" onclick="saveFeeStructure()">&#128190; Save All Fees</button>
+        <button class="mg-btn" type="button" onclick="saveFeeStructure()">&#128190; Save All Fees (selected type)</button>
       </div>
       <div class="mg-table-wrap">
         <table class="mg-table" id="feeTable">
@@ -96,6 +118,10 @@
               <input type="number" id="payAmount" min="1" placeholder="e.g. 15000">
             </div>
             <div class="mg-field">
+              <label for="payType">Fee Type</label>
+              <select id="payType" onchange="loadStudentPayments()"></select>
+            </div>
+            <div class="mg-field">
               <label for="payMethod">Method</label>
               <select id="payMethod">
                 <option>Cash</option><option>Bank Transfer</option><option>POS</option><option>Other</option>
@@ -108,6 +134,8 @@
           </div>
           <button class="mg-btn" type="button" onclick="savePayment()">&#128190; Save Payment</button>
           <div id="payBalance" style="margin-top:12px; font-size:13.5px; font-weight:700; color:#1C5A42;"></div>
+          <!-- NEW (pack 15): per-type breakdown for this student -->
+          <div id="payTypeBreak" style="margin-top:6px; font-size:12.5px; color:#5B6B62; line-height:1.7;"></div>
         </div>
 
         <div class="mg-card">
@@ -119,12 +147,36 @@
           <div class="mg-table-wrap">
             <table class="mg-table" id="payTable">
               <!-- CHANGED (pack 14): added Actions column (Receipt PDF + Delete) -->
-              <thead><tr><th>Date</th><th>Amount</th><th>Method</th><th>Received By</th><th>Actions</th></tr></thead>
+              <thead><tr><th>Date</th><th>Fee Type</th><th>Amount</th><th>Method</th><th>Received By</th><th>Actions</th></tr></thead>
               <tbody><tr><td colspan="4" style="text-align:center; color:#5B6B62;">Pick a student to see their payments.</td></tr></tbody>
             </table>
           </div>
         </div>
       </div>
+    </div>
+
+    <!-- NEW (pack 15): payment proofs parents uploaded on their portal.
+         Approve => it becomes a real payment for that student. -->
+    <div class="mg-panel" id="finPanelSubs">
+      <div class="mg-toolbar">
+        <div class="mg-field">
+          <label for="subsStatus">Show</label>
+          <select id="subsStatus" onchange="loadSubmissions()">
+            <option value="pending">Pending review</option>
+            <option value="approved">Approved</option>
+            <option value="rejected">Rejected</option>
+            <option value="">All</option>
+          </select>
+        </div>
+        <button class="mg-btn-light" type="button" onclick="loadSubmissions()">&#128260; Refresh</button>
+      </div>
+      <div class="mg-table-wrap">
+        <table class="mg-table" id="subsTable">
+          <thead><tr><th>Date</th><th>Student</th><th>Class</th><th>Fee Type</th><th>Amount</th><th>Proof</th><th>Status</th><th>Actions</th></tr></thead>
+          <tbody><tr><td colspan="8" style="text-align:center; color:#5B6B62;">Loading...</td></tr></tbody>
+        </table>
+      </div>
+      <p class="mg-note">When a parent pays by transfer, they upload a screenshot/PDF from their portal. Check it, then Approve (adds the payment automatically) or Reject.</p>
     </div>
 
     <!-- Expenses -->

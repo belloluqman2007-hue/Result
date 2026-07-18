@@ -52,8 +52,43 @@
           <div class="mg-field"><label for="setPhone2">Phone 2</label><input type="text" id="setPhone2"></div>
           <div class="mg-field" style="flex:1 1 200px;"><label for="setEmail">Email</label><input type="email" id="setEmail"></div>
         </div>
+        <!-- NEW (pack 15): powers the late-fee alert on the dashboard -->
+        <div class="mg-toolbar">
+          <div class="mg-field">
+            <label for="setCurrentTerm">Current Term</label>
+            <select id="setCurrentTerm">
+              <option>1st Term</option>
+              <option>2nd Term</option>
+              <option>3rd Term</option>
+            </select>
+          </div>
+          <div class="mg-field">
+            <label for="setDueDay">School-fee due day of month</label>
+            <input type="number" id="setDueDay" min="1" max="28" value="10">
+          </div>
+        </div>
+        <p class="mg-note">Example: due day 10 &rarr; from the 11th, unpaid school fees show as a <b>late-fee alert</b> on the admin dashboard.</p>
         <button class="mg-btn" type="button" onclick="saveSettings()">&#128190; Save Profile</button>
         <p class="mg-note">The address and phone/email you save here appear on the public school website footer.</p>
+      </div>
+
+      <!-- NEW (pack 15): many bank/payment accounts shown on the parent
+           portal as "Where to pay" details. -->
+      <div class="mg-card">
+        <h3>&#127974; Payment Bank Accounts</h3>
+        <div class="mg-toolbar">
+          <div class="mg-field"><label for="bankName">Bank Name</label><input type="text" id="bankName" placeholder="e.g. Opay / GTBank"></div>
+          <div class="mg-field"><label for="bankAccName">Account Name</label><input type="text" id="bankAccName" placeholder="e.g. Ameenullah School"></div>
+          <div class="mg-field"><label for="bankAccNum">Account Number</label><input type="text" id="bankAccNum" placeholder="e.g. 0123456789"></div>
+          <button class="mg-btn" type="button" onclick="addBankAccount()">&#10133; Add Account</button>
+        </div>
+        <div class="mg-table-wrap">
+          <table class="mg-table" id="bankTable">
+            <thead><tr><th>Bank</th><th>Account Name</th><th>Account Number</th><th></th></tr></thead>
+            <tbody><tr><td colspan="4" style="text-align:center; color:#5B6B62;">Loading...</td></tr></tbody>
+          </table>
+        </div>
+        <p class="mg-note">These accounts appear on the Student/Parent portal so parents know exactly where to pay.</p>
       </div>
 
       <!-- Sessions -->

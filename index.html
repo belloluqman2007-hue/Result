@@ -4,15 +4,12 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Ameenullah School of Arabic and Islamic Studies | Official Website</title>
-  <!-- Legacy stylesheet (unchanged) + NEW pack-13 website styles -->
   <link rel="stylesheet" href="css/style.css">
-  <!-- NEW (pack 13 - real school website, owner request): full public
-       homepage - hero, about, portal modules, admission enquiry, login
-       by role. The old result-portal landing was replaced by this page
-       at the owner's request; indexing/routes are unchanged. -->
+  <!-- NEW (pack 13/15): real school website. CHANGED (pack 15, owner
+       request): the "Portal Modules" section was REMOVED and the whole
+       page redesigned to be finer and more interesting. -->
   <link rel="stylesheet" href="css/school.css">
 
-  <!-- PWA (unchanged) -->
   <link rel="manifest" href="manifest.webmanifest">
   <meta name="theme-color" content="#2f5021">
   <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
@@ -29,7 +26,7 @@
     </div>
     <nav class="sc-nav">
       <a href="#about">About</a>
-      <a href="#modules">Portal Modules</a>
+      <a href="#programs">Programs</a>
       <a href="#admission">Admission</a>
       <a href="#login" class="sc-nav-cta">Portal Login</a>
     </nav>
@@ -41,90 +38,72 @@
     <h1>AMEENULLAH SCHOOL OF ARABIC AND ISLAMIC STUDIES</h1>
     <div class="sc-hero-ar" lang="ar">مدرسة أمين اللّه للعلوم العربيّة الإسلاميّة</div>
     <div class="sc-hero-motto">Motto: Knowledge and Worship &middot; <span lang="ar">العلم والعبادة</span></div>
+    <div class="sc-hero-badges">
+      <span class="sc-hero-badge">&#128218; Qur'an &amp; Arabic Excellence</span>
+      <span class="sc-hero-badge">&#128202; Digital Results &amp; Report Cards</span>
+      <span class="sc-hero-badge">&#128101; Parent Portal &amp; Online Payments</span>
+    </div>
     <div class="sc-cta-row">
       <a class="sc-btn sc-btn-gold" href="#admission">&#127979; Apply for Admission</a>
+      <a class="sc-btn sc-btn-light" href="portal-login.html">&#128218; Check Result</a>
       <a class="sc-btn sc-btn-light" href="#login">&#128272; Portal Login</a>
     </div>
   </section>
 
   <!-- ======================== ABOUT ======================= -->
   <section class="sc-section" id="about">
-    <h2>Welcome to Our School</h2>
+    <h2>Welcome to Ameenullah</h2>
     <p class="sc-sub">
-      Ameenullah School of Arabic and Islamic Studies blends strong Arabic and Islamic
-      education with modern learning tools. Our online portal keeps teachers, students
-      and parents connected to results, attendance, exams and school life - anytime, anywhere.
+      A citadel of Arabic and Islamic learning in Ijebu-Ode, raising students on the
+      beautiful balance of <b>knowledge</b> and <b>worship</b>. From resumption tests to
+      report sheets, our whole school runs smoothly on a modern digital portal - and
+      parents follow everything from their phones.
     </p>
     <div class="sc-stats">
-      <div class="sc-stat"><b>&#128202;</b>Digital Results &amp; Report Cards</div>
-      <div class="sc-stat"><b>&#128197;</b>Attendance Tracking</div>
-      <div class="sc-stat"><b>&#128179;</b>Fees &amp; Finance Records</div>
-      <div class="sc-stat"><b>&#128101;</b>Student &amp; Parent Portal</div>
+      <div class="sc-stat"><b>&#128223;</b>Results Online, Anywhere</div>
+      <div class="sc-stat"><b>&#128197;</b>Attendance &amp; Term Calendars</div>
+      <div class="sc-stat"><b>&#127974;</b>Fees, Receipts &amp; Balances</div>
+      <div class="sc-stat"><b>&#9998;</b>Signed Digital Report Sheets</div>
     </div>
   </section>
 
-  <!-- ================= PORTAL MODULES (owner's list) ================== -->
-  <section class="sc-section" id="modules" style="background:#fff; max-width:none;">
+  <!-- ===================== WHY CHOOSE US =================== -->
+  <section class="sc-section" style="background:#fff; max-width:none;">
     <div style="max-width:1100px; margin:0 auto;">
-      <h2>Our School Portal Modules</h2>
-      <p class="sc-sub">Everything the school runs online. Modules marked <span class="sc-chip sc-chip-live">Live</span> are working today; the rest are <span class="sc-chip sc-chip-soon">Coming soon</span> as we keep expanding.</p>
+      <h2>Why Parents Choose Us</h2>
+      <p class="sc-sub">A school where deen and discipline meet modern tools.</p>
+      <div class="sc-why-grid">
+        <div class="sc-why-card"><span class="ico">&#128366;&#65039;</span><b>Qur'an Memorisation</b><p>Dedicated Tahfeedhul-Qur'an evenings (Thursdays - Saturdays) with close mentoring.</p></div>
+        <div class="sc-why-card"><span class="ico">&#128037;</span><b>Arabic Excellence</b><p>Structured Arabic &amp; Islamic studies from the foundation to the advanced sanaawiy classes.</p></div>
+        <div class="sc-why-card"><span class="ico">&#128105;&#127995;&#8205;&#127979;</span><b>Caring Teachers</b><p>Weekly evaluations keep our teachers sharp, punctual and accountable.</p></div>
+        <div class="sc-why-card"><span class="ico">&#128241;</span><b>Parent Connection</b><p>Results, fees, calendars and payment proofs - all from the parent portal on your phone.</p></div>
+        <div class="sc-why-card"><span class="ico">&#128737;&#65039;</span><b>Safe &amp; Organised</b><p>Daily registers, term calendars and clear communication keep everyone informed.</p></div>
+        <div class="sc-why-card"><span class="ico">&#11088;</span><b>Character First</b><p>Knowledge <i>and</i> worship - our motto shapes confident, well-mannered students.</p></div>
+      </div>
+    </div>
+  </section>
 
-      <div class="sc-mod-groups">
-        <div class="sc-mod-group">
-          <h3>School Admin</h3>
-          <a class="sc-mod-row" href="login.html">Dashboard &amp; School Overview <span class="sc-chip sc-chip-live">Live</span></a>
-          <a class="sc-mod-row" href="students.html">Student Register &amp; Records <span class="sc-chip sc-chip-live">Live</span></a>
-          <a class="sc-mod-row" href="attendance.html">Attendance Register <span class="sc-chip sc-chip-live">Live</span></a>
-          <a class="sc-mod-row" href="teacher-dashboard.html">Promotions <span class="sc-chip sc-chip-live">Live</span></a>
-          <a class="sc-mod-row" href="id-card.html">ID Cards <span class="sc-chip sc-chip-live">Live</span></a>
-          <span class="sc-mod-row">Certificates <span class="sc-chip sc-chip-soon">Coming soon</span></span>
-          <span class="sc-mod-row">Behaviour Chart <span class="sc-chip sc-chip-soon">Coming soon</span></span>
-          <span class="sc-mod-row">Lesson Plans <span class="sc-chip sc-chip-soon">Coming soon</span></span>
-          <span class="sc-mod-row">Handwriting Sheets <span class="sc-chip sc-chip-soon">Coming soon</span></span>
-          <span class="sc-mod-row">Math Fact Drills <span class="sc-chip sc-chip-soon">Coming soon</span></span>
-          <span class="sc-mod-row">Spelling &amp; Vocabulary <span class="sc-chip sc-chip-soon">Coming soon</span></span>
-        </div>
+  <!-- ====================== PROGRAMS ====================== -->
+  <section class="sc-section" id="programs">
+    <h2>Our Programs</h2>
+    <p class="sc-sub">Carefully designed tracks for every stage of your child's growth.</p>
+    <div class="sc-prog-band">
+      <div class="sc-prog"><b>&#127802; Foundation (Ibtida'i)</b><p>Strong start in Arabic reading, writing, memorisation and morals, with Fridays' general revision.</p></div>
+      <div class="sc-prog"><b>&#128218; Middle (I'dadi)</b><p>Grammar, fiqh and tajweed deepened, with guided memorisation and weekly lectures.</p></div>
+      <div class="sc-prog"><b>&#129489;&#127995;&#8205;&#127979; Advanced (Thanawi)</b><p>Advanced texts, research habits and preparation for higher Islamic learning.</p></div>
+      <div class="sc-prog"><b>&#128366;&#65039; Tahfeedhul-Qur'an</b><p>Evening memorisation classes - Thursdays, Fridays &amp; Saturdays, 4:00PM till sunset.</p></div>
+    </div>
+  </section>
 
-        <div class="sc-mod-group">
-          <h3>Teachers &amp; Staff</h3>
-          <a class="sc-mod-row" href="staff-attendance.html">Staff Attendance <span class="sc-chip sc-chip-live">Live</span></a>
-          <a class="sc-mod-row" href="staff-attendance.html">Weekly Evaluations <span class="sc-chip sc-chip-live">Live</span></a>
-          <h3 style="margin-top:16px;">Assessments &amp; Exams</h3>
-          <a class="sc-mod-row" href="create-exam.html">Examinations <span class="sc-chip sc-chip-live">Live</span></a>
-          <a class="sc-mod-row" href="result.html">Score Entry <span class="sc-chip sc-chip-live">Live</span></a>
-          <a class="sc-mod-row" href="student-result.html">Results &amp; Reports <span class="sc-chip sc-chip-live">Live</span></a>
-          <a class="sc-mod-row" href="class-results.html">Report Cards &amp; Print <span class="sc-chip sc-chip-live">Live</span></a>
-          <a class="sc-mod-row" href="manage-publish.html">Publish Results <span class="sc-chip sc-chip-live">Live</span></a>
-          <span class="sc-mod-row">Entrance Exams <span class="sc-chip sc-chip-soon">Coming soon</span></span>
-          <span class="sc-mod-row">Homework <span class="sc-chip sc-chip-soon">Coming soon</span></span>
-        </div>
-
-        <div class="sc-mod-group">
-          <h3>Finance</h3>
-          <a class="sc-mod-row" href="finance.html">Payments <span class="sc-chip sc-chip-live">Live</span></a>
-          <a class="sc-mod-row" href="finance.html">Fee Structure <span class="sc-chip sc-chip-live">Live</span></a>
-          <a class="sc-mod-row" href="finance.html">Expenses <span class="sc-chip sc-chip-live">Live</span></a>
-          <h3 style="margin-top:16px;">Communication</h3>
-          <span class="sc-mod-row">User Management <span class="sc-chip sc-chip-live">Live</span></span>
-          <span class="sc-mod-row">Messaging &amp; Announcements <span class="sc-chip sc-chip-live">Live</span></span>
-          <h3 style="margin-top:16px;">Tools</h3>
-          <a class="sc-mod-row" href="manage-signatures.html">School Signatures <span class="sc-chip sc-chip-live">Live</span></a>
-          <span class="sc-mod-row">Feedback <span class="sc-chip sc-chip-soon">Coming soon</span></span>
-          <span class="sc-mod-row">Question Bank <span class="sc-chip sc-chip-soon">Coming soon</span></span>
-          <span class="sc-mod-row">Documents <span class="sc-chip sc-chip-soon">Coming soon</span></span>
-          <span class="sc-mod-row">OCR Scanner <span class="sc-chip sc-chip-soon">Coming soon</span></span>
-          <span class="sc-mod-row">Banner Templates <span class="sc-chip sc-chip-soon">Coming soon</span></span>
-        </div>
-
-        <div class="sc-mod-group">
-          <h3>System</h3>
-          <span class="sc-mod-row">School Profile <span class="sc-chip sc-chip-live">Live</span></span>
-          <span class="sc-mod-row">Branding <span class="sc-chip sc-chip-soon">Coming soon</span></span>
-          <span class="sc-mod-row">School Settings <span class="sc-chip sc-chip-soon">Coming soon</span></span>
-          <a class="sc-mod-row" href="index.html">School Website <span class="sc-chip sc-chip-live">Live</span></a>
-          <span class="sc-mod-row">Subscription <span class="sc-chip sc-chip-soon">Coming soon</span></span>
-          <span class="sc-mod-row">Support &amp; Profile <span class="sc-chip sc-chip-soon">Coming soon</span></span>
-        </div>
+  <!-- ================= HOW TO APPLY ================= -->
+  <section class="sc-section" id="howto" style="background:#fff; max-width:none;">
+    <div style="max-width:1100px; margin:0 auto;">
+      <h2>Admission in 3 Easy Steps</h2>
+      <p class="sc-sub">From interest to enrolment - simple and fast.</p>
+      <div class="sc-steps">
+        <div class="sc-step"><span class="num">1</span><b>Send an Enquiry</b><p>Fill the short form below (or call us). The school receives it instantly.</p></div>
+        <div class="sc-step"><span class="num">2</span><b>We Contact You</b><p>Management reaches out, answers your questions and confirms admission.</p></div>
+        <div class="sc-step"><span class="num">3</span><b>Portal Activated</b><p>Your child is added to the register - their Student/Parent portal starts working immediately.</p></div>
       </div>
     </div>
   </section>
@@ -147,12 +126,12 @@
       <a class="sc-role-card" href="portal-login.html">
         <span class="sc-role-ico">&#129489;&#8205;&#127979;</span>
         <b>Student</b>
-        <p>Log in with your Student ID and surname to view your published results.</p>
+        <p>Log in with your Student ID and surname to view published results and fees.</p>
       </a>
       <a class="sc-role-card" href="portal-login.html">
         <span class="sc-role-ico">&#128106;</span>
         <b>Parent</b>
-        <p>Log in with your child's Student ID and surname to follow their progress.</p>
+        <p>Log in with your child's Student ID and surname to follow progress and pay fees.</p>
       </a>
     </div>
   </section>
@@ -178,7 +157,7 @@
         </div>
         <div>
           <label for="admClass">Class Applying For</label>
-          <input type="text" id="admClass" placeholder="e.g. Primary 1 / Ibtida'i 2 / Idaadi 1">
+          <input type="text" id="admClass" placeholder="e.g. Ibtida'i 1 / Idaadi 2 / Thanawi 1">
         </div>
         <div>
           <label for="admMessage">Message (optional)</label>
@@ -195,15 +174,12 @@
   <footer class="sc-footer">
     <b>AMEENULLAH SCHOOL OF ARABIC AND ISLAMIC STUDIES</b>
     <div class="sc-footer-ar" lang="ar">مدرسة أمين اللّه للعلوم العربيّة الإسلاميّة</div>
-    <!-- NEW (pack 14): ids so admin-updated school settings show here -->
     <div id="scFooterAddr">3, Temidire Street, Off Ondo Road, Ijebu-Ode, Ogun State.</div>
     <div id="scFooterContact">Tel: 08062445559, 08058306889 &middot; Email: madrasatuameenillah22@gmail.com</div>
     <div style="margin-top:10px; opacity:.75;">&copy; <span id="scYear"></span> Ameenullah School of Arabic and Islamic Studies. All rights reserved.</div>
   </footer>
 
-  <!-- NEW (pack 13): website scripts (admission form + footer year) -->
   <script src="js/website.js"></script>
-  <!-- PWA (unchanged) -->
   <script src="js/pwa.js" defer></script>
 </body>
 </html>

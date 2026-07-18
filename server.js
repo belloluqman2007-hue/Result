@@ -228,6 +228,12 @@ app.get("/staff-attendance.html", requireLogin, (req, res) => {
     res.sendFile(path.join(__dirname, "staff-attendance.html"));
 });
 
+// NEW (pack 15): calendar editor page - staff can view/print; saving,
+// publishing and deleting stay admin-only at the API level.
+app.get("/manage-calendars.html", requireLogin, (req, res) => {
+    res.sendFile(path.join(__dirname, "manage-calendars.html"));
+});
+
 app.get("/finance.html", requireAdminPage, (req, res) => { // CHANGED (pack 14): admin-only (owner request: teachers must not access)
     res.sendFile(path.join(__dirname, "finance.html"));
 });
@@ -407,6 +413,61 @@ const addonTables = [
         email VARCHAR(120),
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
     )`,
+    // NEW (pack 15 - fee types, owner request: "school fee, developmental
+    // fee, exam fee, and so on" - each with its own amount per class).
+    `CREATE TABLE IF NOT EXISTS fee_types (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        name VARCHAR(120) NOT NULL UNIQUE,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )`,
+    // NEW (pack 15): fee amounts per fee TYPE per class per term/session.
+    // The older fee_structure table stays untouched (migrated as School Fee).
+    `CREATE TABLE IF NOT EXISTS fee_structure2 (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        fee_type VARCHAR(120) NOT NULL DEFAULT 'School Fee',
+        class_name VARCHAR(150) NOT NULL,
+        term VARCHAR(50) NOT NULL,
+        session VARCHAR(50) NOT NULL,
+        amount DECIMAL(12,2) NOT NULL DEFAULT 0,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        UNIQUE KEY uniq_ft_class_term_session (fee_type, class_name, term, session)
+    )`,
+    // NEW (pack 15): many bank accounts shown on the parent portal as
+    // "where to pay" details.
+    `CREATE TABLE IF NOT EXISTS bank_accounts (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        bank_name VARCHAR(150) NOT NULL,
+        account_name VARCHAR(150),
+        account_number VARCHAR(60) NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )`,
+    // NEW (pack 15): parents upload a screenshot/PDF of their payment;
+    // admin approves (it becomes a real payment) or rejects it.
+    `CREATE TABLE IF NOT EXISTS payment_submissions (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        student_id VARCHAR(100) NOT NULL,
+        fee_type VARCHAR(120) NOT NULL DEFAULT 'School Fee',
+        term VARCHAR(50) NOT NULL,
+        session VARCHAR(50) NOT NULL,
+        amount DECIMAL(12,2) NOT NULL,
+        note VARCHAR(255),
+        evidence_path VARCHAR(255),
+        status ENUM('pending','approved','rejected') NOT NULL DEFAULT 'pending',
+        reviewed_by VARCHAR(100),
+        reviewed_at TIMESTAMP NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )`,
+    // NEW (pack 15): termly madrasah calendar. published=1 shows it on
+    // the parent portal; publishing one auto-unpublishes the rest so
+    // parents never see duplicates from different terms (owner request).
+    `CREATE TABLE IF NOT EXISTS calendars (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        title VARCHAR(255) NOT NULL,
+        doc LONGTEXT,
+        published TINYINT(1) NOT NULL DEFAULT 0,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    )`,
     // NEW (pack 14 - academic sessions the admin creates, e.g. 2027/2028).
     `CREATE TABLE IF NOT EXISTS sessions (
         session VARCHAR(50) PRIMARY KEY,
@@ -474,7 +535,7 @@ function setupAddonTables(attempt) {
                 if (finished === addonTables.length) {
                     conn.end();
                     if (firstFailure) return addonRetryLater(attempt, firstFailure);
-                    console.log("Add-on tables ready (announcements, school_events, class_teacher_signatures, result_publish, admission_enquiries, attendance, staff_attendance, staff_evaluations, fee_structure, fee_payments, expenses, school_settings, sessions).");
+                    console.log("Add-on tables ready (...,school_settings, sessions, fee_types, fee_structure2, bank_accounts, payment_submissions, calendars).");
                 }
             });
         });
@@ -564,6 +625,66 @@ function profileColsRetry(attempt, err) {
 }
 
 ensureStudentProfileColumns(1);
+
+/* ==================================================================
+   NEW (pack 15 - finance v2): safe, guarded migrations +
+   one-time seeding. Same pattern as the student-profile columns:
+   check information_schema first, ALTER only when needed, never
+   error on re-boots, app keeps working if anything is denied.
+     1. fee_payments gains a fee_type column (default 'School Fee').
+     2. school_settings gains due_day + current_term columns.
+     3. fee_types seeded with School Fee / Developmental Fee / Exam Fee.
+     4. old fee_structure rows copied into fee_structure2 as School Fee
+        (INSERT IGNORE - runs every boot but only ever inserts once).
+================================================================== */
+function runPack15Migrations(attempt) {
+    const conn = addonConnection();
+    conn.connect((err) => {
+        if (err) { conn.destroy(); return pack15Retry(attempt, err); }
+        const steps = [
+            // 1) fee_type on fee_payments
+            `ALTER TABLE fee_payments
+               ADD COLUMN fee_type VARCHAR(120) NOT NULL DEFAULT 'School Fee'`,
+            // 2) due_day + current_term on school_settings
+            `ALTER TABLE school_settings
+               ADD COLUMN due_day INT NOT NULL DEFAULT 10,
+               ADD COLUMN current_term VARCHAR(50) NOT NULL DEFAULT '1st Term'`,
+            // 3) seed fee types
+            `INSERT IGNORE INTO fee_types (name) VALUES ('School Fee'), ('Developmental Fee'), ('Exam Fee')`,
+            // 4) copy v1 structure into v2 (idempotent)
+            `INSERT IGNORE INTO fee_structure2 (fee_type, class_name, term, session, amount)
+                SELECT 'School Fee', class_name, term, session, amount FROM fee_structure`
+        ];
+        let finished = 0;
+        let missingTable = false;
+        steps.forEach((sql, i) => {
+            conn.query(sql, (qErr) => {
+                // Duplicate-column race with a parallel boot is fine.
+                if (qErr && qErr.code !== "ER_DUP_FIELDNAME" && qErr.code !== "ER_DUP_ENTRY") {
+                    console.log("Pack 15 migration step " + (i + 1) + " notice:", qErr.code || qErr.message);
+                    // FIX: the add-on tables are created by a SEPARATE boot
+                    // task - if it hasn't finished yet, retry the whole
+                    // batch a few seconds later so seeding never gets lost.
+                    if (qErr.code === "ER_NO_SUCH_TABLE") missingTable = true;
+                }
+                finished++;
+                if (finished === steps.length) {
+                    conn.end();
+                    if (missingTable) return pack15Retry(attempt, { code: "ER_NO_SUCH_TABLE" });
+                    console.log("Pack 15 setup ready (fee types, structure v2, settings v2).");
+                }
+            });
+        });
+    });
+}
+function pack15Retry(attempt, err) {
+    if (attempt >= 6) {
+        console.log("Pack 15 setup warning:", err.code || err.message || err);
+        return;
+    }
+    setTimeout(() => runPack15Migrations(attempt + 1), 4000);
+}
+runPack15Migrations(1);
 
 /* ==================================================================
    NEW (subject enable/disable - request #3): is_active column on the
@@ -2716,19 +2837,35 @@ app.post("/fee-payment", requireLogin, requireAdmin, (req, res) => {
     if (!studentId || !term || !session || !(amount > 0)) {
         return res.status(400).json({ message: "student_id, term, session and an amount above 0 are required." });
     }
+    // CHANGED (pack 15): payments are tagged with a FEE TYPE (School Fee,
+    // Developmental Fee, Exam Fee, custom). Falls back to the original
+    // insert if the column is somehow missing (backward compatible).
+    const feeType = (req.body.fee_type || "School Fee").trim() || "School Fee";
     connection.query(
-        `INSERT INTO fee_payments (student_id, term, session, amount, method, note, received_by)
-         VALUES (?,?,?,?,?,?,?)`,
-        [studentId, term, session, amount, method, note, req.session.username || null],
+        `INSERT INTO fee_payments (student_id, term, session, fee_type, amount, method, note, received_by)
+         VALUES (?,?,?,?,?,?,?,?)`,
+        [studentId, term, session, feeType, amount, method, note, req.session.username || null],
         (err) => {
+            if (err && err.code === "ER_BAD_FIELD_ERROR") {
+                return connection.query(
+                    `INSERT INTO fee_payments (student_id, term, session, amount, method, note, received_by)
+                     VALUES (?,?,?,?,?,?,?)`,
+                    [studentId, term, session, amount, method, note, req.session.username || null],
+                    (err2) => {
+                        if (err2) { console.log(err2); return res.status(500).json({ message: "Database error" }); }
+                        res.json({ message: "Payment recorded", amount });
+                    }
+                );
+            }
             if (err) { console.log(err); return res.status(500).json({ message: "Database error" }); }
-            res.json({ message: "Payment recorded", amount });
+            res.json({ message: "Payment recorded", amount, fee_type: feeType });
         }
     );
 });
 
 app.get("/fee-payments", requireLogin, requireAdmin, (req, res) => {
-    let sql = "SELECT id, student_id, term, session, amount, method, note, received_by, paid_at FROM fee_payments";
+    // CHANGED (pack 15): SELECT * so the new fee_type column comes along.
+    let sql = "SELECT * FROM fee_payments";
     const params = [], wh = [];
     if (req.query.student_id) { wh.push("student_id = ?"); params.push(req.query.student_id); }
     if (req.query.term)       { wh.push("term = ?");       params.push(req.query.term); }
@@ -2771,9 +2908,10 @@ app.get("/finance-summary", requireLogin, requireAdmin, (req, res) => {
     const term = (req.query.term || "").trim();
     const session = (req.query.session || "").trim();
     if (!term || !session) return res.status(400).json({ message: "term and session are required." });
+    // CHANGED (pack 15): expected = all fee TYPES x class sizes (v2 table).
     const expectedSql = `
         SELECT COALESCE(SUM(fs.amount * c.cnt), 0) AS expected
-        FROM fee_structure fs
+        FROM fee_structure2 fs
         JOIN (SELECT class_name, COUNT(*) AS cnt FROM students GROUP BY class_name) c
           ON c.class_name = fs.class_name
         WHERE fs.term = ? AND fs.session = ?
@@ -2901,20 +3039,41 @@ app.get("/school-settings", (req, res) => {
 
 app.post("/school-settings", requireLogin, requireAdmin, (req, res) => {
     const f = k => String(req.body[k] == null ? "" : req.body[k]).trim();
-    connection.query(
-        `INSERT INTO school_settings
-         (id, school_name, school_name_ar, motto, motto_ar, address, phone1, phone2, email)
-         VALUES (1,?,?,?,?,?,?,?,?,?)
+    // CHANGED (pack 15): also stores due_day (late-fee alert day of the
+    // month) and current_term (used by the dashboard alert). Legacy
+    // fallback keeps the pack-14 columns if the v2 columns are absent.
+    const dueDay = parseInt(req.body.due_day, 10);
+    const currentTerm = f("current_term");
+    const fullSql = `INSERT INTO school_settings
+         (id, school_name, school_name_ar, motto, motto_ar, address, phone1, phone2, email, due_day, current_term)
+         VALUES (1,?,?,?,?,?,?,?,?,?,?,?)
          ON DUPLICATE KEY UPDATE
            school_name = VALUES(school_name), school_name_ar = VALUES(school_name_ar),
            motto = VALUES(motto), motto_ar = VALUES(motto_ar), address = VALUES(address),
-           phone1 = VALUES(phone1), phone2 = VALUES(phone2), email = VALUES(email)`,
-        [f("school_name"), f("school_name_ar"), f("motto"), f("motto_ar"), f("address"), f("phone1"), f("phone2"), f("email")],
-        (err) => {
-            if (err) { console.log(err); return res.status(500).json({ message: "Database error" }); }
-            res.json({ message: "School settings saved" });
+           phone1 = VALUES(phone1), phone2 = VALUES(phone2), email = VALUES(email),
+           due_day = VALUES(due_day), current_term = VALUES(current_term)`;
+    const fullVals = [f("school_name"), f("school_name_ar"), f("motto"), f("motto_ar"), f("address"), f("phone1"), f("phone2"), f("email"),
+                      (dueDay >= 1 && dueDay <= 28) ? dueDay : 10, currentTerm || "1st Term"];
+    connection.query(fullSql, fullVals, (err) => {
+        if (err && err.code === "ER_BAD_FIELD_ERROR") {
+            return connection.query(
+                `INSERT INTO school_settings
+                 (id, school_name, school_name_ar, motto, motto_ar, address, phone1, phone2, email)
+                 VALUES (1,?,?,?,?,?,?,?,?,?)
+                 ON DUPLICATE KEY UPDATE
+                   school_name = VALUES(school_name), school_name_ar = VALUES(school_name_ar),
+                   motto = VALUES(motto), motto_ar = VALUES(motto_ar), address = VALUES(address),
+                   phone1 = VALUES(phone1), phone2 = VALUES(phone2), email = VALUES(email)`,
+                [f("school_name"), f("school_name_ar"), f("motto"), f("motto_ar"), f("address"), f("phone1"), f("phone2"), f("email")],
+                (err2) => {
+                    if (err2) { console.log(err2); return res.status(500).json({ message: "Database error" }); }
+                    res.json({ message: "School settings saved" });
+                }
+            );
         }
-    );
+        if (err) { console.log(err); return res.status(500).json({ message: "Database error" }); }
+        res.json({ message: "School settings saved" });
+    });
 });
 
 /* ---------- Academic sessions (admin creates) ------------------------ */
@@ -3005,6 +3164,380 @@ app.delete("/user/:id", requireLogin, requireAdmin, (req, res) => {
     connection.query("DELETE FROM users WHERE id = ?", [userId], (err) => {
         if (err) { console.log(err); return res.status(500).json({ message: "Database error" }); }
         res.json({ message: "User deleted" });
+    });
+});
+
+
+/* =====================================================================
+   NEW (pack 15) - fee types, structure v2, parent payment proofs,
+   bank accounts, portal fees, madrasah calendar. All additive.
+   ===================================================================== */
+
+/* ---------- Fee TYPES (School Fee / Developmental / Exam / custom) -- */
+app.get("/fee-types", requireLogin, (req, res) => {
+    connection.query("SELECT id, name FROM fee_types ORDER BY id", (err, rows) => {
+        if (err) { console.log(err); return res.status(500).json({ message: "Database error" }); }
+        res.json(rows);
+    });
+});
+
+app.post("/fee-type", requireLogin, requireAdmin, (req, res) => {
+    const name = (req.body.name || "").trim();
+    if (!name) return res.status(400).json({ message: "Fee type name is required." });
+    connection.query("INSERT IGNORE INTO fee_types (name) VALUES (?)", [name], (err) => {
+        if (err) { console.log(err); return res.status(500).json({ message: "Database error" }); }
+        res.json({ message: "Fee type saved", name });
+    });
+});
+
+app.delete("/fee-type/:id", requireLogin, requireAdmin, (req, res) => {
+    connection.query("DELETE FROM fee_types WHERE id = ?", [req.params.id], (err) => {
+        if (err) { console.log(err); return res.status(500).json({ message: "Database error" }); }
+        res.json({ message: "Fee type removed" });
+    });
+});
+
+/* ---------- Fee STRUCTURE v2 (per fee type per class) --------------- */
+app.get("/fee-structure2", requireLogin, requireAdmin, (req, res) => {
+    let sql = "SELECT fee_type, class_name, term, session, amount FROM fee_structure2";
+    const params = [], wh = [];
+    if (req.query.term)     { wh.push("term = ?");      params.push(req.query.term); }
+    if (req.query.session)  { wh.push("session = ?");   params.push(req.query.session); }
+    if (req.query.fee_type) { wh.push("fee_type = ?");  params.push(req.query.fee_type); }
+    if (wh.length) sql += " WHERE " + wh.join(" AND ");
+    sql += " ORDER BY fee_type, class_name";
+    connection.query(sql, params, (err, rows) => {
+        if (err) { console.log(err); return res.status(500).json({ message: "Database error" }); }
+        res.json(rows);
+    });
+});
+
+app.post("/fee-structure2", requireLogin, requireAdmin, (req, res) => {
+    const feeType = (req.body.fee_type || "School Fee").trim() || "School Fee";
+    const className = (req.body.class_name || "").trim();
+    const term = (req.body.term || "").trim();
+    const session = (req.body.session || "").trim();
+    const amount = Number(req.body.amount);
+    if (!className || !term || !session || !(amount >= 0)) {
+        return res.status(400).json({ message: "fee_type, class_name, term, session and a valid amount are required." });
+    }
+    connection.query(
+        `INSERT INTO fee_structure2 (fee_type, class_name, term, session, amount)
+         VALUES (?,?,?,?,?)
+         ON DUPLICATE KEY UPDATE amount = VALUES(amount)`,
+        [feeType, className, term, session, amount],
+        (err) => {
+            if (err) { console.log(err); return res.status(500).json({ message: "Database error" }); }
+            res.json({ message: "Fee saved", fee_type: feeType, class_name: className, amount });
+        }
+    );
+});
+
+/* ---------- Balance v2: per student, per fee TYPE (admin) ----------- */
+app.get("/fee-balance-v2", requireLogin, requireAdmin, (req, res) => {
+    const term = (req.query.term || "").trim();
+    const session = (req.query.session || "").trim();
+    const className = (req.query.class_name || "").trim();
+    if (!term || !session) return res.status(400).json({ message: "term and session are required." });
+    let sql = `
+        SELECT s.student_id, s.full_name, s.class_name,
+               fs.fee_type, fs.amount AS fee,
+               COALESCE(p.paid, 0) AS paid,
+               (fs.amount - COALESCE(p.paid, 0)) AS balance
+        FROM students s
+        JOIN fee_structure2 fs
+          ON fs.class_name = s.class_name AND fs.term = ? AND fs.session = ?
+        LEFT JOIN (SELECT student_id, fee_type, SUM(amount) AS paid
+                     FROM fee_payments WHERE term = ? AND session = ?
+                    GROUP BY student_id, fee_type) p
+               ON p.student_id = s.student_id AND p.fee_type = fs.fee_type
+    `;
+    const params = [term, session, term, session];
+    if (className) { sql += " WHERE s.class_name = ?"; params.push(className); }
+    sql += " ORDER BY s.class_name, s.full_name, fs.fee_type";
+    connection.query(sql, params, (err, rows) => {
+        if (err) { console.log(err); return res.status(500).json({ message: "Database error" }); }
+        res.json(rows);
+    });
+});
+
+/* ---------- Late-fee ALERTS for the dashboard (admin) ---------------
+   Students whose unpaid balance > 0 for the fee type (default
+   'School Fee') - flagged late once the day of month passes due_day. */
+app.get("/fee-alerts", requireLogin, requireAdmin, (req, res) => {
+    const term = (req.query.term || "").trim();
+    const session = (req.query.session || "").trim();
+    const feeType = (req.query.fee_type || "School Fee").trim() || "School Fee";
+    if (!term || !session) return res.status(400).json({ message: "term and session are required." });
+    connection.query(
+        `SELECT s.student_id, s.full_name, s.class_name,
+                fs.amount AS fee, COALESCE(p.paid, 0) AS paid,
+                (fs.amount - COALESCE(p.paid, 0)) AS balance
+         FROM students s
+         JOIN fee_structure2 fs
+           ON fs.class_name = s.class_name AND fs.term = ? AND fs.session = ? AND fs.fee_type = ?
+         LEFT JOIN (SELECT student_id, SUM(amount) AS paid
+                      FROM fee_payments WHERE term = ? AND session = ? AND fee_type = ?
+                     GROUP BY student_id) p ON p.student_id = s.student_id
+         HAVING balance > 0
+         ORDER BY s.class_name, s.full_name`,
+        [term, session, feeType, term, session, feeType],
+        (err, rows) => {
+            if (err) { console.log(err); return res.status(500).json({ message: "Database error" }); }
+            connection.query("SELECT due_day FROM school_settings WHERE id = 1", (e2, srows) => {
+                const dueDay = (!e2 && srows && srows.length && srows[0].due_day) ? Number(srows[0].due_day) : 10;
+                const today = new Date().getDate();
+                const late = today > dueDay;
+                res.json({
+                    due_day: dueDay, today, is_late: late, fee_type: feeType, term, session,
+                    alerts: late ? rows : []   // nobody is "late" before the due day
+                });
+            });
+        }
+    );
+});
+
+/* ---------- BANK ACCOUNTS (many; shown on parent portal) ------------- */
+app.get("/bank-accounts", (req, res) => {
+    connection.query("SELECT id, bank_name, account_name, account_number FROM bank_accounts ORDER BY id", (err, rows) => {
+        if (err) { console.log(err); return res.status(500).json({ message: "Database error" }); }
+        res.json(rows);
+    });
+});
+
+app.post("/bank-account", requireLogin, requireAdmin, (req, res) => {
+    const bank = (req.body.bank_name || "").trim();
+    const accName = (req.body.account_name || "").trim();
+    const accNum = (req.body.account_number || "").trim();
+    if (!bank || !accNum) return res.status(400).json({ message: "Bank name and account number are required." });
+    connection.query(
+        "INSERT INTO bank_accounts (bank_name, account_name, account_number) VALUES (?,?,?)",
+        [bank, accName, accNum],
+        (err) => {
+            if (err) { console.log(err); return res.status(500).json({ message: "Database error" }); }
+            res.json({ message: "Bank account saved" });
+        }
+    );
+});
+
+app.delete("/bank-account/:id", requireLogin, requireAdmin, (req, res) => {
+    connection.query("DELETE FROM bank_accounts WHERE id = ?", [req.params.id], (err) => {
+        if (err) { console.log(err); return res.status(500).json({ message: "Database error" }); }
+        res.json({ message: "Bank account deleted" });
+    });
+});
+
+/* ---------- PORTAL: my fees & balances (per fee type) ---------------- */
+app.get("/portal/fees", (req, res) => {
+    const sid = req.session && req.session.portalStudentId;
+    if (!sid) return res.status(401).json({ message: "Not logged in" });
+    connection.query(
+        `SELECT fs.term, fs.session, fs.fee_type, fs.amount AS fee,
+                COALESCE(p.paid, 0) AS paid,
+                (fs.amount - COALESCE(p.paid, 0)) AS balance
+         FROM fee_structure2 fs
+         JOIN students st ON st.class_name = fs.class_name AND st.student_id = ?
+         LEFT JOIN (SELECT student_id, term, session, fee_type, SUM(amount) AS paid
+                      FROM fee_payments WHERE student_id = ?
+                     GROUP BY student_id, term, session, fee_type) p
+                ON p.term = fs.term AND p.session = fs.session AND p.fee_type = fs.fee_type
+         ORDER BY fs.session DESC, fs.term, fs.fee_type`,
+        [sid, sid],
+        (err, rows) => {
+            if (err) { console.log(err); return res.status(500).json({ message: "Database error" }); }
+            res.json(rows);
+        }
+    );
+});
+
+/* ---------- PORTAL: parent uploads payment proof (screenshot/PDF) ---- */
+const evidenceDir = path.join(__dirname, "uploads", "payment-evidence");
+try { fs.mkdirSync(evidenceDir, { recursive: true }); } catch (e) { /* exists */ }
+
+const evidenceStorage = multer.diskStorage({
+    destination: (req, file, cb) => cb(null, "uploads/payment-evidence/"),
+    filename: (req, file, cb) => {
+        const safe = (file.originalname || "proof").replace(/[^a-zA-Z0-9.\-_]/g, "_");
+        cb(null, "ev_" + Date.now() + "_" + safe);
+    }
+});
+const uploadEvidence = multer({
+    storage: evidenceStorage,
+    limits: { fileSize: 8 * 1024 * 1024 },
+    fileFilter: (req, file, cb) => {
+        const ok = /^image\/(png|jpe?g|gif|webp)$/.test(file.mimetype) || file.mimetype === "application/pdf";
+        cb(ok ? null : new Error("Only an image (PNG/JPG) or PDF is allowed."), ok);
+    }
+});
+
+app.post("/portal/payment-submission", (req, res) => {
+    const sid = req.session && req.session.portalStudentId;
+    if (!sid) return res.status(401).json({ message: "Not logged in" });
+    uploadEvidence.single("evidence")(req, res, (upErr) => {
+        if (upErr) {
+            return res.status(400).json({ message: upErr.message || "Upload failed" });
+        }
+        const feeType = (req.body.fee_type || "School Fee").trim() || "School Fee";
+        const term = (req.body.term || "").trim();
+        const session = (req.body.session || "").trim();
+        const amount = Number(req.body.amount);
+        const note = (req.body.note || "").trim();
+        if (!term || !session || !(amount > 0)) {
+            return res.status(400).json({ message: "Fee type, term, session and a valid amount are required." });
+        }
+        const evidencePath = req.file ? ("uploads/payment-evidence/" + req.file.filename) : null;
+        connection.query(
+            `INSERT INTO payment_submissions
+             (student_id, fee_type, term, session, amount, note, evidence_path)
+             VALUES (?,?,?,?,?,?,?)`,
+            [sid, feeType, term, session, amount, note, evidencePath],
+            (err) => {
+                if (err) { console.log(err); return res.status(500).json({ message: "Database error" }); }
+                res.json({ message: "Payment proof sent. The school will review it shortly." });
+            }
+        );
+    });
+});
+
+app.get("/portal/my-submissions", (req, res) => {
+    const sid = req.session && req.session.portalStudentId;
+    if (!sid) return res.status(401).json({ message: "Not logged in" });
+    connection.query(
+        `SELECT id, fee_type, term, session, amount, note, evidence_path, status, created_at
+         FROM payment_submissions WHERE student_id = ? ORDER BY created_at DESC LIMIT 50`,
+        [sid],
+        (err, rows) => {
+            if (err) { console.log(err); return res.status(500).json({ message: "Database error" }); }
+            res.json(rows);
+        }
+    );
+});
+
+/* ---------- ADMIN: review parent payment proofs ---------------------- */
+app.get("/payment-submissions", requireLogin, requireAdmin, (req, res) => {
+    let sql = `
+        SELECT ps.*, st.full_name, st.class_name
+        FROM payment_submissions ps
+        LEFT JOIN students st ON st.student_id = ps.student_id
+    `;
+    const params = [];
+    if (req.query.status) { sql += " WHERE ps.status = ?"; params.push(req.query.status); }
+    sql += " ORDER BY ps.created_at DESC LIMIT 300";
+    connection.query(sql, params, (err, rows) => {
+        if (err) { console.log(err); return res.status(500).json({ message: "Database error" }); }
+        res.json(rows);
+    });
+});
+
+function reviewSubmission(req, res, approve) {
+    connection.query("SELECT * FROM payment_submissions WHERE id = ?", [req.params.id], (err, rows) => {
+        if (err) { console.log(err); return res.status(500).json({ message: "Database error" }); }
+        if (!rows.length) return res.status(404).json({ message: "Submission not found." });
+        const sub = rows[0];
+        if (sub.status !== "pending") {
+            return res.status(400).json({ message: "Already " + sub.status + "." });
+        }
+        const finish = () => {
+            connection.query(
+                "UPDATE payment_submissions SET status = ?, reviewed_by = ?, reviewed_at = NOW() WHERE id = ?",
+                [approve ? "approved" : "rejected", req.session.username || null, req.params.id],
+                (err3) => {
+                    if (err3) { console.log(err3); return res.status(500).json({ message: "Database error" }); }
+                    res.json({ message: approve ? "Approved - added to the student's payments." : "Rejected." });
+                }
+            );
+        };
+        if (!approve) return finish();
+        // Approved: becomes a REAL payment for the student (tagged by fee type)
+        connection.query(
+            `INSERT INTO fee_payments (student_id, term, session, fee_type, amount, method, note, received_by)
+             VALUES (?,?,?,?,?,?,?,?)`,
+            [sub.student_id, sub.term, sub.session, sub.fee_type || "School Fee", sub.amount,
+             "Parent upload", "Parent proof #" + sub.id, req.session.username || null],
+            (err2) => {
+                if (err2 && err2.code === "ER_BAD_FIELD_ERROR") {
+                    return connection.query(
+                        `INSERT INTO fee_payments (student_id, term, session, amount, method, note, received_by)
+                         VALUES (?,?,?,?,?,?,?)`,
+                        [sub.student_id, sub.term, sub.session, sub.amount,
+                         "Parent upload", "Parent proof #" + sub.id, req.session.username || null],
+                        (err2b) => {
+                            if (err2b) { console.log(err2b); return res.status(500).json({ message: "Database error" }); }
+                            finish();
+                        }
+                    );
+                }
+                if (err2) { console.log(err2); return res.status(500).json({ message: "Database error" }); }
+                finish();
+            }
+        );
+    });
+}
+
+app.post("/payment-submission/:id/approve", requireLogin, requireAdmin, (req, res) => reviewSubmission(req, res, true));
+app.post("/payment-submission/:id/reject",  requireLogin, requireAdmin, (req, res) => reviewSubmission(req, res, false));
+
+/* ---------- MADRASAH CALENDAR (admin) --------------------------------
+   publishes ONE at a time: publishing auto-unpublishes the rest so the
+   parent portal never shows duplicates from different terms. */
+app.get("/calendars", requireLogin, (req, res) => {
+    connection.query("SELECT * FROM calendars ORDER BY updated_at DESC", (err, rows) => {
+        if (err) { console.log(err); return res.status(500).json({ message: "Database error" }); }
+        res.json(rows);
+    });
+});
+
+/* Portal sees ONLY published calendars; unpublish/delete => it is gone. */
+app.get("/portal/calendars", (req, res) => {
+    const sid = req.session && req.session.portalStudentId;
+    if (!sid) return res.status(401).json({ message: "Not logged in" });
+    connection.query("SELECT * FROM calendars WHERE published = 1 ORDER BY updated_at DESC LIMIT 5", (err, rows) => {
+        if (err) { console.log(err); return res.status(500).json({ message: "Database error" }); }
+        res.json(rows);
+    });
+});
+
+app.post("/calendar", requireLogin, requireAdmin, (req, res) => {
+    const id = Number(req.body.id) || 0;
+    const title = (req.body.title || "").trim();
+    const docStr = typeof req.body.doc === "string" ? req.body.doc : JSON.stringify(req.body.doc || {});
+    if (!title) return res.status(400).json({ message: "Calendar title is required." });
+    if (id) {
+        connection.query("UPDATE calendars SET title = ?, doc = ? WHERE id = ?", [title, docStr, id], (err) => {
+            if (err) { console.log(err); return res.status(500).json({ message: "Database error" }); }
+            res.json({ message: "Calendar saved", id });
+        });
+    } else {
+        connection.query("INSERT INTO calendars (title, doc, published) VALUES (?,?,0)", [title, docStr], (err, result) => {
+            if (err) { console.log(err); return res.status(500).json({ message: "Database error" }); }
+            res.json({ message: "Calendar saved", id: result.insertId });
+        });
+    }
+});
+
+app.post("/calendar-publish", requireLogin, requireAdmin, (req, res) => {
+    const id = Number(req.body.id);
+    const publish = Number(req.body.published) ? 1 : 0;
+    if (!id) return res.status(400).json({ message: "Calendar is required." });
+    const apply = () => connection.query("UPDATE calendars SET published = ? WHERE id = ?", [publish, id], (err) => {
+        if (err) { console.log(err); return res.status(500).json({ message: "Database error" }); }
+        res.json({ message: publish ? "Published - now visible on the parent portal." : "Unpublished - removed from the parent portal." });
+    });
+    if (publish) {
+        // ONE live calendar at a time - no duplicates from other terms.
+        connection.query("UPDATE calendars SET published = 0", (err) => {
+            if (err) { console.log(err); return res.status(500).json({ message: "Database error" }); }
+            apply();
+        });
+    } else {
+        apply();
+    }
+});
+
+app.delete("/calendar/:id", requireLogin, requireAdmin, (req, res) => {
+    connection.query("DELETE FROM calendars WHERE id = ?", [req.params.id], (err) => {
+        if (err) { console.log(err); return res.status(500).json({ message: "Database error" }); }
+        res.json({ message: "Calendar deleted" });
     });
 });
 

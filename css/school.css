@@ -279,3 +279,178 @@ table.mg-table tr:last-child td{ border-bottom:none; }
   .sc-hero{ padding:48px 16px 42px; }
   .pt-pub-row button{ margin-left:0; width:100%; }
 }
+
+/* ==========================================================================
+   APPENDED (pack 15)
+   ========================================================================== */
+
+/* FIX (pack 15 - portal print blank page 2, owner request): the portal
+   body has min-height:100vh which pushes an empty second page when saving
+   the result as PDF. Reset it hard at print time. */
+@media print{
+  html, body{ min-height:0 !important; height:auto !important; }
+  .pt-body{ min-height:0 !important; }
+  .pt-wrap{ background:#fff !important; }
+}
+
+/* ---------------- MADRASAH CALENDAR sheet (paper replica) ------------ */
+.cal-sheet{
+  width:190mm; max-width:100%;
+  margin:10px auto; padding:9mm 10mm 0;
+  background:#fff; color:#111;
+  font-family:"Times New Roman", Georgia, serif;
+  box-shadow:0 4px 22px rgba(15,61,46,.14);
+  box-sizing:border-box;
+}
+.cal-head{ position:relative; padding-left:66px; }
+.cal-logo{ position:absolute; left:0; top:2px; width:56px; height:56px; object-fit:cover; border-radius:50%; }
+.cal-head-text{ text-align:center; }
+.cal-bismillah{ height:30px; display:block; margin:0 auto 2px; }
+.cal-name-ar{ font-size:17px; line-height:1.2; }
+.cal-name-band{
+  background:#000; color:#fff; font-weight:800; letter-spacing:.6px;
+  font-size:19.5px; padding:3px 8px; margin:4px 0 3px; text-transform:uppercase;
+}
+.cal-contact{ font-size:10.5px; line-height:1.45; }
+.cal-motto{
+  font-size:12px; display:inline-block; margin-top:2px; padding-bottom:2px;
+  border-bottom:3px solid #000; font-weight:700; letter-spacing:.4px;
+}
+.cal-refs{
+  display:flex; justify-content:space-between; gap:10px;
+  font-size:12px; border-top:2px solid #000; margin-top:10px; padding-top:6px;
+}
+.cal-title{
+  text-align:center; font-weight:800; font-size:14.5px; text-transform:uppercase;
+  text-decoration:underline; margin:10px 0 8px; letter-spacing:.3px;
+}
+.cal-table{ width:100%; border-collapse:collapse; font-size:12px; }
+.cal-table th, .cal-table td{ border:1.6px solid #222; padding:4px 7px; text-align:left; vertical-align:middle; }
+.cal-table th{ font-weight:800; text-transform:uppercase; }
+.cal-table .w{ width:10%; font-weight:700; text-align:center; }
+.cal-table .d{ width:26%; text-align:center; }
+.cal-note-row td{ font-size:12.5px; }
+.cal-lessons{ margin-top:12px; font-size:12px; }
+.cal-lessons-title{ font-weight:800; text-decoration:underline; margin-bottom:6px; }
+.cal-lesson-row{ display:flex; justify-content:space-between; gap:14px; margin:5px 0; line-height:1.35; }
+.cal-lesson-row span{ flex:1; }
+.cal-lesson-row b{ min-width:190px; text-align:left; font-weight:700; }
+.cal-sigs{ display:flex; justify-content:space-between; gap:40px; margin:26px 6% 0; }
+.cal-sig-box{ flex:1; text-align:center; }
+.cal-sig-img{ height:42px; display:block; margin:0 auto -6px; }
+.cal-sig-blank{ display:block; height:42px; }
+.cal-sig-line{ border-top:2px solid #000; margin:0 12%; }
+.cal-sig-title{ font-size:11.5px; letter-spacing:.4px; margin-top:3px; }
+.cal-bottom-band{
+  height:12px; margin-top:14px;
+  background:linear-gradient(to right, #000 0%, #000 100%);
+}
+
+/* Print: ONLY the calendar sheet, one page (outranks the frozen
+   style.css print rule - the wrapper is not #reportContainer). */
+@media print{
+  body > .mng-page:not(#reportContainer){
+    display:block !important; margin:0 !important; padding:0 !important; background:#fff !important;
+  }
+  .mng-head, .mg-card, .mng-page > h3, .mg-msg{ display:none !important; }
+  #calPreviewWrap:not(#reportContainer){
+    display:block !important; margin:0 !important; padding:0 !important; overflow:visible !important;
+  }
+  .cal-sheet{
+    margin:0 auto !important; box-shadow:none !important;
+    width:auto !important; padding:4mm 1mm 0 !important;
+  }
+}
+
+/* ----------------------- HOMEPAGE beauty (pack 15) ------------------- */
+.sc-hero{ position:relative; overflow:hidden; }
+.sc-hero::after{
+  content:""; position:absolute; inset:0; pointer-events:none;
+  background:
+    radial-gradient(600px 220px at 15% 110%, rgba(255,255,255,.10), transparent 60%),
+    radial-gradient(400px 200px at 90% 20%, rgba(201,162,39,.18), transparent 60%);
+}
+.sc-hero-badges{
+  display:flex; gap:10px; justify-content:center; flex-wrap:wrap; margin-top:22px; position:relative; z-index:2;
+}
+.sc-hero-badge{
+  background:rgba(255,255,255,.12); border:1px solid rgba(255,255,255,.35);
+  color:#EAF6F0; font-size:12.5px; font-weight:700; padding:7px 14px; border-radius:999px;
+  backdrop-filter:blur(4px);
+}
+.sc-why-grid{ display:grid; grid-template-columns:repeat(auto-fit,minmax(230px,1fr)); gap:16px; }
+.sc-why-card{
+  background:#fff; border:1px solid var(--sc-border); border-radius:var(--sc-radius);
+  padding:22px 18px; transition:.15s; text-align:center;
+}
+.sc-why-card:hover{ transform:translateY(-3px); box-shadow:0 12px 26px rgba(15,61,46,.12); border-color:var(--sc-green-3); }
+.sc-why-card .ico{ font-size:30px; display:block; margin-bottom:8px; }
+.sc-why-card b{ color:var(--sc-green-1); }
+.sc-why-card p{ color:var(--sc-muted); font-size:13px; margin:6px 0 0; line-height:1.55; }
+
+.sc-prog-band{
+  background:linear-gradient(135deg,#0F3D2E,#1C5A42);
+  border-radius:var(--sc-radius); color:#EAF6F0; padding:26px;
+  display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:18px;
+}
+.sc-prog{ background:rgba(255,255,255,.07); border:1px solid rgba(255,255,255,.18); border-radius:12px; padding:18px; }
+.sc-prog b{ color:#F3E3AC; display:block; margin-bottom:6px; font-size:15px; }
+.sc-prog p{ font-size:12.5px; line-height:1.55; margin:0; opacity:.92; }
+
+.sc-steps{ display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:14px; }
+.sc-step{ background:#F6FAF8; border:1.5px dashed var(--sc-border); border-radius:12px; padding:18px; text-align:center; }
+.sc-step .num{
+  display:inline-flex; align-items:center; justify-content:center;
+  width:34px; height:34px; border-radius:50%; color:#fff; font-weight:800; font-size:15px;
+  background:linear-gradient(135deg,var(--sc-green-2),var(--sc-green-3));
+  margin-bottom:8px;
+}
+.sc-step b{ color:var(--sc-green-1); display:block; }
+.sc-step p{ color:var(--sc-muted); font-size:12.5px; margin:6px 0 0; line-height:1.5; }
+
+/* ------------------- PORTAL: fees & proof & calendar ----------------- */
+.pt-fee-row{
+  display:grid; grid-template-columns:1.4fr 1fr 1fr 1fr; gap:8px; align-items:center;
+  padding:9px 4px; border-bottom:1px dashed #E4EEE9; font-size:13.5px;
+}
+.pt-fee-row.head{ font-size:11px; font-weight:800; text-transform:uppercase; color:var(--sc-muted); letter-spacing:.5px; }
+.pt-fee-row b{ font-weight:700; }
+.pt-fee-total{ font-weight:800 !important; color:var(--sc-green-1); border-bottom:none; background:#F0F7F3; border-radius:8px; padding:10px; margin-top:6px; }
+.pt-right{ text-align:right; }
+.pt-status-paid{ color:#157347; font-weight:800; font-size:12px; }
+.pt-status-owing{ color:#B3261E; font-weight:800; font-size:12px; }
+
+.pt-bank{
+  display:flex; flex-wrap:wrap; gap:8px 16px; align-items:center;
+  border:1.5px solid var(--sc-border); border-radius:12px; padding:12px 14px; margin-bottom:10px;
+  background:#FBFDFC;
+}
+.pt-bank b{ color:var(--sc-green-1); font-size:15px; }
+.pt-bank .num{ font-size:16px; font-weight:800; letter-spacing:1px; }
+
+.pt-form-grid{ display:grid; gap:12px; margin-top:12px; }
+.pt-form-grid label{ font-size:12px; font-weight:800; color:var(--sc-green-1); display:block; margin-bottom:4px; }
+.pt-form-grid input, .pt-form-grid select{
+  font:inherit; padding:10px 12px; border:1.5px solid var(--sc-border); border-radius:10px; width:100%; box-sizing:border-box;
+}
+.pt-msg{ display:none; font-size:13px; font-weight:700; padding:10px 12px; border-radius:10px; margin-top:10px; }
+.pt-msg.ok{ display:block; background:#E2F4EA; color:#157347; }
+.pt-msg.err{ display:block; background:#FBE9E7; color:#B3261E; }
+
+.pt-sub-badge{ font-size:11px; font-weight:800; padding:3px 10px; border-radius:999px; }
+.pt-sub-pending{ background:#FBF3D9; color:#8a6a08; }
+.pt-sub-approved{ background:#E2F4EA; color:#157347; }
+.pt-sub-rejected{ background:#FBE9E7; color:#B3261E; }
+
+/* Dashboard alert card (admin) */
+.ams-alert-card{
+  display:none; gap:10px; flex-wrap:wrap;
+  background:#FFF8E8; border:1.5px solid #E7D08B; border-radius:14px; padding:14px 16px; margin-bottom:16px;
+}
+.ams-alert-card.show{ display:flex; }
+.ams-alert-chip{
+  background:#fff; border:1.5px solid #E7D08B; border-radius:999px; padding:8px 14px;
+  font-size:13px; font-weight:800; color:#7A5A00; text-decoration:none;
+}
+.ams-alert-chip.red{ border-color:#F0C4C0; color:#B3261E; background:#FFF5F4; }
+.ams-alert-chip small{ display:block; font-weight:600; color:#8B7A45; font-size:11px; }

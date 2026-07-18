@@ -539,3 +539,38 @@ passed, probes cleaned.
 
 Result calculations, grading, positions, report card generation, printing
 and every staff query: completely untouched.
+
+---
+
+## Feature pack 15 - PDF/print fixes, homepage v2, fee types, parent payments, alerts, bank accounts, madrasah calendar (owner requests)
+
+**"The student portal is having blank page 2 under the result PDF download"** /
+**"Let admin be able to delete payment and let the download PDF display well"** /
+**"Remove the school module in the home website and let that home very fine and interesting"** /
+**"Space to assign different fees per class and select for student when paying - school fee, developmental fee, exam fee... and admin is notified on the dashboard if a student did not pay monthly school fees and it is already late"** /
+**"Admin can put more than one account details for the parent portal; parents see amount paid and balance and can print it; they can also pay and send a screenshot or PDF of the payment which appears to the admin"** /
+**"Add space for admin to create this calendar (photo) and print on one page"** /
+**"The calendar appears on the student/parent portal and is gone if admin unpublishes or deletes it - no duplicates from different terms."**
+
+| File | What happened |
+|---|---|
+| `js/ams-pdf.js` | REWRITTEN: every text runs through an Arabic-safe writer (non-Latin text like Arabic class names is painted by the device's own fonts onto a canvas and placed as an image) - garbage characters are gone. Receipt now has a FEE TYPE row; NEW `amsFeeStatementPDF` (per-type fee/paid/balance + totals). |
+| `css/school.css` | FIX: portal print blank page 2 (min-height reset at print). NEW: calendar paper replica styles + its print-one-page rules; homepage beauty styles; portal fee/proof/calendar styles; admin alert card. |
+| `index.html` | "Portal Modules" section REMOVED (owner request). Homepage redesigned: hero badges, stats, Why Choose Us (6 cards), Programs band, 3-step admission, role logins. |
+| `server.js` | NEW tables: fee_types (seeded School/Developmental/Exam Fee), fee_structure2 (per type/class/term/session), bank_accounts, payment_submissions, calendars (published flag - ONE live at a time). Guarded migrations: fee_payments+fee_type, school_settings+due_day/current_term, v1 -> v2 copy. NEW routes: fee-types CRUD, fee-structure2, fee-balance-v2, /fee-alerts (late = past due_day), bank-accounts (public read, admin write), portal /portal/fees, /portal/payment-submission (evidence upload), /portal/my-submissions, /portal/calendars (published only), admin /payment-submissions (+approve -> real payment, /-reject), calendars CRUD + /calendar-publish (auto-unpublishes the rest). `/fee-payment` now tags the fee type (legacy fallback kept); finance-summary counts ALL types; settings save due_day + current_term. Evidence files -> uploads/payment-evidence (created at boot). |
+| `finance.html`, `js/finance.js` | Fee-Type picker + Manage Fee Types (add/remove custom types); fees saved per type; payments tagged per type with per-type balance breakdown; payments table shows the type; receipts/statements include it; NEW "Parent Payments" tab: review uploaded proofs, Approve (becomes a real payment) or Reject, pending-count badge. Delete + receipt PDF from pack 14 kept. |
+| `school-settings.html`, `js/school-settings.js` | Current Term + school-fee due day (powers dashboard late alert); Payment Bank Accounts manager (add/delete many accounts). |
+| `portal.html`, `js/portal.js` | "My Fees & Balance" card (per type + TOTAL + Statement PDF), "Where to Pay" (bank accounts), "Send Payment Proof" (screenshot/PDF upload + status list: pending/approved/rejected), "School Calendar" card - shows ONLY the published calendar with Download PDF; result print keeps the frozen single-page design. |
+| `js/calendar-render.js` | NEW shared renderer: replicates the school's letterhead calendar (logo, bismillah, Arabic name, black name band, refs, weeks table, note row, lesson hours, two signatures, bottom band) from editable data. Defaults pre-filled from the real paper photo. |
+| `manage-calendars.html`, `js/calendar-editor.js` | NEW calendar studio: edit everything (activities, lesson times, note, signature titles + saved signatures), live preview, ONE-page print, PDF download, save, publish (one live at a time - publishing unpublishes the rest, no duplicates), unpublish/delete (instantly gone from the portal). |
+| `teacher-dashboard.html` | Nav link "Madrasah Calendar" + NEW admin alert card (late school fees after due day - with count; parent proofs pending review - with count; links to Finance). Teachers never see it. |
+| `sw.js` | Cache v3 so phones pick up everything fresh. |
+
+Verified LIVE: all 5 tables + guarded migrations run, fee types seeded,
+portal fees return real balances, calendar publish/unpublish visibility
+on the portal confirmed end-to-end, payment proof upload + listing
+confirmed (file stored), homepage modules section gone, restricted admin
+routes all 401/403 for non-admins, test rows cleaned.
+
+Result calculations, grading, positions, report card generation, printing
+and every staff query: completely untouched.
