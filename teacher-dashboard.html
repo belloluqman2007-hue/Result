@@ -157,6 +157,26 @@
              teachers and when there is nothing to show. -->
         <div class="ams-alert-card" id="amsAdminAlerts"></div>
 
+        <!-- NEW (pack 16): the LIVE school calendar for ALL staff - admin
+             AND teachers (owner request). Shows only when the admin has
+             published a calendar; it disappears by itself when the admin
+             unpublishes or deletes it (same rule as the parent portal, so
+             no duplicates from different terms). Read-only + PDF download;
+             editing stays admin-only in the calendar studio. -->
+        <div class="ams-panel" id="amsPubCalCard" style="display:none; margin-bottom:22px;">
+          <div class="ams-panel-head">
+            <h3 class="ams-panel-title">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4"/><path d="M8 2v4"/><path d="M3 10h18"/></svg>
+              School Calendar
+            </h3>
+            <span style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+              <span class="ams-panel-sub" id="amsPubCalTitle" style="margin:0;"></span>
+              <button type="button" class="m-btn-sm" id="amsPubCalPdfBtn">&#11015; Download PDF</button>
+            </span>
+          </div>
+          <div id="amsPubCalHolder" style="overflow-x:auto;"></div>
+        </div>
+
         <!-- ======================================================
              STAT CARDS: the three original counters keep their
              EXACT ids (studentCount / subjectCount / resultCount)
@@ -565,6 +585,14 @@
   <script src="js/subject.js"></script>
   <script src="js/dashboard.js"></script>
 
+  <!-- NEW (pack 16): staff calendar viewer - PDF libs + the shared calendar
+       renderer (same one used by the parent portal and the admin studio)
+       + the dashboard viewer itself. Additive only. -->
+  <script src="js/vendor/html2canvas.min.js"></script>
+  <script src="js/vendor/jspdf.umd.min.js"></script>
+  <script src="js/calendar-render.js"></script>
+  <script src="js/teacher-calendar.js"></script>
+
   <!-- NEW (PWA conversion): registers the service worker + install button. Additive only. -->
   <script src="js/pwa.js" defer></script>
   <!-- NEW (pack 15): admin mo-money alerts - late school fees (past the
@@ -607,7 +635,20 @@
                           "\u{1F9FE} " + n + " parent payment proof" + (n === 1 ? "" : "s") + " pending review" +
                           "<small>open Finance - Parent Payments tab</small></a>";
                 }
-                showAlerts(html);
+                // NEW (pack 17 - owner request): warn which students'
+                // payments still have NO snapped receipt photo, so admin
+                // remembers to snap and attach them (parents see the photo).
+                return fetch("/receipt-alerts?term=" + encodeURIComponent(term) + "&session=" + encodeURIComponent(session))
+                  .then(function (r) { return r.ok ? r.json() : []; })
+                  .then(function (miss) {
+                    if (Array.isArray(miss) && miss.length) {
+                      var names = miss.slice(0, 3).map(function (m) { return (m.full_name || m.student_id); }).join(", ");
+                      html += '<a class="ams-alert-chip" href="finance.html" title="Snap receipts in Finance">' +
+                              "\u{1F4F7} " + miss.length + " payment(s) missing receipt photo" +
+                              "<small>" + names + (miss.length > 3 ? ", +" + (miss.length - 3) + " more" : "") + " - snap the receipt in Finance</small></a>";
+                    }
+                    showAlerts(html);
+                  });
               })
               .catch(function () { showAlerts(html); });
           })

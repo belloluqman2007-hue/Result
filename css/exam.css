@@ -389,19 +389,24 @@ body{
 }
 .page-one .cover-arabic-name{
   font-family:'Sakkal Majalla','Traditional Arabic','Amiri',serif;
-  font-size:36pt;
+  /* CHANGED (pack 17 - owner: "arabic school name is too big, reduce
+     small"): 36pt -> 30pt, with a touch more breathing room so it never
+     drops onto the logo above or the English name below. */
+  font-size:30pt;
   font-weight:700;
-  line-height:1.25;
+  line-height:1.3;
   letter-spacing:normal;
   text-align:center;
-  margin:1mm 0 2mm;
+  margin:2mm 0 2.5mm;
 }
 .page-one .cover-english-name{
   font-family:'Times New Roman',Times,serif;
-  font-size:16pt;
+  /* CHANGED (pack 17 - owner: "English name big small" = a little
+     bigger): 16pt -> 17pt. */
+  font-size:17pt;
   font-weight:700;
   letter-spacing:.4px;
-  line-height:1.3;
+  line-height:1.35;
   text-align:center;
   margin:0 0 5mm;
 }
@@ -419,18 +424,22 @@ body{
   font-family:'Times New Roman',Times,serif;
   font-size:16pt;
   font-weight:700;
-  line-height:1.3;
+  /* CHANGED (pack 17 - owner: lines must not "drop on each other"):
+     more air between the address and the lines under it. */
+  line-height:1.4;
   text-align:center;
   margin:0 0 3mm;
 }
 .page-one .cover-tel,
 .page-one .cover-email{
   font-family:'Times New Roman',Times,serif;
-  font-size:20pt;
+  /* CHANGED (pack 17 - owner: lines piling on each other): 20pt -> 18pt
+     with wider line spacing and a real gap between Tel and E-mail. */
+  font-size:18pt;
   font-weight:700;
-  line-height:1.25;
+  line-height:1.35;
   text-align:center;
-  margin:0 0 1mm;
+  margin:0 0 2mm;
 }
 .page-one .cover-email a{
   color:#0563C1;          /* Word-style hyperlink, exactly like the paper */
@@ -453,7 +462,9 @@ body{
   font-family:'Sakkal Majalla','Traditional Arabic','Amiri',serif;
   font-size:20pt;
   font-weight:700;
-  line-height:1.35;
+  /* CHANGED (pack 17 - owner: lines not dropping on each other): roomier
+     line height for the voweled Arabic line. */
+  line-height:1.5;
   text-align:center;
   margin:0 0 5mm;
 }

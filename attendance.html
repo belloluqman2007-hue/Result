@@ -91,6 +91,29 @@
           <tbody><tr><td colspan="7" style="text-align:center; color:#5B6B62;">Choose a date range (uses the class picked above).</td></tr></tbody>
         </table>
       </div>
+
+      <!-- NEW (pack 17 - owner request): EVERY day attendance was marked
+           for ONE particular student - dates in compact rows (date | day |
+           status) and the same list downloads as a clean PDF. Kept short
+           and tidy: a slim scroll box, not an endless page. -->
+      <div class="mg-card" style="margin-top:14px;">
+        <h3>&#128100; Student Attendance History</h3>
+        <div class="mg-toolbar">
+          <div class="mg-field" style="flex:1 1 240px;">
+            <label for="attStuPick">Student (from the class picked above)</label>
+            <select id="attStuPick"><option value="">Pick a student</option></select>
+          </div>
+          <button class="mg-btn" type="button" onclick="loadStudentHistory()">Show History</button>
+          <button class="mg-btn-light" type="button" onclick="downloadStudentHistoryPDF()">&#11015; Download PDF</button>
+        </div>
+        <div id="attStuSummary" style="margin-bottom:8px; font-weight:700; color:#0F3D2E;"></div>
+        <div class="mg-table-wrap att-stu-scroll">
+          <table class="mg-table" id="attStuTable">
+            <thead><tr><th>#</th><th>Date</th><th>Day</th><th>Status</th></tr></thead>
+            <tbody><tr><td colspan="4" style="text-align:center; color:#5B6B62;">Pick a student and press "Show History".</td></tr></tbody>
+          </table>
+        </div>
+      </div>
     </div>
 
     <div class="mg-msg" id="attMsg"></div>

@@ -257,27 +257,13 @@ function loadCalendars() {
 
 /* --------------------------- download PDF --------------------------- */
 function calDownloadPDF() {
-  calPreview();
-  var sheet = document.querySelector("#calPreviewWrap .cal-sheet");
-  if (!sheet) return;
+  // CHANGED (pack 17 - owner: "the calendar PDF is shrinking, let it fill
+  // the page from up to down"): the studio now uses the SAME shared
+  // builder as the portal/dashboard - FULL letterhead, FILLS the whole
+  // A4 page. File name stays the calendar's own name.
+  var name = (document.getElementById("calName").value || "calendar").replace(/[^a-zA-Z0-9\-_ ]/g, "").trim() || "calendar";
   calNotify("Building PDF...", true);
-
-  window.html2canvas(sheet, { scale: 2, backgroundColor: "#ffffff", useCORS: true })
-    .then(function (canvas) {
-      var pdf = new window.jspdf.jsPDF({ unit: "pt", format: "a4" });
-      var pageW = 595.28, pageH = 841.89;
-      var margin = 18;
-      var ratio = canvas.height / canvas.width;
-      var imgW = pageW - margin * 2;
-      var imgH = imgW * ratio;
-      if (imgH > pageH - margin * 2) { // always ONE page
-        imgH = pageH - margin * 2;
-        imgW = imgH / ratio;
-      }
-      pdf.addImage(canvas.toDataURL("image/jpeg", 0.92), "JPEG", (pageW - imgW) / 2, margin, imgW, imgH);
-      var name = (document.getElementById("calName").value || "calendar").replace(/[^a-zA-Z0-9\-_ ]/g, "").trim() || "calendar";
-      pdf.save(name.replace(/\s+/g, "-") + ".pdf");
-      calNotify("\u2705 PDF downloaded.", true);
-    })
-    .catch(function () { calNotify("Could not build the PDF. Try Print instead.", false); });
+  amsCalendarPDF(calReadDoc(), calSigMap || {}, function () {
+    calNotify("\u2705 PDF downloaded (fills the whole page).", true);
+  }, name.replace(/\s+/g, "-") + ".pdf");
 }

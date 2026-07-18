@@ -230,6 +230,22 @@ function savePayment() {
     .catch(function () { finNotify("Network error - payment NOT saved.", false); });
 }
 
+/* NEW (pack 17): upload the snapped receipt photo for ONE payment, then
+   refresh the list so the View/Remove buttons appear. */
+function uploadReceiptPhoto(row, file) {
+  if (file.size && file.size > 8 * 1024 * 1024) { finNotify("Photo is too big (max 8MB).", false); return; }
+  var fd = new FormData();
+  fd.append("receipt", file);
+  finNotify("Uploading receipt photo\u2026", true);
+  fetch("/fee-payment/" + row.id + "/receipt", { method: "POST", body: fd })
+    .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, d: d }; }); })
+    .then(function (res) {
+      finNotify(res.ok ? "\u2705 " + (res.d.message || "Receipt saved") : (res.d.message || "Could not save the receipt photo."), res.ok);
+      if (res.ok) loadStudentPayments();
+    })
+    .catch(function () { finNotify("Network error - receipt photo NOT saved.", false); });
+}
+
 function loadStudentPayments() {
   var sid = document.getElementById("payStudent").value;
   var ts = finTermSession();
@@ -276,6 +292,54 @@ function loadStudentPayments() {
           btnD.style.marginLeft = "6px";
           btnD.addEventListener("click", function () { deletePayment(row); });
           tdAct.appendChild(btnD);
+
+          /* NEW (pack 17 - owner request): snap a photo of the receipt
+             written in school and pin it to this payment. The parent
+             sees it in their portal; admin can view/replace/remove it
+             (e.g. if the photo is not clear). */
+          var fileInput = document.createElement("input");
+          fileInput.type = "file";
+          fileInput.accept = "image/*";
+          fileInput.style.display = "none";
+          fileInput.addEventListener("change", function () {
+            if (fileInput.files && fileInput.files[0]) uploadReceiptPhoto(row, fileInput.files[0]);
+          });
+          tdAct.appendChild(fileInput);
+
+          var btnSnap = document.createElement("button");
+          btnSnap.className = "mg-btn-light";
+          btnSnap.type = "button";
+          btnSnap.textContent = "\u{1F4F7}";
+          btnSnap.title = row.receipt_path ? "Replace the receipt photo" : "Upload the receipt photo (parent sees it)";
+          btnSnap.style.marginLeft = "6px";
+          btnSnap.addEventListener("click", function () { fileInput.click(); });
+          tdAct.appendChild(btnSnap);
+
+          if (row.receipt_path) {
+            var btnView = document.createElement("button");
+            btnView.className = "mg-btn-light";
+            btnView.type = "button";
+            btnView.textContent = "\u{1F5BC}";
+            btnView.title = "View the receipt photo";
+            btnView.style.marginLeft = "6px";
+            btnView.addEventListener("click", function () { window.open("/" + row.receipt_path, "_blank"); });
+            tdAct.appendChild(btnView);
+
+            var btnNoRec = document.createElement("button");
+            btnNoRec.className = "mg-btn-light mg-btn-danger";
+            btnNoRec.type = "button";
+            btnNoRec.textContent = "\u2716";
+            btnNoRec.title = "Remove the receipt photo (unclear/wrong)";
+            btnNoRec.style.marginLeft = "6px";
+            btnNoRec.addEventListener("click", function () {
+              if (!confirm("Remove this receipt photo? The parent will stop seeing it.")) return;
+              fetch("/fee-payment/" + row.id + "/receipt", { method: "DELETE" })
+                .then(function (r) { return r.json(); })
+                .then(function (d) { finNotify(d.message || "Receipt removed.", true); loadStudentPayments(); })
+                .catch(function () { finNotify("Could not remove the receipt photo.", false); });
+            });
+            tdAct.appendChild(btnNoRec);
+          }
 
           tr.appendChild(tdAct);
           tbody.appendChild(tr);

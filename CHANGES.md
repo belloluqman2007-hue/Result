@@ -574,3 +574,57 @@ routes all 401/403 for non-admins, test rows cleaned.
 
 Result calculations, grading, positions, report card generation, printing
 and every staff query: completely untouched.
+
+## Feature pack 16 - the published school calendar now appears for TEACHERS too (owner request)
+
+**"And the calendar will appear on student parent portal and will be gone if admin unpublish it or delete to avoid different duplicates from different terms and will also appear for teachers also"**
+
+| File | What happened |
+|---|---|
+| `teacher-dashboard.html` | NEW "School Calendar" card on the staff dashboard (visible to admin AND teachers). Shows ONLY the published calendar - the exact same one parents see. It hides itself automatically when the admin unpublishes or deletes the calendar, so there are never duplicates from different terms. Includes a Download PDF button (one-page A4, same as the portal). |
+| `js/teacher-calendar.js` | NEW: loads the live calendar (`GET /calendars?published=1`), renders it with the shared calendar renderer + saved signatures, and builds the one-page PDF. Read-only - staff cannot edit from here. |
+| `server.js` | NEW: `GET /calendars?published=1` returns only the live calendar for any logged-in staff member (the plain `/calendars` list used by the admin studio is unchanged). Publish/unpublish/delete still admin-only. |
+| `sw.js` | Cache v4 so phones pick up the new dashboard files fresh. |
+
+How it works in practice: admin publishes the term calendar in
+**Madrasah Calendar** -> it INSTANTLY appears on the parent portal AND on
+every staff dashboard. Admin unpublishes or deletes it -> it disappears
+from BOTH places with nothing left behind. Only one calendar can be live
+at a time, so old terms never pile up.
+
+Result calculations, grading, positions, report card generation, printing
+and every staff query: completely untouched.
+
+## Feature pack 17 - multi-exam PDF fix, exam tools font size + Word download, cover header air, calendar fills page, receipt photos, attendance history, settings-save fix (owner requests)
+
+**"The other exams after the first one is not displaying well if downloaded - the cover will fit but the exam written there will not display well except the first written exam"** /
+**"Add font size to the exam tools"** /
+**"If saved exam is open it must automatically go to step 2 in the exam tools"** /
+**"The arabic school name on the exam is too big, reduce small; English name big small; nothing should drop on each other"** /
+**"Download as word document for external editing"** /
+**"The madrasah calendar PDF download is shrinking - fill the page from up to down"** /
+**"Add all user space for signature; calendar shows the principal and head teacher signatures from Manage Signature"** /
+**"Space to upload image in the payment - the snapped receipt written in school - parent will also see it; admin can remove it"** /
+**"Admin notified on the dashboard if the snapped receipt is not yet uploaded for a particular student"** /
+**"Attendance shows all days marked for a particular student with dates in a row, in the PDF too, compact"** /
+**"If a class+date already done is picked, all saved marks must appear with the warning"** /
+**"The save profile in school settings is not working - fix that"** /
+**"Calendar view on the portal/teacher dashboard: hide the header on screen; it appears in the download to avoid the long view"**
+
+| File | What happened |
+|---|---|
+| `js/exam.js` | FIX (big one): the auto font-fit used to overshoot on phone fonts and slam exam 2+ questions to the tiny 12pt floor - now it binary-searches the LARGEST size that really fits, and a NEW uniform pass gives every one-page exam in the booklet the SAME text size (fullest exam sets it) so all exams display alike. NEW: font-size picker inside the Step-2 exam tools, synced with Step 1. CHANGED: opening a saved exam lands in Step 2 for editing (subject is pre-selected so the gate passes instantly). NEW: Download Word (.doc) - fully editable copy for external editing. |
+| `create-exam.html` | Font Size select in the exam tools toolbar; Download Word buttons in both action bars. |
+| `css/exam.css` | Cover header reset: Arabic name 36 -> 30pt, English name 16 -> 17pt, tel/email 20 -> 18pt, airier line spacing - lines no longer collide. |
+| `server.js` | FIX: Save Profile in School Settings was silently failing (11 placeholders for 10 values in the pack-15 INSERT - a SQL syntax error every single time; verified against the live MySQL 9.4 DB and now correct). NEW migration: fee_payments.receipt_path (ran, verified live). NEW routes: POST/DELETE /fee-payment/:id/receipt (admin receipt photo), /receipt-alerts (payments missing receipts, with student names), /portal/payments (parent sees own payments + receipt link, legacy fallback), /attendance/student (every marked day for one student). /save-signature now also accepts staff_ user slots. |
+| `js/finance.js` | Payments table: upload/view/replace/remove the receipt photo per payment (parent sees it instantly). |
+| `js/portal.js` | NEW "Payments Recorded by the School" list under My Fees & Balance with a View-receipt link when admin snapped one. |
+| `teacher-dashboard.html` | NEW admin alert chip: N payments missing receipt photo (first student names shown, links to Finance). |
+| `js/attendance.js`, `attendance.html`, `js/ams-pdf.js`, `css/school.css` | Register AUTO-loads the moment class+date are picked; if that date was marked, the saved marks appear with the "date already marked" warning (still editable). NEW Student Attendance History card: one row per marked day (date | day | status), slim scroll box, totals + present %, and a matching compact PDF (NEW amsStudentAttendancePDF). |
+| `js/calendar-render.js`, `css/school.css`, `js/portal.js`, `js/teacher-calendar.js`, `js/calendar-editor.js` | Calendar view is now COMPACT on screen (letterhead/refs/bottom band hide) for parents and teachers; a NEW shared builder (amsCalendarPDF) always renders the FULL letterhead sheet and FILLS the whole A4 page top to bottom - used by the portal, the dashboard and the admin studio. |
+| `js/signature.js` | Every login user from Manage Users now gets a signature slot (staff_username) beside the four officials; the calendar keeps pulling Principal + Head Teacher automatically. |
+| `sw.js` | Cache v5. |
+
+Verified in a real browser + live DB: multi-exam booklet renders uniform & readable (screenshots), saved exam lands on Step 2, Word/PDF downloads fire, cover header has air, calendar PDF fills the whole page, compact view hides the letterhead, receipt upload/portal visibility/alerts/routes all work, register auto-loads with the duplicate-date warning, student history + PDF verified, and the settings INSERT now succeeds on the live database.
+
+Result calculations, grading, positions, report card generation, printing and every staff result query: completely untouched.

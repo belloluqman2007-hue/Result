@@ -103,15 +103,22 @@ function initExam() {
 
     // NEW (question font size feature): the teacher picks the starting
     // size in Step 1; the auto-fit still shrinks it if questions spill.
+    // CHANGED (pack 17 - owner: "add font size to the exam tools"): the
+    // same picker now also lives in the Step 2 toolbar
+    // (examFontSelectTools) - both stay in sync either way, so the
+    // teacher never has to go back to Step 1 to resize questions.
     const fontSel = document.getElementById("examFontSelect");
-    if (fontSel) {
-        fontSel.addEventListener("change", function () {
-            document.querySelectorAll("#examFlow .exam-body").forEach(function (b) {
-                b.style.fontSize = fontSel.value + "pt";
-            });
-            paginateExam();
+    const fontSelTools = document.getElementById("examFontSelectTools");
+    function applyExamFontFrom(val, other) {
+        document.querySelectorAll("#examFlow .exam-body").forEach(function (b) {
+            b.style.fontSize = val + "pt";
         });
+        if (other && other.value !== val) other.value = val;
+        paginateExam();
     }
+    if (fontSel) fontSel.addEventListener("change", function () { applyExamFontFrom(fontSel.value, fontSelTools); });
+    if (fontSelTools) fontSelTools.addEventListener("change", function () { applyExamFontFrom(fontSelTools.value, fontSel); });
+    if (fontSel && fontSelTools) fontSelTools.value = fontSel.value;
 
     refreshAllPageHeaders();
     paginateExam();
@@ -529,6 +536,29 @@ function paginateExam() {
 
     segments.forEach(function (seg) { paginateSegment(flow, seg); });
 
+    /* NEW (pack 17 - owner: "let it all display as the first one
+       display"): ONE question text size for the whole downloaded
+       booklet. Each auto-fitted exam used to shrink on its own, so the
+       first exam printed full-size while a fuller exam printed tiny and
+       cramped. Now every one-page exam shares the size that fitted the
+       FULLEST exam - applying a smaller size can never overflow a page,
+       so this is always safe. Exams split with manual page breaks keep
+       the chosen (full) size, exactly like before. */
+    let docFit = Infinity;
+    segments.forEach(function (seg) {
+        if (seg.bodies.some(function (p) { return !!p.querySelector(".manual-page-break"); })) return;
+        const c = seg.bodies[0] && seg.bodies[0].querySelector(".page-content");
+        const pt = c && parseFloat(c.style.fontSize);
+        if (pt) docFit = Math.min(docFit, pt);
+    });
+    if (docFit !== Infinity) {
+        segments.forEach(function (seg) {
+            if (seg.bodies.some(function (p) { return !!p.querySelector(".manual-page-break"); })) return;
+            const c = seg.bodies[0] && seg.bodies[0].querySelector(".page-content");
+            if (c) c.style.fontSize = docFit + "pt";
+        });
+    }
+
     refreshAllPageHeaders();
     checkAllPagesOverflow();
     updateExamZoom(); // NEW (true A4 on every screen): page count changed
@@ -549,6 +579,14 @@ function examBaseFontPt() {
    page budget. Measured live, so wrapping is accounted for - the page
    count NEVER grows from typing; only an explicit "Insert Page Break"
    gives a section more than one page. */
+/* CHANGED (pack 17 - "the other exams after the first one is not
+   displaying well"): the old proportional shrink OVERSHOT badly on phone
+   fonts (Amiri measures far taller than Sakkal Majalla): one big
+   overshoot slammed the font to the 12pt floor and STOPPED there with no
+   grow-back, so exam 2, 3... printed TINY on half a page while exam 1
+   stayed full-size. The fitter now binary-searches between the floor and
+   the teacher's chosen size and keeps the LARGEST size that truly fits
+   the page - every exam stays as readable as its content allows. */
 function autoFitOnePage(page) {
     const content = page.querySelector(".page-content");
     if (!content) return;
@@ -559,32 +597,27 @@ function autoFitOnePage(page) {
     if (!blocks.length) { content.style.fontSize = base + "pt"; return; }
 
     const budget = budgetFor(page);
-    let cur = Math.min(parseFloat(content.style.fontSize) || base, base);
-    content.style.fontSize = cur + "pt";
-
-    for (let i = 0; i < 8; i++) {
+    const measure = function (pt) {
+        content.style.fontSize = pt + "pt";
         let used = 0;
         blocks.forEach(function (b) { used += outerHeightPx(b); });
+        return used;
+    };
 
-        if (used > budget + 1) {
-            // too tall -> shrink proportionally (2% safety for font metrics)
-            const next = Math.max(EXAM_MIN_PT, cur * (budget / used) * 0.98);
-            if (Math.abs(next - cur) < 0.05) break;      // cannot improve
-            cur = next;
-            content.style.fontSize = cur + "pt";
-            if (cur <= EXAM_MIN_PT) break;               // floor: chip takes over
-            continue;
-        }
-        if (cur < base - 0.05) {
-            // fits with room -> grow back towards the chosen size
-            const next = Math.min(base, cur * (budget / Math.max(used, 1)));
-            if (next - cur < 0.05) break;
-            cur = next;
-            content.style.fontSize = cur + "pt";
-            continue;
-        }
-        break; // fits at the chosen size
+    // Fits at the teacher's chosen size? Keep it - the exact paper look.
+    if (measure(base) <= budget + 1) return;
+
+    // Even the floor cannot fit it -> floor stays and the warning chip
+    // explains (same behaviour as before; a question is never split).
+    if (measure(EXAM_MIN_PT) > budget + 1) return;
+
+    // Binary search: LARGEST readable size that fits the one page.
+    let lo = EXAM_MIN_PT, hi = base;
+    for (let i = 0; i < 7; i++) {
+        const mid = (lo + hi) / 2;
+        if (measure(mid) <= budget + 1) lo = mid; else hi = mid;
     }
+    content.style.fontSize = (Math.floor(lo * 4) / 4) + "pt"; // tidy 0.25pt steps
 }
 
 /* Lay out ONE section (cover + its question pages).
@@ -1190,19 +1223,31 @@ function loadExam(id) {
 
             document.getElementById("examClass").value = exam.class_name;
 
+            // FIX (pack 17): make the saved subject selectable IMMEDIATELY -
+            // the subject list loads asynchronously, and the new
+            // straight-to-Step-2 jump validates Class+Subject+Term+Session,
+            // so the value must be in place BEFORE the gate runs.
+            const subjectSelect = document.getElementById("examSubject");
+            if (exam.subject) {
+                if (!Array.from(subjectSelect.options).some(o => o.value === exam.subject)) {
+                    subjectSelect.innerHTML += `<option value="${exam.subject}">${exam.subject}</option>`;
+                }
+                subjectSelect.value = exam.subject;
+            }
+
             fetch(`/subjects?class=${encodeURIComponent(exam.class_name)}`)
                 .then(response => response.json())
                 .then(subjects => {
-                    const subjectSelect = document.getElementById("examSubject");
+                    // Keep a saved subject selectable even if it is disabled now.
+                    const saved = subjectSelect.value;
                     subjectSelect.innerHTML = '<option value="" disabled>Select Subject</option>';
                     subjects.forEach(subject => {
                         subjectSelect.innerHTML += `<option value="${subject.subject_name}">${subject.subject_name}</option>`;
                     });
-                    // Keep a saved subject selectable even if it is disabled now.
                     if (exam.subject && !Array.from(subjectSelect.options).some(o => o.value === exam.subject)) {
                         subjectSelect.innerHTML += `<option value="${exam.subject}">${exam.subject}</option>`;
                     }
-                    subjectSelect.value = exam.subject;
+                    subjectSelect.value = exam.subject || saved;
                 });
 
             // CHANGED (multi-exam in one PDF): multi-exam saves carry each
@@ -1233,7 +1278,11 @@ function loadExam(id) {
             resetFlow(flowHtml);
             closeLoadPanel();
             fitAllCoverOneLiners();
-            examGotoStep(1); // CHANGED: opened exams land on the details step
+            // CHANGED (pack 17 - owner request): a SAVED exam opened for
+            // editing goes straight to Step 2 (the writing/editing tools),
+            // not back to the details step. The wizard fields are already
+            // filled from the saved record, so the step-2 gate passes.
+            examGotoStep(2);
         })
         .catch(error => {
             console.log(error);
@@ -1461,4 +1510,91 @@ function downloadExamPDF(openInViewer) {
     }
 
     captureNext();
+}
+
+/* ==========================================================================
+   NEW (pack 17 - owner request): "download as word document for external
+   editing". Builds a Word-compatible .doc (HTML markup that Word/WPS opens
+   FULLY editable) from the live pages: every cover and every question
+   page in order, one Word page per exam page. Images are referenced by
+   their full URL (they ship with the site, so Word fetches them online).
+   The PDF stays the exact-print format; the .doc is for typing changes -
+   it keeps the paper styling closely but is not pixel-perfect by design.
+========================================================================== */
+function downloadExamWord() {
+    paginateExam(); // fresh layout, same as the PDF path
+    const pages = Array.from(document.querySelectorAll("#examFlow .exam-page"));
+    if (!pages.length) {
+        if (window.amsToast) window.amsToast("Write the exam first.", "info");
+        return;
+    }
+    const origin = location.origin;
+
+    const pageHtml = pages.map(function (page) {
+        const isCover = page.classList.contains("page-one");
+        const clone = page.cloneNode(true);
+        // Screen-only aids never enter the Word file.
+        clone.querySelectorAll(".cover-remove,.page-warn-chip,.manual-page-break").forEach(function (el) { el.remove(); });
+        // Word fetches pictures online -> absolute URLs needed.
+        clone.querySelectorAll("img").forEach(function (img) {
+            const src = img.getAttribute("src") || "";
+            if (src && !/^(https?:|data:)/i.test(src)) {
+                img.setAttribute("src", origin + "/" + src.replace(/^\/+/, ""));
+            }
+        });
+        const content = isCover ? clone : (clone.querySelector(".page-content") || clone);
+        const sizeRule = (!isCover && content.style && content.style.fontSize)
+            ? "font-size:" + content.style.fontSize + ";" : "";
+        return `<div dir="rtl" style="width:178mm; margin:0 auto; padding:10mm 12mm; box-sizing:border-box; ${sizeRule}">${content.innerHTML}</div>`;
+    }).join(`<br clear="all" style="page-break-before:always; mso-special-character:line-break;">`);
+
+    // The paper styling, translated into Word-safe CSS (fonts come with
+    // Windows/Office - Sakkal Majalla, Traditional Arabic, Times).
+    const css = `
+      body{ direction:rtl; text-align:right; font-family:'Sakkal Majalla','Traditional Arabic','Amiri',serif; font-weight:bold; }
+      p{ margin:0 0 6px 0; }
+      .cover-header{ text-align:center; }
+      .cover-bismillah{ display:block; width:42mm; margin:0 auto 3mm; }
+      .cover-logo{ display:block; width:40mm; margin:0 auto 2mm; }
+      .cover-arabic-name{ font-size:30pt; font-weight:bold; text-align:center; margin:1mm 0 2mm; }
+      .cover-english-name{ font-family:'Times New Roman',Times,serif; font-size:17pt; font-weight:bold; text-align:center; margin:0 0 5mm; }
+      .cover-divider{ height:5mm; background:#000; margin:0 -20mm 6mm -10mm; }
+      .cover-address{ font-family:'Times New Roman',Times,serif; font-size:16pt; font-weight:bold; text-align:center; margin:0 0 3mm; }
+      .cover-tel,.cover-email{ font-family:'Times New Roman',Times,serif; font-size:18pt; font-weight:bold; text-align:center; margin:0 0 2mm; }
+      .cover-email a{ color:#0563C1; }
+      .cover-motto{ font-family:'Times New Roman',Times,serif; font-size:16pt; font-weight:bold; text-align:center; margin:0 0 4mm; }
+      .cover-motto .motto-ar{ font-family:'Sakkal Majalla','Traditional Arabic','Amiri',serif; }
+      .cover-exam-period{ font-size:20pt; font-weight:bold; text-align:center; margin:0 0 5mm; }
+      .cover-info-table{ width:100%; border-collapse:collapse; margin:0 0 1mm; }
+      .cover-info-table td{ font-size:20pt; font-weight:bold; border:none; padding:.5mm 2px; }
+      .blank-line{ border-bottom:2px solid #000; }
+      .blank-line-short{ border-bottom:2px solid #000; width:45mm; }
+      .cover-instructions p{ font-size:20pt; font-weight:bold; margin:0; }
+      .cover-footer{ margin-top:12mm; }
+      .cover-footer .cover-wish{ font-size:14pt; text-align:left; }
+      .cover-footer .cover-code{ font-family:'Times New Roman',Times,serif; font-weight:bold; text-align:center; }
+      ol{ list-style-type:arabic-indic; }
+      table{ border-collapse:collapse; }
+      td,th{ border:1px solid #000; padding:4px; }
+    `;
+
+    const doc =
+        `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40">
+<head><meta charset="utf-8"><title>Exam</title>
+<!--[if gte mso 9]><xml><w:WordDocument><w:View>Print</w:View><w:Zoom>100</w:Zoom><w:DoNotOptimizeForBrowser/></w:WordDocument></xml><![endif]-->
+<style>@page Section1 { size:595.3pt 841.9pt; margin:36pt; } div.Section1 { page:Section1; } ${css}</style>
+</head><body><div class="Section1">${pageHtml}</div></body></html>`;
+
+    const raw = (document.getElementById("examTitle") || {}).value || "exam";
+    const safe = (raw.trim().replace(/[\\/:*?"<>|]+/g, "-").slice(0, 60) || "exam");
+    const blob = new Blob(["\ufeff", doc], { type: "application/msword" }); // BOM => Arabic reads right in Word
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = safe + ".doc";
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 2000);
+    if (window.amsToast) {
+        window.amsToast("Word file downloaded — open it in Word/WPS to edit, then print from there.", "success", 6000);
+    }
 }

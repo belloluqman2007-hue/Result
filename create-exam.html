@@ -111,6 +111,8 @@
         <div class="meta-field meta-actions">
           <button type="button" onclick="examPrint()">Print / Save as PDF</button>
           <button type="button" onclick="downloadExamPDF()">&#11015; Download PDF (phone)</button>
+          <!-- NEW (pack 17 - owner request): editable Word export. -->
+          <button type="button" onclick="downloadExamWord()">&#128196; Download Word</button>
         </div>
 
         <div class="meta-field meta-actions">
@@ -145,6 +147,8 @@
         <button type="button" onclick="addExamSection()">&#128462; Add Another Exam</button>
         <button type="button" onclick="examPrint()">Print / Save as PDF</button>
         <button type="button" onclick="downloadExamPDF()">&#11015; Download PDF (phone)</button>
+        <!-- NEW (pack 17 - owner request): editable Word export. -->
+        <button type="button" onclick="downloadExamWord()">&#128196; Download Word</button>
         <button type="button" class="exam-back-btn" onclick="examGotoStep(1)">&larr; Exam Details</button>
       </div>
 
@@ -179,6 +183,18 @@
           <option value="normal" selected>Normal</option>
           <option value="relaxed">Relaxed</option>
           <option value="spacious">Fill Page (Extra Spacious)</option>
+        </select>
+        <span class="divider"></span>
+        <!-- NEW (pack 17 - owner: "add font size to the exam tools"):
+             the question font size right inside the tools. Mirrors the
+             Step 1 picker both ways (exam.js keeps them in sync). -->
+        <label class="toolbar-label">Font Size:</label>
+        <select id="examFontSelectTools" title="Question font size - same picker as Step 1; auto-fit still protects the page">
+          <option value="22">Small (22pt)</option>
+          <option value="26">Medium (26pt)</option>
+          <option value="32" selected>Large (32pt)</option>
+          <option value="36">Extra Large (36pt)</option>
+          <option value="40">Huge (40pt)</option>
         </select>
         <span class="divider"></span>
         <button type="button" onclick="toggleDirection()" id="dirToggleBtn">RTL / LTR</button>

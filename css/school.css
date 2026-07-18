@@ -362,6 +362,23 @@ table.mg-table tr:last-child td{ border-bottom:none; }
   }
 }
 
+/* NEW (pack 17): slim scroll box keeps the per-student attendance
+   history short and tidy on the page (one row per marked day). */
+.att-stu-scroll{ max-height:340px; overflow-y:auto; }
+
+/* NEW (pack 17 - owner request): COMPACT calendar on screen for parents
+   and teachers - the big letterhead (logo, bismillah, name band,
+   contacts, motto), the refs row and the bottom band hide ON SCREEN so
+   the view is short and tidy. Printing/PDF always uses the FULL sheet
+   (amsCalendarPDF builds its own non-compact copy, so these screen-only
+   rules never touch downloads). */
+@media screen{
+  .cal-compact .cal-head,
+  .cal-compact .cal-refs,
+  .cal-compact .cal-bottom-band{ display:none; }
+  .cal-compact{ padding-top:14px; }
+}
+
 /* ----------------------- HOMEPAGE beauty (pack 15) ------------------- */
 .sc-hero{ position:relative; overflow:hidden; }
 .sc-hero::after{

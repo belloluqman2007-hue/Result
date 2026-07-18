@@ -50,6 +50,19 @@ function initAttendance() {
     .catch(function () {
       document.getElementById("attClass").innerHTML = '<option value="">Could not load classes</option>';
     });
+
+  /* NEW (pack 17 - owner request): the moment a class AND a date are
+     picked, the register loads BY ITSELF and, if that date was marked
+     before, the saved marks appear with the "date already marked"
+     warning - no extra button press needed. */
+  function autoLoadRegister() {
+    if (document.getElementById("attClass").value && document.getElementById("attDate").value) {
+      loadRegister();
+    }
+    attFillStudentPick(); // NEW (pack 17): keep the history picker in step
+  }
+  document.getElementById("attClass").addEventListener("change", autoLoadRegister);
+  document.getElementById("attDate").addEventListener("change", autoLoadRegister);
 }
 
 function loadRegister() {
@@ -241,4 +254,123 @@ function downloadReportPDF() {
   });
   var d = window.amsAttendanceReportPDF({ className: className, from: from, to: to, rows: rows });
   d.save("attendance-report-" + className.replace(/\s+/g, "_") + ".pdf");
+}
+
+/* ======================== NEW (pack 17) ===============================
+   Student Attendance History: every day attendance was marked for ONE
+   student, dates in compact rows + a matching PDF download.
+   Route: GET /attendance/student (created in pack 17).
+   ==================================================================== */
+var attStudentsCache = null; // all students (for the picker)
+var attStuRows = [];         // last history rows (for the PDF)
+var attStuMeta = null;       // { name, id, className }
+
+function attEnsureStudents(cb) {
+  if (attStudentsCache) { cb(attStudentsCache); return; }
+  fetch("/students")
+    .then(function (r) { return r.ok ? r.json() : []; })
+    .then(function (rows) {
+      attStudentsCache = Array.isArray(rows) ? rows : [];
+      cb(attStudentsCache);
+    })
+    .catch(function () { cb([]); });
+}
+
+function attFillStudentPick() {
+  var sel = document.getElementById("attStuPick");
+  if (!sel) return;
+  var cls = document.getElementById("attClass").value;
+  attEnsureStudents(function (list) {
+    var cur = sel.value;
+    sel.innerHTML = '<option value="">Pick a student</option>';
+    list
+      .filter(function (s) { return !cls || s.class_name === cls; })
+      .forEach(function (s) {
+        var opt = document.createElement("option");
+        opt.value = s.student_id;
+        opt.textContent = (s.full_name || s.student_id) + " (" + s.student_id + ")";
+        sel.appendChild(opt);
+      });
+    if (cur) sel.value = cur;
+  });
+}
+
+var ATT_DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+function attDayName(dateStr) {
+  var d = new Date(String(dateStr).slice(0, 10) + "T12:00:00");
+  return isNaN(d) ? "-" : ATT_DAYS[d.getDay()];
+}
+
+function loadStudentHistory() {
+  var sid = document.getElementById("attStuPick").value;
+  if (!sid) { attNotify("Pick the student first.", false); return; }
+  var tbody = document.querySelector("#attStuTable tbody");
+  tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; color:#5B6B62;">Loading...</td></tr>';
+
+  fetch("/attendance/student?student_id=" + encodeURIComponent(sid))
+    .then(function (r) { return r.json(); })
+    .then(function (rows) {
+      rows = Array.isArray(rows) ? rows : [];
+      attStuRows = rows;
+      var picked = (attStudentsCache || []).find(function (s) { return s.student_id === sid; }) || {};
+      attStuMeta = {
+        name: rows[0] && rows[0].full_name ? rows[0].full_name : (picked.full_name || sid),
+        id: sid,
+        className: (rows[0] && rows[0].class_name) || picked.class_name || document.getElementById("attClass").value || "-"
+      };
+
+      var p = 0, a = 0, l = 0;
+      rows.forEach(function (r) {
+        if (r.status === "present") p++; else if (r.status === "absent") a++; else if (r.status === "late") l++;
+      });
+      var total = rows.length;
+      var pct = total ? Math.round((p + 0.5 * l) / total * 100) : 0;
+      document.getElementById("attStuSummary").textContent = total
+        ? (attStuMeta.name + "  -  Present: " + p + "   Absent: " + a + "   Late: " + l + "   Days: " + total + "   Present %: " + pct + "%")
+        : "";
+
+      if (!rows.length) {
+        tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; color:#5B6B62;">No attendance has been marked for this student yet.</td></tr>';
+        return;
+      }
+      tbody.innerHTML = "";
+      rows.forEach(function (r, i) {
+        var tr = document.createElement("tr");
+        var dateStr = String(r.att_date).slice(0, 10);
+        [String(i + 1), dateStr, attDayName(r.att_date), String(r.status || "-").toUpperCase()].forEach(function (v, ci) {
+          var td = document.createElement("td");
+          td.textContent = v;
+          td.style.textAlign = "center";
+          if (ci === 3) {
+            td.style.fontWeight = "800";
+            td.style.color = r.status === "present" ? "#0E7A46" : r.status === "absent" ? "#B3261E" : "#B26A00";
+          }
+          tr.appendChild(td);
+        });
+        tbody.appendChild(tr);
+      });
+    })
+    .catch(function () {
+      tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; color:#B3261E;">Could not load history. Check your internet.</td></tr>';
+    });
+}
+
+function downloadStudentHistoryPDF() {
+  if (!attStuRows.length || !attStuMeta) { attNotify("Load the student's history first.", false); return; }
+  var p = 0, a = 0, l = 0;
+  attStuRows.forEach(function (r) {
+    if (r.status === "present") p++; else if (r.status === "absent") a++; else if (r.status === "late") l++;
+  });
+  var total = attStuRows.length;
+  var d = window.amsStudentAttendancePDF({
+    studentName: attStuMeta.name,
+    studentId: attStuMeta.id,
+    className: attStuMeta.className,
+    summary: { present: p, absent: a, late: l, total: total, pct: total ? Math.round((p + 0.5 * l) / total * 100) : 0 },
+    rows: attStuRows.map(function (r, i) {
+      return [i + 1, String(r.att_date).slice(0, 10), attDayName(r.att_date), String(r.status || "-").toUpperCase()];
+    })
+  });
+  d.save("attendance-history-" + attStuMeta.id + ".pdf");
 }

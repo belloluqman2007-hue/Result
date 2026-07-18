@@ -285,4 +285,24 @@
     footer(d, H - M - 60);
     return d;
   };
+
+  /* NEW (pack 17 - owner request): ONE student's full attendance history -
+   every marked day in a row (date | day | status). Compact 3-column
+   layout so even a full year stays short and easy to read. */
+  window.amsStudentAttendancePDF = function (o) {
+    var d = doc();
+    var y = header(d, "STUDENT ATTENDANCE HISTORY", [
+      "Name: " + o.studentName + "      ID: " + o.studentId + "      Class: " + o.className,
+      "Present: " + o.summary.present + "      Absent: " + o.summary.absent + "      Late: " + o.summary.late +
+      "      Days Marked: " + o.summary.total + "      Present %: " + o.summary.pct + "%"
+    ]);
+    y = table(d, y, [
+      { title: "#", w: 6, align: "center" },
+      { title: "Date", w: 22, align: "center" },
+      { title: "Day", w: 20, align: "center" },
+      { title: "Status", w: 18, align: "center" }
+    ], o.rows, 9.5);
+    footer(d, y + 26);
+    return d;
+  };
 })();

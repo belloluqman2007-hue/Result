@@ -482,7 +482,31 @@ function deleteClassSignature(className) {
     }
 }
 
-// Build the four role cards as soon as the page's DOM is parsed
+// Build the role cards as soon as the page's DOM is parsed
 // (this file is loaded at the end of <body>).
-buildSignatureCards();
-buildClassSignatureSection(); // NEW: "Class Teacher - per Class" section
+// CHANGED (pack 17 - owner: "add all user space for signature"): besides
+// the four officials (Principal / Vice Principal / Head Teacher / Class
+// Teacher), EVERY login user from Manage Users gets their own signature
+// slot (staff_<username>) - Bursar, Exam Officer, any custom position.
+// Non-admin staff cannot read /users, so for them the page shows the
+// official slots only, exactly as before. Building waits for the user
+// list so every slot appears in one pass.
+fetch("/users")
+    .then(function (r) { return r.ok ? r.json() : []; })
+    .then(function (users) {
+        (Array.isArray(users) ? users : []).forEach(function (u) {
+            var slot = "staff_" + String(u.username || "").toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
+            if (slot === "staff_") return;
+            if (SIGNATURE_ROLES.some(function (r) { return r.id === slot; })) return;
+            SIGNATURE_ROLES.push({
+                id: slot,
+                label: String(u.username || "User") + " (" + String(u.role || "staff") + ")"
+            });
+        });
+    })
+    .catch(function () { /* non-admin: official slots only */ })
+    .finally(function () {
+        buildSignatureCards();
+        buildClassSignatureSection(); // NEW: "Class Teacher - per Class" section
+        loadCurrentSignatures();      // refresh previews incl. the user slots
+    });

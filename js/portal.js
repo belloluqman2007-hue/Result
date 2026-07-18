@@ -192,8 +192,37 @@ function loadMyFees() {
       document.getElementById("ptFeesHint").textContent =
         "Showing " + ptFeeTS.term + " - " + ptFeeTS.session + ".";
       card.style.display = "block";
+      loadMyPayments(); // NEW (pack 17): payment rows + snapped receipts
     })
     .catch(function () { /* leave hidden */ });
+}
+
+/* NEW (pack 17 - owner request): "parent will also see it that admin has
+   updated the fees in their portal" - every payment the school recorded
+   for this child, WITH the receipt photo the admin snapped in school.
+   Tap Receipt to open the photo; it never appears before admin adds it. */
+function loadMyPayments() {
+  fetch("/portal/payments")
+    .then(function (r) { return r.ok ? r.json() : []; })
+    .then(function (rows) {
+      var box = document.getElementById("ptFees");
+      if (!box || !Array.isArray(rows) || !rows.length) return;
+      var html = '<div style="margin-top:10px; border-top:1px dashed #d7e0da; padding-top:10px;">' +
+        '<div class="pt-fee-row head"><span>Payments Recorded by the School</span><span class="pt-right">Amount</span><span class="pt-right">Receipt</span></div>';
+      rows.forEach(function (p) {
+        var dt = p.created_at ? String(p.created_at).slice(0, 10) : "-";
+        var label = esc(p.fee_type || "School Fee") + ' <small style="color:#5B6B62;">' + esc(dt) + (p.method ? " \u00B7 " + esc(p.method) : "") + "</small>";
+        var rec = p.receipt_path
+          ? '<a href="/' + encodeURI(p.receipt_path) + '" target="_blank" rel="noopener" style="font-weight:800; color:#0d6b4f;">\u{1F9FE} View</a>'
+          : '<span style="color:#93a19a;" title="The school has not snapped the receipt yet">-</span>';
+        html += '<div class="pt-fee-row"><span>' + label + '</span>' +
+                '<span class="pt-right">' + ptNaira(p.amount) + '</span>' +
+                '<span class="pt-right">' + rec + '</span></div>';
+      });
+      html += "</div>";
+      box.insertAdjacentHTML("beforeend", html);
+    })
+    .catch(function () { /* receipts stay hidden */ });
 }
 
 document.getElementById("ptStmtBtn").addEventListener("click", function () {
@@ -311,6 +340,7 @@ function loadMySubs() {
 
 /* --------------------- madrasah calendar (published only) ------------ */
 var ptCalDoc = null;
+var ptCalSigMap = null; // NEW (pack 17): signature map for the full-page PDF
 function loadCalendar() {
   fetch("/portal/calendars")
     .then(function (r) { return r.ok ? r.json() : []; })
@@ -331,9 +361,13 @@ function loadCalendar() {
       document.getElementById("ptCalHint").textContent = cal.title;
       card.style.display = "block";
       amsFetchSignatureMap(function (map) {
+        ptCalSigMap = map; // NEW (pack 17): kept for the PDF
         var holder = document.getElementById("ptCalHolder");
         holder.innerHTML = "";
-        holder.appendChild(amsBuildCalendarSheet(data, map));
+        // CHANGED (pack 17 - owner request): compact view on screen (the
+        // big letterhead hides so the page is not long); the PDF download
+        // still builds the FULL letterhead calendar.
+        holder.appendChild(amsBuildCalendarSheet(data, map, { compact: true }));
         wrap.style.display = "block";
       });
     })
@@ -341,22 +375,14 @@ function loadCalendar() {
 }
 
 document.getElementById("ptCalPdfBtn").addEventListener("click", function () {
-  var sheet = document.querySelector("#ptCalHolder .cal-sheet");
-  if (!sheet) return;
+  if (!ptCalDoc) return;
   var btn = document.getElementById("ptCalPdfBtn");
   btn.disabled = true;
   btn.textContent = "Building...";
-  window.html2canvas(sheet, { scale: 2, backgroundColor: "#ffffff", useCORS: true })
-    .then(function (canvas) {
-      var pdf = new window.jspdf.jsPDF({ unit: "pt", format: "a4" });
-      var pageW = 595.28, pageH = 841.89, margin = 18;
-      var ratio = canvas.height / canvas.width;
-      var imgW = pageW - margin * 2;
-      var imgH = imgW * ratio;
-      if (imgH > pageH - margin * 2) { imgH = pageH - margin * 2; imgW = imgH / ratio; }
-      pdf.addImage(canvas.toDataURL("image/jpeg", 0.92), "JPEG", (pageW - imgW) / 2, margin, imgW, imgH);
-      pdf.save("school-calendar.pdf");
-    })
-    .catch(function () { alert("Could not build the PDF on this device."); })
-    .finally(function () { btn.disabled = false; btn.textContent = "\u{2B07} Download PDF"; });
+  // CHANGED (pack 17): shared builder - FULL letterhead, FILLS the whole
+  // A4 page top to bottom (no more shrunken calendar).
+  amsCalendarPDF(ptCalDoc, ptCalSigMap || {}, function () {
+    btn.disabled = false;
+    btn.textContent = "\u{2B07} Download PDF";
+  });
 });

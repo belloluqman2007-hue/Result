@@ -686,6 +686,40 @@ function pack15Retry(attempt, err) {
 }
 runPack15Migrations(1);
 
+/* ------------------------------------------------------------------
+   NEW (pack 17 - owner request): receipt photo on each recorded payment.
+   Admin snaps/uploads the receipt written in school; parents see it in
+   their portal; admin can remove it. Guarded + idempotent, same pattern
+   as the pack-15 migrations above.
+------------------------------------------------------------------ */
+function runPack17Migrations(attempt) {
+    const conn = addonConnection();
+    conn.connect((err) => {
+        if (err) { conn.destroy(); return pack17Retry(attempt, err); }
+        let missingTable = false;
+        conn.query(
+            `ALTER TABLE fee_payments ADD COLUMN receipt_path VARCHAR(255) NULL`,
+            (qErr) => {
+                if (qErr && qErr.code !== "ER_DUP_FIELDNAME") {
+                    console.log("Pack 17 migration notice:", qErr.code || qErr.message);
+                    if (qErr.code === "ER_NO_SUCH_TABLE") missingTable = true;
+                }
+                conn.end();
+                if (missingTable) return pack17Retry(attempt, { code: "ER_NO_SUCH_TABLE" });
+                console.log("Pack 17 setup ready (payment receipt photos).");
+            }
+        );
+    });
+}
+function pack17Retry(attempt, err) {
+    if (attempt >= 6) {
+        console.log("Pack 17 setup warning:", err.code || err.message || err);
+        return;
+    }
+    setTimeout(() => runPack17Migrations(attempt + 1), 4000);
+}
+runPack17Migrations(1);
+
 /* ==================================================================
    NEW (subject enable/disable - request #3): is_active column on the
    subjects table. Same guarded/idempotent pattern as above: check
@@ -1509,8 +1543,12 @@ app.post("/save-signature", requireLogin, uploadSignature.single("signature"), (
     // now accepted instead of two. Same route, same storage, same
     // signatures table - only the allowed role list grew.
     const ALLOWED_SIGNATURE_ROLES = ["class_teacher", "principal", "vice_principal", "head_teacher"];
-    if (!role || !ALLOWED_SIGNATURE_ROLES.includes(role)) {
-        return res.status(400).json({ message: "Role must be one of: " + ALLOWED_SIGNATURE_ROLES.join(", ") + "." });
+    // NEW (pack 17 - owner: "add all user space for signature"): every
+    // login user's own slot is also accepted (staff_<username>, letters/
+    // numbers/underscore only, so no path tricks are possible).
+    const isStaffSlot = /^staff_[a-z0-9_]{1,40}$/.test(role || "");
+    if (!role || (!ALLOWED_SIGNATURE_ROLES.includes(role) && !isStaffSlot)) {
+        return res.status(400).json({ message: "Role must be one of: " + ALLOWED_SIGNATURE_ROLES.join(", ") + " (or a staff_ user slot)." });
     }
 
     if (!req.file) {
@@ -3046,7 +3084,7 @@ app.post("/school-settings", requireLogin, requireAdmin, (req, res) => {
     const currentTerm = f("current_term");
     const fullSql = `INSERT INTO school_settings
          (id, school_name, school_name_ar, motto, motto_ar, address, phone1, phone2, email, due_day, current_term)
-         VALUES (1,?,?,?,?,?,?,?,?,?,?,?)
+         VALUES (1,?,?,?,?,?,?,?,?,?,?)
          ON DUPLICATE KEY UPDATE
            school_name = VALUES(school_name), school_name_ar = VALUES(school_name_ar),
            motto = VALUES(motto), motto_ar = VALUES(motto_ar), address = VALUES(address),
@@ -3350,6 +3388,36 @@ app.get("/portal/fees", (req, res) => {
     );
 });
 
+/* NEW (pack 17 - owner request): the parent's own payment rows incl. the
+   receipt photo the admin snapped, so "parent will also see it that admin
+   has updated the fees in their portal". Legacy fallback keeps working
+   while the receipt column warms up. */
+app.get("/portal/payments", (req, res) => {
+    const sid = req.session && req.session.portalStudentId;
+    if (!sid) return res.status(401).json({ message: "Not logged in" });
+    // FIX (pack 17): the payments table stamps paid_at (not created_at).
+    connection.query(
+        `SELECT id, fee_type, term, session, amount, method, note, receipt_path, paid_at AS created_at
+         FROM fee_payments WHERE student_id = ? ORDER BY paid_at DESC LIMIT 100`,
+        [sid],
+        (err, rows) => {
+            if (err && err.code === "ER_BAD_FIELD_ERROR") {
+                return connection.query(
+                    `SELECT id, amount, method, note, paid_at AS created_at, 'School Fee' AS fee_type, '' AS term, '' AS session, NULL AS receipt_path
+                     FROM fee_payments WHERE student_id = ? ORDER BY paid_at DESC LIMIT 100`,
+                    [sid],
+                    (err2, rows2) => {
+                        if (err2) { console.log(err2); return res.status(500).json({ message: "Database error" }); }
+                        res.json(rows2);
+                    }
+                );
+            }
+            if (err) { console.log(err); return res.status(500).json({ message: "Database error" }); }
+            res.json(rows);
+        }
+    );
+});
+
 /* ---------- PORTAL: parent uploads payment proof (screenshot/PDF) ---- */
 const evidenceDir = path.join(__dirname, "uploads", "payment-evidence");
 try { fs.mkdirSync(evidenceDir, { recursive: true }); } catch (e) { /* exists */ }
@@ -3477,11 +3545,103 @@ function reviewSubmission(req, res, approve) {
 app.post("/payment-submission/:id/approve", requireLogin, requireAdmin, (req, res) => reviewSubmission(req, res, true));
 app.post("/payment-submission/:id/reject",  requireLogin, requireAdmin, (req, res) => reviewSubmission(req, res, false));
 
+/* ---------- NEW (pack 17 - owner request): receipt photo on a recorded
+   payment. Admin snaps the receipt written in school and attaches it to
+   the payment; the parent sees it in their portal (My Fees & Balance);
+   admin can remove it if it is not clear. Reuses the image upload
+   machinery (uploads/payment-evidence) built for parent proofs. */
+app.post("/fee-payment/:id/receipt", requireLogin, requireAdmin, (req, res) => {
+    uploadEvidence.single("receipt")(req, res, (upErr) => {
+        if (upErr) return res.status(400).json({ message: upErr.message || "Upload failed" });
+        if (!req.file) return res.status(400).json({ message: "Choose the receipt photo first." });
+        const p = "uploads/payment-evidence/" + req.file.filename;
+        connection.query("UPDATE fee_payments SET receipt_path = ? WHERE id = ?", [p, req.params.id], (err, result) => {
+            if (err) {
+                // migration still creating the column (first boot after update)
+                if (err.code === "ER_BAD_FIELD_ERROR") {
+                    return res.status(503).json({ message: "Receipt feature is warming up - wait one minute and try again." });
+                }
+                console.log(err); return res.status(500).json({ message: "Database error" });
+            }
+            if (!result.affectedRows) return res.status(404).json({ message: "Payment not found." });
+            res.json({ message: "Receipt photo saved - the parent can now see it in their portal.", path: p });
+        });
+    });
+});
+
+// Remove an unclear/wrong receipt photo (file is deleted too).
+app.delete("/fee-payment/:id/receipt", requireLogin, requireAdmin, (req, res) => {
+    connection.query("SELECT receipt_path FROM fee_payments WHERE id = ?", [req.params.id], (err, rows) => {
+        if (err) {
+            if (err.code === "ER_BAD_FIELD_ERROR") return res.status(503).json({ message: "Receipt feature is warming up - try again shortly." });
+            console.log(err); return res.status(500).json({ message: "Database error" });
+        }
+        const p = rows && rows[0] && rows[0].receipt_path;
+        connection.query("UPDATE fee_payments SET receipt_path = NULL WHERE id = ?", [req.params.id], (err2) => {
+            if (err2) { console.log(err2); return res.status(500).json({ message: "Database error" }); }
+            if (p && String(p).indexOf("uploads/") === 0) {
+                try { fs.unlinkSync(path.join(__dirname, p)); } catch (e) { /* file already gone */ }
+            }
+            res.json({ message: "Receipt photo removed." });
+        });
+    });
+});
+
+/* NEW (pack 17 - owner request): dashboard reminder - every payment in
+   the current term/session that still has NO snapped receipt photo,
+   listed WITH the student names so admin knows exactly who is missing. */
+app.get("/receipt-alerts", requireLogin, requireAdmin, (req, res) => {
+    const term = (req.query.term || "").trim();
+    const schoolSession = (req.query.session || "").trim();
+    // FIX (pack 17): the payments table stamps paid_at (not created_at).
+    let sql = `SELECT fp.id, fp.student_id, st.full_name, fp.fee_type, fp.amount, fp.paid_at AS created_at
+               FROM fee_payments fp
+               LEFT JOIN students st ON st.student_id = fp.student_id
+               WHERE (fp.receipt_path IS NULL OR fp.receipt_path = '')`;
+    const params = [];
+    if (term) { sql += " AND fp.term = ?"; params.push(term); }
+    if (schoolSession) { sql += " AND fp.session = ?"; params.push(schoolSession); }
+    sql += " ORDER BY fp.paid_at DESC LIMIT 200";
+    connection.query(sql, params, (err, rows) => {
+        if (err && err.code === "ER_BAD_FIELD_ERROR") return res.json([]); // column warming up
+        if (err) { console.log(err); return res.status(500).json({ message: "Database error" }); }
+        res.json(rows);
+    });
+});
+
+/* NEW (pack 17 - owner request): EVERY day attendance was marked for ONE
+   particular student (dates in rows) - powers the attendance page's new
+   per-student history card and its PDF download. */
+app.get("/attendance/student", requireLogin, (req, res) => {
+    const sid = (req.query.student_id || "").trim();
+    if (!sid) return res.status(400).json({ message: "student_id is required." });
+    connection.query(
+        `SELECT a.att_date, a.status, a.class_name, s.full_name
+         FROM attendance a
+         LEFT JOIN students s ON s.student_id = a.student_id
+         WHERE a.student_id = ?
+         ORDER BY a.att_date DESC
+         LIMIT 366`,
+        [sid],
+        (err, rows) => {
+            if (err) { console.log(err); return res.status(500).json({ message: "Database error" }); }
+            res.json(rows);
+        }
+    );
+});
+
 /* ---------- MADRASAH CALENDAR (admin) --------------------------------
    publishes ONE at a time: publishing auto-unpublishes the rest so the
    parent portal never shows duplicates from different terms. */
 app.get("/calendars", requireLogin, (req, res) => {
-    connection.query("SELECT * FROM calendars ORDER BY updated_at DESC", (err, rows) => {
+    // NEW (pack 16): ?published=1 returns ONLY the live calendar - teachers
+    // read this on their dashboard (same rule as the parent portal). The
+    // plain list (admin studio) still returns everything, unchanged.
+    const onlyLive = String(req.query.published || "") === "1";
+    const sql = onlyLive
+        ? "SELECT * FROM calendars WHERE published = 1 ORDER BY updated_at DESC LIMIT 5"
+        : "SELECT * FROM calendars ORDER BY updated_at DESC";
+    connection.query(sql, (err, rows) => {
         if (err) { console.log(err); return res.status(500).json({ message: "Database error" }); }
         res.json(rows);
     });

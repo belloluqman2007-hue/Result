@@ -25,16 +25,23 @@
       .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
   }
 
-  /* sigMap: { roleName: signature_path } e.g. { head_teacher: "images/signatures/head_teacher.png" } */
-  window.amsBuildCalendarSheet = function (data, sigMap) {
+  /* sigMap: { roleName: signature_path } e.g. { head_teacher: "images/signatures/head_teacher.png" }
+     CHANGED (pack 17 - owner request): optional third arg `opts`.
+     opts.compact = true adds the .cal-compact class: on SCREEN the big
+     letterhead (logo/bismillah/name band/contacts/motto), the refs row
+     and the bottom band are hidden (css, screen-only) so parents and
+     teachers see a SHORT, tidy calendar. The PDF/download keeps the FULL
+     letterhead automatically (amsCalendarPDF always builds a full sheet). */
+  window.amsBuildCalendarSheet = function (data, sigMap, opts) {
     data = data || {};
     sigMap = sigMap || {};
+    opts = opts || {};
 
     var rows = Array.isArray(data.rows) ? data.rows : [];
     var lessons = Array.isArray(data.lessons) ? data.lessons : [];
 
     var sheet = document.createElement("div");
-    sheet.className = "cal-sheet";
+    sheet.className = "cal-sheet" + (opts.compact ? " cal-compact" : "");
 
     /* ---------- header ---------- */
     var head = document.createElement("div");
@@ -167,5 +174,44 @@
       (Array.isArray(rows) ? rows : []).forEach(function (s) { map[s.role] = s.signature_path; });
       cb(map);
     }).catch(function () { cb({}); });
+  };
+
+  /* NEW (pack 17 - owner: "the calendar PDF download is shrinking, let it
+     fill the page from up to down"): ONE shared full-page PDF builder for
+     the portal card, the staff dashboard card and the admin studio.
+     Always renders the FULL letterhead sheet (even when the on-screen
+     card is compact), photographs it, and stretches it to FILL the whole
+     A4 page (top to bottom) with just a thin even margin - no more small
+     shrunken calendar floating in a sea of white. */
+  window.amsCalendarPDF = function (data, sigMap, done, filename) {
+    if (!window.html2canvas || !window.jspdf) {
+      alert("PDF generator is still loading - try again in a moment.");
+      if (done) done();
+      return;
+    }
+    var stage = document.createElement("div");
+    stage.style.cssText = "position:fixed; left:-10000px; top:0; width:210mm; background:#ffffff;";
+    var sheet = amsBuildCalendarSheet(data, sigMap); // FULL letterhead
+    stage.appendChild(sheet);
+    document.body.appendChild(stage);
+    var fontsReady = (document.fonts && document.fonts.ready) || Promise.resolve();
+    fontsReady.then(function () {
+      return window.html2canvas(sheet, { scale: 2, backgroundColor: "#ffffff", useCORS: true });
+    }).then(function (canvas) {
+      stage.remove();
+      var pdf = new window.jspdf.jsPDF({ unit: "pt", format: "a4" });
+      var pageW = 595.28, pageH = 841.89, margin = 14;
+      // FILL the page top to bottom: width AND height stretch to the sheet
+      // (like Word's "fill page") - the table design tolerates the stretch.
+      var imgW = pageW - margin * 2;
+      var imgH = pageH - margin * 2;
+      pdf.addImage(canvas.toDataURL("image/jpeg", 0.95), "JPEG", margin, margin, imgW, imgH);
+      pdf.save(filename || "school-calendar.pdf");
+      if (done) done();
+    }).catch(function () {
+      stage.remove();
+      alert("Could not build the PDF on this device.");
+      if (done) done();
+    });
   };
 })();
