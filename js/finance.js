@@ -8,6 +8,30 @@
 
 var finTab = "fees";
 var finStudents = []; // current class roster for payments
+// NEW (pack 14): last loaded payment rows + selected student meta for
+// receipts / list PDF / delete.
+var finPayRows = [];
+var finPayBalance = null;
+
+// NEW (pack 14): fill a session datalist from the sessions the admin
+// created (School Settings page). Falls back silently to the HTML options.
+function fillSessionList(listId, inputId) {
+  fetch("/sessions").then(function (r) { return r.ok ? r.json() : []; }).then(function (rows) {
+    if (!Array.isArray(rows) || !rows.length) return;
+    var list = document.getElementById(listId);
+    if (!list) return;
+    list.innerHTML = "";
+    rows.forEach(function (row) {
+      var opt = document.createElement("option");
+      opt.value = row.session;
+      opt.textContent = row.session + (Number(row.is_current) === 1 ? " (current)" : "");
+      list.appendChild(opt);
+    });
+    // default the input to the current session the admin set
+    var cur = rows.find(function (r2) { return Number(r2.is_current) === 1; });
+    if (cur && inputId) document.getElementById(inputId).value = cur.session;
+  }).catch(function () { /* keep HTML defaults */ });
+}
 
 function finNotify(text, ok) {
   var msg = document.getElementById("finMsg");
@@ -64,6 +88,7 @@ function initFinance() {
     .catch(function () { /* leave defaults */ });
 
   document.getElementById("payStudent").addEventListener("change", loadStudentPayments);
+  fillSessionList("finSessionList", "finSession"); // NEW (pack 14)
 }
 
 /* ------------------------------ fee structure ------------------------ */
@@ -214,8 +239,9 @@ function loadStudentPayments() {
     .then(function (r) { return r.json(); })
     .then(function (rows) {
       rows = Array.isArray(rows) ? rows : [];
+      finPayRows = rows; // NEW (pack 14): kept for PDF / receipts
       if (!rows.length) {
-        tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; color:#5B6B62;">No payments yet for this term.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; color:#5B6B62;">No payments yet for this term.</td></tr>';
       } else {
         tbody.innerHTML = "";
         rows.forEach(function (row) {
@@ -226,6 +252,28 @@ function loadStudentPayments() {
             td.textContent = v || "-";
             tr.appendChild(td);
           });
+          // NEW (pack 14): Receipt PDF + Delete (both admin actions)
+          var tdAct = document.createElement("td");
+          tdAct.style.whiteSpace = "nowrap";
+
+          var btnR = document.createElement("button");
+          btnR.className = "mg-btn-light";
+          btnR.type = "button";
+          btnR.title = "Download receipt (PDF)";
+          btnR.textContent = "\u{1F9FE}";
+          btnR.addEventListener("click", function () { downloadReceipt(row); });
+          tdAct.appendChild(btnR);
+
+          var btnD = document.createElement("button");
+          btnD.className = "mg-btn-light mg-btn-danger";
+          btnD.type = "button";
+          btnD.title = "Delete payment (admin)";
+          btnD.textContent = "\u{1F5D1}";
+          btnD.style.marginLeft = "6px";
+          btnD.addEventListener("click", function () { deletePayment(row); });
+          tdAct.appendChild(btnD);
+
+          tr.appendChild(tdAct);
           tbody.appendChild(tr);
         });
       }
@@ -241,6 +289,7 @@ function loadStudentPayments() {
     .then(function (r) { return r.json(); })
     .then(function (rows) {
       var rec = (Array.isArray(rows) ? rows : []).find(function (r2) { return r2.student_id === sid; });
+      finPayBalance = rec || null; // NEW (pack 14)
       if (!rec) { balanceBox.textContent = ""; return; }
       var bal = Number(rec.balance);
       balanceBox.textContent =
@@ -346,4 +395,79 @@ function loadSummary() {
         ". Set the fees in the Fee Structure tab first.";
     })
     .catch(function () { finNotify("Could not load summary.", false); });
+}
+
+
+/* ======================== NEW (pack 14) ===============================
+   Receipt PDF per payment, whole payments list PDF, and payment delete.
+   Uses js/ams-pdf.js (pure jsPDF - always a clean one-page A4).
+   ==================================================================== */
+function finStudentMeta() {
+  var sid = document.getElementById("payStudent").value;
+  var st = finStudents.find(function (s) { return s.student_id === sid; }) || {};
+  return {
+    studentId: sid,
+    studentName: st.full_name || sid,
+    className: st.class_name || document.getElementById("payClass").value
+  };
+}
+
+function downloadReceipt(row) {
+  var ts = finTermSession();
+  var meta = finStudentMeta();
+  var d = window.amsReceiptPDF({
+    receiptNo: "REC-" + row.id,
+    date: row.paid_at ? String(row.paid_at).slice(0, 10) : "-",
+    studentName: meta.studentName,
+    studentId: meta.studentId,
+    className: meta.className,
+    term: ts.term,
+    session: ts.session,
+    amount: row.amount,
+    method: row.method,
+    receivedBy: row.received_by,
+    note: row.note
+  });
+  d.save("receipt-" + row.id + ".pdf");
+}
+
+function deletePayment(row) {
+  if (!confirm("Delete this payment of " + naira(row.amount) + "? This cannot be undone.")) return;
+  fetch("/fee-payment/" + row.id, { method: "DELETE" })
+    .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, d: d }; }); })
+    .then(function (res) {
+      if (res.ok) { finNotify("Payment deleted.", true); loadStudentPayments(); }
+      else finNotify(res.d.message || "Could not delete (admin account required).", false);
+    })
+    .catch(function () { finNotify("Network error.", false); });
+}
+
+function downloadPaymentsPDF() {
+  var sid = document.getElementById("payStudent").value;
+  if (!sid) { finNotify("Pick a student first.", false); return; }
+  var ts = finTermSession();
+  var meta = finStudentMeta();
+  var rows = finPayRows.map(function (r) {
+    return [
+      r.paid_at ? String(r.paid_at).slice(0, 10) : "-",
+      naira(r.amount),
+      r.method || "-",
+      r.received_by || "-",
+      r.note || "-"
+    ];
+  });
+  var fee = finPayBalance ? Number(finPayBalance.fee) : 0;
+  var paid = finPayBalance ? Number(finPayBalance.paid) : finPayRows.reduce(function (a, r) { return a + (Number(r.amount) || 0); }, 0);
+  var d = window.amsPaymentsPDF({
+    studentName: meta.studentName,
+    studentId: sid,
+    className: meta.className,
+    term: ts.term,
+    session: ts.session,
+    rows: rows,
+    fee: fee,
+    totalPaid: paid,
+    balance: fee - paid
+  });
+  d.save("payments-" + sid + "-" + ts.term.replace(/\s+/g, "") + ".pdf");
 }

@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>School Settings | Ameenullah School of Arabic and Islamic Studies</title>
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/modern-ui.css">
+  <link rel="stylesheet" href="css/manage.css">
+  <!-- NEW (pack 13): shared manager styles -->
+  <link rel="stylesheet" href="css/school.css">
+
+  <link rel="manifest" href="manifest.webmanifest">
+  <meta name="theme-color" content="#2f5021">
+  <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+</head>
+<body onload="checkAuth(); initSettings();">
+  <!-- NEW (pack 14 - admin only): school profile settings + academic
+       sessions ("be able to create session"). -->
+  <div class="mng-page">
+
+    <div class="mng-head">
+      <a class="mng-back" href="teacher-dashboard.html">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5"/><path d="m12 19-7-7 7-7"/></svg>
+        Dashboard
+      </a>
+      <div class="mng-head-text">
+        <h1>&#9881;&#65039; School Settings</h1>
+        <p>Admin only. Edit the school's public profile and create academic sessions (school years).</p>
+      </div>
+    </div>
+
+    <div class="mg-cards">
+
+      <!-- School profile -->
+      <div class="mg-card">
+        <h3>&#127979; School Profile</h3>
+        <div class="mg-toolbar">
+          <div class="mg-field" style="flex:1 1 220px;"><label for="setName">School Name</label><input type="text" id="setName"></div>
+          <div class="mg-field" style="flex:1 1 220px;"><label for="setNameAr">School Name (Arabic)</label><input type="text" id="setNameAr" dir="rtl"></div>
+        </div>
+        <div class="mg-toolbar">
+          <div class="mg-field" style="flex:1 1 220px;"><label for="setMotto">Motto</label><input type="text" id="setMotto"></div>
+          <div class="mg-field" style="flex:1 1 220px;"><label for="setMottoAr">Motto (Arabic)</label><input type="text" id="setMottoAr" dir="rtl"></div>
+        </div>
+        <div class="mg-toolbar">
+          <div class="mg-field" style="flex:1 1 100%"><label for="setAddress">Address</label><input type="text" id="setAddress"></div>
+        </div>
+        <div class="mg-toolbar">
+          <div class="mg-field"><label for="setPhone1">Phone 1</label><input type="text" id="setPhone1"></div>
+          <div class="mg-field"><label for="setPhone2">Phone 2</label><input type="text" id="setPhone2"></div>
+          <div class="mg-field" style="flex:1 1 200px;"><label for="setEmail">Email</label><input type="email" id="setEmail"></div>
+        </div>
+        <button class="mg-btn" type="button" onclick="saveSettings()">&#128190; Save Profile</button>
+        <p class="mg-note">The address and phone/email you save here appear on the public school website footer.</p>
+      </div>
+
+      <!-- Sessions -->
+      <div class="mg-card">
+        <h3>&#128197; Academic Sessions</h3>
+        <div class="mg-toolbar">
+          <div class="mg-field">
+            <label for="newSession">New Session</label>
+            <input type="text" id="newSession" placeholder="e.g. 2027/2028">
+          </div>
+          <button class="mg-btn" type="button" onclick="addSession()">&#10133; Create Session</button>
+        </div>
+        <div class="mg-table-wrap">
+          <table class="mg-table" id="sessTable">
+            <thead><tr><th>Session</th><th>Status</th><th></th></tr></thead>
+            <tbody><tr><td colspan="3" style="text-align:center; color:#5B6B62;">Loading...</td></tr></tbody>
+          </table>
+        </div>
+        <p class="mg-note">The session marked <b>Current</b> is pre-selected on the Publish page and Finance page. Existing pages with fixed session lists keep working as before.</p>
+      </div>
+    </div>
+
+    <div class="mg-msg" id="setMsg"></div>
+  </div>
+
+  <script src="js/ui.js"></script>
+  <script src="js/app.js"></script>
+  <!-- NEW (pack 14) -->
+  <script src="js/school-settings.js"></script>
+  <script src="js/pwa.js" defer></script>
+</body>
+</html>

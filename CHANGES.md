@@ -504,3 +504,38 @@ until published, owner-gated student info works, test rows cleaned up.
 
 Result calculations, grading, positions, report card generation, printing
 and every staff query: completely untouched.
+
+---
+
+## Feature pack 14 - admin locks, payment receipts/delete, attendance PDFs + duplicate-day warning, one-page portal print, school settings + sessions, user management (owner requests)
+
+**"Teacher should not have access to finance and publish result and
+admission."** / **"Let there be delete in the payment and download PDF."** /
+**"The attendance should be able to download as PDF and if same date
+attendance has been taken it must display to avoid duplicate, and should be
+able to change at any time."** / **"Let the student result in student
+portal be exactly like the one in check results, not to fall on 2 pages."** /
+**"Add school settings for admin and be able to create session."** /
+**"Let admin be able to create user either admin or teacher and any other
+positions."**
+
+| File | What happened |
+|---|---|
+| `server.js` | NEW `requireAdminPage` guard; `manage-publish.html`, `manage-admissions.html`, `finance.html` now ADMIN-ONLY pages (teachers are bounced to their dashboard). Their READ routes also `requireAdmin` now (publish state, enquiries, fee-structure, fee-payments, fee-balance, finance-summary, expenses) + POST `/fee-payment`. NEW: DELETE `/fee-payment/:id` (admin); GET `/attendance/summary` ("already taken" data); `school_settings` + `sessions` tables (auto-created), GET `/school-settings` (public read), POST `/school-settings` (admin), GET `/sessions`, POST `/session` (admin, current-session support); user management GET `/users`, POST `/create-user` (any role), POST `/reset-user-password`, DELETE `/user/:id` (admin, self-protected). NEW page guards: `manage-users.html`, `school-settings.html`. |
+| `js/ams-pdf.js` | NEW shared pure-jsPDF maker: payment receipt, payments list, attendance register, attendance report - always clean one-page A4 output on any device. |
+| `finance.html`, `js/finance.js` | Receipt PDF (&#129534;) per payment + Delete (&#128465;) per payment + "Download PDF" of the student's full payment record; session list comes from admin-created sessions (current session pre-selected). |
+| `attendance.html`, `js/attendance.js` | "&#9888;&#65039; Attendance already taken for this date" banner with the saved counts/marker whenever a class+date was marked before (no more accidental duplicates); marks can STILL be changed and re-saved any time; "Download PDF" for both the daily register and the range report. |
+| `css/school.css` | FIX: portal print now behaves EXACTLY like the Check Result page (single A4 page) - the wrapper re-show selector outranks the frozen style.css print rule; the report card itself is untouched. |
+| `manage-users.html`, `js/users.js` | NEW admin page: create users (admin / teacher / principal / vice principal / head teacher / class teacher / bursar / secretary / custom), reset passwords, delete users (self-delete blocked). |
+| `school-settings.html`, `js/school-settings.js` | NEW admin page: school profile (name EN/AR, motto EN/AR, address, phones, email - shown on the website footer) + create academic sessions with a "current" marker. |
+| `js/publish.js`, `js/finance.js` | Session choices now come from the sessions the admin created (fallback to old fixed lists). |
+| `teacher-dashboard.html` | Admin-only nav links (Publish Results, Admissions, Finance, Manage Users, School Settings) hidden for teachers; the server blocks them too anyway. |
+| `index.html`, `js/website.js` | Footer address/contact follows the admin's School Settings (defaults preserved). |
+
+Verified live: all restricted routes 401/403 for non-admin, browser page
+requests redirect correctly, 2 new tables auto-create, public website +
+enquiry + portal gate all unchanged and working, publish flow regression
+passed, probes cleaned.
+
+Result calculations, grading, positions, report card generation, printing
+and every staff query: completely untouched.

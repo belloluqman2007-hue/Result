@@ -7,6 +7,9 @@
 "use strict";
 
 var attState = {}; // student_id -> status (present/absent/late)
+// NEW (pack 14): last loaded register / report rows for the PDF downloads
+var attRegisterRows = [];
+var attReportRows = [];
 
 function attNotify(text, ok) {
   var msg = document.getElementById("attMsg");
@@ -62,6 +65,8 @@ function loadRegister() {
     .then(function (rows) {
       rows = Array.isArray(rows) ? rows : [];
       attState = {};
+      attRegisterRows = rows; // NEW (pack 14): kept for the PDF
+      loadTakenSummary(className, date); // NEW (pack 14): "already taken" warning
       if (!rows.length) {
         tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; color:#5B6B62;">No students in this class yet.</td></tr>';
         return;
@@ -140,6 +145,7 @@ function saveRegister() {
     .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, d: d }; }); })
     .then(function (res) {
       attNotify(res.ok ? "\u2705 " + (res.d.message || "Attendance saved") + " - " + date : (res.d.message || "Could not save."), res.ok);
+      if (res.ok) loadTakenSummary(className, date); // NEW (pack 14): keep the banner accurate after saving
     })
     .catch(function () { attNotify("Network error - NOT saved.", false); });
 }
@@ -158,6 +164,7 @@ function loadAttReport() {
     .then(function (r) { return r.json(); })
     .then(function (rows) {
       rows = Array.isArray(rows) ? rows : [];
+      attReportRows = rows; // NEW (pack 14)
       if (!rows.length) {
         tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; color:#5B6B62;">No attendance marked in this range.</td></tr>';
         return;
@@ -178,4 +185,60 @@ function loadAttReport() {
     .catch(function () {
       tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; color:#B3261E;">Could not load report.</td></tr>';
     });
+}
+
+
+/* ======================== NEW (pack 14) ===============================
+   1. "Already taken" warning that shows whenever this class+date was
+      marked before (prevents accidental duplicate taking; editing and
+      saving again stays fully allowed).
+   2. Clean A4 PDF download of the register and of the range report.
+   ==================================================================== */
+function loadTakenSummary(className, date) {
+  var banner = document.getElementById("attTaken");
+  var text = document.getElementById("attTakenText");
+  fetch("/attendance/summary?class_name=" + encodeURIComponent(className) + "&date=" + encodeURIComponent(date))
+    .then(function (r) { return r.ok ? r.json() : { taken: false }; })
+    .then(function (sum) {
+      if (sum && sum.taken) {
+        text.textContent = " " + sum.total + " students marked (Present: " + sum.present +
+          ", Absent: " + sum.absent + ", Late: " + sum.late + ")" +
+          (sum.marked_by ? " - by " + sum.marked_by : "") + ".";
+        banner.classList.add("show");
+      } else {
+        banner.classList.remove("show");
+      }
+    })
+    .catch(function () { banner.classList.remove("show"); });
+}
+
+function downloadRegisterPDF() {
+  if (!attRegisterRows.length) { attNotify("Load the register first.", false); return; }
+  var className = document.getElementById("attClass").value;
+  var date = document.getElementById("attDate").value;
+  var counts = { present: 0, absent: 0, late: 0, total: attRegisterRows.length };
+  var rows = attRegisterRows.map(function (r, i) {
+    var st = attState[r.student_id] || "present";
+    counts[st] = (counts[st] || 0) + 1;
+    return [i + 1, r.student_id, r.full_name || "-", st.toUpperCase()];
+  });
+  var d = window.amsAttendanceRegisterPDF({
+    className: className, date: date, rows: rows,
+    summary: { present: counts.present, absent: counts.absent, late: counts.late, total: counts.total }
+  });
+  d.save("attendance-" + className.replace(/\s+/g, "_") + "-" + date + ".pdf");
+}
+
+function downloadReportPDF() {
+  if (!attReportRows.length) { attNotify("Load the report first.", false); return; }
+  var className = document.getElementById("attClass").value;
+  var from = document.getElementById("attRepFrom").value;
+  var to = document.getElementById("attRepTo").value;
+  var rows = attReportRows.map(function (r, i) {
+    var marked = Number(r.marked) || 0;
+    var pct = marked ? Math.round((Number(r.present) + 0.5 * Number(r.late)) / marked * 100) : 0;
+    return [i + 1, r.full_name || "-", r.present, r.absent, r.late, r.marked, pct + "%"];
+  });
+  var d = window.amsAttendanceReportPDF({ className: className, from: from, to: to, rows: rows });
+  d.save("attendance-report-" + className.replace(/\s+/g, "_") + ".pdf");
 }

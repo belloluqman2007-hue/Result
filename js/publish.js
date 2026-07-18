@@ -119,3 +119,21 @@ function savePublish(className, publish, toggleEl) {
     })
     .finally(function () { toggleEl.disabled = false; });
 }
+
+
+// NEW (pack 14): fill the session datalist with the sessions the admin
+// created on the School Settings page (falls back to HTML defaults).
+(function () {
+  fetch("/sessions").then(function (r) { return r.ok ? r.json() : []; }).then(function (rows) {
+    if (!Array.isArray(rows) || !rows.length) return;
+    var list = document.getElementById("pubSessionList");
+    if (!list) return;
+    list.innerHTML = "";
+    rows.forEach(function (row) {
+      var opt = document.createElement("option");
+      opt.value = row.session;
+      opt.textContent = row.session + (Number(row.is_current) === 1 ? " (current)" : "");
+      list.appendChild(opt);
+    });
+  }).catch(function () { /* keep HTML defaults */ });
+})();

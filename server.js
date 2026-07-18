@@ -117,6 +117,21 @@ function publishResultGate(req, res, next) {
     });
 }
 
+
+// NEW (pack 14): admin-only PAGE guard - teachers are sent back to their
+// dashboard instead of seeing finance / publish / admissions / settings.
+// (API-level guard stays requireAdmin; this one just redirects pages.)
+function requireAdminPage(req, res, next) {
+    if (req.session && req.session.userId) {
+        if (req.session.role === "admin") return next();
+        return res.redirect("teacher-dashboard.html");
+    }
+    if (req.headers.accept && req.headers.accept.includes("text/html")) {
+        return res.redirect("/login.html");
+    }
+    return res.status(401).json({ message: "Not logged in" });
+}
+
 app.post("/login", (req, res) => {
     const { username, password } = req.body;
 
@@ -197,11 +212,11 @@ app.get("/manage-signatures.html", requireLogin, (req, res) => {
 // NEW (pack 13): protect the new management pages exactly like the
 // existing dashboard pages. Must stay BEFORE express.static.
 // ----------------------------------------------------------------
-app.get("/manage-publish.html", requireLogin, (req, res) => {
+app.get("/manage-publish.html", requireAdminPage, (req, res) => { // CHANGED (pack 14): admin-only (owner request: teachers must not access)
     res.sendFile(path.join(__dirname, "manage-publish.html"));
 });
 
-app.get("/manage-admissions.html", requireLogin, (req, res) => {
+app.get("/manage-admissions.html", requireAdminPage, (req, res) => { // CHANGED (pack 14): admin-only (owner request: teachers must not access)
     res.sendFile(path.join(__dirname, "manage-admissions.html"));
 });
 
@@ -213,8 +228,16 @@ app.get("/staff-attendance.html", requireLogin, (req, res) => {
     res.sendFile(path.join(__dirname, "staff-attendance.html"));
 });
 
-app.get("/finance.html", requireLogin, (req, res) => {
+app.get("/finance.html", requireAdminPage, (req, res) => { // CHANGED (pack 14): admin-only (owner request: teachers must not access)
     res.sendFile(path.join(__dirname, "finance.html"));
+});
+
+app.get("/manage-users.html", requireAdminPage, (req, res) => {
+    res.sendFile(path.join(__dirname, "manage-users.html"));
+});
+
+app.get("/school-settings.html", requireAdminPage, (req, res) => {
+    res.sendFile(path.join(__dirname, "school-settings.html"));
 });
 
 app.get("/id-card.html", requireLogin, (req, res) => {
@@ -370,6 +393,26 @@ const addonTables = [
         received_by VARCHAR(100),
         paid_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )`,
+    // NEW (pack 14 - school settings, admin editable profile: name,
+    // Arabic name, motto, address, phones, email). Single row (id = 1).
+    `CREATE TABLE IF NOT EXISTS school_settings (
+        id INT PRIMARY KEY,
+        school_name VARCHAR(255),
+        school_name_ar VARCHAR(255),
+        motto VARCHAR(255),
+        motto_ar VARCHAR(255),
+        address VARCHAR(255),
+        phone1 VARCHAR(50),
+        phone2 VARCHAR(50),
+        email VARCHAR(120),
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    )`,
+    // NEW (pack 14 - academic sessions the admin creates, e.g. 2027/2028).
+    `CREATE TABLE IF NOT EXISTS sessions (
+        session VARCHAR(50) PRIMARY KEY,
+        is_current TINYINT(1) NOT NULL DEFAULT 0,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )`,
     // NEW (pack 13 - finance: school expenses).
     `CREATE TABLE IF NOT EXISTS expenses (
         id INT AUTO_INCREMENT PRIMARY KEY,
@@ -431,7 +474,7 @@ function setupAddonTables(attempt) {
                 if (finished === addonTables.length) {
                     conn.end();
                     if (firstFailure) return addonRetryLater(attempt, firstFailure);
-                    console.log("Add-on tables ready (announcements, school_events, class_teacher_signatures, result_publish, admission_enquiries, attendance, staff_attendance, staff_evaluations, fee_structure, fee_payments, expenses).");
+                    console.log("Add-on tables ready (announcements, school_events, class_teacher_signatures, result_publish, admission_enquiries, attendance, staff_attendance, staff_evaluations, fee_structure, fee_payments, expenses, school_settings, sessions).");
                 }
             });
         });
@@ -2411,7 +2454,7 @@ app.get("/portal/published-terms", (req, res) => {
 });
 
 /* ---------- Admin: publish / unpublish results ---------------------- */
-app.get("/result-publish", requireLogin, (req, res) => {
+app.get("/result-publish", requireLogin, requireAdmin, (req, res) => {
     let sql = "SELECT class_name, term, session, published FROM result_publish";
     const params = [];
     const wh = [];
@@ -2466,7 +2509,7 @@ app.post("/admission-enquiry", (req, res) => {
     );
 });
 
-app.get("/admission-enquiries", requireLogin, (req, res) => {
+app.get("/admission-enquiries", requireLogin, requireAdmin, (req, res) => {
     connection.query(
         "SELECT id, child_name, parent_name, phone, class_applied, message, status, created_at FROM admission_enquiries ORDER BY created_at DESC LIMIT 500",
         (err, rows) => {
@@ -2630,7 +2673,7 @@ app.get("/staff-evaluations", requireLogin, requireAdmin, (req, res) => {
 });
 
 /* ---------- Finance: fee structure, payments, expenses -------------- */
-app.get("/fee-structure", requireLogin, (req, res) => {
+app.get("/fee-structure", requireLogin, requireAdmin, (req, res) => {
     let sql = "SELECT class_name, term, session, amount FROM fee_structure";
     const params = [], wh = [];
     if (req.query.term)    { wh.push("term = ?");    params.push(req.query.term); }
@@ -2663,7 +2706,7 @@ app.post("/fee-structure", requireLogin, requireAdmin, (req, res) => {
     );
 });
 
-app.post("/fee-payment", requireLogin, (req, res) => {
+app.post("/fee-payment", requireLogin, requireAdmin, (req, res) => {
     const studentId = (req.body.student_id || "").trim();
     const term = (req.body.term || "").trim();
     const session = (req.body.session || "").trim();
@@ -2684,7 +2727,7 @@ app.post("/fee-payment", requireLogin, (req, res) => {
     );
 });
 
-app.get("/fee-payments", requireLogin, (req, res) => {
+app.get("/fee-payments", requireLogin, requireAdmin, (req, res) => {
     let sql = "SELECT id, student_id, term, session, amount, method, note, received_by, paid_at FROM fee_payments";
     const params = [], wh = [];
     if (req.query.student_id) { wh.push("student_id = ?"); params.push(req.query.student_id); }
@@ -2698,7 +2741,7 @@ app.get("/fee-payments", requireLogin, (req, res) => {
     });
 });
 
-app.get("/fee-balance", requireLogin, (req, res) => {
+app.get("/fee-balance", requireLogin, requireAdmin, (req, res) => {
     const term = (req.query.term || "").trim();
     const session = (req.query.session || "").trim();
     const className = (req.query.class_name || "").trim();
@@ -2724,7 +2767,7 @@ app.get("/fee-balance", requireLogin, (req, res) => {
     });
 });
 
-app.get("/finance-summary", requireLogin, (req, res) => {
+app.get("/finance-summary", requireLogin, requireAdmin, (req, res) => {
     const term = (req.query.term || "").trim();
     const session = (req.query.session || "").trim();
     if (!term || !session) return res.status(400).json({ message: "term and session are required." });
@@ -2764,7 +2807,7 @@ app.get("/finance-summary", requireLogin, (req, res) => {
     });
 });
 
-app.get("/expenses", requireLogin, (req, res) => {
+app.get("/expenses", requireLogin, requireAdmin, (req, res) => {
     connection.query(
         "SELECT id, title, category, amount, spent_on, note, created_at FROM expenses ORDER BY spent_on DESC, id DESC LIMIT 300",
         (err, rows) => {
@@ -2797,6 +2840,171 @@ app.delete("/expense/:id", requireLogin, requireAdmin, (req, res) => {
     connection.query("DELETE FROM expenses WHERE id = ?", [req.params.id], (err) => {
         if (err) { console.log(err); return res.status(500).json({ message: "Database error" }); }
         res.json({ message: "Expense deleted" });
+    });
+});
+
+
+/* =====================================================================
+   NEW (pack 14) - payment delete, attendance "already taken" summary,
+   school settings, sessions, user management. All additive.
+   ===================================================================== */
+
+/* ---------- Delete a fee payment (owner request) -------------------- */
+app.delete("/fee-payment/:id", requireLogin, requireAdmin, (req, res) => {
+    connection.query("DELETE FROM fee_payments WHERE id = ?", [req.params.id], (err) => {
+        if (err) { console.log(err); return res.status(500).json({ message: "Database error" }); }
+        res.json({ message: "Payment deleted" });
+    });
+});
+
+/* ---------- Attendance "already taken for this date" summary --------
+   Lets the register WARN before re-taking (avoids duplicate surprises);
+   editing and saving again stays fully allowed (upsert). */
+app.get("/attendance/summary", requireLogin, (req, res) => {
+    const className = (req.query.class_name || "").trim();
+    const date = (req.query.date || "").trim();
+    if (!className || !date) return res.status(400).json({ message: "class_name and date are required." });
+    connection.query(
+        `SELECT COUNT(*) AS total,
+                SUM(status = 'present') AS present,
+                SUM(status = 'absent')  AS absent,
+                SUM(status = 'late')    AS late,
+                MAX(marked_by) AS marked_by,
+                MAX(created_at) AS saved_at
+         FROM attendance
+         WHERE class_name = ? AND att_date = ?`,
+        [className, date],
+        (err, rows) => {
+            if (err) { console.log(err); return res.status(500).json({ message: "Database error" }); }
+            const r = rows && rows[0] ? rows[0] : {};
+            res.json({
+                taken: Number(r.total) > 0,
+                total: Number(r.total) || 0,
+                present: Number(r.present) || 0,
+                absent: Number(r.absent) || 0,
+                late: Number(r.late) || 0,
+                marked_by: r.marked_by || null,
+                saved_at: r.saved_at || null
+            });
+        }
+    );
+});
+
+/* ---------- School settings (admin) ----------------------------------
+   GET is public so the website can show the correct contact details. */
+app.get("/school-settings", (req, res) => {
+    connection.query("SELECT * FROM school_settings WHERE id = 1", (err, rows) => {
+        if (err) { console.log(err); return res.status(500).json({ message: "Database error" }); }
+        res.json(rows && rows.length ? rows[0] : {});
+    });
+});
+
+app.post("/school-settings", requireLogin, requireAdmin, (req, res) => {
+    const f = k => String(req.body[k] == null ? "" : req.body[k]).trim();
+    connection.query(
+        `INSERT INTO school_settings
+         (id, school_name, school_name_ar, motto, motto_ar, address, phone1, phone2, email)
+         VALUES (1,?,?,?,?,?,?,?,?,?)
+         ON DUPLICATE KEY UPDATE
+           school_name = VALUES(school_name), school_name_ar = VALUES(school_name_ar),
+           motto = VALUES(motto), motto_ar = VALUES(motto_ar), address = VALUES(address),
+           phone1 = VALUES(phone1), phone2 = VALUES(phone2), email = VALUES(email)`,
+        [f("school_name"), f("school_name_ar"), f("motto"), f("motto_ar"), f("address"), f("phone1"), f("phone2"), f("email")],
+        (err) => {
+            if (err) { console.log(err); return res.status(500).json({ message: "Database error" }); }
+            res.json({ message: "School settings saved" });
+        }
+    );
+});
+
+/* ---------- Academic sessions (admin creates) ------------------------ */
+app.get("/sessions", requireLogin, (req, res) => {
+    connection.query("SELECT session, is_current FROM sessions ORDER BY session", (err, rows) => {
+        if (err) { console.log(err); return res.status(500).json({ message: "Database error" }); }
+        res.json(rows);
+    });
+});
+
+app.post("/session", requireLogin, requireAdmin, (req, res) => {
+    const session = (req.body.session || "").trim();
+    const makeCurrent = Number(req.body.is_current) ? 1 : 0;
+    if (!session) return res.status(400).json({ message: "Session is required (e.g. 2027/2028)." });
+    const insert = () => {
+        connection.query(
+            "INSERT INTO sessions (session, is_current) VALUES (?, ?) ON DUPLICATE KEY UPDATE is_current = IF(?, 1, is_current)",
+            [session, makeCurrent, makeCurrent],
+            (err) => {
+                if (err) { console.log(err); return res.status(500).json({ message: "Database error" }); }
+                res.json({ message: "Session saved", session, is_current: makeCurrent });
+            }
+        );
+    };
+    if (makeCurrent) {
+        connection.query("UPDATE sessions SET is_current = 0", (err) => {
+            if (err) { console.log(err); return res.status(500).json({ message: "Database error" }); }
+            insert();
+        });
+    } else {
+        insert();
+    }
+});
+
+/* ---------- User management (admin creates users of ANY role) -------
+   "Let admin be able to create user either admin or teacher and any
+   other positions." New roles act like teacher-level everywhere
+   (only 'admin' gets admin powers), until you ask otherwise. */
+app.get("/users", requireLogin, requireAdmin, (req, res) => {
+    connection.query("SELECT id, username, role FROM users ORDER BY username", (err, rows) => {
+        if (err) { console.log(err); return res.status(500).json({ message: "Database error" }); }
+        res.json(rows);
+    });
+});
+
+app.post("/create-user", requireLogin, requireAdmin, (req, res) => {
+    const username = (req.body.username || "").trim();
+    const password = req.body.password || "";
+    const role = (req.body.role || "teacher").trim().toLowerCase().replace(/[^a-z_]/g, "") || "teacher";
+    if (!username || password.length < 4) {
+        return res.status(400).json({ message: "Username and a password of at least 4 characters are required." });
+    }
+    connection.query("SELECT id FROM users WHERE username = ?", [username], (err, rows) => {
+        if (err) { console.log(err); return res.status(500).json({ message: "Database error" }); }
+        if (rows.length) return res.status(409).json({ message: "That username already exists." });
+        bcrypt.hash(password, 10, (herr, hash) => {
+            if (herr) { console.log(herr); return res.status(500).json({ message: "Error securing password" }); }
+            connection.query("INSERT INTO users (username, password_hash, role) VALUES (?,?,?)",
+                [username, hash, role],
+                (err2) => {
+                    if (err2) { console.log(err2); return res.status(500).json({ message: "Database error" }); }
+                    res.json({ message: "User created", username, role });
+                });
+        });
+    });
+});
+
+app.post("/reset-user-password", requireLogin, requireAdmin, (req, res) => {
+    const userId = Number(req.body.user_id);
+    const password = req.body.password || "";
+    if (!userId || password.length < 4) {
+        return res.status(400).json({ message: "User and a password of at least 4 characters are required." });
+    }
+    bcrypt.hash(password, 10, (herr, hash) => {
+        if (herr) { console.log(herr); return res.status(500).json({ message: "Error securing password" }); }
+        connection.query("UPDATE users SET password_hash = ? WHERE id = ?", [hash, userId], (err) => {
+            if (err) { console.log(err); return res.status(500).json({ message: "Database error" }); }
+            res.json({ message: "Password reset" });
+        });
+    });
+});
+
+app.delete("/user/:id", requireLogin, requireAdmin, (req, res) => {
+    const userId = Number(req.params.id);
+    if (userId === req.session.userId) {
+        return res.status(400).json({ message: "You cannot delete your own account." });
+    }
+    connection.query("DELETE FROM users WHERE id = ?", [userId], (err) => {
+        if (err) { console.log(err); return res.status(500).json({ message: "Database error" }); }
+        res.json({ message: "User deleted" });
     });
 });
 

@@ -173,14 +173,34 @@ a.sc-mod-row:hover{ background:#F2F8F5; border-radius:8px; }
   padding:12px 14px; font-size:13px; color:var(--sc-muted); margin-top:14px; line-height:1.55;
 }
 
-/* Portal print: hide chrome, keep ONLY the report card (which uses the
-   FROZEN report-container design - untouched by this stylesheet). */
+/* FIX (pack 14 - portal print, owner request): the portal report must
+   print EXACTLY like the Check Result page (single A4 page). The frozen
+   rules in style.css hide every direct child of body except
+   #reportContainer; here the report lives INSIDE main.pt-wrap, so we
+   re-show just that wrapper (the :not(#reportContainer) selector below
+   outranks the style.css print rule) and hide the other portal cards.
+   The report card itself keeps the FROZEN style.css print layout. */
 @media print{
   .portal-no-print{ display:none !important; }
-  body{ background:#fff !important; }
-  .pt-wrap{ margin:0; padding:0; max-width:none; }
-  .pt-card{ border:none; padding:0; }
+  body > .pt-wrap:not(#reportContainer){
+    display:block !important; margin:0 !important; padding:0 !important;
+    max-width:none !important; gap:0 !important; background:#fff !important;
+  }
+  .pt-card{ display:none !important; border:none !important; padding:0 !important; margin:0 !important; box-shadow:none !important; }
+  #ptReportCardWrap{ display:block !important; padding:0 !important; margin:0 !important; border:none !important; }
+  #ptReport{ display:block !important; padding:0 !important; margin:0 !important; }
 }
+
+/* NEW (pack 14 - attendance): "already taken today" warning banner */
+.att-taken{
+  display:none; align-items:flex-start; gap:10px;
+  background:#FBF3D9; border:1.5px solid #E7D08B; color:#7A5A00;
+  border-radius:12px; padding:12px 14px; margin-bottom:14px;
+  font-size:13.5px; line-height:1.5;
+}
+.att-taken.show{ display:flex; }
+.att-taken b{ color:#5b4703; }
+.att-taken .att-taken-note{ opacity:.85; font-size:12px; }
 
 /* --------------------- MANAGEMENT PAGES (pack 13) ---------------------- */
 .mg-toolbar{ display:flex; gap:10px; flex-wrap:wrap; align-items:flex-end; margin-bottom:16px; }

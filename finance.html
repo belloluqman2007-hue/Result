@@ -112,9 +112,14 @@
 
         <div class="mg-card">
           <h3>&#129534; This Student's Payments</h3>
+          <!-- NEW (pack 14): download this student's full payment record as PDF -->
+          <div class="mg-toolbar" style="margin-bottom:10px;">
+            <button class="mg-btn-light" type="button" onclick="downloadPaymentsPDF()">&#11015; Download PDF</button>
+          </div>
           <div class="mg-table-wrap">
             <table class="mg-table" id="payTable">
-              <thead><tr><th>Date</th><th>Amount</th><th>Method</th><th>Received By</th></tr></thead>
+              <!-- CHANGED (pack 14): added Actions column (Receipt PDF + Delete) -->
+              <thead><tr><th>Date</th><th>Amount</th><th>Method</th><th>Received By</th><th>Actions</th></tr></thead>
               <tbody><tr><td colspan="4" style="text-align:center; color:#5B6B62;">Pick a student to see their payments.</td></tr></tbody>
             </table>
           </div>
@@ -188,6 +193,9 @@
 
   <script src="js/ui.js"></script>
   <script src="js/app.js"></script>
+  <!-- NEW (pack 14): jsPDF + shared receipt/list PDF maker (local vendor) -->
+  <script src="js/vendor/jspdf.umd.min.js"></script>
+  <script src="js/ams-pdf.js"></script>
   <!-- NEW (pack 13) -->
   <script src="js/finance.js"></script>
   <script src="js/pwa.js" defer></script>

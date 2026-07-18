@@ -49,6 +49,18 @@
         <button class="mg-btn" type="button" onclick="loadRegister()">Load Register</button>
         <button class="mg-btn-light" type="button" onclick="markAllPresent()">All Present</button>
         <button class="mg-btn" type="button" onclick="saveRegister()">&#128190; Save Attendance</button>
+        <!-- NEW (pack 14): download the register as a clean A4 PDF -->
+        <button class="mg-btn-light" type="button" onclick="downloadRegisterPDF()">&#11015; Download PDF</button>
+      </div>
+      <!-- NEW (pack 14): warns when this date was already taken (you can
+           still review, change and save again - saves always update). -->
+      <div class="att-taken" id="attTaken">
+        <span style="font-size:18px;">&#9888;&#65039;</span>
+        <div>
+          <b>Attendance already taken for this date.</b>
+          <span id="attTakenText"></span>
+          <div class="att-taken-note">The marks below are the saved ones. You can change anything and press "Save Attendance" to update.</div>
+        </div>
       </div>
       <div class="mg-table-wrap">
         <table class="mg-table" id="attTable">
@@ -70,6 +82,8 @@
           <input type="date" id="attRepTo">
         </div>
         <button class="mg-btn" type="button" onclick="loadAttReport()">Load Report</button>
+        <!-- NEW (pack 14) -->
+        <button class="mg-btn-light" type="button" onclick="downloadReportPDF()">&#11015; Download PDF</button>
       </div>
       <div class="mg-table-wrap">
         <table class="mg-table" id="attRepTable">
@@ -84,6 +98,9 @@
 
   <script src="js/ui.js"></script>
   <script src="js/app.js"></script>
+  <!-- NEW (pack 14): jsPDF + shared PDF maker (local vendor) -->
+  <script src="js/vendor/jspdf.umd.min.js"></script>
+  <script src="js/ams-pdf.js"></script>
   <!-- NEW (pack 13) -->
   <script src="js/attendance.js"></script>
   <script src="js/pwa.js" defer></script>
