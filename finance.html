@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Finance | Ameenullah School of Arabic and Islamic Studies</title>
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/modern-ui.css">
+  <link rel="stylesheet" href="css/manage.css">
+  <!-- NEW (pack 13): shared manager styles -->
+  <link rel="stylesheet" href="css/school.css">
+
+  <link rel="manifest" href="manifest.webmanifest">
+  <meta name="theme-color" content="#2f5021">
+  <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+</head>
+<body onload="checkAuth(); initFinance();">
+  <!-- NEW (pack 13): fee structure, fee payments, expenses and summary.
+       Fee structure & expenses saving are ADMIN-only; recording payments
+       is open to all logged-in staff (like score entry). -->
+  <div class="mng-page">
+
+    <div class="mng-head">
+      <a class="mng-back" href="teacher-dashboard.html">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5"/><path d="m12 19-7-7 7-7"/></svg>
+        Dashboard
+      </a>
+      <div class="mng-head-text">
+        <h1>&#128176; Finance</h1>
+        <p>Set school fees per class, record payments, track expenses, and see the money summary for any term.</p>
+      </div>
+    </div>
+
+    <!-- Shared term/session pickers -->
+    <div class="mg-toolbar">
+      <div class="mg-field">
+        <label for="finTerm">Term</label>
+        <select id="finTerm">
+          <option>1st Term</option>
+          <option>2nd Term</option>
+          <option>3rd Term</option>
+        </select>
+      </div>
+      <div class="mg-field">
+        <label for="finSession">Session</label>
+        <input type="text" id="finSession" list="finSessionList" value="2026/2027" placeholder="e.g. 2026/2027">
+        <datalist id="finSessionList">
+          <option>2024/2025</option>
+          <option>2025/2026</option>
+          <option>2026/2027</option>
+          <option>2027/2028</option>
+          <option>2028/2029</option>
+        </datalist>
+      </div>
+      <button class="mg-btn-light" type="button" onclick="finReloadTab()">&#128260; Reload</button>
+    </div>
+
+    <div class="mg-tabs">
+      <button class="mg-tab active" type="button" onclick="finSwitchTab('fees', this)">&#127979; Fee Structure</button>
+      <button class="mg-tab" type="button" onclick="finSwitchTab('pay', this)">&#128184; Payments</button>
+      <button class="mg-tab" type="button" onclick="finSwitchTab('exp', this)">&#128177; Expenses</button>
+      <button class="mg-tab" type="button" onclick="finSwitchTab('sum', this)">&#128202; Summary</button>
+    </div>
+
+    <!-- Fee structure -->
+    <div class="mg-panel active" id="finPanelFees">
+      <div class="mg-toolbar">
+        <button class="mg-btn-light" type="button" onclick="loadFeeStructure()">Load Classes &amp; Fees</button>
+        <button class="mg-btn" type="button" onclick="saveFeeStructure()">&#128190; Save All Fees</button>
+      </div>
+      <div class="mg-table-wrap">
+        <table class="mg-table" id="feeTable">
+          <thead><tr><th>Class</th><th>Fee per Term (&#8358;)</th></tr></thead>
+          <tbody><tr><td colspan="2" style="text-align:center; color:#5B6B62;">Press "Load Classes &amp; Fees" to begin. Saving is admin-only.</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Payments -->
+    <div class="mg-panel" id="finPanelPay">
+      <div class="mg-cards">
+        <div class="mg-card">
+          <h3>&#128184; Record a Payment</h3>
+          <div class="mg-toolbar">
+            <div class="mg-field">
+              <label for="payClass">Class</label>
+              <select id="payClass" onchange="loadPayStudents()"><option value="">Select Class</option></select>
+            </div>
+            <div class="mg-field">
+              <label for="payStudent">Student</label>
+              <select id="payStudent"><option value="">Choose class first</option></select>
+            </div>
+            <div class="mg-field">
+              <label for="payAmount">Amount (&#8358;)</label>
+              <input type="number" id="payAmount" min="1" placeholder="e.g. 15000">
+            </div>
+            <div class="mg-field">
+              <label for="payMethod">Method</label>
+              <select id="payMethod">
+                <option>Cash</option><option>Bank Transfer</option><option>POS</option><option>Other</option>
+              </select>
+            </div>
+            <div class="mg-field">
+              <label for="payNote">Note</label>
+              <input type="text" id="payNote" placeholder="optional">
+            </div>
+          </div>
+          <button class="mg-btn" type="button" onclick="savePayment()">&#128190; Save Payment</button>
+          <div id="payBalance" style="margin-top:12px; font-size:13.5px; font-weight:700; color:#1C5A42;"></div>
+        </div>
+
+        <div class="mg-card">
+          <h3>&#129534; This Student's Payments</h3>
+          <div class="mg-table-wrap">
+            <table class="mg-table" id="payTable">
+              <thead><tr><th>Date</th><th>Amount</th><th>Method</th><th>Received By</th></tr></thead>
+              <tbody><tr><td colspan="4" style="text-align:center; color:#5B6B62;">Pick a student to see their payments.</td></tr></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Expenses -->
+    <div class="mg-panel" id="finPanelExp">
+      <div class="mg-cards">
+        <div class="mg-card">
+          <h3>&#128177; Record an Expense</h3>
+          <div class="mg-toolbar">
+            <div class="mg-field">
+              <label for="expTitle">Title</label>
+              <input type="text" id="expTitle" placeholder="e.g. Chalk & markers">
+            </div>
+            <div class="mg-field">
+              <label for="expCategory">Category</label>
+              <select id="expCategory">
+                <option>Supplies</option><option>Salary</option><option>Utilities</option>
+                <option>Maintenance</option><option>Events</option><option>Other</option>
+              </select>
+            </div>
+            <div class="mg-field">
+              <label for="expAmount">Amount (&#8358;)</label>
+              <input type="number" id="expAmount" min="1" placeholder="e.g. 5000">
+            </div>
+            <div class="mg-field">
+              <label for="expDate">Date</label>
+              <input type="date" id="expDate">
+            </div>
+            <div class="mg-field">
+              <label for="expNote">Note</label>
+              <input type="text" id="expNote" placeholder="optional">
+            </div>
+          </div>
+          <button class="mg-btn" type="button" onclick="saveExpense()">&#128190; Save Expense</button>
+          <p class="mg-note">Saving &amp; deleting expenses is admin-only.</p>
+        </div>
+
+        <div class="mg-card">
+          <h3>&#128203; Expense Records</h3>
+          <div class="mg-table-wrap">
+            <table class="mg-table" id="expTable">
+              <thead><tr><th>Date</th><th>Title</th><th>Category</th><th>Amount</th><th></th></tr></thead>
+              <tbody><tr><td colspan="5" style="text-align:center; color:#5B6B62;">Loading...</td></tr></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Summary -->
+    <div class="mg-panel" id="finPanelSum">
+      <div class="mg-toolbar">
+        <button class="mg-btn-light" type="button" onclick="loadSummary()">Load Summary</button>
+      </div>
+      <div class="mg-stat-chips" id="sumChips" style="display:none;">
+        <div class="mg-stat-chip"><span>Expected fees</span><b id="sumExpected">-</b></div>
+        <div class="mg-stat-chip"><span>Received</span><b id="sumReceived" style="color:#157347;">-</b></div>
+        <div class="mg-stat-chip"><span>Outstanding</span><b id="sumOutstanding" style="color:#B3261E;">-</b></div>
+        <div class="mg-stat-chip"><span>Payments count</span><b id="sumPayCount">-</b></div>
+        <div class="mg-stat-chip"><span>Expenses (all time)</span><b id="sumExpenses">-</b></div>
+      </div>
+      <p class="mg-note" id="sumNote" style="display:none;"></p>
+    </div>
+
+    <div class="mg-msg" id="finMsg"></div>
+  </div>
+
+  <script src="js/ui.js"></script>
+  <script src="js/app.js"></script>
+  <!-- NEW (pack 13) -->
+  <script src="js/finance.js"></script>
+  <script src="js/pwa.js" defer></script>
+</body>
+</html>

@@ -425,3 +425,82 @@ nothing assigned still use the shared one (nothing breaks).
 
 Verified on the live database: table auto-creates, save/read/remove work,
 and the existing shared signatures (principal, class teacher) are untouched.
+
+---
+
+## Feature pack 13 - school website + student/parent portal + publish gate + attendance + staff tools + finance (owner requests)
+
+**"Let add student and parent space where they can check their result and
+information, where they can login through their ID as their name and
+surname as their password. Let do it a real school website... If the
+person will be interested in the school, and if they are activated through
+the management, they can login - admin, teacher, student and parent. The
+result can show to student or parents except it has been publish by
+admin."** + **"I want all your suggestions"** (attendance, finance, staff tools).
+
+### 1. Real school website (new `index.html`)
+Public homepage: hero, about, full portal-module showcase (owner's menu list;
+Live vs Coming soon chips), login-by-role cards (Admin / Teacher / Student /
+Parent) and a public **Admission Enquiry form**. The old result-portal
+landing was replaced at the owner's request; staff login page untouched.
+
+### 2. Student/Parent portal (login = Student ID + surname)
+`portal-login.html` + `portal.html`. Password = the child's SURNAME (last
+word of the registered name), case-insensitive (full name also accepted).
+Portal shows the child's info and ONLY published terms; tapping one renders
+the **official report sheet with the existing frozen builder**
+(`js/report-card.js` / `amsFetchReportPack` / `amsBuildReportCard`) - same
+design as staff/printouts, 100% re-used.
+
+### 3. Admin-only publish gate
+NEW `result_publish` table (`class_name, term, session, published`;
+`class_name=''` = whole term, which wins by design). `manage-publish.html`:
+per-class switches + whole-term switch. Saving is `requireAdmin`.
+`/search-result`, `/student-position`, `/student/:id` are now gated for
+NON-staff: anonymous = blocked, portal users = own child + published term
+only. **Staff behaviour is 100% unchanged (they skip every gate).** The old
+public Check Result page now redirects visitors to the portal (owner
+decision), staff flow untouched.
+
+### 4. Admissions inbox
+`admission_enquiries` table + `manage-admissions.html` (list + status:
+new/contacted/admitted, admin-only). Activation = adding the child via the
+existing Add Student page, which turns on the portal login automatically.
+
+### 5. Attendance (students)
+`attendance` table (one row per student per day) + `attendance.html`:
+daily register (Present/Absent/Late, all-present shortcut, save) + date-range
+report with present %.
+
+### 6. Staff tools
+`staff_attendance` + `staff_evaluations` tables + `staff-attendance.html`:
+daily staff attendance and weekly evaluations (teaching/punctuality/conduct /10
++ comment). Saving is admin-only.
+
+### 7. Finance
+`fee_structure`, `fee_payments`, `expenses` tables + `finance.html`:
+fee per class per term/session (admin), record student payments with running
+balance, expenses (admin add/delete), summary chips (expected/received/
+outstanding for the chosen term).
+
+| File | What happened |
+|---|---|
+| `server.js` | NEW tables (auto-created): result_publish, admission_enquiries, attendance, staff_attendance, staff_evaluations, fee_structure, fee_payments, expenses. NEW routes: portal login/me/logout/published-terms, result-publish GET/POST (POST admin), admission-enquiry POST (public) + GET/PUT (PUT admin), attendance class/save/report, staff-list, staff-attendance GET/POST (POST admin), staff-evaluation/save (POST admin), staff-evaluations (admin), fee-structure GET/POST (POST admin), fee-payment, fee-payments, fee-balance, finance-summary, expenses GET/POST/DELETE (admin). NEW gates on the 3 read APIs (staff skip). Hard-ened owner comparison (case/space-insensitive). Protected page guards for the 5 new staff pages. |
+| `index.html` | Rebuilt as the real school website (owner request). |
+| `portal-login.html`, `portal.html` | NEW student/parent portal. |
+| `manage-publish.html`, `manage-admissions.html`, `attendance.html`, `staff-attendance.html`, `finance.html` | NEW management pages. |
+| `css/school.css` | NEW shared styles (website, portal, manager, portal print rules that hide portal chrome only - the frozen report card is untouched). |
+| `js/website.js`, `js/portal-login.js`, `js/portal.js`, `js/publish.js`, `js/admissions.js`, `js/attendance.js`, `js/staff-attendance.js`, `js/finance.js` | NEW page logic files. |
+| `teacher-dashboard.html` | Additive nav section "Management" with links to the 5 new pages. |
+| `student-result.html` | Gate script: visitors go to the portal; staff flow unchanged. |
+| `sw.js` | Cache version bumped v1->v2 so phones pick up the new files. |
+
+Verified LIVE against the production database: website serves at `/`,
+8 tables auto-create, public enquiry saves, anonymous result access = 403,
+portal login (surname, case-insensitive) works, unpublished terms = 403
+"friendly" message, after whole-term publish the portal lists the term and
+/search-result returns the student's real 13 rows, 3rd Term stays blocked
+until published, owner-gated student info works, test rows cleaned up.
+
+Result calculations, grading, positions, report card generation, printing
+and every staff query: completely untouched.

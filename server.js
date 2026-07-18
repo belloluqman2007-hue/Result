@@ -58,6 +58,65 @@ function requireAdmin(req, res, next) {
     return res.status(403).json({ message: "Admin access required" });
 }
 
+
+/* =====================================================================
+   NEW (pack 13 - Student/Parent portal + publish gate, owner request)
+   ---------------------------------------------------------------------
+   "The result can show to student or parents except it is been publish
+   by admin". STAFF behaviour is 100% UNCHANGED (they skip every gate).
+   Everyone else must log in with Student ID + surname, may view ONLY
+   their own child, and ONLY terms an admin has published.
+   ===================================================================== */
+function checkPublished(className, term, schoolSession, cb) {
+    connection.query(
+        "SELECT published FROM result_publish WHERE term = ? AND session = ? AND (class_name = ? OR class_name = '') LIMIT 4",
+        [term, schoolSession, className],
+        (err, rows) => {
+            if (err) return cb(err);
+            cb(null, (rows || []).some(r => Number(r.published) === 1));
+        }
+    );
+}
+
+// Owner-only gate (basic records: student info / position). Staff skip it.
+function portalOwnerGate(req, res, next) {
+    if (req.session && req.session.userId) return next(); // staff: untouched
+    const sid = req.session && req.session.portalStudentId;
+    if (!sid) return res.status(403).json({ message: "Please log in as a student or parent first." });
+    // FIX (pack 13): compare trimmed + case-insensitively ('AM' vs 'Am ')
+    if (String(sid).trim().toLowerCase() !== String(req.params.studentId).trim().toLowerCase()) {
+        return res.status(403).json({ message: "You can only view your own child's record." });
+    }
+    next();
+}
+
+// Result gate (score sheets). Staff skip it; portal users need OWN child
+// + a published term/session.
+function publishResultGate(req, res, next) {
+    if (req.session && req.session.userId) return next(); // staff: FULL old behaviour
+    const sid = req.session && req.session.portalStudentId;
+    if (!sid) return res.status(403).json({ message: "Please log in as a student or parent to check results." });
+    // FIX (pack 13): compare trimmed + case-insensitively ('AM' vs 'Am ')
+    if (String(sid).trim().toLowerCase() !== String(req.params.studentId).trim().toLowerCase()) {
+        return res.status(403).json({ message: "You can only view your own result." });
+    }
+    const term = req.query.term;
+    const schoolSession = req.query.session;
+    if (!term || !schoolSession) {
+        return res.status(403).json({ message: "Pick a published term and session." });
+    }
+    connection.query("SELECT class_name FROM students WHERE student_id = ?", [sid], (err, rows) => {
+        if (err || !rows.length) return res.status(403).json({ message: "Student record not found." });
+        checkPublished(rows[0].class_name, term, schoolSession, (err2, published) => {
+            if (err2) { console.log(err2); return res.status(500).json({ message: "Database error" }); }
+            if (!published) {
+                return res.status(403).json({ message: "This result has not been published by the school yet. Please check back later." });
+            }
+            next();
+        });
+    });
+}
+
 app.post("/login", (req, res) => {
     const { username, password } = req.body;
 
@@ -130,6 +189,32 @@ app.get("/add-subject.html", requireLogin, (req, res) => {
 
 app.get("/manage-signatures.html", requireLogin, (req, res) => {
     res.sendFile(path.join(__dirname, "manage-signatures.html"));
+});
+
+
+
+// ----------------------------------------------------------------
+// NEW (pack 13): protect the new management pages exactly like the
+// existing dashboard pages. Must stay BEFORE express.static.
+// ----------------------------------------------------------------
+app.get("/manage-publish.html", requireLogin, (req, res) => {
+    res.sendFile(path.join(__dirname, "manage-publish.html"));
+});
+
+app.get("/manage-admissions.html", requireLogin, (req, res) => {
+    res.sendFile(path.join(__dirname, "manage-admissions.html"));
+});
+
+app.get("/attendance.html", requireLogin, (req, res) => {
+    res.sendFile(path.join(__dirname, "attendance.html"));
+});
+
+app.get("/staff-attendance.html", requireLogin, (req, res) => {
+    res.sendFile(path.join(__dirname, "staff-attendance.html"));
+});
+
+app.get("/finance.html", requireLogin, (req, res) => {
+    res.sendFile(path.join(__dirname, "finance.html"));
 });
 
 app.get("/id-card.html", requireLogin, (req, res) => {
@@ -206,6 +291,94 @@ const addonTables = [
         class_name VARCHAR(150) PRIMARY KEY,
         signature_path VARCHAR(255) NOT NULL,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    )`,
+    // NEW (pack 13 - results publish gate): class_name '' = WHOLE TERM
+    // (admin publishes every class at once; per-class rows publish one
+    // class only). Whole-term wins by design (owner decision).
+    `CREATE TABLE IF NOT EXISTS result_publish (
+        class_name VARCHAR(150) NOT NULL DEFAULT '',
+        term VARCHAR(50) NOT NULL,
+        session VARCHAR(50) NOT NULL,
+        published TINYINT(1) NOT NULL DEFAULT 0,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        PRIMARY KEY (class_name, term, session)
+    )`,
+    // NEW (pack 13 - admission enquiries from the school website):
+    // visitors register interest; management reviews and admits.
+    `CREATE TABLE IF NOT EXISTS admission_enquiries (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        child_name VARCHAR(255) NOT NULL,
+        parent_name VARCHAR(255),
+        phone VARCHAR(50),
+        class_applied VARCHAR(150),
+        message TEXT,
+        status ENUM('new','contacted','admitted') NOT NULL DEFAULT 'new',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )`,
+    // NEW (pack 13 - student attendance): one row per student per day.
+    `CREATE TABLE IF NOT EXISTS attendance (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        student_id VARCHAR(100) NOT NULL,
+        class_name VARCHAR(150) NOT NULL,
+        att_date DATE NOT NULL,
+        status ENUM('present','absent','late') NOT NULL DEFAULT 'present',
+        marked_by VARCHAR(100),
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE KEY uniq_student_day (student_id, att_date)
+    )`,
+    // NEW (pack 13 - staff attendance): one row per staff per day.
+    `CREATE TABLE IF NOT EXISTS staff_attendance (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        staff_username VARCHAR(100) NOT NULL,
+        att_date DATE NOT NULL,
+        status ENUM('present','absent') NOT NULL DEFAULT 'present',
+        marked_by VARCHAR(100),
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE KEY uniq_staff_day (staff_username, att_date)
+    )`,
+    // NEW (pack 13 - weekly teacher evaluations).
+    `CREATE TABLE IF NOT EXISTS staff_evaluations (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        staff_username VARCHAR(100) NOT NULL,
+        week_start DATE NOT NULL,
+        teaching TINYINT,
+        punctuality TINYINT,
+        conduct TINYINT,
+        comment TEXT,
+        created_by VARCHAR(100),
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )`,
+    // NEW (pack 13 - finance: fee structure per class per term/session).
+    `CREATE TABLE IF NOT EXISTS fee_structure (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        class_name VARCHAR(150) NOT NULL,
+        term VARCHAR(50) NOT NULL,
+        session VARCHAR(50) NOT NULL,
+        amount DECIMAL(12,2) NOT NULL DEFAULT 0,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        UNIQUE KEY uniq_class_term_session (class_name, term, session)
+    )`,
+    // NEW (pack 13 - finance: fee payments received).
+    `CREATE TABLE IF NOT EXISTS fee_payments (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        student_id VARCHAR(100) NOT NULL,
+        term VARCHAR(50) NOT NULL,
+        session VARCHAR(50) NOT NULL,
+        amount DECIMAL(12,2) NOT NULL,
+        method VARCHAR(60),
+        note VARCHAR(255),
+        received_by VARCHAR(100),
+        paid_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )`,
+    // NEW (pack 13 - finance: school expenses).
+    `CREATE TABLE IF NOT EXISTS expenses (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        title VARCHAR(255) NOT NULL,
+        category VARCHAR(100),
+        amount DECIMAL(12,2) NOT NULL,
+        spent_on DATE,
+        note VARCHAR(255),
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )`
 ];
 
@@ -258,7 +431,7 @@ function setupAddonTables(attempt) {
                 if (finished === addonTables.length) {
                     conn.end();
                     if (firstFailure) return addonRetryLater(attempt, firstFailure);
-                    console.log("Add-on tables ready (announcements, school_events, class_teacher_signatures).");
+                    console.log("Add-on tables ready (announcements, school_events, class_teacher_signatures, result_publish, admission_enquiries, attendance, staff_attendance, staff_evaluations, fee_structure, fee_payments, expenses).");
                 }
             });
         });
@@ -943,7 +1116,7 @@ app.put("/update-result/:id", requireLogin, (req, res) => {
 
 });
 
-app.get("/search-result/:studentId", (req, res) => {
+app.get("/search-result/:studentId", publishResultGate, (req, res) => { // CHANGED (pack 13): portal/anon users need login + published term; staff skip the gate completely
     const studentId = req.params.studentId;
     const term = req.query.term;
     const session = req.query.session;
@@ -1014,7 +1187,7 @@ app.get("/search-result/:studentId", (req, res) => {
     });
 });
 
-app.get("/student-position/:studentId", (req, res) => {
+app.get("/student-position/:studentId", portalOwnerGate, (req, res) => { // CHANGED (pack 13): portal/anon users - owner only; staff unchanged
     const studentId = req.params.studentId;
     const className = req.query.className;
     const term = req.query.term;
@@ -1132,7 +1305,7 @@ app.get("/student-position/:studentId", (req, res) => {
 
 
 
-app.get("/student/:studentId", (req, res) => {
+app.get("/student/:studentId", portalOwnerGate, (req, res) => { // CHANGED (pack 13): portal/anon users - owner only; staff unchanged
 
     const studentId = req.params.studentId;
 
@@ -2158,6 +2331,472 @@ app.delete("/wipe-all-data", requireLogin, requireAdmin, (req, res) => {
 
             res.json({ message: "All results and student records have been cleared." });
         });
+    });
+});
+
+
+/* =====================================================================
+   NEW (pack 13) - SCHOOL WEBSITE + PORTAL + MANAGEMENT APIs.
+   Everything below is ADDITIVE: new tables only, no existing route,
+   query, result calculation or report generation is touched.
+   ===================================================================== */
+
+/* ---------- Student / Parent portal (login: Student ID + surname) --- */
+app.post("/portal-login", (req, res) => {
+    const studentId = (req.body.student_id || "").trim();
+    const password  = (req.body.password  || "").trim();
+    if (!studentId || !password) {
+        return res.status(400).json({ message: "Student ID and surname are required." });
+    }
+    connection.query("SELECT * FROM students WHERE student_id = ?", [studentId], (err, rows) => {
+        if (err) { console.log(err); return res.status(500).json({ message: "Database error" }); }
+        if (!rows.length) return res.status(401).json({ message: "Invalid Student ID or surname" });
+        const st = rows[0];
+        const fullName = (st.full_name || "").trim();
+        const surname  = fullName ? fullName.split(/\s+/).pop() : "";
+        const ok = password.toLowerCase() === surname.toLowerCase()
+                || password.toLowerCase() === fullName.toLowerCase();
+        if (!ok) return res.status(401).json({ message: "Invalid Student ID or surname" });
+        req.session.portalStudentId = st.student_id;
+        res.json({
+            message: "Login successful",
+            student: {
+                student_id: st.student_id,
+                full_name: st.full_name,
+                class_name: st.class_name,
+                gender: st.gender,
+                date_of_birth: st.date_of_birth,
+                photo_path: st.photo_path
+            }
+        });
+    });
+});
+
+app.get("/portal/me", (req, res) => {
+    const sid = req.session && req.session.portalStudentId;
+    if (!sid) return res.json({ loggedIn: false });
+    connection.query("SELECT * FROM students WHERE student_id = ?", [sid], (err, rows) => {
+        if (err || !rows.length) {
+            if (err) console.log(err);
+            return res.json({ loggedIn: false });
+        }
+        res.json({ loggedIn: true, student: rows[0] });
+    });
+});
+
+app.post("/portal/logout", (req, res) => {
+    if (req.session) delete req.session.portalStudentId;
+    res.json({ message: "Logged out" });
+});
+
+/* Terms/sessions that (a) the student actually has results for AND
+   (b) admin has PUBLISHED (per-class row or whole-term row). */
+app.get("/portal/published-terms", (req, res) => {
+    const sid = req.session && req.session.portalStudentId;
+    if (!sid) return res.status(401).json({ message: "Not logged in" });
+    const sql = `
+        SELECT DISTINCT r.term, r.session
+        FROM results r
+        JOIN result_publish p
+          ON p.term = r.term AND p.session = r.session
+         AND p.published = 1
+         AND (p.class_name = '' OR p.class_name = r.class_name)
+        WHERE r.student_id = ?
+        ORDER BY r.session, r.term
+    `;
+    connection.query(sql, [sid], (err, rows) => {
+        if (err) { console.log(err); return res.status(500).json({ message: "Database error" }); }
+        res.json(rows);
+    });
+});
+
+/* ---------- Admin: publish / unpublish results ---------------------- */
+app.get("/result-publish", requireLogin, (req, res) => {
+    let sql = "SELECT class_name, term, session, published FROM result_publish";
+    const params = [];
+    const wh = [];
+    if (req.query.term)    { wh.push("term = ?");    params.push(req.query.term); }
+    if (req.query.session) { wh.push("session = ?"); params.push(req.query.session); }
+    if (wh.length) sql += " WHERE " + wh.join(" AND ");
+    sql += " ORDER BY session, term, class_name";
+    connection.query(sql, params, (err, rows) => {
+        if (err) { console.log(err); return res.status(500).json({ message: "Database error" }); }
+        res.json(rows);
+    });
+});
+
+// ADMIN only - "except it is been publish by admin".
+app.post("/result-publish", requireLogin, requireAdmin, (req, res) => {
+    const className = (req.body.class_name || "").trim(); // '' = whole term
+    const term      = (req.body.term || "").trim();
+    const session   = (req.body.session || "").trim();
+    const published = Number(req.body.published) ? 1 : 0;
+    if (!term || !session) {
+        return res.status(400).json({ message: "Term and session are required." });
+    }
+    connection.query(
+        `INSERT INTO result_publish (class_name, term, session, published)
+         VALUES (?,?,?,?)
+         ON DUPLICATE KEY UPDATE published = VALUES(published)`,
+        [className, term, session, published],
+        (err) => {
+            if (err) { console.log(err); return res.status(500).json({ message: "Database error" }); }
+            res.json({ message: "Saved", class_name: className, term, session, published });
+        }
+    );
+});
+
+/* ---------- Admission enquiries (public website form) --------------- */
+app.post("/admission-enquiry", (req, res) => {
+    const child  = (req.body.child_name || "").trim();
+    const parent = (req.body.parent_name || "").trim();
+    const phone  = (req.body.phone || "").trim();
+    const cls    = (req.body.class_applied || "").trim();
+    const msg    = (req.body.message || "").trim();
+    if (!child || !phone) {
+        return res.status(400).json({ message: "Child's name and a phone number are required." });
+    }
+    connection.query(
+        "INSERT INTO admission_enquiries (child_name, parent_name, phone, class_applied, message) VALUES (?,?,?,?,?)",
+        [child, parent, phone, cls, msg],
+        (err) => {
+            if (err) { console.log(err); return res.status(500).json({ message: "Database error" }); }
+            res.json({ message: "Thank you! The school will contact you soon." });
+        }
+    );
+});
+
+app.get("/admission-enquiries", requireLogin, (req, res) => {
+    connection.query(
+        "SELECT id, child_name, parent_name, phone, class_applied, message, status, created_at FROM admission_enquiries ORDER BY created_at DESC LIMIT 500",
+        (err, rows) => {
+            if (err) { console.log(err); return res.status(500).json({ message: "Database error" }); }
+            res.json(rows);
+        }
+    );
+});
+
+app.put("/admission-enquiry/:id", requireLogin, requireAdmin, (req, res) => {
+    const status = (req.body.status || "").trim();
+    if (!["new", "contacted", "admitted"].includes(status)) {
+        return res.status(400).json({ message: "Invalid status." });
+    }
+    connection.query("UPDATE admission_enquiries SET status = ? WHERE id = ?", [status, req.params.id], (err) => {
+        if (err) { console.log(err); return res.status(500).json({ message: "Database error" }); }
+        res.json({ message: "Updated" });
+    });
+});
+
+/* ---------- Student attendance -------------------------------------- */
+app.get("/attendance/class", requireLogin, (req, res) => {
+    const className = (req.query.class_name || "").trim();
+    const date = (req.query.date || "").trim();
+    if (!className || !date) return res.status(400).json({ message: "class_name and date are required." });
+    connection.query(
+        `SELECT s.student_id, s.full_name, s.gender, a.status
+         FROM students s
+         LEFT JOIN attendance a ON a.student_id = s.student_id AND a.att_date = ?
+         WHERE s.class_name = ?
+         ORDER BY s.full_name`,
+        [date, className],
+        (err, rows) => {
+            if (err) { console.log(err); return res.status(500).json({ message: "Database error" }); }
+            res.json(rows);
+        }
+    );
+});
+
+app.post("/attendance/save", requireLogin, (req, res) => {
+    const className = (req.body.class_name || "").trim();
+    const date = (req.body.date || "").trim();
+    const records = Array.isArray(req.body.records) ? req.body.records : [];
+    if (!className || !date || !records.length) {
+        return res.status(400).json({ message: "class_name, date and records are required." });
+    }
+    const valid = ["present", "absent", "late"];
+    const markedBy = req.session.username || null;
+    const rows = records
+        .filter(r => r && r.student_id && valid.includes(r.status))
+        .map(r => [String(r.student_id), className, date, r.status, markedBy]);
+    if (!rows.length) return res.status(400).json({ message: "No valid records supplied." });
+    connection.query(
+        `INSERT INTO attendance (student_id, class_name, att_date, status, marked_by)
+         VALUES ?
+         ON DUPLICATE KEY UPDATE status = VALUES(status), marked_by = VALUES(marked_by)`,
+        [rows],
+        (err) => {
+            if (err) { console.log(err); return res.status(500).json({ message: "Database error" }); }
+            res.json({ message: "Attendance saved", count: rows.length });
+        }
+    );
+});
+
+app.get("/attendance/report", requireLogin, (req, res) => {
+    const className = (req.query.class_name || "").trim();
+    const from = (req.query.from || "").trim();
+    const to = (req.query.to || "").trim();
+    if (!className || !from || !to) return res.status(400).json({ message: "class_name, from and to are required." });
+    connection.query(
+        `SELECT a.student_id, s.full_name,
+                SUM(a.status = 'present') AS present,
+                SUM(a.status = 'absent')  AS absent,
+                SUM(a.status = 'late')    AS late,
+                COUNT(*) AS marked
+         FROM attendance a
+         JOIN students s ON s.student_id = a.student_id
+         WHERE a.class_name = ? AND a.att_date BETWEEN ? AND ?
+         GROUP BY a.student_id, s.full_name
+         ORDER BY s.full_name`,
+        [className, from, to],
+        (err, rows) => {
+            if (err) { console.log(err); return res.status(500).json({ message: "Database error" }); }
+            res.json(rows);
+        }
+    );
+});
+
+/* ---------- Staff attendance + weekly evaluations ------------------- */
+app.get("/staff-list", requireLogin, (req, res) => {
+    connection.query("SELECT username, role FROM users ORDER BY username", (err, rows) => {
+        if (err) { console.log(err); return res.status(500).json({ message: "Database error" }); }
+        res.json(rows);
+    });
+});
+
+app.get("/staff-attendance", requireLogin, (req, res) => {
+    const date = (req.query.date || "").trim();
+    if (!date) return res.status(400).json({ message: "date is required." });
+    connection.query(
+        `SELECT u.username, u.role, sa.status
+         FROM users u
+         LEFT JOIN staff_attendance sa ON sa.staff_username = u.username AND sa.att_date = ?
+         ORDER BY u.username`,
+        [date],
+        (err, rows) => {
+            if (err) { console.log(err); return res.status(500).json({ message: "Database error" }); }
+            res.json(rows);
+        }
+    );
+});
+
+app.post("/staff-attendance/save", requireLogin, requireAdmin, (req, res) => {
+    const date = (req.body.date || "").trim();
+    const records = Array.isArray(req.body.records) ? req.body.records : [];
+    if (!date || !records.length) return res.status(400).json({ message: "date and records are required." });
+    const markedBy = req.session.username || null;
+    const rows = records
+        .filter(r => r && r.username && ["present", "absent"].includes(r.status))
+        .map(r => [String(r.username), date, r.status, markedBy]);
+    if (!rows.length) return res.status(400).json({ message: "No valid records supplied." });
+    connection.query(
+        `INSERT INTO staff_attendance (staff_username, att_date, status, marked_by)
+         VALUES ?
+         ON DUPLICATE KEY UPDATE status = VALUES(status), marked_by = VALUES(marked_by)`,
+        [rows],
+        (err) => {
+            if (err) { console.log(err); return res.status(500).json({ message: "Database error" }); }
+            res.json({ message: "Staff attendance saved", count: rows.length });
+        }
+    );
+});
+
+app.post("/staff-evaluation/save", requireLogin, requireAdmin, (req, res) => {
+    const username = (req.body.username || "").trim();
+    const weekStart = (req.body.week_start || "").trim();
+    const clamp = v => { const n = parseInt(v, 10); return (n >= 1 && n <= 10) ? n : null; };
+    const teaching = clamp(req.body.teaching), punctuality = clamp(req.body.punctuality), conduct = clamp(req.body.conduct);
+    const comment = (req.body.comment || "").trim();
+    if (!username || !weekStart) return res.status(400).json({ message: "username and week_start are required." });
+    connection.query(
+        `INSERT INTO staff_evaluations (staff_username, week_start, teaching, punctuality, conduct, comment, created_by)
+         VALUES (?,?,?,?,?,?,?)`,
+        [username, weekStart, teaching, punctuality, conduct, comment, req.session.username || null],
+        (err) => {
+            if (err) { console.log(err); return res.status(500).json({ message: "Database error" }); }
+            res.json({ message: "Evaluation saved" });
+        }
+    );
+});
+
+app.get("/staff-evaluations", requireLogin, requireAdmin, (req, res) => {
+    let sql = "SELECT id, staff_username, week_start, teaching, punctuality, conduct, comment, created_by, created_at FROM staff_evaluations";
+    const params = [];
+    if (req.query.username) { sql += " WHERE staff_username = ?"; params.push(req.query.username); }
+    sql += " ORDER BY week_start DESC, id DESC LIMIT 100";
+    connection.query(sql, params, (err, rows) => {
+        if (err) { console.log(err); return res.status(500).json({ message: "Database error" }); }
+        res.json(rows);
+    });
+});
+
+/* ---------- Finance: fee structure, payments, expenses -------------- */
+app.get("/fee-structure", requireLogin, (req, res) => {
+    let sql = "SELECT class_name, term, session, amount FROM fee_structure";
+    const params = [], wh = [];
+    if (req.query.term)    { wh.push("term = ?");    params.push(req.query.term); }
+    if (req.query.session) { wh.push("session = ?"); params.push(req.query.session); }
+    if (wh.length) sql += " WHERE " + wh.join(" AND ");
+    sql += " ORDER BY class_name";
+    connection.query(sql, params, (err, rows) => {
+        if (err) { console.log(err); return res.status(500).json({ message: "Database error" }); }
+        res.json(rows);
+    });
+});
+
+app.post("/fee-structure", requireLogin, requireAdmin, (req, res) => {
+    const className = (req.body.class_name || "").trim();
+    const term = (req.body.term || "").trim();
+    const session = (req.body.session || "").trim();
+    const amount = Number(req.body.amount);
+    if (!className || !term || !session || !(amount >= 0)) {
+        return res.status(400).json({ message: "class_name, term, session and a valid amount are required." });
+    }
+    connection.query(
+        `INSERT INTO fee_structure (class_name, term, session, amount)
+         VALUES (?,?,?,?)
+         ON DUPLICATE KEY UPDATE amount = VALUES(amount)`,
+        [className, term, session, amount],
+        (err) => {
+            if (err) { console.log(err); return res.status(500).json({ message: "Database error" }); }
+            res.json({ message: "Fee saved", class_name: className, amount });
+        }
+    );
+});
+
+app.post("/fee-payment", requireLogin, (req, res) => {
+    const studentId = (req.body.student_id || "").trim();
+    const term = (req.body.term || "").trim();
+    const session = (req.body.session || "").trim();
+    const amount = Number(req.body.amount);
+    const method = (req.body.method || "").trim();
+    const note = (req.body.note || "").trim();
+    if (!studentId || !term || !session || !(amount > 0)) {
+        return res.status(400).json({ message: "student_id, term, session and an amount above 0 are required." });
+    }
+    connection.query(
+        `INSERT INTO fee_payments (student_id, term, session, amount, method, note, received_by)
+         VALUES (?,?,?,?,?,?,?)`,
+        [studentId, term, session, amount, method, note, req.session.username || null],
+        (err) => {
+            if (err) { console.log(err); return res.status(500).json({ message: "Database error" }); }
+            res.json({ message: "Payment recorded", amount });
+        }
+    );
+});
+
+app.get("/fee-payments", requireLogin, (req, res) => {
+    let sql = "SELECT id, student_id, term, session, amount, method, note, received_by, paid_at FROM fee_payments";
+    const params = [], wh = [];
+    if (req.query.student_id) { wh.push("student_id = ?"); params.push(req.query.student_id); }
+    if (req.query.term)       { wh.push("term = ?");       params.push(req.query.term); }
+    if (req.query.session)    { wh.push("session = ?");    params.push(req.query.session); }
+    if (wh.length) sql += " WHERE " + wh.join(" AND ");
+    sql += " ORDER BY paid_at DESC LIMIT 200";
+    connection.query(sql, params, (err, rows) => {
+        if (err) { console.log(err); return res.status(500).json({ message: "Database error" }); }
+        res.json(rows);
+    });
+});
+
+app.get("/fee-balance", requireLogin, (req, res) => {
+    const term = (req.query.term || "").trim();
+    const session = (req.query.session || "").trim();
+    const className = (req.query.class_name || "").trim();
+    if (!term || !session) return res.status(400).json({ message: "term and session are required." });
+    let sql = `
+        SELECT s.student_id, s.full_name, s.class_name,
+               COALESCE(fs.amount, 0) AS fee,
+               COALESCE(p.paid, 0) AS paid,
+               (COALESCE(fs.amount, 0) - COALESCE(p.paid, 0)) AS balance
+        FROM students s
+        LEFT JOIN fee_structure fs
+               ON fs.class_name = s.class_name AND fs.term = ? AND fs.session = ?
+        LEFT JOIN (SELECT student_id, SUM(amount) AS paid
+                     FROM fee_payments WHERE term = ? AND session = ?
+                    GROUP BY student_id) p ON p.student_id = s.student_id
+    `;
+    const params = [term, session, term, session];
+    if (className) { sql += " WHERE s.class_name = ?"; params.push(className); }
+    sql += " ORDER BY s.class_name, s.full_name";
+    connection.query(sql, params, (err, rows) => {
+        if (err) { console.log(err); return res.status(500).json({ message: "Database error" }); }
+        res.json(rows);
+    });
+});
+
+app.get("/finance-summary", requireLogin, (req, res) => {
+    const term = (req.query.term || "").trim();
+    const session = (req.query.session || "").trim();
+    if (!term || !session) return res.status(400).json({ message: "term and session are required." });
+    const expectedSql = `
+        SELECT COALESCE(SUM(fs.amount * c.cnt), 0) AS expected
+        FROM fee_structure fs
+        JOIN (SELECT class_name, COUNT(*) AS cnt FROM students GROUP BY class_name) c
+          ON c.class_name = fs.class_name
+        WHERE fs.term = ? AND fs.session = ?
+    `;
+    connection.query(expectedSql, [term, session], (err, expRows) => {
+        if (err) { console.log(err); return res.status(500).json({ message: "Database error" }); }
+        connection.query(
+            "SELECT COALESCE(SUM(amount),0) AS received, COUNT(*) AS cnt FROM fee_payments WHERE term = ? AND session = ?",
+            [term, session],
+            (err2, payRows) => {
+                if (err2) { console.log(err2); return res.status(500).json({ message: "Database error" }); }
+                connection.query(
+                    "SELECT COALESCE(SUM(amount),0) AS total, COUNT(*) AS cnt FROM expenses",
+                    (err3, costRows) => {
+                        if (err3) { console.log(err3); return res.status(500).json({ message: "Database error" }); }
+                        const expected = Number(expRows[0].expected);
+                        const received = Number(payRows[0].received);
+                        res.json({
+                            expected,
+                            received,
+                            payments_count: Number(payRows[0].cnt),
+                            outstanding: expected - received,
+                            expenses_total: Number(costRows[0].total),
+                            expenses_count: Number(costRows[0].cnt),
+                            term, session
+                        });
+                    }
+                );
+            }
+        );
+    });
+});
+
+app.get("/expenses", requireLogin, (req, res) => {
+    connection.query(
+        "SELECT id, title, category, amount, spent_on, note, created_at FROM expenses ORDER BY spent_on DESC, id DESC LIMIT 300",
+        (err, rows) => {
+            if (err) { console.log(err); return res.status(500).json({ message: "Database error" }); }
+            res.json(rows);
+        }
+    );
+});
+
+app.post("/expenses", requireLogin, requireAdmin, (req, res) => {
+    const title = (req.body.title || "").trim();
+    const category = (req.body.category || "").trim();
+    const amount = Number(req.body.amount);
+    const spentOn = (req.body.spent_on || "").trim() || null;
+    const note = (req.body.note || "").trim();
+    if (!title || !(amount > 0)) {
+        return res.status(400).json({ message: "A title and an amount above 0 are required." });
+    }
+    connection.query(
+        "INSERT INTO expenses (title, category, amount, spent_on, note) VALUES (?,?,?,?,?)",
+        [title, category, amount, spentOn, note],
+        (err) => {
+            if (err) { console.log(err); return res.status(500).json({ message: "Database error" }); }
+            res.json({ message: "Expense recorded", amount });
+        }
+    );
+});
+
+app.delete("/expense/:id", requireLogin, requireAdmin, (req, res) => {
+    connection.query("DELETE FROM expenses WHERE id = ?", [req.params.id], (err) => {
+        if (err) { console.log(err); return res.status(500).json({ message: "Database error" }); }
+        res.json({ message: "Expense deleted" });
     });
 });
 

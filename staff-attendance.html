@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Staff Tools | Ameenullah School of Arabic and Islamic Studies</title>
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/modern-ui.css">
+  <link rel="stylesheet" href="css/manage.css">
+  <!-- NEW (pack 13): shared manager styles -->
+  <link rel="stylesheet" href="css/school.css">
+
+  <link rel="manifest" href="manifest.webmanifest">
+  <meta name="theme-color" content="#2f5021">
+  <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+</head>
+<body onload="checkAuth(); initStaffTools();">
+  <!-- NEW (pack 13): staff attendance + weekly evaluations.
+       Saving is restricted to the ADMIN account (management tools). -->
+  <div class="mng-page">
+
+    <div class="mng-head">
+      <a class="mng-back" href="teacher-dashboard.html">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5"/><path d="m12 19-7-7 7-7"/></svg>
+        Dashboard
+      </a>
+      <div class="mng-head-text">
+        <h1>&#128104;&#8205;&#127979; Staff Tools</h1>
+        <p>Daily staff attendance and weekly teacher evaluations. Only the admin account can save here.</p>
+      </div>
+    </div>
+
+    <div class="mg-cards">
+
+      <!-- Staff attendance -->
+      <div class="mg-card">
+        <h3>&#9200; Staff Attendance</h3>
+        <div class="mg-toolbar">
+          <div class="mg-field">
+            <label for="saDate">Date</label>
+            <input type="date" id="saDate">
+          </div>
+          <button class="mg-btn-light" type="button" onclick="loadStaffDay()">Load</button>
+          <button class="mg-btn" type="button" onclick="saveStaffDay()">&#128190; Save</button>
+        </div>
+        <div class="mg-table-wrap">
+          <table class="mg-table" id="saTable">
+            <thead><tr><th>Staff</th><th>Role</th><th>Status</th></tr></thead>
+            <tbody><tr><td colspan="3" style="text-align:center; color:#5B6B62;">Loading...</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Weekly evaluation form -->
+      <div class="mg-card">
+        <h3>&#11088; Weekly Evaluation</h3>
+        <div class="mg-toolbar" style="margin-bottom:8px;">
+          <div class="mg-field">
+            <label for="evStaff">Staff</label>
+            <select id="evStaff"></select>
+          </div>
+          <div class="mg-field">
+            <label for="evWeek">Week Starting</label>
+            <input type="date" id="evWeek">
+          </div>
+        </div>
+        <div class="mg-toolbar" style="margin-bottom:8px;">
+          <div class="mg-field">
+            <label for="evTeaching">Teaching (1-10)</label>
+            <select id="evTeaching"></select>
+          </div>
+          <div class="mg-field">
+            <label for="evPunctuality">Punctuality (1-10)</label>
+            <select id="evPunctuality"></select>
+          </div>
+          <div class="mg-field">
+            <label for="evConduct">Conduct (1-10)</label>
+            <select id="evConduct"></select>
+          </div>
+        </div>
+        <div class="mg-field" style="margin-bottom:10px;">
+          <label for="evComment">Comment</label>
+          <input type="text" id="evComment" placeholder="e.g. Excellent lesson delivery this week">
+        </div>
+        <button class="mg-btn" type="button" onclick="saveEvaluation()">&#128190; Save Evaluation</button>
+      </div>
+    </div>
+
+    <!-- Recent evaluations -->
+    <div class="mg-card" style="margin-top:18px;">
+      <h3>&#128203; Recent Evaluations</h3>
+      <div class="mg-table-wrap">
+        <table class="mg-table" id="evTable">
+          <thead><tr><th>Week</th><th>Staff</th><th>Teaching</th><th>Punctuality</th><th>Conduct</th><th>Comment</th><th>By</th></tr></thead>
+          <tbody><tr><td colspan="7" style="text-align:center; color:#5B6B62;">Loading...</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="mg-msg" id="stMsg"></div>
+  </div>
+
+  <script src="js/ui.js"></script>
+  <script src="js/app.js"></script>
+  <!-- NEW (pack 13) -->
+  <script src="js/staff-attendance.js"></script>
+  <script src="js/pwa.js" defer></script>
+</body>
+</html>

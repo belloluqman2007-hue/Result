@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Student &amp; Parent Portal | Ameenullah School of Arabic and Islamic Studies</title>
+  <!-- Legacy stylesheet provides the FROZEN report-card design (untouched). -->
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/modern-ui.css">
+  <!-- NEW (pack 13): portal styles (+ print rules that only hide portal
+       chrome; the report card itself keeps its original design). -->
+  <link rel="stylesheet" href="css/school.css">
+
+  <!-- Same Arabic letter-joining fix as the Check Result page (unchanged rules) -->
+  <style>
+    [lang="ar"]{ font-family:'Amiri','Cairo',serif; letter-spacing:normal !important; }
+    #reportLevel{ letter-spacing:normal !important; }
+  </style>
+
+  <link rel="manifest" href="manifest.webmanifest">
+  <meta name="theme-color" content="#2f5021">
+  <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+</head>
+<body class="pt-body">
+
+  <!-- NEW (pack 13): Student & Parent portal home. Everything here is
+       additive; the report sheet is built by the EXISTING frozen
+       js/report-card.js builder so it looks IDENTICAL to staff/printouts. -->
+  <header class="pt-topbar portal-no-print">
+    <img src="images/LOGO.JPG" alt="School Logo">
+    <div>
+      <b>Student &amp; Parent Portal</b>
+      <div style="font-size:11.5px; opacity:.85;">Ameenullah School of Arabic &amp; Islamic Studies</div>
+    </div>
+    <div class="pt-top-right">
+      <a class="pt-linkbtn" href="index.html">&#127968; Website</a>
+      <button class="pt-linkbtn" id="portalLogoutBtn" type="button">&#128682; Logout</button>
+    </div>
+  </header>
+
+  <main class="pt-wrap">
+
+    <!-- Student information card -->
+    <section class="pt-card portal-no-print">
+      <h2>Student Information</h2>
+      <p class="pt-hint">These details come from the official school register.</p>
+      <div class="pt-child">
+        <img id="ptPhoto" src="images/default.png" alt="Student Photo"
+             onerror="this.onerror=null; this.src='images/default.png';">
+        <div>
+          <div class="pt-child-name" id="ptName">...</div>
+          <div class="pt-child-meta">
+            <span>Student ID: <b id="ptId">...</b></span>
+            <span>Class: <b id="ptClass">...</b></span>
+            <span>Gender: <b id="ptGender">...</b></span>
+            <span>Date of Birth: <b id="ptDob">...</b></span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Published results -->
+    <section class="pt-card portal-no-print">
+      <h2>Published Results</h2>
+      <p class="pt-hint">A result shows here only <b>after the school publishes it</b>. If nothing shows yet, please check back later.</p>
+      <div id="ptTerms">
+        <div class="pt-empty">Loading published results...</div>
+      </div>
+    </section>
+
+    <!-- Report sheet viewer (design = the original/frozen report card) -->
+    <section class="pt-card" id="ptReportCardWrap" style="display:none;">
+      <div class="portal-no-print" style="display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-bottom:14px;">
+        <h2 style="margin:0;">Official Report Sheet</h2>
+        <span style="margin-left:auto; display:flex; gap:8px; flex-wrap:wrap;">
+          <button class="mg-btn" id="ptPrintBtn" type="button">&#128424;&#65039; Print Report</button>
+          <button class="mg-btn-light" id="ptCloseReport" type="button">&#10006; Close</button>
+        </span>
+      </div>
+      <div id="ptReport"></div>
+    </section>
+
+  </main>
+
+  <!-- EXISTING frozen report-card builder (unchanged file, reused) -->
+  <script src="js/report-card.js"></script>
+  <!-- NEW (pack 13): portal logic -->
+  <script src="js/portal.js"></script>
+  <!-- PWA (unchanged) -->
+  <script src="js/pwa.js" defer></script>
+</body>
+</html>

@@ -189,6 +189,23 @@ alt="Student Photo">
 </div>
 </div>
 
+<!-- NEW (pack 13 - publish gate, owner request): "The result can show to
+     student or parents except it is been publish by admin." The old public
+     checking now lives inside the Student/Parent portal: STAFF flow is
+     100% unchanged; everyone else must log in, and can only view terms
+     the admin has published. -->
+<script>
+(function () {
+  function goPortal() { location.replace("portal-login.html"); }
+  fetch("/me").then(function (r) { return r.json(); }).then(function (me) {
+    if (me && me.loggedIn) return;                 // staff: unchanged flow
+    fetch("/portal/me").then(function (r) { return r.json(); }).then(function (p) {
+      if (!(p && p.loggedIn)) goPortal();
+    }).catch(function () { /* leave page; the result API itself is still gated */ });
+  }).catch(function () { /* offline hiccup: leave the page as-is */ });
+})();
+</script>
+
 <script src="js/result.js"></script>
 
   <!-- NEW (PWA conversion): registers the service worker + install button. Additive only. -->

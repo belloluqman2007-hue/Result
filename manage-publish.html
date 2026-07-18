@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Publish Results | Ameenullah School of Arabic and Islamic Studies</title>
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/modern-ui.css">
+  <link rel="stylesheet" href="css/manage.css">
+  <!-- NEW (pack 13): website/portal/manager shared styles -->
+  <link rel="stylesheet" href="css/school.css">
+
+  <link rel="manifest" href="manifest.webmanifest">
+  <meta name="theme-color" content="#2f5021">
+  <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+</head>
+<body onload="checkAuth();">
+  <!-- NEW (pack 13 - owner request): "The result can show to student or
+       parents except it is been publish by admin." Only the ADMIN
+       account can switch publishing on/off; per class OR whole term at
+       once (whole-term switch wins). -->
+  <div class="mng-page">
+
+    <div class="mng-head">
+      <a class="mng-back" href="teacher-dashboard.html">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5"/><path d="m12 19-7-7 7-7"/></svg>
+        Dashboard
+      </a>
+      <div class="mng-head-text">
+        <h1>&#128226; Publish Results</h1>
+        <p>Controls what students &amp; parents can see in their portal. Nothing is visible until you publish it here. Admin account only.</p>
+      </div>
+    </div>
+
+    <div class="mg-toolbar">
+      <div class="mg-field">
+        <label for="pubTerm">Term</label>
+        <select id="pubTerm">
+          <option value="" disabled selected>Select Term</option>
+          <option>1st Term</option>
+          <option>2nd Term</option>
+          <option>3rd Term</option>
+        </select>
+      </div>
+      <div class="mg-field">
+        <label for="pubSession">Session</label>
+        <input type="text" id="pubSession" list="pubSessionList" placeholder="e.g. 2026/2027">
+        <datalist id="pubSessionList">
+          <option>2024/2025</option>
+          <option>2025/2026</option>
+          <option>2026/2027</option>
+          <option>2027/2028</option>
+          <option>2028/2029</option>
+          <option>2029/2030</option>
+        </datalist>
+      </div>
+      <button class="mg-btn" type="button" onclick="loadPublishState()">Load Classes</button>
+    </div>
+
+    <div id="pubWholeWrap" style="display:none;">
+      <div class="mg-card" style="margin-bottom:16px;">
+        <h3>&#127760; Whole-Term Switch</h3>
+        <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
+          <label class="sw">
+            <input type="checkbox" id="pubWholeToggle" onchange="savePublish('', this.checked, this)">
+            <span class="sw-track"></span>
+          </label>
+          <div>
+            <b id="pubWholeLabel">Publish ALL classes for this term</b>
+            <div class="mg-note" style="margin:2px 0 0;">When ON, every class is visible to students/parents - even classes switched OFF below.</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="mg-table-wrap">
+        <table class="mg-table" id="pubTable">
+          <thead>
+            <tr><th>Class</th><th>Visible to students &amp; parents?</th></tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <p class="mg-note">&#128274; Publishing affects the Student/Parent portal only. Staff tools (dashboard, score entry, report cards) always work like before.</p>
+    </div>
+
+    <div class="mg-msg" id="pubMsg"></div>
+  </div>
+
+  <script src="js/ui.js"></script>
+  <script src="js/app.js"></script>
+  <!-- NEW (pack 13) -->
+  <script src="js/publish.js"></script>
+  <script src="js/pwa.js" defer></script>
+</body>
+</html>

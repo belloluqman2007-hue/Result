@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Student / Parent Login | Ameenullah School of Arabic and Islamic Studies</title>
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/modern-ui.css">
+  <!-- NEW (pack 13): website/portal styles -->
+  <link rel="stylesheet" href="css/school.css">
+
+  <!-- PWA (unchanged pattern) -->
+  <link rel="manifest" href="manifest.webmanifest">
+  <meta name="theme-color" content="#2f5021">
+  <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+</head>
+<body>
+  <!-- NEW (pack 13): Student/Parent login. Uses the SAME modern login
+       layout as staff (login.html), only the fields differ:
+       Student ID = username, child's SURNAME = password. -->
+  <div class="ams-login-wrap">
+
+    <aside class="ams-login-hero">
+      <img src="images/LOGO.JPG" alt="School Logo">
+      <h1>Ameenullah School of Arabic and Islamic Studies</h1>
+      <div class="ams-login-ar">مدرسة أمين اللّه للعلوم العربيّة الإسلاميّة</div>
+      <p>Welcome! Check results and follow school progress from anywhere.</p>
+
+      <div class="ams-login-feature">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 12l2 2 4-4"/><circle cx="12" cy="12" r="10"/></svg>
+        View results as soon as the school publishes them
+      </div>
+      <div class="ams-login-feature">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8" rx="1"/></svg>
+        Print beautiful official report sheets
+      </div>
+      <div class="ams-login-feature">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="10" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+        Parent &amp; student friendly - phone or computer
+      </div>
+    </aside>
+
+    <main class="ams-login-panel">
+      <div>
+        <div class="ams-login-mobile-brand">
+          <img src="images/LOGO.JPG" alt="School Logo">
+          <strong>AMEENULLAH SCHOOL OF ARABIC AND ISLAMIC STUDIES</strong>
+        </div>
+
+        <div class="login-box">
+          <h2>Student / Parent Login</h2>
+
+          <form id="portalLoginForm">
+            <input type="text" id="portalStudentId" placeholder="Student ID (your username)" required autocomplete="username">
+            <input type="password" id="portalSurname" placeholder="Surname (your password)" required autocomplete="current-password">
+            <button type="submit" id="portalLoginBtn">Login</button>
+            <div id="portalLoginError" class="login-error" style="display:none;"></div>
+          </form>
+
+          <div class="pt-login-hint">
+            <b>How to log in:</b><br>
+            &#8226; <b>Username</b> = the Student ID given by the school (e.g. <i>AMS001</i>).<br>
+            &#8226; <b>Password</b> = the student's <b>surname</b> (last name) exactly as registered.<br>
+            &#8226; <b>Parents:</b> use your child's Student ID and surname.<br>
+            &#8226; Results appear only <b>after the school publishes them</b>.<br>
+            &#8226; No account yet? Visit <a href="index.html#admission">Admission</a> or contact the school.
+          </div>
+
+          <div class="pt-login-hint" style="margin-top:10px;">
+            &#128203; Staff? Use the <a href="login.html"><b>Staff Login</b></a> instead.
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <!-- NEW (pack 13): portal login logic -->
+  <script src="js/portal-login.js"></script>
+  <!-- PWA (unchanged) -->
+  <script src="js/pwa.js" defer></script>
+</body>
+</html>

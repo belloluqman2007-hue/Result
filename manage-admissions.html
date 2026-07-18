@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admissions | Ameenullah School of Arabic and Islamic Studies</title>
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/modern-ui.css">
+  <link rel="stylesheet" href="css/manage.css">
+  <!-- NEW (pack 13): shared manager styles -->
+  <link rel="stylesheet" href="css/school.css">
+
+  <link rel="manifest" href="manifest.webmanifest">
+  <meta name="theme-color" content="#2f5021">
+  <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+</head>
+<body onload="checkAuth(); loadAdmissions();">
+  <!-- NEW (pack 13): enquiries sent from the public school website.
+       When a child is officially admitted, add them via "Add Student" -
+       that activates their Student/Parent portal login automatically. -->
+  <div class="mng-page">
+
+    <div class="mng-head">
+      <a class="mng-back" href="teacher-dashboard.html">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5"/><path d="m12 19-7-7 7-7"/></svg>
+        Dashboard
+      </a>
+      <div class="mng-head-text">
+        <h1>&#127979; Admission Enquiries</h1>
+        <p>People who filled the "Interested in Our School?" form on the website. Call them, then mark the status. Saving status is admin-only.</p>
+      </div>
+    </div>
+
+    <div class="mg-toolbar">
+      <button class="mg-btn-light" type="button" onclick="loadAdmissions()">&#128260; Refresh</button>
+      <span class="mg-note" style="margin:0;">Tip: after admission, use <b>Add Student</b> to create the child's record - the Student/Parent login starts working immediately.</span>
+    </div>
+
+    <div class="mg-table-wrap">
+      <table class="mg-table" id="admTable">
+        <thead>
+          <tr>
+            <th>Date</th><th>Child's Name</th><th>Parent</th><th>Phone</th>
+            <th>Class Applied</th><th>Message</th><th>Status</th>
+          </tr>
+        </thead>
+        <tbody><tr><td colspan="7" style="text-align:center; color:#5B6B62;">Loading...</td></tr></tbody>
+      </table>
+    </div>
+
+    <div class="mg-msg" id="admMsg"></div>
+  </div>
+
+  <script src="js/ui.js"></script>
+  <script src="js/app.js"></script>
+  <!-- NEW (pack 13) -->
+  <script src="js/admissions.js"></script>
+  <script src="js/pwa.js" defer></script>
+</body>
+</html>

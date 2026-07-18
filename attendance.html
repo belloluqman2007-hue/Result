@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Attendance | Ameenullah School of Arabic and Islamic Studies</title>
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/modern-ui.css">
+  <link rel="stylesheet" href="css/manage.css">
+  <!-- NEW (pack 13): shared manager styles -->
+  <link rel="stylesheet" href="css/school.css">
+
+  <link rel="manifest" href="manifest.webmanifest">
+  <meta name="theme-color" content="#2f5021">
+  <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+</head>
+<body onload="checkAuth(); initAttendance();">
+  <!-- NEW (pack 13): daily student attendance register per class. -->
+  <div class="mng-page">
+
+    <div class="mng-head">
+      <a class="mng-back" href="teacher-dashboard.html">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5"/><path d="m12 19-7-7 7-7"/></svg>
+        Dashboard
+      </a>
+      <div class="mng-head-text">
+        <h1>&#9989; Student Attendance</h1>
+        <p>Pick a class and date, mark each student Present / Absent / Late, then save. Re-opening the same day loads your marks for corrections.</p>
+      </div>
+    </div>
+
+    <div class="mg-tabs">
+      <button class="mg-tab active" type="button" data-tab="mark" onclick="attSwitchTab('mark', this)">&#128221; Mark Register</button>
+      <button class="mg-tab" type="button" data-tab="report" onclick="attSwitchTab('report', this)">&#128202; Report</button>
+    </div>
+
+    <!-- Marking panel -->
+    <div class="mg-panel active" id="attPanelMark">
+      <div class="mg-toolbar">
+        <div class="mg-field">
+          <label for="attClass">Class</label>
+          <select id="attClass"><option value="">Loading classes...</option></select>
+        </div>
+        <div class="mg-field">
+          <label for="attDate">Date</label>
+          <input type="date" id="attDate">
+        </div>
+        <button class="mg-btn" type="button" onclick="loadRegister()">Load Register</button>
+        <button class="mg-btn-light" type="button" onclick="markAllPresent()">All Present</button>
+        <button class="mg-btn" type="button" onclick="saveRegister()">&#128190; Save Attendance</button>
+      </div>
+      <div class="mg-table-wrap">
+        <table class="mg-table" id="attTable">
+          <thead><tr><th>#</th><th>Student</th><th>ID</th><th>Status</th></tr></thead>
+          <tbody><tr><td colspan="4" style="text-align:center; color:#5B6B62;">Pick a class and date, then press "Load Register".</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Report panel -->
+    <div class="mg-panel" id="attPanelReport">
+      <div class="mg-toolbar">
+        <div class="mg-field">
+          <label for="attRepFrom">From</label>
+          <input type="date" id="attRepFrom">
+        </div>
+        <div class="mg-field">
+          <label for="attRepTo">To</label>
+          <input type="date" id="attRepTo">
+        </div>
+        <button class="mg-btn" type="button" onclick="loadAttReport()">Load Report</button>
+      </div>
+      <div class="mg-table-wrap">
+        <table class="mg-table" id="attRepTable">
+          <thead><tr><th>Student</th><th>ID</th><th>Present</th><th>Absent</th><th>Late</th><th>Days Marked</th><th>Present %</th></tr></thead>
+          <tbody><tr><td colspan="7" style="text-align:center; color:#5B6B62;">Choose a date range (uses the class picked above).</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="mg-msg" id="attMsg"></div>
+  </div>
+
+  <script src="js/ui.js"></script>
+  <script src="js/app.js"></script>
+  <!-- NEW (pack 13) -->
+  <script src="js/attendance.js"></script>
+  <script src="js/pwa.js" defer></script>
+</body>
+</html>
