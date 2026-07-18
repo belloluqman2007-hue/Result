@@ -382,3 +382,46 @@ window.print(), so pressing Print on the phone did literally nothing.
 | `create-exam.html` | NEW "Open Saved Exam" button on Step 1 (the Step-2 button stays). |
 
 Result module: untouched. All routes, APIs and tables: unchanged.
+
+---
+
+## Fix pack 11 - dashboard "Student Scores" Load Results error (owner report)
+
+**"Load result is not working in student scores in dashboard. I search for a
+student id it will say error."**
+
+The `/search-result/:studentId` API had been changed to REQUIRE `term` and
+`session`, but the teacher dashboard "Load Results" button sends only the
+student ID (it wants EVERY saved row for the student). The API answered
+"400 Term and session are required." and the page showed "Error loading
+results."
+
+| File | What happened |
+|---|---|
+| `server.js` | FIX: `/search-result/:studentId` accepts calls with or without `term`/`session`. With both (student result page, report cards) behaviour is 100% unchanged, including the 3rd Term cumulative-average enrichment. Without them (dashboard loader) it returns all rows for the student, as the loader always expected. Verified live with student "Am": 25 rows without filters, 13 rows with 1st Term + 2026/2027, 3rd Term enrichment fields intact. |
+
+Result calculations, grading, positions, report cards and the result page:
+completely untouched.
+
+---
+
+## Feature pack 12 - class teacher signatures PER CLASS (owner request)
+
+**"The signature also - let there be space to accept many signatures and
+assign them to classes, for it to appear on class teacher class not just
+random class."**
+
+Before: ONE shared "Class Teacher" signature was stamped on EVERY class's
+report cards. Now: many class teacher signatures, each assigned to its own
+class; a class's reports stamp ITS OWN teacher's signature. Classes with
+nothing assigned still use the shared one (nothing breaks).
+
+| File | What happened |
+|---|---|
+| `server.js` | NEW table `class_teacher_signatures` (auto-created at startup). NEW routes: GET `/class-signatures`, POST `/save-class-signature`, DELETE `/class-signature/:className`. All purely additive. |
+| `js/signature.js` | NEW full-width card on the Signatures page: "Class Teacher - per Class" - pick a class, draw or upload, save; list of all assigned class signatures with Remove buttons. |
+| `js/result.js` | The result now stamps the signature assigned to THAT student's class; falls back to the shared Class Teacher signature. Layout/design untouched. |
+| `js/report-card.js`, `js/class-results.js` | Class-ZIP reports do the same per-class stamping (fetched once for the whole zip, no slowdown). |
+
+Verified on the live database: table auto-creates, save/read/remove work,
+and the existing shared signatures (principal, class teacher) are untouched.

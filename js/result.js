@@ -107,13 +107,24 @@ function searchResult() {
                     document.getElementById("studentPhoto").src = "images/default.png";
                 });
 
-            fetch("/signatures")
-                .then(response => response.json())
-                .then(signatures => {
+            // CHANGED (per-class class teacher signature, owner request):
+            // also read the class-assigned signatures and stamp the one tied
+            // to THIS student's class; the shared Class Teacher signature
+            // stays as the fallback for classes with nothing assigned.
+            // Layout/image placement is untouched - only WHICH image shows.
+            Promise.all([
+                fetch("/signatures").then(r => r.json()),
+                fetch("/class-signatures").then(r => r.json()).catch(() => [])
+            ])
+                .then(([signatures, classSigs]) => {
                     const classTeacherImg = document.getElementById("classTeacherSignature");
                     const principalImg = document.getElementById("principalSignature");
 
-                    const classTeacherSig = signatures.find(s => s.role === "class_teacher");
+                    const studentClass = (data[0] && data[0].class_name) || "";
+                    const perClassSig = Array.isArray(classSigs)
+                        ? classSigs.find(c => c.class_name === studentClass)
+                        : null;
+                    const classTeacherSig = perClassSig || signatures.find(s => s.role === "class_teacher");
                     const principalSig = signatures.find(s => s.role === "principal");
 
                     if (classTeacherSig) {

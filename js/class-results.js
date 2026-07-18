@@ -19,6 +19,7 @@
 
     var lastSheet = null; /* { className, term, session, subjects[], students[] } */
     var amsSignaturesCache = []; /* NEW (request #6): for PDF footers */
+    var amsClassSignaturesCache = null; /* NEW (per-class teacher signatures): class_name -> image, fetched once per zip run */
     var zipCancelled = false;    /* NEW (request #5) */
 
     function notify(msg, type, ms) {
@@ -388,6 +389,17 @@
             } catch (e) { signatures = []; }
         }
 
+        // NEW (per-class teacher signatures): also fetch the class-assigned
+        // ones once, so every report in the zip stamps ITS OWN class's
+        // teacher signature (fallback to the shared one happens inside
+        // amsBuildReportCard).
+        if (amsClassSignaturesCache === null) {
+            try {
+                amsClassSignaturesCache = await fetch("/class-signatures").then(r => r.json());
+            } catch (e) { amsClassSignaturesCache = []; }
+            if (!Array.isArray(amsClassSignaturesCache)) amsClassSignaturesCache = [];
+        }
+
         try {
             for (var i = 0; i < total; i++) {
                 if (zipCancelled) break;
@@ -398,7 +410,8 @@
 
                 try {
                     var pack = await window.amsFetchReportPack(
-                        stu.id, lastSheet.term, lastSheet.session, signatures
+                        stu.id, lastSheet.term, lastSheet.session,
+                        { signatures: signatures, classSignatures: amsClassSignaturesCache }
                     );
 
                     if (!pack.rows.length) {
@@ -479,6 +492,11 @@
         fetch("/signatures")
             .then(r => r.json())
             .then(sigs => { amsSignaturesCache = Array.isArray(sigs) ? sigs : []; })
+            .catch(() => {});
+        // NEW (per-class teacher signatures): warm the cache too.
+        fetch("/class-signatures")
+            .then(r => r.json())
+            .then(cs => { amsClassSignaturesCache = Array.isArray(cs) ? cs : []; })
             .catch(() => {});
     });
 })();

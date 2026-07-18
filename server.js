@@ -195,6 +195,17 @@ const addonTables = [
         event_date DATE NOT NULL,
         description TEXT,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )`,
+    // NEW (per-class class-teacher signatures, owner request): MANY class
+    // teacher signatures - one assigned per class - so each class's report
+    // cards stamp ITS OWN teacher's signature ("appear on class teacher
+    // class, not just random class"). The old signatures table and its
+    // shared "class_teacher" role stay as the fallback for classes with
+    // nothing assigned. Purely additive - no existing table/column touched.
+    `CREATE TABLE IF NOT EXISTS class_teacher_signatures (
+        class_name VARCHAR(150) PRIMARY KEY,
+        signature_path VARCHAR(255) NOT NULL,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
     )`
 ];
 
@@ -247,7 +258,7 @@ function setupAddonTables(attempt) {
                 if (finished === addonTables.length) {
                     conn.end();
                     if (firstFailure) return addonRetryLater(attempt, firstFailure);
-                    console.log("Add-on tables ready (announcements, school_events).");
+                    console.log("Add-on tables ready (announcements, school_events, class_teacher_signatures).");
                 }
             });
         });
@@ -749,6 +760,35 @@ const signatureStorage = multer.diskStorage({
     }
 });
 
+// NEW (per-class class-teacher signatures): class-named files
+// (ct_<class>.png) live beside the role files, so every class keeps its own
+// signature image. The client appends class_name BEFORE the image field,
+// exactly like req.body.role is read above, so the filename callback can
+// see it.
+const classSignatureStorage = multer.diskStorage({
+    destination: (req, file, cb) => {
+        cb(null, signatureDir);
+    },
+    filename: (req, file, cb) => {
+        const rawClass = req.body.class_name || "unknown";
+        const safeClass = rawClass.replace(/[^a-zA-Z0-9_-]/g, "_") || "unknown";
+        cb(null, `ct_${safeClass}.png`);
+    }
+});
+
+const uploadClassSignature = multer({
+    storage: classSignatureStorage,
+    limits: { fileSize: 2 * 1024 * 1024 },
+    fileFilter: (req, file, cb) => {
+        const allowed = ["image/jpeg", "image/png", "image/jpg"];
+        if (allowed.includes(file.mimetype)) {
+            cb(null, true);
+        } else {
+            cb(new Error("Only JPG and PNG images are allowed."));
+        }
+    }
+});
+
 const uploadSignature = multer({
     storage: signatureStorage,
     limits: { fileSize: 2 * 1024 * 1024 },
@@ -908,13 +948,18 @@ app.get("/search-result/:studentId", (req, res) => {
     const term = req.query.term;
     const session = req.query.session;
 
-    if (!term || !session) {
-        return res.status(400).json({ message: "Term and session are required." });
-    }
+    // FIX (teacher dashboard "Load Results" was erroring): term and session
+    // are OPTIONAL again. The student result page always sends both and gets
+    // EXACTLY the same behaviour as before (including the 3rd Term
+    // cumulative-average enrichment below); the teacher dashboard "Student
+    // Scores" loader sends neither because it wants EVERY saved row for the
+    // student - requiring them turned its call into a 400 error.
+    let sql = "SELECT * FROM results WHERE student_id = ?";
+    const params = [studentId];
+    if (term) { sql += " AND term = ?"; params.push(term); }
+    if (session) { sql += " AND session = ?"; params.push(session); }
 
-    const sql = "SELECT * FROM results WHERE student_id = ? AND term = ? AND session = ?";
-
-    connection.query(sql, [studentId, term, session], (err, currentTermResults) => {
+    connection.query(sql, params, (err, currentTermResults) => {
         if (err) {
             console.log(err);
             return res.status(500).send("Database Error");
@@ -1163,6 +1208,69 @@ app.delete("/delete-signature/:role", requireLogin, (req, res) => {
                 return res.status(500).json({ message: "Error deleting signature." });
             }
             res.json({ message: "Signature removed." });
+        }
+    );
+});
+
+/* ==================================================================
+   NEW (per-class class-teacher signatures, owner request):
+   "space to accept many signatures and assign them to classes, so the
+   signature appears on its own class, not just random class."
+   Public read (the result pages need it, mirror of /signatures);
+   save/delete stay behind login. Nothing here replaces the existing
+   /signatures flow - classes without an assignment still fall back to
+   the shared class_teacher signature exactly as before.
+================================================================== */
+
+app.get("/class-signatures", (req, res) => {
+    connection.query(
+        "SELECT class_name, signature_path FROM class_teacher_signatures ORDER BY class_name",
+        (err, rows) => {
+            if (err) {
+                console.log(err);
+                return res.status(500).send("Database Error");
+            }
+            res.json(rows);
+        }
+    );
+});
+
+app.post("/save-class-signature", requireLogin, uploadClassSignature.single("signature"), (req, res) => {
+    const className = (req.body.class_name || "").trim();
+
+    if (!className) {
+        return res.status(400).json({ message: "Please choose the class first." });
+    }
+    if (!req.file) {
+        return res.status(400).json({ message: "No signature image received." });
+    }
+
+    const signaturePath = `images/signatures/${req.file.filename}`;
+
+    connection.query(
+        `INSERT INTO class_teacher_signatures (class_name, signature_path) VALUES (?, ?)
+         ON DUPLICATE KEY UPDATE signature_path = VALUES(signature_path), updated_at = CURRENT_TIMESTAMP`,
+        [className, signaturePath],
+        (err) => {
+            if (err) {
+                console.log(err);
+                return res.status(500).json({ message: "Error saving signature." });
+            }
+            res.json({ message: "Signature saved for " + className + ".", path: signaturePath });
+        }
+    );
+});
+
+app.delete("/class-signature/:className", requireLogin, (req, res) => {
+    connection.query(
+        "DELETE FROM class_teacher_signatures WHERE class_name = ?",
+        [req.params.className],
+        (err) => {
+            if (err) {
+                console.log(err);
+                return res.status(500).json({ message: "Error deleting signature." });
+            }
+            res.json({ message: "Class signature removed." });
         }
     );
 });

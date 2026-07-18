@@ -25,22 +25,33 @@
        the very same ones the Check Result page uses).
        Pass sharedSignatures (fetched once by the caller) to avoid
        re-downloading them for every student in a class zip. */
+    // CHANGED (per-class class teacher signature, owner request):
+    // sharedSignatures is now a pack { signatures, classSignatures }.
+    // A plain array (older callers) is treated as just the role list.
     window.amsFetchReportPack = function (studentId, term, session, sharedSignatures) {
         const enc = encodeURIComponent;
         const sigPromise = sharedSignatures
             ? Promise.resolve(sharedSignatures)
-            : fetch("/signatures").then(r => r.json()).catch(() => []);
+            : Promise.all([
+                fetch("/signatures").then(r => r.json()).catch(() => []),
+                fetch("/class-signatures").then(r => r.json()).catch(() => [])
+            ]).then(([sigs, classSigs]) => ({ signatures: sigs, classSignatures: classSigs }));
         return Promise.all([
             fetch(`/search-result/${enc(studentId)}?term=${enc(term)}&session=${enc(session)}`)
                 .then(r => r.json()),
             fetch(`/student/${enc(studentId)}`).then(r => r.json()).catch(() => []),
             fetch(`/student-position/${enc(studentId)}`).then(r => r.json()).catch(() => ({})),
             sigPromise
-        ]).then(([rows, studentArr, positionData, signatures]) => ({
+        ]).then(([rows, studentArr, positionData, sigPack]) => ({
             rows: Array.isArray(rows) ? rows : [],
             student: Array.isArray(studentArr) && studentArr.length ? studentArr[0] : null,
             position: positionData && positionData.position ? positionData.position : null,
-            signatures: Array.isArray(signatures) ? signatures : []
+            signatures: Array.isArray(sigPack)
+                ? sigPack                                  // legacy plain-array caller
+                : (sigPack.signatures || []),
+            classSignatures: Array.isArray(sigPack)
+                ? []
+                : (sigPack.classSignatures || [])
         }));
     };
 
@@ -77,7 +88,10 @@
         }
 
         const photoSrc = (pack.student && pack.student.photo_path) ? pack.student.photo_path : "images/default.png";
-        const classTeacherSig = pack.signatures.find(s => s.role === "class_teacher");
+        // CHANGED (per-class signature): the signature assigned to THIS
+        // report's class wins; shared Class Teacher signature = fallback.
+        const perClassSig = (pack.classSignatures || []).find(c => c.class_name === first.class_name);
+        const classTeacherSig = perClassSig || pack.signatures.find(s => s.role === "class_teacher");
         const principalSig = pack.signatures.find(s => s.role === "principal");
 
         // Scores table - identical columns to js/result.js

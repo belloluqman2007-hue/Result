@@ -273,6 +273,216 @@ function loadCurrentSignatures() {
         .catch(error => console.log(error));
 }
 
+/* ==========================================================
+   NEW (per-class Class Teacher signatures, owner request):
+   "space to accept many signatures and assign them to classes,
+   so the signature appears on its own class's reports, not just
+   random class."
+   One full-width card UNDER the four role cards: pick a class,
+   draw or upload its teacher's signature, save. Every class's
+   reports then stamp ITS OWN teacher's signature; classes with
+   nothing assigned keep using the shared Class Teacher
+   signature above (unchanged fallback).
+========================================================== */
+
+const CLASS_SIG_ROLE = "ctclass"; // pad-registry key for the per-class pad
+
+function buildClassSignatureSection() {
+    const host = document.getElementById("sigCards");
+    if (!host) return;
+
+    const wrap = document.createElement("div");
+    wrap.className = "mng-card";
+    wrap.style.gridColumn = "1 / -1"; // span the full card row
+    wrap.innerHTML =
+        '<h2 class="mng-card-title">' +
+            '<span class="mng-ico">' +
+                '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+                '<path d="M20.24 12.24a6 6 0 0 0-8.49-8.49L5 10.5V19h8.5z"/><path d="m16 8-9.04 9.07"/><path d="M17.5 15H9"/></svg>' +
+            "</span>Class Teacher - per Class" +
+        "</h2>" +
+        '<p class="mng-card-sub" style="padding-left:0;">Add MANY class teacher signatures - one for each class. ' +
+        "A class's reports will stamp ITS OWN teacher's signature. Classes with nothing assigned here keep using " +
+        'the shared "Class Teacher" signature above.</p>' +
+
+        // class picker
+        '<div style="display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin-bottom:14px;">' +
+            '<label for="ctClassSelect" style="font-weight:800; font-size:13px;">Assign to class:</label>' +
+            '<select id="ctClassSelect" style="min-width:220px;"></select>' +
+        "</div>" +
+
+        // Draw / Upload tabs - same panel ids pattern, pad key "ctclass"
+        '<div class="sig-tabs">' +
+            '<button type="button" class="sig-tab-btn active" onclick="switchTab(\'ctclass\',\'draw\')">&#9998; Draw</button>' +
+            '<button type="button" class="sig-tab-btn" onclick="switchTab(\'ctclass\',\'upload\')">&#8681; Upload Image</button>' +
+        "</div>" +
+
+        '<div id="ctclass-draw-panel" class="sig-panel active">' +
+            '<div class="signature-pad-wrap"><canvas id="ctclass-canvas" width="380" height="140"></canvas></div>' +
+            '<div class="mng-actions" style="margin-top:12px;">' +
+                '<button type="button" class="mng-btn mng-btn-sm mng-btn-ghost" onclick="clearPad(\'ctclass\')">Clear</button>' +
+                '<button type="button" class="mng-btn mng-btn-sm" onclick="saveClassDrawnSignature()">Save for Selected Class</button>' +
+            "</div>" +
+        "</div>" +
+
+        '<div id="ctclass-upload-panel" class="sig-panel">' +
+            '<div class="mng-photo-row">' +
+                '<label class="mng-photo-btn" for="ctclass-file">' +
+                    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m17 8-5-5-5 5"/><path d="M12 3v12"/></svg>' +
+                    "Choose Image (PNG/JPG)" +
+                "</label>" +
+                '<input type="file" id="ctclass-file" accept="image/png, image/jpeg" style="display:none;">' +
+            "</div>" +
+            '<div class="mng-actions" style="margin-top:12px;">' +
+                '<button type="button" class="mng-btn mng-btn-sm" onclick="saveClassUploadedSignature()">Save for Selected Class</button>' +
+            "</div>" +
+        "</div>" +
+
+        // the assigned list (class -> signature, with remove buttons)
+        '<div id="ctAssignedList" style="margin-top:18px; border-top:1px dashed var(--m-border,#D9E8E0); padding-top:14px;">' +
+            '<p class="mng-card-sub" style="padding-left:0;">Loading assigned classes...</p>' +
+        "</div>";
+
+    host.appendChild(wrap);
+    initPad(CLASS_SIG_ROLE);   // same drawing pad engine as the role cards
+    loadClassOptions();
+    loadClassSignatures();
+}
+
+function loadClassOptions() {
+    fetch("/classes")
+        .then(r => r.json())
+        .then(classes => {
+            const sel = document.getElementById("ctClassSelect");
+            if (!sel) return;
+            sel.innerHTML = "";
+            if (!Array.isArray(classes) || !classes.length) {
+                sel.innerHTML = "<option value=''>(no classes found)</option>";
+                return;
+            }
+            classes.forEach(c => {
+                const opt = document.createElement("option");
+                opt.value = c.class_name;
+                opt.textContent = c.class_name;
+                sel.appendChild(opt);
+            });
+        })
+        .catch(() => notify("Could not load the class list.", "error"));
+}
+
+function saveClassDrawnSignature() {
+    if (!padHasStrokes[CLASS_SIG_ROLE]) {
+        notify("Please draw a signature first.", "error");
+        return;
+    }
+    const canvas = document.getElementById(`${CLASS_SIG_ROLE}-canvas`);
+    // toBlob keeps the untouched pixels transparent (same as role cards)
+    canvas.toBlob(blob => submitClassSignature(blob, "class-signature.png"), "image/png");
+}
+
+function saveClassUploadedSignature() {
+    const fileInput = document.getElementById("ctclass-file");
+    if (fileInput.files.length === 0) {
+        notify("Please choose an image file first.", "error");
+        return;
+    }
+    submitClassSignature(fileInput.files[0], fileInput.files[0].name);
+}
+
+function submitClassSignature(blobOrFile, fileName) {
+    const sel = document.getElementById("ctClassSelect");
+    const className = ((sel && sel.value) || "").trim();
+    if (!className) {
+        notify("Please choose the class first.", "error");
+        return;
+    }
+    const formData = new FormData();
+    formData.append("class_name", className); // BEFORE the file: multer reads fields in order
+    formData.append("signature", blobOrFile, fileName);
+    fetch("/save-class-signature", { method: "POST", body: formData })
+        .then(response => response.json())
+        .then(data => {
+            notify(data.message, (data.message || "").toLowerCase().includes("saved") ? "success" : "error");
+            clearPad(CLASS_SIG_ROLE);
+            const fileInput = document.getElementById("ctclass-file");
+            if (fileInput) fileInput.value = "";
+            loadClassSignatures();
+        })
+        .catch(error => {
+            console.log(error);
+            notify("Error saving signature.", "error");
+        });
+}
+
+function loadClassSignatures() {
+    const list = document.getElementById("ctAssignedList");
+    if (!list) return;
+    fetch("/class-signatures")
+        .then(r => r.json())
+        .then(rows => {
+            rows = Array.isArray(rows) ? rows : [];
+            if (!rows.length) {
+                list.innerHTML = '<p class="mng-card-sub" style="padding-left:0;">No class signatures assigned yet - every class uses the shared Class Teacher signature above.</p>';
+                return;
+            }
+            list.innerHTML = "";
+            rows.forEach(row => {
+                const item = document.createElement("div");
+                item.style.cssText = "display:flex; align-items:center; gap:12px; padding:10px 0; border-bottom:1px dashed var(--m-border,#D9E8E0); flex-wrap:wrap;";
+
+                const name = document.createElement("strong");
+                name.style.minWidth = "180px";
+                name.textContent = row.class_name;
+
+                const img = document.createElement("img");
+                img.alt = "";
+                img.src = `${row.signature_path}?t=${Date.now()}`;
+                img.style.cssText = "height:44px; max-width:180px; object-fit:contain; background:#fff; border:1px solid var(--m-border,#D9E8E0); border-radius:8px; padding:4px;";
+
+                const btn = document.createElement("button");
+                btn.type = "button";
+                btn.className = "mng-btn mng-btn-sm mng-btn-danger";
+                btn.textContent = "Remove";
+                btn.style.marginLeft = "auto";
+                btn.addEventListener("click", () => deleteClassSignature(row.class_name));
+
+                item.appendChild(name);
+                item.appendChild(img);
+                item.appendChild(btn);
+                list.appendChild(item);
+            });
+        })
+        .catch(() => {
+            list.innerHTML = '<p class="mng-card-sub" style="padding-left:0;">Could not load the class signatures.</p>';
+        });
+}
+
+function deleteClassSignature(className) {
+    const doDelete = () => {
+        fetch(`/class-signature/${encodeURIComponent(className)}`, { method: "DELETE" })
+            .then(response => response.json())
+            .then(data => {
+                notify(data.message, "success");
+                loadClassSignatures();
+            })
+            .catch(error => {
+                console.log(error);
+                notify("Error removing signature.", "error");
+            });
+    };
+
+    if (window.amsConfirm) {
+        window.amsConfirm(
+            `Remove the signature for ${className}?`,
+            "That class's reports will use the shared Class Teacher signature again.",
+            { confirmText: "Yes, remove", cancelText: "Cancel" }
+        ).then(yes => { if (yes) doDelete(); });
+    } else if (confirm(`Remove the signature for ${className}?`)) {
+        doDelete();
+    }
+}
+
 // Build the four role cards as soon as the page's DOM is parsed
 // (this file is loaded at the end of <body>).
 buildSignatureCards();
+buildClassSignatureSection(); // NEW: "Class Teacher - per Class" section
