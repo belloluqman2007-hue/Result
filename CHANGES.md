@@ -662,3 +662,23 @@ Result calculations, grading, positions, report card generation, printing and ev
 | `sw.js` | Cache v7. |
 
 Result calculations, grading, positions, report card generation, printing and every staff result query: completely untouched.
+
+---
+
+## PACK 20 (2026-07-19) - owner requests
+
+**"Why is the signature disappearing after some time - fix that"** /
+**"In the exam page 4 I can't write anything except one line - I can't write anything to other lines"** /
+**"Make the class not necessary in bulk student - some students are not activated/assigned to a class yet, some dropped out or transferred"**
+
+| File | What happened |
+|---|---|
+| `server.js` | FIX (signatures disappearing - REAL root cause): the host (Render) wipes the app's disk on every restart/deploy, so every uploaded image slowly vanished - role signatures, per-class signatures, student photos, parent payment proofs and receipt snaps. Now every upload is ALSO stored in the database (new LONGBLOB columns added by a guarded pack-20 migration - runs itself at boot, verified live), a request-time middleware rebuilds any missing image file straight from the database (verified: wiped a signature file, requested it, got the image back and the file rebuilt), and a one-time boot hydration restores everything already backed up. Save routes keep a small first-boot fallback so saving can never fail while the migration warms up. NOTE: images that vanished BEFORE this update were never backed up anywhere - upload each signature/photo once more, from now on it stays forever. CHANGED (bulk upload): Class is no longer required - rows with a blank Class import with an empty class (assignable later); a TYPED class name must still be a real class. Each row stays independent: good rows import, bad rows are listed. |
+| `templates/student_upload_template.xlsx` | READ ME sheet now says Class is OPTIONAL (copy a valid class name or leave it blank and assign later). Column headers and styling untouched. |
+| `add-student.html` | Bulk card now shows the hint: only Student ID, Full Name and Gender are required - Class may be left blank. |
+| `js/exam.js` | (exam page-4 writing) - already covered by the pack-19 merge: the second exam's lines were each trapped in their own invisible zone, so only ONE line was ever visible/writable. The merge (verified this pack by actually typing into the owner's real exam) turns page 4 back into one normal writing area - click any line and write. |
+| `sw.js` | Cache v8. |
+
+Verified: pack-20 migration ran on the live DB (all five backup columns present), restore middleware returns and rebuilds wiped images (200 OK + file back on disk), unknown images still 404 exactly like before, typing into exam 2 of the owner's real booklet works on phone-sized viewport, bulk-upload class-blank path verified in code, template still parses with styling intact.
+
+Result calculations, grading, positions, report card generation, printing and every staff result query: completely untouched.

@@ -277,6 +277,89 @@ app.get("/manifest.webmanifest", (req, res) => {
     res.sendFile(path.join(__dirname, "manifest.webmanifest"));
 });
 
+/* ==================================================================
+   FIX (pack 20 - owner: "why is the signature disappearing after some
+   time - fix that"): Render (and any cloud host) wipes the app's disk
+   on every restart/deploy, so every uploaded image slowly vanished -
+   signatures, class signatures, student photos, parent payment proofs
+   and receipt snaps. From pack 20 every upload is ALSO stored in the
+   database (LONGBLOB column, added by the guarded migration further
+   down), and this middleware rebuilds any missing file from the
+   database the moment it is requested again. Nothing about the stored
+   file paths, routes or readers changes.
+================================================================== */
+const imageDbSources = [
+    // [urlPrefix, table, pathColumn, dataColumn]
+    ["/images/signatures/", "signatures", "signature_path", "signature_data"],
+    ["/images/signatures/", "class_teacher_signatures", "signature_path", "signature_data"],
+    ["/images/students/", "students", "photo_path", "photo_data"],
+    ["/uploads/payment-evidence/", "payment_submissions", "evidence_path", "evidence_data"],
+    ["/uploads/payment-evidence/", "fee_payments", "receipt_path", "receipt_data"]
+];
+
+function tryRestoreImage(relPath, sources, idx, done) {
+    if (idx >= sources.length) return done(false);
+    const [prefix, table, pathCol, dataCol] = sources[idx];
+    if (relPath.indexOf(prefix.replace(/^\//, "")) !== 0) return tryRestoreImage(relPath, sources, idx + 1, done);
+    // ?? = escaped identifier (mysql2 built-in), ? = value.
+    connection.query(
+        "SELECT ?? AS img FROM ?? WHERE ?? = ? LIMIT 1",
+        [dataCol, table, pathCol, relPath],
+        (err, rows) => {
+            if (err || !rows || !rows.length || !rows[0].img) {
+                return tryRestoreImage(relPath, sources, idx + 1, done);
+            }
+            try {
+                const abs = path.join(__dirname, relPath);
+                fs.mkdirSync(path.dirname(abs), { recursive: true });
+                fs.writeFileSync(abs, rows[0].img);
+                return done(true);
+            } catch (wErr) {
+                console.log("Image restore failed for", relPath, wErr.message || wErr);
+                return done(false);
+            }
+        }
+    );
+}
+
+app.use((req, res, next) => {
+    // Only look at GETs under the upload folders; everything else passes.
+    if (req.method !== "GET") return next();
+    const urlPath = req.path;
+    if (!/^\/(images\/(signatures|students)|uploads\/payment-evidence)\//.test(urlPath)) return next();
+    if (urlPath.indexOf("..") !== -1) return next();
+    const relPath = urlPath.replace(/^\//, "");
+    const abs = path.join(__dirname, relPath);
+    if (fs.existsSync(abs)) return next();          // file alive - normal static serve
+    tryRestoreImage(relPath, imageDbSources, 0, (restored) => next()); // rebuilt or not - continue either way
+});
+
+/* FIX (pack 20): save-image queries now also store the bytes in the
+   pack-20 backup columns. During the very first boot after deploy the
+   migration may still be running (columns missing -> ER_BAD_FIELD_ERROR);
+   then we silently retry with the pre-pack-20 columns so saves NEVER fail.
+*/
+function queryImageSave(sqlWithData, paramsWithData, sqlWithout, paramsWithout, cb) {
+    connection.query(sqlWithData, paramsWithData, (err, result) => {
+        if (err && err.code === "ER_BAD_FIELD_ERROR") {
+            return connection.query(sqlWithout, paramsWithout, cb);
+        }
+        cb(err, result);
+    });
+}
+
+/* FIX (pack 20): student photos get their database copy via a small
+   follow-up UPDATE after any successful photo write (keeps the original
+   multi-branch INSERT/UPDATE code untouched). Swallowed on failure - the
+   photo itself is already saved to disk, the backup just waits for the
+   next write or the migration window to pass. */
+function backupStudentPhoto(studentId, filePath) {
+    if (!filePath || !studentId) return;
+    let data;
+    try { data = fs.readFileSync(filePath); } catch (e) { return; }
+    connection.query("UPDATE students SET photo_data = ? WHERE student_id = ?", [data, studentId], () => {});
+}
+
 app.use(express.static(__dirname));
 
 /* ==================================================================
@@ -719,6 +802,90 @@ function pack17Retry(attempt, err) {
     setTimeout(() => runPack17Migrations(attempt + 1), 4000);
 }
 runPack17Migrations(1);
+
+/* ------------------------------------------------------------------
+   FIX (pack 20 - owner: "signature disappearing after some time"):
+   keep a DATABASE COPY of every uploaded image, so a wiped disk can
+   always be rebuilt. Same guarded/idempotent pattern as packs 15/17:
+   ADD COLUMN is swallowed when it already exists (ER_DUP_FIELDNAME).
+   Then a one-time hydration pass re-materialises any files already
+   lost for rows that DO have a database copy.
+------------------------------------------------------------------ */
+function runPack20Migrations(attempt) {
+    const conn = addonConnection();
+    conn.connect((err) => {
+        if (err) { conn.destroy(); return pack20Retry(attempt, err); }
+        const alters = [
+            "ALTER TABLE signatures ADD COLUMN signature_data LONGBLOB NULL",
+            "ALTER TABLE class_teacher_signatures ADD COLUMN signature_data LONGBLOB NULL",
+            "ALTER TABLE students ADD COLUMN photo_data LONGBLOB NULL",
+            "ALTER TABLE payment_submissions ADD COLUMN evidence_data LONGBLOB NULL",
+            "ALTER TABLE fee_payments ADD COLUMN receipt_data LONGBLOB NULL"
+        ];
+        let missingTable = false;
+        let i = 0;
+        (function nextAlter() {
+            if (i >= alters.length) {
+                conn.end();
+                console.log("Pack 20 setup ready (database-backed uploads).");
+                return hydrateUploadedImages();
+            }
+            conn.query(alters[i++], (qErr) => {
+                if (qErr && qErr.code !== "ER_DUP_FIELDNAME") {
+                    console.log("Pack 20 migration notice:", qErr.code || qErr.message);
+                    if (qErr.code === "ER_NO_SUCH_TABLE") missingTable = true;
+                }
+                if (missingTable) { conn.destroy(); return pack20Retry(attempt, { code: "ER_NO_SUCH_TABLE" }); }
+                nextAlter();
+            });
+        })();
+    });
+}
+function pack20Retry(attempt, err) {
+    if (attempt >= 6) {
+        console.log("Pack 20 setup warning:", err.code || err.message || err);
+        return;
+    }
+    setTimeout(() => runPack20Migrations(attempt + 1), 4000);
+}
+runPack20Migrations(1);
+
+// Rebuild every missing upload file that HAS a database copy (runs once
+// at boot; the request-time middleware covers anything saved later).
+function hydrateUploadedImages() {
+    const jobs = [
+        ["signatures", "signature_path", "signature_data"],
+        ["class_teacher_signatures", "signature_path", "signature_data"],
+        ["students", "photo_path", "photo_data"],
+        ["payment_submissions", "evidence_path", "evidence_data"],
+        ["fee_payments", "receipt_path", "receipt_data"]
+    ];
+    const conn = addonConnection();
+    conn.connect((err) => {
+        if (err) { conn.destroy(); return; }
+        let done = 0, restored = 0;
+        jobs.forEach(([table, pathCol, dataCol]) => {
+            conn.query("SELECT ?? AS p, ?? AS d FROM ?? WHERE ?? IS NOT NULL", [pathCol, dataCol, table, dataCol], (qErr, rows) => {
+                if (!qErr && rows) {
+                    rows.forEach((r) => {
+                        if (!r.p || !r.d) return;
+                        const abs = path.join(__dirname, r.p);
+                        if (fs.existsSync(abs)) return;
+                        try {
+                            fs.mkdirSync(path.dirname(abs), { recursive: true });
+                            fs.writeFileSync(abs, r.d);
+                            restored++;
+                        } catch (e) { /* disk read-only? middleware will retry */ }
+                    });
+                }
+                if (++done === jobs.length) {
+                    if (restored) console.log(`Pack 20: rebuilt ${restored} uploaded image(s) from the database.`);
+                    conn.end();
+                }
+            });
+        });
+    });
+}
 
 /* ==================================================================
    NEW (subject enable/disable - request #3): is_active column on the
@@ -1556,8 +1723,14 @@ app.post("/save-signature", requireLogin, uploadSignature.single("signature"), (
     }
 
     const signaturePath = `images/signatures/${req.file.filename}`;
+    // FIX (pack 20): also store the image bytes in the database so the
+    // signature survives the host wiping its disk (auto-rebuilt on request).
+    const sigData = fs.readFileSync(req.file.path);
 
-    connection.query(
+    queryImageSave(
+        `INSERT INTO signatures (role, signature_path, signature_data) VALUES (?, ?, ?)
+         ON DUPLICATE KEY UPDATE signature_path = VALUES(signature_path), signature_data = VALUES(signature_data), updated_at = CURRENT_TIMESTAMP`,
+        [role, signaturePath, sigData],
         `INSERT INTO signatures (role, signature_path) VALUES (?, ?)
          ON DUPLICATE KEY UPDATE signature_path = VALUES(signature_path), updated_at = CURRENT_TIMESTAMP`,
         [role, signaturePath],
@@ -1621,8 +1794,13 @@ app.post("/save-class-signature", requireLogin, uploadClassSignature.single("sig
     }
 
     const signaturePath = `images/signatures/${req.file.filename}`;
+    // FIX (pack 20): database copy, same as /save-signature.
+    const sigData = fs.readFileSync(req.file.path);
 
-    connection.query(
+    queryImageSave(
+        `INSERT INTO class_teacher_signatures (class_name, signature_path, signature_data) VALUES (?, ?, ?)
+         ON DUPLICATE KEY UPDATE signature_path = VALUES(signature_path), signature_data = VALUES(signature_data), updated_at = CURRENT_TIMESTAMP`,
+        [className, signaturePath, sigData],
         `INSERT INTO class_teacher_signatures (class_name, signature_path) VALUES (?, ?)
          ON DUPLICATE KEY UPDATE signature_path = VALUES(signature_path), updated_at = CURRENT_TIMESTAMP`,
         [className, signaturePath],
@@ -2008,6 +2186,8 @@ SELECT
                         console.log(err);
                         return res.status(500).send("Error saving student");
                     }
+                    // FIX (pack 20): database copy of the photo (survives disk wipes)
+                    if (photoPath) backupStudentPhoto(student_id, req.file && req.file.path);
                     res.send("Student saved successfully");
                 }
             );
@@ -2039,6 +2219,8 @@ SELECT
                         console.log(err);
                         res.status(500).send("Error saving student");
                     } else {
+                        // FIX (pack 20): database copy of the photo (survives disk wipes)
+                        if (photoPath) backupStudentPhoto(student_id, req.file && req.file.path);
                         res.send("Student saved successfully");
                     }
                 }
@@ -2118,6 +2300,8 @@ SELECT
                     if (result.affectedRows === 0) {
                         return res.status(404).json({ message: "No student found with that Admission Number." });
                     }
+                    // FIX (pack 20): database copy of the photo (survives disk wipes)
+                    if (photoPath) backupStudentPhoto(newId, req.file && req.file.path);
                     res.json({ message: "Student profile updated.", student_id: newId });
                 }
             );
@@ -2183,6 +2367,8 @@ SELECT
                 if (result.affectedRows === 0) {
                     return res.status(404).json({ message: "No student found with that ID." });
                 }
+                // FIX (pack 20): database copy of the photo (survives disk wipes)
+                backupStudentPhoto(studentId, req.file.path);
                 res.json({ message: "Photo saved.", photo_path: photoPath });
             }
         );
@@ -2272,8 +2458,13 @@ SELECT
                     }
                 }
 
-                if (!studentId || !fullName || !gender || !className) {
-                    results.errors.push(`Row ${rowNum}: Missing required field(s) (Student ID, Full Name, Gender, and Class are all required).`);
+                // CHANGED (pack 20 - owner request): Class is NO LONGER
+                // required - some pupils are not yet assigned to a class,
+                // some dropped out or were transferred. Rows with a blank
+                // Class now upload fine (blank class, assignable later);
+                // only misspelt/non-empty class names are still refused.
+                if (!studentId || !fullName || !gender) {
+                    results.errors.push(`Row ${rowNum}: Missing required field(s) (Student ID, Full Name, and Gender are required; Class may be left blank).`);
                     return processNextRow();
                 }
 
@@ -2282,8 +2473,10 @@ SELECT
                     return processNextRow();
                 }
 
-                if (!validClasses.has(className)) {
-                    results.errors.push(`Row ${rowNum}: "${className}" is not a recognized class. Check the "Valid Classes" sheet in the template.`);
+                // CHANGED (pack 20): an EMPTY class is allowed (stored blank);
+                // only a NON-empty class must exist in the class list.
+                if (className && !validClasses.has(className)) {
+                    results.errors.push(`Row ${rowNum}: "${className}" is not a recognized class. Check the "Valid Classes" sheet in the template (or leave Class blank to assign the pupil later).`);
                     return processNextRow();
                 }
 
@@ -3454,7 +3647,14 @@ app.post("/portal/payment-submission", (req, res) => {
             return res.status(400).json({ message: "Fee type, term, session and a valid amount are required." });
         }
         const evidencePath = req.file ? ("uploads/payment-evidence/" + req.file.filename) : null;
-        connection.query(
+        // FIX (pack 20): keep a database copy of the proof so it cannot
+        // disappear when the host wipes its disk.
+        const evidenceData = req.file ? fs.readFileSync(req.file.path) : null;
+        queryImageSave(
+            `INSERT INTO payment_submissions
+             (student_id, fee_type, term, session, amount, note, evidence_path, evidence_data)
+             VALUES (?,?,?,?,?,?,?,?)`,
+            [sid, feeType, term, session, amount, note, evidencePath, evidenceData],
             `INSERT INTO payment_submissions
              (student_id, fee_type, term, session, amount, note, evidence_path)
              VALUES (?,?,?,?,?,?,?)`,
@@ -3555,7 +3755,14 @@ app.post("/fee-payment/:id/receipt", requireLogin, requireAdmin, (req, res) => {
         if (upErr) return res.status(400).json({ message: upErr.message || "Upload failed" });
         if (!req.file) return res.status(400).json({ message: "Choose the receipt photo first." });
         const p = "uploads/payment-evidence/" + req.file.filename;
-        connection.query("UPDATE fee_payments SET receipt_path = ? WHERE id = ?", [p, req.params.id], (err, result) => {
+        // FIX (pack 20): database copy of the receipt photo too.
+        const recData = fs.readFileSync(req.file.path);
+        queryImageSave(
+            "UPDATE fee_payments SET receipt_path = ?, receipt_data = ? WHERE id = ?",
+            [p, recData, req.params.id],
+            "UPDATE fee_payments SET receipt_path = ? WHERE id = ?",
+            [p, req.params.id],
+        (err, result) => {
             if (err) {
                 // migration still creating the column (first boot after update)
                 if (err.code === "ER_BAD_FIELD_ERROR") {
