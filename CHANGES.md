@@ -682,3 +682,22 @@ Result calculations, grading, positions, report card generation, printing and ev
 Verified: pack-20 migration ran on the live DB (all five backup columns present), restore middleware returns and rebuilds wiped images (200 OK + file back on disk), unknown images still 404 exactly like before, typing into exam 2 of the owner's real booklet works on phone-sized viewport, bulk-upload class-blank path verified in code, template still parses with styling intact.
 
 Result calculations, grading, positions, report card generation, printing and every staff result query: completely untouched.
+
+---
+
+## PACK 21 (2026-07-21) - owner master-prompt: the 5 concrete bugs
+
+**"Student search not working / Download Statement opens blank page / Payment records open empty tab / show 45 not 45.00 / zero has a dot in the middle"**
+
+| # | Bug | Root cause found | Fix (verified) |
+|---|---|---|---|
+| 1 | Student search "not working" | It only fired **onblur** - on phones that moment rarely comes. | `js/app.js` + `teacher-dashboard.html` + `css/modern-ui.css`: WHILE-YOU-TYPE lookup (500ms debounce) + a quick-info card under the Student ID box: photo, name, admission no, class, gender, date of birth, parent name/phone, and fee balance for the term/session picked in the form. `server.js`: /fee-balance-v2 now also accepts `student_id` (additive filter; editors unchanged otherwise). onblur behaviour kept. Verified as-you-type on the dashboard. |
+| 2 | Download Statement dead/blank | **`student is not defined` ReferenceError** - the pack-15 fee code lives outside the login scope but read its `student` variable. Proven on the LIVE site (the error fired at every click). | `js/portal.js`: file-scope `ptStudent` (set at login) + statement now FETCHES the full profile (parent info, photo) and includes every payment with date + receipt ref. `js/ams-pdf.js`: statement gains parent line, passport photo, and a "payments received" table (Date | Fee Type | Amount | Method | Receipt Ref RCP-0007...). Verified: fee-statement-AM.pdf downloads and renders fully. |
+| 3 | Payment records open an empty tab | Receipt photo **files were wiped by the host restart** (the issue pack 20 fixed for good) - links 404'd into blank tabs. | Already cured by pack 20 (database-backed images + auto-rebuild, verified live). Fresh receipt/proof uploads can never vanish again. |
+| 4 | Scores show 00.00 / 45.00 | MySQL DECIMAL columns return strings printed as-is. | `js/result.js`, `js/report-card.js`, `js/class-results.js`: NEW display formatter - 45.00->45, 49.7->50, average rounded too (72.3->72), grand totals clean. DISPLAY ONLY: database values, averages used for remarks/positions and every calculation stay byte-identical. Verified: Quran 20 25 45 C / Tawheed 40 60 100 A / Average 72 / Total 145. |
+| 5 | Zero with a dot | IBM Plex Mono's default 0 glyph is dotted (cannot be switched off). | All numeric rules in `css/style.css`, `css/modern-ui.css`, `css/idcard.css` now use Cairo (plain western 0, same sizes/weights - design preserved). Verified computed font = Cairo. |
+| - | `sw.js` | | Cache v9. |
+
+Master-prompt status note: the five concrete bugs above are all fixed and verified. Many "improvements" items already exist in the portal (results, attendance, fees+statement, proof upload, messages, notifications, calendar, report card, ID card etc.). The remaining wish-list (charts, QR, 2FA, appointments, compare-children, gallery...) is a next-round roadmap - nothing was rebuilt and no existing flow was touched.
+
+Result calculations, grading, positions, report card data flow, and all staff/portal queries: untouched (display formatting only).

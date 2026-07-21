@@ -32,6 +32,12 @@
     .then(function (data) {
       if (!data || !data.loggedIn || !data.student) { goLogin(); return; }
       student = data.student;
+      ptStudent = data.student; // FIX (pack 21): the pack-15 fee/statement
+                                 // code lives OUTSIDE this IIFE and referenced
+                                 // `student` directly -> ReferenceError
+                                 // ("student is not defined") every time the
+                                 // Statement button was clicked. Publish the
+                                 // logged-in student for that scope too.
       setText("ptName", student.full_name);
       setText("ptId", student.student_id);
       setText("ptClass", student.class_name);
@@ -142,6 +148,31 @@
    ==================================================================== */
 var ptFeeRows = [];
 var ptFeeTS = null;
+var ptStudent = null; // FIX (pack 21): file-scope copy of the logged-in
+                      // student (see the /portal/me handler above) so the
+                      // fee statement can read name/id/class without
+                      // breaking on an undefined `student`.
+var ptPaymentsRows = []; // pack 21: payment rows for the statement
+
+/* pack 21: fetch helper - image URL -> data URL (for PDF photos). Silently
+   resolves to null if the image is missing/failed, so a photo never
+   blocks the statement. */
+function ptImgToDataUrl(url) {
+  return new Promise(function (resolve) {
+    var img = new Image();
+    img.crossOrigin = "anonymous";
+    img.onload = function () {
+      try {
+        var c = document.createElement("canvas");
+        c.width = img.naturalWidth; c.height = img.naturalHeight;
+        c.getContext("2d").drawImage(img, 0, 0);
+        resolve(c.toDataURL("image/jpeg", 0.85));
+      } catch (e) { resolve(null); }
+    };
+    img.onerror = function () { resolve(null); };
+    img.src = url;
+  });
+}
 
 function esc(v) {
   return String(v == null ? "" : v)
@@ -206,7 +237,9 @@ function loadMyPayments() {
     .then(function (r) { return r.ok ? r.json() : []; })
     .then(function (rows) {
       var box = document.getElementById("ptFees");
-      if (!box || !Array.isArray(rows) || !rows.length) return;
+      if (!box || !Array.isArray(rows)) return;
+      ptPaymentsRows = rows; // FIX (pack 21): keep the rows for the statement PDF
+      if (!rows.length) return;
       var html = '<div style="margin-top:10px; border-top:1px dashed #d7e0da; padding-top:10px;">' +
         '<div class="pt-fee-row head"><span>Payments Recorded by the School</span><span class="pt-right">Amount</span><span class="pt-right">Receipt</span></div>';
       rows.forEach(function (p) {
@@ -226,20 +259,44 @@ function loadMyPayments() {
 }
 
 document.getElementById("ptStmtBtn").addEventListener("click", function () {
-  if (!ptFeeTS || !student) return;
+  if (!ptFeeTS || !ptStudent) return;  // FIX (pack 21): was `student` (undefined in this scope -> ReferenceError -> silent dead button)
+  var btn = this;
+  btn.disabled = true;
   var viewRows = ptFeeRows.filter(function (r) { return r.term === ptFeeTS.term && r.session === ptFeeTS.session; });
-  var d = window.amsFeeStatementPDF({
-    studentName: student.full_name,
-    studentId: student.student_id,
-    className: student.class_name,
-    term: ptFeeTS.term,
-    session: ptFeeTS.session,
-    rows: viewRows,
-    totalFee: viewRows.reduce(function (a, r) { return a + Number(r.fee); }, 0),
-    totalPaid: viewRows.reduce(function (a, r) { return a + Number(r.paid); }, 0),
-    totalBalance: viewRows.reduce(function (a, r) { return a + Number(r.balance); }, 0)
-  });
-  d.save("fee-statement-" + student.student_id + ".pdf");
+  // FIX (pack 21 - master list): enrich the statement with parent info,
+  // passport photo and the full payment history (dates + receipt refs).
+  fetch("/student/" + encodeURIComponent(ptStudent.student_id))
+    .then(function (r) { return r.ok ? r.json() : []; })
+    .then(function (rows) {
+      var full = Array.isArray(rows) && rows.length ? rows[0] : {};
+      var parentLine = (full.parent_name ? full.parent_name : "-") +
+                       (full.parent_phone ? "   Tel: " + full.parent_phone : "");
+      return ptImgToDataUrl("/" + (full.photo_path || "")).then(function (photo) {
+        return { parentLine: parentLine, photo: photo };
+      });
+    })
+    .catch(function () { return { parentLine: "", photo: null }; })
+    .then(function (extra) {
+      var d = window.amsFeeStatementPDF({
+        studentName: ptStudent.full_name,
+        studentId: ptStudent.student_id,
+        className: ptStudent.class_name,
+        parentLine: extra.parentLine,
+        photoDataUrl: extra.photo,
+        term: ptFeeTS.term,
+        session: ptFeeTS.session,
+        rows: viewRows,
+        payments: ptPaymentsRows.map(function (p) {
+          return { id: p.id, date: p.created_at ? String(p.created_at).slice(0, 10) : "",
+                   fee_type: p.fee_type, amount: p.amount, method: p.method };
+        }),
+        totalFee: viewRows.reduce(function (a, r) { return a + Number(r.fee); }, 0),
+        totalPaid: viewRows.reduce(function (a, r) { return a + Number(r.paid); }, 0),
+        totalBalance: viewRows.reduce(function (a, r) { return a + Number(r.balance); }, 0)
+      });
+      d.save("fee-statement-" + ptStudent.student_id + ".pdf");
+    })
+    .finally(function () { btn.disabled = false; });
 });
 
 /* --------------------- where to pay (bank accounts) ----------------- */

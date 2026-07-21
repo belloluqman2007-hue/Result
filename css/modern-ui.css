@@ -564,7 +564,7 @@ table:not(#resultTable):not(.report-container *):not(.cover-info-table) tr:nth-c
   gap:14px;
 }
 .ams-clock{
-  font-family:'IBM Plex Mono',monospace;
+  font-family:'Cairo', 'Segoe UI', Arial, sans-serif; /* pack 21: clean zero (was IBM Plex Mono - dotted 0) */
   font-size:13px;
   color:var(--m-muted);
   text-align:right;
@@ -666,7 +666,7 @@ table:not(#resultTable):not(.report-container *):not(.cover-info-table) tr:nth-c
 }
 .ams-stat .ams-stat-icon svg{ width:22px; height:22px; }
 .ams-stat .ams-stat-value{
-  font-family:'IBM Plex Mono',monospace;
+  font-family:'Cairo', 'Segoe UI', Arial, sans-serif; /* pack 21: clean zero (was IBM Plex Mono - dotted 0) */
   font-size:24px;
   font-weight:600;
   color:var(--m-emerald);
@@ -932,7 +932,7 @@ table:not(#resultTable):not(.report-container *):not(.cover-info-table) tr:nth-c
 }
 .ams-event .ams-event-date strong{
   display:block;
-  font-family:'IBM Plex Mono',monospace;
+  font-family:'Cairo', 'Segoe UI', Arial, sans-serif; /* pack 21: clean zero (was IBM Plex Mono - dotted 0) */
   font-size:16px;
 }
 .ams-event .ams-event-date span{
@@ -1007,7 +1007,7 @@ table:not(#resultTable):not(.report-container *):not(.cover-info-table) tr:nth-c
 }
 .ams-cal-day{
   position:relative;
-  font-family:'IBM Plex Mono',monospace;
+  font-family:'Cairo', 'Segoe UI', Arial, sans-serif; /* pack 21: clean zero (was IBM Plex Mono - dotted 0) */
   font-size:12.5px;
   padding:7px 0;
   border-radius:9px;
@@ -1161,7 +1161,7 @@ table:not(#resultTable):not(.report-container *):not(.cover-info-table) tr:nth-c
   color:var(--m-emerald);
   padding:2px 9px;
   border-radius:99px;
-  font-family:'IBM Plex Mono',monospace;
+  font-family:'Cairo', 'Segoe UI', Arial, sans-serif; /* pack 21: clean zero (was IBM Plex Mono - dotted 0) */
 }
 
 .ams-pagination{
@@ -1181,7 +1181,7 @@ table:not(#resultTable):not(.report-container *):not(.cover-info-table) tr:nth-c
   color:var(--m-emerald);
   border:1.5px solid var(--m-border);
   box-shadow:none;
-  font-family:'IBM Plex Mono',monospace;
+  font-family:'Cairo', 'Segoe UI', Arial, sans-serif; /* pack 21: clean zero (was IBM Plex Mono - dotted 0) */
   font-size:13px;
 }
 .ams-pagination button:hover{
@@ -1226,7 +1226,7 @@ table:not(#resultTable):not(.report-container *):not(.cover-info-table) tr:nth-c
   color:var(--m-emerald);
   padding:3px 11px;
   border-radius:99px;
-  font-family:'IBM Plex Mono',monospace;
+  font-family:'Cairo', 'Segoe UI', Arial, sans-serif; /* pack 21: clean zero (was IBM Plex Mono - dotted 0) */
 }
 .ams-profile-rows{
   display:flex;
@@ -1675,4 +1675,63 @@ html[data-theme="dark"] .report-container p{ color:inherit; }
 
 #reportLevel{
   letter-spacing:normal !important;
+}
+
+/* ==========================================================================
+   FIX (pack 21): quick student card inside the score form (appears while
+   typing the Student ID) - photo + key details + current fee balance.
+========================================================================== */
+.ams-quick-card{
+  margin-top:10px;
+  padding:12px 14px;
+  background:var(--parchment, #F6FAF8);
+  border:1px solid var(--line, #C7DED2);
+  border-left:4px solid var(--gold, #2F9E6E);
+  border-radius:6px;
+  font-size:13px;
+}
+.ams-qc-head{
+  display:flex;
+  align-items:center;
+  gap:12px;
+  margin-bottom:8px;
+}
+.ams-qc-photo{
+  width:52px;
+  height:64px;
+  object-fit:cover;
+  border-radius:4px;
+  border:2px solid var(--gold, #2F9E6E);
+  background:#fff;
+}
+.ams-qc-name{
+  font-weight:800;
+  color:var(--emerald, #0F3D2E);
+  font-size:14.5px;
+}
+.ams-qc-sub{
+  color:#5B6B62;
+  font-size:12.5px;
+}
+.ams-qc-row{
+  display:flex;
+  justify-content:space-between;
+  gap:12px;
+  padding:2px 0;
+}
+.ams-qc-row span{
+  color:#5B6B62;
+}
+.ams-qc-row b{
+  color:var(--emerald, #0F3D2E);
+  font-family:'Cairo', Arial, sans-serif;
+  text-align:right;
+}
+.ams-qc-balance{
+  margin-top:8px;
+  padding-top:8px;
+  border-top:1px dashed var(--line, #C7DED2);
+  font-weight:700;
+  color:var(--emerald, #0F3D2E);
+  font-size:12.5px;
 }

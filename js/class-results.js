@@ -105,6 +105,14 @@
         return n + "th";
     }
 
+    /* FIX (pack 21 - owner: no more "45.00"): scores show as clean whole
+       numbers on the broadsheet too. Display-only; stored values and the
+       position math are untouched. */
+    function fmtScore(v) {
+        var n = Number(v);
+        return isFinite(n) ? String(Math.round(n)) : String(v);
+    }
+
     /* ---------- render the table (used on screen AND in the PDF) ---------- */
     function buildTableHTML(sheet, fromIdx, toIdx) {
         var html = '<table class="broadsheet"><thead><tr>' +
@@ -120,9 +128,9 @@
                 '<td class="bs-name">' + escapeHTML(s.name) + "</td>";
             sheet.subjects.forEach(function (sub) {
                 var v = s.scores[sub];
-                html += "<td>" + ((typeof v === "number" && !isNaN(v)) ? v : "-") + "</td>";
+                html += "<td>" + ((typeof v === "number" && !isNaN(v)) ? fmtScore(v) : "-") + "</td>";
             });
-            html += "<td><b>" + s.total + "</b></td><td>" + s.average + "</td>" +
+            html += "<td><b>" + fmtScore(s.total) + "</b></td><td>" + fmtScore(s.average) + "</td>" +
                 "<td>" + ordinal(s.position) + "</td></tr>";
         }
         html += "</tbody></table>";

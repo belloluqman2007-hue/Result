@@ -1,3 +1,15 @@
+/* FIX (pack 21 - owner: no more "45.00" / "89.00"): scores DISPLAY as
+   clean whole numbers (49.7 -> 50, 67.3 -> 67). Database values and the
+   average used for remarks/promotion logic are completely untouched -
+   this rounds ONLY what is shown on screen and print. "-" and grades
+   pass through unchanged. */
+function amsFmtScore(v) {
+    if (v === null || v === undefined || v === "") return "-";
+    if (v === "-") return "-";
+    const n = Number(v);
+    return isFinite(n) ? String(Math.round(n)) : String(v);
+}
+
 function searchResult() {
 
     let studentId = document.getElementById("searchId").value;
@@ -162,10 +174,10 @@ function searchResult() {
                     table.innerHTML += `
                         <tr>
                             <td>${result.subject}</td>
-                            <td>${firstTotal}</td>
-                            <td>${secondTotal}</td>
-                            <td>${thirdTotal}</td>
-                            <td>${cumulativeAvg !== null && cumulativeAvg !== undefined ? cumulativeAvg : "-"}</td>
+                            <td>${amsFmtScore(firstTotal)}</td>
+                            <td>${amsFmtScore(secondTotal)}</td>
+                            <td>${amsFmtScore(thirdTotal)}</td>
+                            <td>${cumulativeAvg !== null && cumulativeAvg !== undefined ? amsFmtScore(cumulativeAvg) : "-"}</td>
                             <td>${result.grade}</td>
                         </tr>
                     `;
@@ -185,9 +197,9 @@ function searchResult() {
                     table.innerHTML += `
                         <tr>
                             <td>${result.subject}</td>
-                            <td>${result.ca_score}</td>
-                            <td>${result.exam_score}</td>
-                            <td>${result.total}</td>
+                            <td>${amsFmtScore(result.ca_score)}</td>
+                            <td>${amsFmtScore(result.exam_score)}</td>
+                            <td>${amsFmtScore(result.total)}</td>
                             <td>${result.grade}</td>
                         </tr>
                     `;
@@ -198,7 +210,7 @@ function searchResult() {
             }
 
             document.getElementById("totalSubjects").textContent = data.length;
-            document.getElementById("grandTotal").textContent = totalScore;
+            document.getElementById("grandTotal").textContent = amsFmtScore(totalScore); // pack 21: clean whole number
 
             let teacherRemark = "";
 
@@ -234,7 +246,7 @@ function searchResult() {
             table.innerHTML += `
                 <tr>
                     <td colspan="${isThirdTerm ? 4 : 3}"><strong>${isThirdTerm ? "Cumulative Average" : "Average"}</strong></td>
-                    <td><strong>${average}</strong></td>
+                    <td><strong>${amsFmtScore(average)}</strong></td>
                     ${isThirdTerm ? "<td></td>" : ""}
                 </tr>
             `;

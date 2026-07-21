@@ -438,7 +438,7 @@ nav a{
 
 .card h2{
   font-size:34px;
-  font-family:'IBM Plex Mono', monospace;
+  font-family:'Cairo', 'Segoe UI', Arial, sans-serif; /* pack 21: clean zero (was IBM Plex Mono - dotted 0) */
 }
 
 /* ==========================================
@@ -771,7 +771,7 @@ nav a{
   padding:11px;
   font-size:14px;
   border:1px solid var(--line);
-  font-family:'IBM Plex Mono', monospace;
+  font-family:'Cairo', 'Segoe UI', Arial, sans-serif; /* pack 21: clean zero (was IBM Plex Mono - dotted 0) */
 }
 
 #resultTable tr:nth-child(even){
@@ -829,7 +829,7 @@ nav a{
 #grandTotal{
   font-weight:700;
   color:var(--emerald);
-  font-family:'IBM Plex Mono', monospace;
+  font-family:'Cairo', 'Segoe UI', Arial, sans-serif; /* pack 21: clean zero (was IBM Plex Mono - dotted 0) */
 }
 
 #teacherRemark,

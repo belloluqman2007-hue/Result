@@ -421,6 +421,11 @@
             <div class="form-group">
               <label>Student ID</label>
               <input type="text" id="studentId" onblur="loadStudent()" required>
+              <!-- FIX (pack 21 - "student search not working"): a quick-info
+                   card now appears WHILE typing (photo, name, class, gender,
+                   parent, fee balance) - no more waiting for the field to
+                   lose focus. Filled by js/app.js. -->
+              <div id="studentQuickCard" class="ams-quick-card" style="display:none;"></div>
             </div>
 
             <div class="form-group">

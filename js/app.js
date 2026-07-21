@@ -375,27 +375,100 @@ function editRow(button) {
 }
 
 
-function loadStudent() {
-    let studentId = document.getElementById("studentId").value;
+/* FIX (pack 21 - owner: "student search is not working"): the lookup used
+   to fire only when the box LOST focus (onblur) - on phones that moment
+   often never comes, so it looked broken. Now it fires WHILE TYPING
+   (debounced) and shows a quick-info card: photo, name, admission number,
+   class, gender, date of birth, parent info and the current fee balance.
+   loadStudent() keeps its old name + behaviour for the onblur hook. */
+let amsStudentLookupTimer = null;
 
-    fetch(`/student/${studentId}`)
+function loadStudent() {
+    amsLookupStudent(false);
+}
+
+function amsLookupStudent(fromTyping) {
+    const idEl = document.getElementById("studentId");
+    const card = document.getElementById("studentQuickCard");
+    const studentId = (idEl.value || "").trim();
+    if (!studentId) { if (card) card.style.display = "none"; return; }
+
+    fetch(`/student/${encodeURIComponent(studentId)}`)
     .then(response => response.json())
     .then(data => {
         if (data.length > 0) {
-            document.getElementById("studentName").value =
-            data[0].full_name;
-            document.getElementById("studentClass").value =
-            data[0].class_name;
+            const st = data[0];
+            document.getElementById("studentName").value = st.full_name;
+            document.getElementById("studentClass").value = st.class_name;
             loadSubjects();
+            if (card) amsFillQuickCard(card, st);
         } else {
-            alert("Student not found.");
+            if (card) card.style.display = "none";
+            if (!fromTyping) alert("Student not found.");
         }
     })
-
     .catch(error => {
         console.log(error);
     });
 }
+
+function amsFillQuickCard(card, st) {
+    const esc = v => String(v == null ? "" : v).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+    const row = (label, value) =>
+        `<div class="ams-qc-row"><span>${label}</span><b>${esc(value || "-")}</b></div>`;
+    card.innerHTML =
+        `<div class="ams-qc-head">
+            <img class="ams-qc-photo" alt="" ${st.photo_path ? `src="/${esc(st.photo_path)}"` : "style=\"display:none;\""}>
+            <div>
+                <div class="ams-qc-name">${esc(st.full_name)}</div>
+                <div class="ams-qc-sub">ID: ${esc(st.student_id)} &nbsp;•&nbsp; ${esc(st.gender || "-")}</div>
+            </div>
+         </div>` +
+        row("Class", st.class_name) +
+        row("Date of Birth", st.date_of_birth ? String(st.date_of_birth).slice(0, 10) : "-") +
+        row("Parent", st.parent_name) +
+        row("Parent Phone", st.parent_phone) +
+        `<div class="ams-qc-balance" id="amsQcBalance">Fee balance: checking…</div>`;
+    card.style.display = "block";
+    const img = card.querySelector(".ams-qc-photo");
+    if (img) img.onerror = () => { img.style.display = "none"; };
+
+    // Fee balance for the term/session currently picked on the form
+    // (admin-only API - teachers just see "—" instead of an error).
+    const term = (document.getElementById("term") || {}).value || "";
+    const session = (document.getElementById("session") || {}).value || "";
+    const balEl = document.getElementById("amsQcBalance");
+    if (!balEl) return;
+    if (!term || !session) { balEl.textContent = "Fee balance: pick Term + Session above to see it"; return; }
+    fetch(`/fee-balance-v2?term=${encodeURIComponent(term)}&session=${encodeURIComponent(session)}&student_id=${encodeURIComponent(st.student_id)}`)
+    .then(r => r.ok ? r.json() : [])
+    .then(rows => {
+        if (!Array.isArray(rows) || !rows.length) { balEl.textContent = "Fee balance: no fees set for this term"; return; }
+        const fee = rows.reduce((a, r) => a + Number(r.fee || 0), 0);
+        const paid = rows.reduce((a, r) => a + Number(r.paid || 0), 0);
+        const bal = rows.reduce((a, r) => a + Number(r.balance || 0), 0);
+        balEl.textContent = `${term}, ${session} — Fees: ₦${fee.toLocaleString()} • Paid: ₦${paid.toLocaleString()} • Balance: ₦${bal.toLocaleString()}`;
+    })
+    .catch(() => { balEl.textContent = "Fee balance: —"; });
+}
+
+// Attach the as-you-type search once the DOM is ready (keeps onblur too).
+document.addEventListener("DOMContentLoaded", function () {
+    const idEl = document.getElementById("studentId");
+    if (!idEl) return;
+    idEl.addEventListener("input", function () {
+        clearTimeout(amsStudentLookupTimer);
+        amsStudentLookupTimer = setTimeout(function () { amsLookupStudent(true); }, 500);
+    });
+    // Refresh the balance inside the card when term/session change.
+    ["term", "session"].forEach(function (selId) {
+        const sel = document.getElementById(selId);
+        if (sel) sel.addEventListener("change", function () {
+            const card = document.getElementById("studentQuickCard");
+            if (card && card.style.display !== "none") amsLookupStudent(true);
+        });
+    });
+});
 
 function calculateScore() {
 

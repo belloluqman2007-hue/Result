@@ -246,6 +246,40 @@
     d.setFontSize(11);
     d.setTextColor(15, 61, 46);
     d.text("TOTAL:  Fee " + nairaText(o.totalFee) + "   |   Paid " + nairaText(o.totalPaid) + "   |   Balance " + nairaText(o.totalBalance), M, y + 4);
+    y += 14;
+
+    /* NEW (pack 21 - master list): complete the statement with parent info,
+       every PAYMENT ever recorded (date + receipt reference) and the pupil's
+       passport photo when available. All optional - the original statement
+       renders exactly as before when they are absent. */
+    if (o.parentLine) {
+      d.setFont("helvetica", "normal");
+      d.setFontSize(9);
+      d.setTextColor(95, 107, 98);
+      d.text("Parent: " + o.parentLine, M, y);
+      y += 6;
+    }
+    if (Array.isArray(o.payments) && o.payments.length) {
+      y = table(d, y + 2, [
+        { title: "#", w: 8, align: "center" },
+        { title: "Date", w: 24, align: "center" },
+        { title: "Fee Type", w: 40 },
+        { title: "Amount Paid", w: 26, align: "right" },
+        { title: "Method", w: 24, align: "center" },
+        { title: "Receipt Ref", w: 24, align: "center" }
+      ], o.payments.map(function (p, i) {
+        return [String(i + 1), String(p.date || "-"), String(p.fee_type || "School Fee"),
+                nairaText(p.amount), String(p.method || "-"), "RCP-" + String(p.id).padStart(4, "0")];
+      }), 9);
+    }
+    if (o.photoDataUrl) {
+      try {
+        const pw = 20, ph = 25;
+        d.addImage(o.photoDataUrl, "JPEG", W - M - pw, 42, pw, ph);
+        d.setDrawColor(31, 90, 66);
+        d.rect(W - M - pw, 42, pw, ph);
+      } catch (e) { /* photo failed to embed - statement still complete */ }
+    }
     footer(d, y + 32);
     return d;
   };

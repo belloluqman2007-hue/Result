@@ -15,6 +15,16 @@
 (function () {
     "use strict";
 
+    /* FIX (pack 21 - owner: no more "45.00"): display scores as clean
+       whole numbers (49.7 -> 50). Display-only - database values and the
+       average used for remarks stay exactly as computed. */
+    function amsFmtScore(v) {
+        if (v === null || v === undefined || v === "") return "-";
+        if (v === "-") return "-";
+        const n = Number(v);
+        return isFinite(n) ? String(Math.round(n)) : String(v);
+    }
+
     function esc(str) {
         return String(str == null ? "" : str)
             .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
@@ -107,7 +117,7 @@
                 const secondTotal = result.second_term_total !== null && result.second_term_total !== undefined ? result.second_term_total : "-";
                 const thirdTotal = result.third_term_total;
                 const cumulativeAvg = result.cumulative_average;
-                tableRows += `<tr><td>${esc(result.subject)}</td><td>${firstTotal}</td><td>${secondTotal}</td><td>${thirdTotal}</td><td>${cumulativeAvg !== null && cumulativeAvg !== undefined ? cumulativeAvg : "-"}</td><td>${esc(result.grade)}</td></tr>`;
+                tableRows += `<tr><td>${esc(result.subject)}</td><td>${amsFmtScore(firstTotal)}</td><td>${amsFmtScore(secondTotal)}</td><td>${amsFmtScore(thirdTotal)}</td><td>${cumulativeAvg !== null && cumulativeAvg !== undefined ? amsFmtScore(cumulativeAvg) : "-"}</td><td>${esc(result.grade)}</td></tr>`;
                 if (cumulativeAvg !== null && cumulativeAvg !== undefined) {
                     averagesSum += Number(cumulativeAvg);
                     averagesCount++;
@@ -115,17 +125,17 @@
                 totalScore += Number(thirdTotal);
             });
             average = averagesCount > 0 ? Number((averagesSum / averagesCount).toFixed(2)) : 0;
-            tableRows += `<tr><td colspan="4"><strong>Cumulative Average</strong></td><td><strong>${average}</strong></td><td></td></tr>`;
+            tableRows += `<tr><td colspan="4"><strong>Cumulative Average</strong></td><td><strong>${amsFmtScore(average)}</strong></td><td></td></tr>`;
         } else {
             tableRows += `<tr><th>Subject</th><th>CA</th><th>Exam</th><th>Total</th><th>Grade</th></tr>`;
             data.forEach(result => {
-                tableRows += `<tr><td>${esc(result.subject)}</td><td>${result.ca_score}</td><td>${result.exam_score}</td><td>${result.total}</td><td>${esc(result.grade)}</td></tr>`;
+                tableRows += `<tr><td>${esc(result.subject)}</td><td>${amsFmtScore(result.ca_score)}</td><td>${amsFmtScore(result.exam_score)}</td><td>${amsFmtScore(result.total)}</td><td>${esc(result.grade)}</td></tr>`;
                 totalScore += Number(result.total);
             });
             average = data.length > 0 ? Number((totalScore / data.length).toFixed(2)) : 0;
             // FIX (exact-original parity): the original average row has
             // NO trailing empty cell on 1st/2nd term reports.
-            tableRows += `<tr><td colspan="3"><strong>Average</strong></td><td><strong>${average}</strong></td></tr>`;
+            tableRows += `<tr><td colspan="3"><strong>Average</strong></td><td><strong>${amsFmtScore(average)}</strong></td></tr>`;
         }
 
         // Remarks - identical thresholds and wording to js/result.js
@@ -177,7 +187,7 @@
       <h3>Performance Summary</h3>
       <table class="summary-table">
         <tr><td><strong>Total Subjects</strong></td><td>${data.length}</td></tr>
-        <tr><td><strong>Total Score</strong></td><td>${totalScore}</td></tr>
+        <tr><td><strong>Total Score</strong></td><td>${amsFmtScore(totalScore)}</td></tr>
         <tr><td><strong>Teacher's Remark</strong></td><td>${esc(teacherRemark)}</td></tr>
         <tr><td><strong>Principal's Remark</strong></td><td>${esc(principalRemark)}</td></tr>
       </table>

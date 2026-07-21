@@ -200,7 +200,7 @@
 }
 
 .details .meta{
-  font-family:'IBM Plex Mono', monospace;
+  font-family:'Cairo', 'Segoe UI', Arial, sans-serif; /* pack 21: clean zero (was IBM Plex Mono - dotted 0) */
   font-size:12px;
   font-weight:600;
   color:#fff;
@@ -239,7 +239,7 @@
 }
 
 .issued strong{
-  font-family:'IBM Plex Mono', monospace;
+  font-family:'Cairo', 'Segoe UI', Arial, sans-serif; /* pack 21: clean zero (was IBM Plex Mono - dotted 0) */
   font-size:12px;
   font-weight:700;
   color:#fff;
@@ -254,7 +254,7 @@
   display:flex;
   align-items:center;
   justify-content:center;
-  font-family:'IBM Plex Mono', monospace;
+  font-family:'Cairo', 'Segoe UI', Arial, sans-serif; /* pack 21: clean zero (was IBM Plex Mono - dotted 0) */
   font-size:11px;
   font-weight:800;
   letter-spacing:.5px;

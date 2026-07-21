@@ -3469,6 +3469,7 @@ app.get("/fee-balance-v2", requireLogin, requireAdmin, (req, res) => {
     const term = (req.query.term || "").trim();
     const session = (req.query.session || "").trim();
     const className = (req.query.class_name || "").trim();
+    const studentId = (req.query.student_id || "").trim(); // NEW (pack 21): dashboard quick card asks for ONE student
     if (!term || !session) return res.status(400).json({ message: "term and session are required." });
     let sql = `
         SELECT s.student_id, s.full_name, s.class_name,
@@ -3484,7 +3485,10 @@ app.get("/fee-balance-v2", requireLogin, requireAdmin, (req, res) => {
                ON p.student_id = s.student_id AND p.fee_type = fs.fee_type
     `;
     const params = [term, session, term, session];
-    if (className) { sql += " WHERE s.class_name = ?"; params.push(className); }
+    const wh2 = [];
+    if (className) { wh2.push("s.class_name = ?"); params.push(className); }
+    if (studentId) { wh2.push("s.student_id = ?"); params.push(studentId); } // NEW (pack 21)
+    if (wh2.length) sql += " WHERE " + wh2.join(" AND ");
     sql += " ORDER BY s.class_name, s.full_name, fs.fee_type";
     connection.query(sql, params, (err, rows) => {
         if (err) { console.log(err); return res.status(500).json({ message: "Database error" }); }
