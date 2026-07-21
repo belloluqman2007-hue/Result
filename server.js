@@ -893,6 +893,52 @@ function pack22Retry(attempt, err) {
 }
 runPack22Migrations(1);
 
+/* ------------------------------------------------------------------
+   NEW (pack 23 - owner requests): messaging (parent<->teacher,
+   parent<->school), portal + staff SETTINGS, teacher->class
+   assignment, friendly receipt view. Guarded + idempotent, additive.
+------------------------------------------------------------------ */
+function runPack23Migrations() {
+    const conn = addonConnection();
+    conn.connect((err) => {
+        if (err) { conn.destroy(); return setTimeout(runPack23Migrations, 4000); }
+        const steps = [
+            // Parent<->school message thread table (+ read_at drives notifications).
+            `CREATE TABLE IF NOT EXISTS messages (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                sender_type VARCHAR(8) NOT NULL,
+                sender_ref VARCHAR(64) NOT NULL,
+                sender_name VARCHAR(160) DEFAULT '',
+                recipient_type VARCHAR(8) NOT NULL,
+                recipient_ref VARCHAR(64) DEFAULT '',
+                recipient_class VARCHAR(120) DEFAULT '',
+                body TEXT NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                read_at TIMESTAMP NULL DEFAULT NULL
+            )`,
+            // Which teacher teaches which class. Empty table = every teacher
+            // sees all parent messages (safe default - nothing gets hidden).
+            `CREATE TABLE IF NOT EXISTS teacher_classes (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                username VARCHAR(64) NOT NULL,
+                class_name VARCHAR(120) NOT NULL,
+                UNIQUE KEY tc_uniq (username, class_name)
+            )`,
+            // Optional portal password: when set it REPLACES the surname login.
+            "ALTER TABLE students ADD COLUMN portal_password VARCHAR(255) NULL"
+        ];
+        let i = 0;
+        (function next() {
+            if (i >= steps.length) { conn.end(); console.log("Pack 23 setup ready (messages, settings, teacher classes)."); return; }
+            conn.query(steps[i++], (qErr) => {
+                if (qErr && qErr.code !== "ER_DUP_FIELDNAME") console.log("Pack 23 migration notice:", qErr.code || qErr.message);
+                next();
+            });
+        })();
+    });
+}
+runPack23Migrations();
+
 // Rebuild every missing upload file that HAS a database copy (runs once
 // at boot; the request-time middleware covers anything saved later).
 function hydrateUploadedImages() {
@@ -2060,6 +2106,323 @@ app.get("/portal/exams", (req, res) => {
     );
 });
 
+/* =====================================================================
+   NEW (pack 23): PORTAL SETTINGS - change password + contact details.
+===================================================================== */
+app.post("/portal/change-password", (req, res) => {
+    const sid = req.session && req.session.portalStudentId;
+    if (!sid) return res.status(401).json({ message: "Not logged in" });
+    const current = String(req.body.current || "");
+    const nextPw  = String(req.body.newPassword || "");
+    if (!current || nextPw.length < 4) {
+        return res.status(400).json({ message: "New password must be at least 4 characters." });
+    }
+    connection.query("SELECT * FROM students WHERE student_id = ? LIMIT 1", [sid], (err, rows) => {
+        if (err || !rows.length) return res.status(500).json({ message: "Database error" });
+        const st = rows[0];
+        const setNew = () => {
+            bcrypt.hash(nextPw, 10, (hErr, hash) => {
+                if (hErr) return res.status(500).json({ message: "Could not set password" });
+                connection.query(
+                    "UPDATE students SET portal_password = ? WHERE student_id = ?",
+                    [hash, sid],
+                    (uErr) => {
+                        if (uErr) return res.status(500).json({ message: "Database error" });
+                        res.json({ message: "Password changed. Use it next time you log in." });
+                    }
+                );
+            });
+        };
+        // Verify the CURRENT one first: custom hash if set, else legacy surname rule.
+        if (st.portal_password) {
+            return bcrypt.compare(current, st.portal_password, (cErr, match) => {
+                if (cErr || !match) return res.status(401).json({ message: "Current password is wrong." });
+                setNew();
+            });
+        }
+        const fullName = (st.full_name || "").trim();
+        const surname  = fullName ? fullName.split(/\s+/).pop() : "";
+        const ok = current.toLowerCase() === surname.toLowerCase()
+                || current.toLowerCase() === fullName.toLowerCase();
+        if (!ok) return res.status(401).json({ message: "Current password (surname) is wrong." });
+        setNew();
+    });
+});
+
+app.post("/portal/profile", (req, res) => {
+    const sid = req.session && req.session.portalStudentId;
+    if (!sid) return res.status(401).json({ message: "Not logged in" });
+    // Only the contact fields a parent may correct - nothing academic.
+    connection.query(
+        "UPDATE students SET parent_name = ?, parent_phone = ?, address = ? WHERE student_id = ?",
+        [String(req.body.parent_name || "").slice(0, 160), String(req.body.parent_phone || "").slice(0, 40), String(req.body.address || "").slice(0, 255), sid],
+        (err) => {
+            if (err) return res.status(500).json({ message: "Database error" });
+            res.json({ message: "Details saved." });
+        }
+    );
+});
+
+/* =====================================================================
+   NEW (pack 23 - owner: "View takes me to a blank page - fix that"):
+   friendly receipt viewer for school-recorded payments. If the file or
+   its database copy is missing, the parent sees a clear message instead
+   of a blank tab.
+===================================================================== */
+app.get("/portal/receipt/:id", (req, res) => {
+    const sid = req.session && req.session.portalStudentId;
+    if (!sid) return res.status(401).send("Not logged in");
+    const friendly = (title, msg) => res.status(200).send(
+        "<!DOCTYPE html><html><head><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'>" +
+        "<title>Receipt</title><style>body{font-family:Arial,sans-serif;background:#f4f7f5;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;}" +
+        ".card{background:#fff;border-radius:14px;padding:28px 24px;max-width:340px;text-align:center;box-shadow:0 8px 24px rgba(0,0,0,.08);}" +
+        "h2{color:#14532d;margin:0 0 8px;font-size:18px;}p{color:#5B6B62;font-size:14px;line-height:1.5;margin:0;}</style></head>" +
+        "<body><div class='card'><h2>" + title + "</h2><p>" + msg + "</p></div></body></html>"
+    );
+    connection.query("SELECT receipt_path, receipt_data FROM fee_payments WHERE id = ? AND student_id = ? LIMIT 1", [req.params.id, sid], (err, rows) => {
+        if (err) return res.status(500).send("Database error");
+        if (!rows.length) return friendly("Not found", "This payment does not belong to your child.");
+        const pay = rows[0];
+        if (!pay.receipt_path) return friendly("No receipt yet", "The school has not snapped the receipt for this payment yet. Please check back later or ask at the office.");
+        const rel = String(pay.receipt_path).replace(/^\/+/, "");
+        const abs = path.join(__dirname, rel);
+        if (fs.existsSync(abs)) return res.sendFile(abs);
+        // File wiped by the host? Rebuild it from the pack-20 database copy.
+        if (pay.receipt_data) {
+            try {
+                fs.mkdirSync(path.dirname(abs), { recursive: true });
+                fs.writeFileSync(abs, pay.receipt_data);
+                return res.sendFile(abs);
+            } catch (e) { /* fall through to friendly note */ }
+        }
+        return friendly("Receipt unavailable", "This receipt was recorded before photo-backup started, so the picture is no longer on the server. The PAYMENT itself is safely recorded - the school can re-snap the receipt at the office if you need the image.");
+    });
+});
+
+/* =====================================================================
+   NEW (pack 23): MESSAGING + NOTIFICATIONS
+   Parent/Student <-> Class Teacher, Parent/Student <-> Administration.
+   read_at = NULL drives the unread badges (the "notifications").
+===================================================================== */
+
+// ---- PORTAL side ----
+app.get("/portal/messages", (req, res) => {
+    const sid = req.session && req.session.portalStudentId;
+    if (!sid) return res.status(401).json({ message: "Not logged in" });
+    connection.query(
+        `SELECT id, sender_type, sender_ref, sender_name, recipient_type, recipient_ref, recipient_class, body, created_at, read_at
+         FROM messages
+         WHERE (sender_type = 'portal' AND sender_ref = ?)
+            OR (recipient_type = 'parent' AND recipient_ref = ?)
+         ORDER BY created_at ASC LIMIT 300`,
+        [sid, sid],
+        (err, rows) => {
+            if (err) { if (err.code === "ER_NO_SUCH_TABLE") return res.json([]); return res.status(500).json({ message: "Database error" }); }
+            res.json(rows);
+        }
+    );
+});
+
+app.get("/portal/messages/unread", (req, res) => {
+    const sid = req.session && req.session.portalStudentId;
+    if (!sid) return res.status(401).json({ message: "Not logged in" });
+    connection.query(
+        "SELECT COUNT(*) AS c FROM messages WHERE recipient_type = 'parent' AND recipient_ref = ? AND read_at IS NULL",
+        [sid],
+        (err, rows) => {
+            if (err) { if (err.code === "ER_NO_SUCH_TABLE") return res.json({ count: 0 }); return res.status(500).json({ message: "Database error" }); }
+            res.json({ count: rows[0].c });
+        }
+    );
+});
+
+app.post("/portal/messages", (req, res) => {
+    const sid = req.session && req.session.portalStudentId;
+    if (!sid) return res.status(401).json({ message: "Not logged in" });
+    const to = req.body.to === "teacher" ? "teacher" : "admin";
+    const body = String(req.body.body || "").trim().slice(0, 2000);
+    if (!body) return res.status(400).json({ message: "Write a message first." });
+    connection.query("SELECT full_name, class_name FROM students WHERE student_id = ? LIMIT 1", [sid], (err, stu) => {
+        if (err || !stu.length) return res.status(500).json({ message: "Database error" });
+        const student = stu[0];
+        connection.query(
+            `INSERT INTO messages (sender_type, sender_ref, sender_name, recipient_type, recipient_ref, recipient_class, body)
+             VALUES ('portal', ?, ?, ?, '', ?, ?)`,
+            [sid, (student.full_name || sid) + " (parent)", to, to === "teacher" ? (student.class_name || "") : "", body],
+            (iErr) => {
+                if (iErr) return res.status(500).json({ message: "Database error" });
+                res.json({ message: "Message sent to the " + (to === "teacher" ? "class teacher" : "school office") + "." });
+            }
+        );
+    });
+});
+
+app.post("/portal/messages/read", (req, res) => {
+    const sid = req.session && req.session.portalStudentId;
+    if (!sid) return res.status(401).json({ message: "Not logged in" });
+    connection.query(
+        "UPDATE messages SET read_at = NOW() WHERE recipient_type = 'parent' AND recipient_ref = ? AND read_at IS NULL",
+        [sid],
+        () => res.json({ message: "ok" })
+    );
+});
+
+// ---- STAFF side ----
+// Which messages may this staff member see?
+function staffMessageFilter(req, cb) {
+    const me = req.session.username;
+    const isAdmin = req.session.role === "admin";
+    if (isAdmin) return cb(null, null); // admins see everything school-bound
+    connection.query("SELECT class_name FROM teacher_classes WHERE username = ?", [me], (err, rows) => {
+        if (err) return cb(null, []); // table missing early on -> treat as "sees all"
+        cb(null, (rows || []).map(r => r.class_name));
+    });
+}
+
+app.get("/api/messages", requireLogin, (req, res) => {
+    const me = req.session.username;
+    const isAdmin = req.session.role === "admin";
+    staffMessageFilter(req, (fErr, myClasses) => {
+        connection.query(
+            `SELECT id, sender_type, sender_ref, sender_name, recipient_type, recipient_ref, recipient_class, body, created_at, read_at
+             FROM messages ORDER BY created_at DESC LIMIT 400`,
+            (err, rows) => {
+                if (err) { if (err.code === "ER_NO_SUCH_TABLE") return res.json([]); return res.status(500).json({ message: "Database error" }); }
+                const mine = (rows || []).filter(m => {
+                    if (m.sender_type === "staff" && m.sender_ref === me) return true; // my own replies
+                    if (m.sender_type !== "portal") return false;                      // other staff's threads
+                    if (isAdmin) return true;                                          // admin sees all parent mail
+                    // teacher: parent mail bound for teachers; honour class mapping,
+                    // empty mapping = see all (nothing ever hidden by accident).
+                    if (m.recipient_type === "teacher") {
+                        if (!myClasses || !myClasses.length) return true;
+                        return myClasses.indexOf(m.recipient_class) !== -1;
+                    }
+                    return false;
+                });
+                res.json(mine);
+            }
+        );
+    });
+});
+
+app.get("/api/messages/unread", requireLogin, (req, res) => {
+    const me = req.session.username;
+    const isAdmin = req.session.role === "admin";
+    staffMessageFilter(req, (fErr, myClasses) => {
+        connection.query(
+            `SELECT recipient_type, recipient_class FROM messages
+             WHERE sender_type = 'portal' AND read_at IS NULL`, // only unread INCOMING parent mail
+            (err, rows) => {
+                if (err) { if (err.code === "ER_NO_SUCH_TABLE") return res.json({ count: 0 }); return res.status(500).json({ message: "Database error" }); }
+                const count = (rows || []).filter(m => {
+                    if (isAdmin) return true;
+                    if (m.recipient_type === "teacher") {
+                        if (!myClasses || !myClasses.length) return true;
+                        return myClasses.indexOf(m.recipient_class) !== -1;
+                    }
+                    return false;
+                }).length;
+                res.json({ count });
+            }
+        );
+    });
+});
+
+app.post("/api/messages", requireLogin, (req, res) => {
+    const me = req.session.username;
+    const studentId = String(req.body.student_id || "").trim();
+    const body = String(req.body.body || "").trim().slice(0, 2000);
+    if (!studentId || !body) return res.status(400).json({ message: "Student and message are required." });
+    connection.query("SELECT full_name FROM students WHERE student_id = ? LIMIT 1", [studentId], (err, stu) => {
+        if (err) return res.status(500).json({ message: "Database error" });
+        if (!stu.length) return res.status(404).json({ message: "No student with that ID - check it and try again." });
+        connection.query(
+            `INSERT INTO messages (sender_type, sender_ref, sender_name, recipient_type, recipient_ref, recipient_class, body)
+             VALUES ('staff', ?, ?, 'parent', ?, '', ?)`,
+            [me, me + " (" + req.session.role + ")", studentId, body],
+            (iErr) => {
+                if (iErr) return res.status(500).json({ message: "Database error" });
+                res.json({ message: "Reply sent to the parent." });
+            }
+        );
+    });
+});
+
+app.post("/api/messages/read", requireLogin, (req, res) => {
+    const me = req.session.username;
+    const isAdmin = req.session.role === "admin";
+    staffMessageFilter(req, (fErr, myClasses) => {
+        connection.query(
+            `SELECT id, recipient_type, recipient_class FROM messages WHERE sender_type = 'portal' AND read_at IS NULL`,
+            (err, rows) => {
+                if (err) return res.json({ message: "ok" });
+                const ids = (rows || []).filter(m => {
+                    if (isAdmin) return true;
+                    if (m.recipient_type === "teacher") {
+                        if (!myClasses || !myClasses.length) return true;
+                        return myClasses.indexOf(m.recipient_class) !== -1;
+                    }
+                    return false;
+                }).map(m => m.id);
+                if (!ids.length) return res.json({ message: "ok" });
+                connection.query("UPDATE messages SET read_at = NOW() WHERE id IN (" + ids.join(",") + ")", () => res.json({ message: "ok" }));
+            }
+        );
+    });
+});
+
+/* NEW (pack 23): STAFF SETTINGS - change own password (teachers too). */
+app.post("/api/change-password", requireLogin, (req, res) => {
+    const current = String(req.body.current || "");
+    const nextPw  = String(req.body.newPassword || "");
+    if (!current || nextPw.length < 4) {
+        return res.status(400).json({ message: "New password must be at least 4 characters." });
+    }
+    connection.query("SELECT * FROM users WHERE username = ?", [req.session.username], (err, rows) => {
+        if (err || !rows.length) return res.status(500).json({ message: "Database error" });
+        bcrypt.compare(current, rows[0].password_hash, (cErr, match) => {
+            if (cErr || !match) return res.status(401).json({ message: "Current password is wrong." });
+            bcrypt.hash(nextPw, 10, (hErr, hash) => {
+                if (hErr) return res.status(500).json({ message: "Could not set password" });
+                connection.query("UPDATE users SET password_hash = ? WHERE username = ?", [hash, req.session.username], (uErr) => {
+                    if (uErr) return res.status(500).json({ message: "Database error" });
+                    res.json({ message: "Password changed. Use it next time you log in." });
+                });
+            });
+        });
+    });
+});
+
+/* NEW (pack 23): teacher -> class assignment (admin, for Messages routing). */
+app.get("/api/teacher-classes", requireLogin, requireAdmin, (req, res) => {
+    connection.query("SELECT id, username, class_name FROM teacher_classes ORDER BY username, class_name", (err, rows) => {
+        if (err) { if (err.code === "ER_NO_SUCH_TABLE") return res.json([]); return res.status(500).json({ message: "Database error" }); }
+        res.json(rows);
+    });
+});
+
+app.post("/api/teacher-classes", requireLogin, requireAdmin, (req, res) => {
+    const username = String(req.body.username || "").trim();
+    const className = String(req.body.class_name || "").trim();
+    if (!username || !className) return res.status(400).json({ message: "Teacher and class are required." });
+    connection.query(
+        "INSERT IGNORE INTO teacher_classes (username, class_name) VALUES (?, ?)",
+        [username, className],
+        (err) => {
+            if (err) return res.status(500).json({ message: "Database error" });
+            res.json({ message: "Assigned." });
+        }
+    );
+});
+
+app.delete("/api/teacher-classes/:id", requireLogin, requireAdmin, (req, res) => {
+    connection.query("DELETE FROM teacher_classes WHERE id = ?", [req.params.id], (err) => {
+        if (err) return res.status(500).json({ message: "Database error" });
+        res.json({ message: "Removed." });
+    });
+});
+
 app.get("/exams", requireLogin, (req, res) => {
     connection.query(
         "SELECT id, title, class_name, subject, term, session, updated_at FROM exams ORDER BY updated_at DESC",
@@ -2944,21 +3307,33 @@ app.post("/portal-login", (req, res) => {
         const st = rows[0];
         const fullName = (st.full_name || "").trim();
         const surname  = fullName ? fullName.split(/\s+/).pop() : "";
+        const sendOk = () => {
+            req.session.portalStudentId = st.student_id;
+            res.json({
+                message: "Login successful",
+                student: {
+                    student_id: st.student_id,
+                    full_name: st.full_name,
+                    class_name: st.class_name,
+                    gender: st.gender,
+                    date_of_birth: st.date_of_birth,
+                    photo_path: st.photo_path
+                }
+            });
+        };
+        // NEW (pack 23): if the family set their own password in portal
+        // Settings, it REPLACES the surname rule. Legacy login unchanged
+        // for everyone who has not set one yet.
+        if (st.portal_password) {
+            return bcrypt.compare(password, st.portal_password, (err, match) => {
+                if (err || !match) return res.status(401).json({ message: "Invalid Student ID or password" });
+                sendOk();
+            });
+        }
         const ok = password.toLowerCase() === surname.toLowerCase()
                 || password.toLowerCase() === fullName.toLowerCase();
         if (!ok) return res.status(401).json({ message: "Invalid Student ID or surname" });
-        req.session.portalStudentId = st.student_id;
-        res.json({
-            message: "Login successful",
-            student: {
-                student_id: st.student_id,
-                full_name: st.full_name,
-                class_name: st.class_name,
-                gender: st.gender,
-                date_of_birth: st.date_of_birth,
-                photo_path: st.photo_path
-            }
-        });
+        sendOk();
     });
 });
 

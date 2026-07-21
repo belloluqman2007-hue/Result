@@ -28,6 +28,7 @@ function initUsers() {
     document.getElementById("customRoleWrap").style.display = sel.value === "__custom" ? "grid" : "none";
   });
   loadUsers();
+  tcInit(); // NEW (pack 23): teacher-class assignments for Messages
 }
 
 function createUser() {
@@ -133,4 +134,73 @@ function loadUsers() {
     .catch(function () {
       tbody.innerHTML = '<tr><td colspan="3" style="text-align:center; color:#B3261E;">Could not load users (admin account required).</td></tr>';
     });
+}
+
+/* ==========================================================================
+   NEW (pack 23 - Messages routing): assign teachers to classes so
+   Parent -> Class Teacher messages land in the right teacher's inbox.
+   Safe default in the server: a teacher with NO assignments still sees
+   every parent message, so nothing can be hidden by a missing row here.
+   ========================================================================== */
+function tcInit() {
+  var tSel = document.getElementById("tcTeacher");
+  var cSel = document.getElementById("tcClass");
+  if (!tSel || !cSel) return;
+
+  fetch("/users").then(function (r) { return r.ok ? r.json() : []; }).then(function (rows) {
+    var teachers = (Array.isArray(rows) ? rows : []).filter(function (u) { return u.role !== "admin"; });
+    tSel.innerHTML = teachers.length
+      ? teachers.map(function (u) { return '<option value="' + u.username + '">' + u.username + " (" + u.role + ")</option>"; }).join("")
+      : '<option value="">No teachers yet</option>';
+  }).catch(function () {});
+
+  fetch("/classes").then(function (r) { return r.ok ? r.json() : []; }).then(function (rows) {
+    var classes = Array.isArray(rows) ? rows : [];
+    cSel.innerHTML = classes.length
+      ? classes.map(function (c) { var n = c.class_name || c; return '<option value="' + n + '">' + n + "</option>"; }).join("")
+      : '<option value="">No classes yet</option>';
+  }).catch(function () {});
+
+  tcLoad();
+}
+
+function tcLoad() {
+  var box = document.getElementById("tcList");
+  if (!box) return;
+  fetch("/api/teacher-classes").then(function (r) { return r.ok ? r.json() : []; }).then(function (rows) {
+    rows = Array.isArray(rows) ? rows : [];
+    if (!rows.length) {
+      box.innerHTML = '<span style="color:#93a19a; font-size:13px;">No assignments yet - every teacher currently sees ALL parent messages.</span>';
+      return;
+    }
+    box.innerHTML = '<table class="mg-table"><thead><tr><th>Teacher</th><th>Class</th><th></th></tr></thead><tbody>' +
+      rows.map(function (r) {
+        return "<tr><td><b>" + r.username + "</b></td><td>" + r.class_name + "</td>" +
+          '<td><button class="mg-btn-light" type="button" onclick="tcRemove(' + r.id + ')">&#10005; Remove</button></td></tr>';
+      }).join("") + "</tbody></table>";
+  }).catch(function () {});
+}
+
+function tcAssign() {
+  var username = document.getElementById("tcTeacher").value;
+  var className = document.getElementById("tcClass").value;
+  if (!username || !className) { usrNotify("Pick a teacher and a class.", false); return; }
+  fetch("/api/teacher-classes", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ username: username, class_name: className })
+  })
+    .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, d: d }; }); })
+    .then(function (res) {
+      usrNotify(res.d.message || "", res.ok);
+      if (res.ok) tcLoad();
+    })
+    .catch(function () { usrNotify("Network error.", false); });
+}
+
+function tcRemove(id) {
+  fetch("/api/teacher-classes/" + id, { method: "DELETE" })
+    .then(function (r) { return r.json(); })
+    .then(function (d) { usrNotify(d.message || "Removed.", true); tcLoad(); })
+    .catch(function () { usrNotify("Network error.", false); });
 }

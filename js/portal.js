@@ -52,6 +52,8 @@
       loadMySubs();      // NEW (pack 15)
       loadPortalNotices(); // NEW (pack 22): announcements for parents/students
       loadPortalExams();   // NEW (pack 22): exam timetable for this class
+      loadPortalMessages(); // NEW (pack 23): two-way messaging with the school
+      ptPrefillSettings(student); // NEW (pack 23): Settings card prefill
       loadCalendar();    // NEW (pack 15)
     })
     .catch(goLogin);
@@ -295,8 +297,12 @@ function loadMyPayments() {
       rows.forEach(function (p) {
         var dt = p.created_at ? String(p.created_at).slice(0, 10) : "-";
         var label = esc(p.fee_type || "School Fee") + ' <small style="color:#5B6B62;">' + esc(dt) + (p.method ? " \u00B7 " + esc(p.method) : "") + "</small>";
+        // FIX (pack 23 - owner: "the View takes me to a blank page"): open
+        // the friendly receipt viewer instead of the raw file URL. Old
+        // receipts whose photo is gone now show a clear explanation page,
+        // never a blank tab.
         var rec = p.receipt_path
-          ? '<a href="/' + encodeURI(p.receipt_path) + '" target="_blank" rel="noopener" style="font-weight:800; color:#0d6b4f;">\u{1F9FE} View</a>'
+          ? '<a href="/portal/receipt/' + encodeURIComponent(p.id) + '" target="_blank" rel="noopener" style="font-weight:800; color:#0d6b4f;">\u{1F9FE} View</a>'
           : '<span style="color:#93a19a;" title="The school has not snapped the receipt yet">-</span>';
         html += '<div class="pt-fee-row"><span>' + label + '</span>' +
                 '<span class="pt-right">' + ptNaira(p.amount) + '</span>' +
@@ -493,3 +499,156 @@ document.getElementById("ptCalPdfBtn").addEventListener("click", function () {
     btn.textContent = "\u{2B07} Download PDF";
   });
 });
+
+/* ==========================================================================
+   NEW (pack 23 - owner requests):
+     1. MESSAGES: parent <-> class teacher, parent <-> school administration
+     2. NOTIFICATIONS: bell badge = unread replies from the school
+     3. SETTINGS: change portal password + update contact details
+   All backend calls are new, guarded routes; nothing existing removed.
+   ========================================================================== */
+
+/* ---- settings: prefill the contact form from the school register ---- */
+function ptPrefillSettings(st) {
+  if (!st) return;
+  var n = document.getElementById("ptParentName");
+  var p = document.getElementById("ptParentPhone");
+  var a = document.getElementById("ptAddress");
+  if (n) n.value = st.parent_name || "";
+  if (p) p.value = st.parent_phone || "";
+  if (a) a.value = st.address || "";
+}
+
+/* ------------------------- MESSAGES UI ------------------------------ */
+function ptRenderMessages(rows) {
+  var box = document.getElementById("ptMsgs");
+  if (!box) return;
+  if (!rows.length) {
+    box.innerHTML = '<div class="pt-empty">No messages yet. Say salam below - the school replies right here.</div>';
+    return;
+  }
+  box.innerHTML = rows.map(function (m) {
+    var mine = m.sender_type === "portal";
+    var who = mine ? "You" : (m.sender_name || "School");
+    var when = String(m.created_at || "").replace("T", " ").slice(0, 16);
+    return '<div style="display:flex; justify-content:' + (mine ? "flex-end" : "flex-start") + "; margin:6px 0;\">" +
+      '<div style="max-width:82%; padding:8px 12px; border-radius:14px; ' +
+      (mine
+        ? "background:#14532d; color:#fff; border-bottom-right-radius:4px;"
+        : "background:#eef4ef; color:#1f2d26; border:1px solid #d7e0da; border-bottom-left-radius:4px;") + '">' +
+      '<div style="font-size:11px; opacity:.75; font-weight:700;">' + esc(who) + " · " + esc(when) + "</div>" +
+      '<div style="font-size:14px; line-height:1.45; white-space:pre-wrap;">' + esc(m.body) + "</div>" +
+      "</div></div>";
+  }).join("");
+}
+
+function loadPortalMessages() {
+  fetch("/portal/messages")
+    .then(function (r) { return r.ok ? r.json() : []; })
+    .then(function (rows) {
+      ptRenderMessages(Array.isArray(rows) ? rows : []);
+      // everything on screen counts as read -> then refresh the bell
+      return fetch("/portal/messages/read", { method: "POST" });
+    })
+    .then(function () { ptRefreshUnread(); })
+    .catch(function () { /* keep old view */ });
+}
+
+var ptMsgSending = false;
+function ptSendMessage(ev) {
+  ev.preventDefault();
+  if (ptMsgSending) return;
+  var toSel = document.getElementById("ptMsgTo");
+  var bodyEl = document.getElementById("ptMsgBody");
+  var note = document.getElementById("ptMsgNote");
+  var body = (bodyEl.value || "").trim();
+  if (!body) return;
+  ptMsgSending = true;
+  fetch("/portal/messages", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ to: toSel.value, body: body })
+  })
+    .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, d: d }; }); })
+    .then(function (res) {
+      if (note) { note.textContent = res.d.message || (res.ok ? "Sent." : "Could not send."); note.style.color = res.ok ? "#14532d" : "#C0392B"; }
+      if (res.ok) { bodyEl.value = ""; loadPortalMessages(); }
+    })
+    .catch(function () { if (note) { note.textContent = "Network error - try again."; note.style.color = "#C0392B"; } })
+    .finally(function () { ptMsgSending = false; });
+}
+
+/* --------------------- NOTIFICATIONS (bell) ------------------------- */
+function ptRefreshUnread() {
+  var badge = document.getElementById("ptBellBadge");
+  if (!badge) return;
+  fetch("/portal/messages/unread")
+    .then(function (r) { return r.ok ? r.json() : { count: 0 }; })
+    .then(function (d) {
+      var c = d && d.count ? d.count : 0;
+      badge.style.display = c > 0 ? "inline-block" : "none";
+      badge.textContent = c > 9 ? "9+" : String(c);
+    })
+    .catch(function () { /* keep old badge */ });
+}
+
+/* ------------------------- SETTINGS forms --------------------------- */
+function ptWireSettings() {
+  var pwForm = document.getElementById("ptPwForm");
+  var contactForm = document.getElementById("ptContactForm");
+  var note = document.getElementById("ptSettingsNote");
+
+  if (pwForm) pwForm.addEventListener("submit", function (ev) {
+    ev.preventDefault();
+    var cur = document.getElementById("ptPwCurrent").value;
+    var n1 = document.getElementById("ptPwNew").value;
+    var n2 = document.getElementById("ptPwNew2").value;
+    if (n1 !== n2) { if (note) { note.textContent = "The two new passwords do not match."; note.style.color = "#C0392B"; } return; }
+    fetch("/portal/change-password", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ current: cur, newPassword: n1 })
+    })
+      .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, d: d }; }); })
+      .then(function (res) {
+        if (note) { note.textContent = res.d.message || ""; note.style.color = res.ok ? "#14532d" : "#C0392B"; }
+        if (res.ok) pwForm.reset();
+      })
+      .catch(function () { if (note) { note.textContent = "Network error - try again."; note.style.color = "#C0392B"; } });
+  });
+
+  if (contactForm) contactForm.addEventListener("submit", function (ev) {
+    ev.preventDefault();
+    fetch("/portal/profile", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        parent_name: document.getElementById("ptParentName").value,
+        parent_phone: document.getElementById("ptParentPhone").value,
+        address: document.getElementById("ptAddress").value
+      })
+    })
+      .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, d: d }; }); })
+      .then(function (res) {
+        if (note) { note.textContent = res.d.message || ""; note.style.color = res.ok ? "#14532d" : "#C0392B"; }
+      })
+      .catch(function () { if (note) { note.textContent = "Network error - try again."; note.style.color = "#C0392B"; } });
+  });
+}
+
+/* Boot the pack-23 widgets (DOM is ready - this script loads last). */
+(function ptPack23Boot() {
+  var msgForm = document.getElementById("ptMsgForm");
+  if (msgForm) msgForm.addEventListener("submit", ptSendMessage);
+  var bell = document.getElementById("ptBellBtn");
+  if (bell) bell.addEventListener("click", function () {
+    var card = document.getElementById("ptMsgCard");
+    if (card) card.scrollIntoView({ behavior: "smooth", block: "start" });
+    loadPortalMessages(); // shows + marks read
+  });
+  ptWireSettings();
+  ptRefreshUnread();
+  // gentle poll so a new school reply lights the bell even while the
+  // parent is on another card (the "notifications" the owner asked for).
+  setInterval(ptRefreshUnread, 60000);
+})();

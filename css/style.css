@@ -782,17 +782,18 @@ nav a{
   background:var(--gold-pale);
 }
 
-/* CHANGED (pack 21 - owner: "let the Arabic font be more clear"):
-   the subject column holds ARABIC subject names - Amiri (a real Arabic
-   naskh face) with a larger size reads the harakat far better than
-   Cairo at 14px. VISUAL ONLY - data unchanged. */
+/* CHANGED (pack 23 - owner: "Return the results to the previous one and
+   just change the font - before it was one page, now it is two pages"):
+   the pack-22 bigger size/line-height overrode the compact @media print
+   rule (higher specificity) and pushed the report onto a 2nd page.
+   Now ONLY the font family changes (Amiri = clear Arabic); size, padding
+   and line-height are back to the previous one-page values everywhere,
+   on screen AND in print. Data untouched. */
 #resultTable td:first-child{
   text-align:left;
   font-weight:700;
   color:var(--emerald);
   font-family:'Amiri','Cairo',serif;
-  font-size:19px;
-  line-height:1.6;
 }
 
 /* Performance summary */

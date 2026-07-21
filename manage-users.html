@@ -79,6 +79,27 @@
         </div>
         <p class="mg-note">Reset password sets a brand-new password for that user. You cannot delete your own account.</p>
       </div>
+
+      <!-- NEW (pack 23 - Messages routing): assign each teacher their
+           class(es) so Parent -> Class Teacher messages reach the right
+           teacher. Teachers with NO assignment still see every parent
+           message (safe default - nothing ever hidden). -->
+      <div class="mg-card">
+        <h3>&#128101; Class Teacher Assignments</h3>
+        <p class="mg-note" style="margin-top:0;">Used by the new Messages feature: parents write to "Class Teacher" and it shows for the teacher of that class.</p>
+        <div class="mg-form-grid">
+          <div class="mg-field">
+            <label for="tcTeacher">Teacher</label>
+            <select id="tcTeacher"></select>
+          </div>
+          <div class="mg-field">
+            <label for="tcClass">Class</label>
+            <select id="tcClass"></select>
+          </div>
+        </div>
+        <button class="mg-btn" type="button" onclick="tcAssign()">&#10133; Assign Teacher to Class</button>
+        <div id="tcList" style="margin-top:12px;"></div>
+      </div>
     </div>
 
     <div class="mg-msg" id="usrMsg"></div>

@@ -4,6 +4,67 @@
 
 ---
 
+## Pack 23 — 2026-07-21
+
+Owner requests:
+1. "Return the results to the previous one and just change the font. Before it was one page, now it is two pages - fix that."
+2. "Add settings to the student parent portal where they can change password and other necessary things."
+3. "Add Messages: Parent ↔ Teacher, Parent ↔ School administration. Notifications."
+4. "Add settings for teacher also."
+5. "Fix the exam that is not displaying the other pages except first page if downloaded. I don't want any problem from the exam again."
+6. "In student parent portal, payment recorded by school - the View takes me to a blank page, fix that."
+
+Changes (all commented in code, additive, backward compatible):
+
+- CHANGED (css/style.css): `#resultTable td:first-child` — pack-22's 19px/1.6
+  sizing is REVERTED (it overrode the compact print rule with higher
+  specificity and pushed the report to 2 pages). Only the font **family**
+  changes (Amiri for clear Arabic). Screen = previous 14px, print =
+  previous 12px/1.3 → **one A4 page again**. Verified via printed PDF.
+- NEW (server.js): `runPack23Migrations()` — `messages` table,
+  `teacher_classes(username, class_name)`, `students.portal_password`.
+- NEW (server.js): portal-login — if a family set their own password in
+  Settings it REPLACES the surname rule; legacy login unchanged otherwise.
+- NEW (server.js): `POST /portal/change-password` (verifies current —
+  custom hash or legacy surname), `POST /portal/profile` (parent name,
+  phone, address), `POST /api/change-password` (staff/teachers).
+- NEW (server.js): messaging — `GET/POST /portal/messages`,
+  `/portal/messages/unread`, `/portal/messages/read`; staff mirrors
+  `GET/POST /api/messages`, `/api/messages/unread`, `/api/messages/read`.
+  Parent messages address "admin" (office) or "teacher" (with the
+  student's class). Teachers only see their own classes' mail — and a
+  teacher with NO class assignment still sees ALL parent mail (safe
+  default, nothing can be hidden by accident).
+- NEW (server.js): `GET/POST/DELETE /api/teacher-classes` (admin assigns
+  teachers to classes — Manage Users page card).
+- NEW (server.js): `GET /portal/receipt/:id` — friendly receipt viewer.
+  Serves the (restored) image when available; shows a clear, styled
+  explanation page when the school hasn't snapped it yet or it predates
+  photo-backup — **never a blank tab**. Verified: old payments on the
+  live DB have no photo backup (pre-pack-20 + host disk wipes).
+- NEW (portal.html + js/portal.js): 🔔 bell with unread badge (60s poll),
+  💬 Messages card (chat bubbles, "Send to" Administration / Class
+  Teacher), ⚙️ Settings card (change portal password + contact details).
+  Receipt "View" links now point at the friendly viewer.
+- NEW (teacher-dashboard.html + js/dashboard.js): 🔔 bell in topbar,
+  Messages panel (tap a parent message to reply; start new by Student ID;
+  unread chip), Settings panel (change own password — works for admin and
+  teachers).
+- NEW (manage-users.html + js/users.js): "Class Teacher Assignments" card.
+- FIX (js/exam.js): exam PDF can never silently drop pages again — every
+  page retried at scales 2 → 1.5 → 1 (phone canvas memory), a
+  clearly-labelled fallback sheet keeps the page count complete if a page
+  still fails, the toast names the affected pages, and capture pacing
+  eases phone memory. Verified: real 4-page exam downloads 4 pages; with
+  capture fully broken it STILL downloads 4 (marked) pages instead of 1.
+- sw.js cache bumped to `ameenullah-shell-v11`.
+
+Tested: 24 live API tests + 6 receipt-viewer tests + 19 browser tests, all
+passing; printed result PDF = exactly 1 A4 page; exam PDF = all pages with
+and without working canvas capture.
+
+---
+
 ## Pack 22 — 2026-07-21
 
 Owner requests:

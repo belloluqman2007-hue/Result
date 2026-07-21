@@ -1496,6 +1496,58 @@ function capturePageAsA4(page) {
     });
 }
 
+/* FIX (pack 23 - owner: "the exam only shows the first page when downloaded;
+   I don't want any problem from the exam again"): on some phones the canvas
+   snapshot of a later page can fail silently (memory/canvas limits) and the
+   page simply vanished from the PDF. Now each page is tried at scale 2,
+   then retried at 1.5 and 1 (smaller canvases = far less memory) before we
+   ever give up - and we NEVER quietly drop a page: a clearly-labelled
+   fallback sheet takes its place so the PDF always has the full page count
+   and the teacher is told which page needs a retry. */
+function capturePageWithRetries(page) {
+    var scales = [2, 1.5, 1];
+    function attempt(i) {
+        if (i >= scales.length) return Promise.reject(new Error("capture failed"));
+        var stage = document.createElement("div");
+        stage.className = "pdf-capture-stage ams-capturing";
+        stage.setAttribute("aria-hidden", "true");
+        var clone = page.cloneNode(true);
+        clone.removeAttribute("id");
+        clone.querySelectorAll("[id]").forEach(function (el) { el.removeAttribute("id"); });
+        stage.appendChild(clone);
+        document.body.appendChild(stage);
+        var fontsReady = (document.fonts && document.fonts.ready) || Promise.resolve();
+        return fontsReady.then(function () {
+            return html2canvas(clone, { scale: scales[i], backgroundColor: "#ffffff", useCORS: true });
+        }).then(function (cv) {
+            stage.remove();
+            // A blank/empty canvas (0x0 or 1x1) is as bad as a thrown error.
+            if (!cv || cv.width < 10 || cv.height < 10) throw new Error("empty canvas");
+            return cv;
+        }).catch(function (err) {
+            try { stage.remove(); } catch (e) {}
+            // brief pause lets the phone reclaim memory before the retry
+            return new Promise(function (resolve) { setTimeout(resolve, 250); }).then(function () { return attempt(i + 1); });
+        });
+    }
+    return attempt(0);
+}
+
+// Clear, honest stand-in sheet used only if a page STILL cannot be captured
+// after all retries - the PDF stays complete and the problem is visible.
+function buildFallbackPageCanvas(pageNumber) {
+    var cv = document.createElement("canvas");
+    cv.width = 1240; cv.height = 1754;
+    var ctx = cv.getContext("2d");
+    ctx.fillStyle = "#ffffff"; ctx.fillRect(0, 0, cv.width, cv.height);
+    ctx.fillStyle = "#14532d"; ctx.font = "bold 46px Arial"; ctx.textAlign = "center";
+    ctx.fillText("Page " + pageNumber + " failed to render", cv.width / 2, 780);
+    ctx.fillStyle = "#5B6B62"; ctx.font = "30px Arial";
+    ctx.fillText("Please press Download again - or contact the office", cv.width / 2, 850);
+    ctx.fillText("and this page will be re-made.", cv.width / 2, 895);
+    return cv;
+}
+
 // Downloads the whole exam as ONE consistent A4 PDF. Since the engine now
 // lays pages out perfectly, the global fit is almost always exactly 1 -
 // the per-page scale still protects against any odd oversized block,
@@ -1533,6 +1585,7 @@ function downloadExamPDF(openInViewer) {
     deselectExamImage();
 
     var canvases = [];
+    var failedPages = []; // pack 23: track any page that needed the fallback sheet
     var i = 0;
 
     function captureNext() {
@@ -1542,9 +1595,23 @@ function downloadExamPDF(openInViewer) {
         }
         // CHANGED (device-proof): capture the hidden A4 copy, not the
         // on-screen (possibly phone-shrunken) page itself.
-        capturePageAsA4(pages[i])
-            .then(function (cv) { canvases.push(cv); i++; captureNext(); })
-            .catch(function () { i++; captureNext(); });
+        // pack 23: retries included; a page is NEVER skipped silently -
+        // worst case it becomes a labelled fallback sheet so the exam
+        // always downloads with its full set of pages.
+        var pageNum = i + 1;
+        capturePageWithRetries(pages[i])
+            .then(function (cv) { canvases.push(cv); })
+            .catch(function () {
+                console.log("Exam PDF: page " + pageNum + " could not be captured after retries.");
+                failedPages.push(pageNum);
+                canvases.push(buildFallbackPageCanvas(pageNum));
+            })
+            .then(function () {
+                i++;
+                // small pause between pages: keeps phone memory healthy on
+                // long exams (was a burst of full-size canvases back-to-back).
+                setTimeout(captureNext, 60);
+            });
     }
 
     function finishPdf() {
@@ -1588,13 +1655,19 @@ function downloadExamPDF(openInViewer) {
         }
 
         if (window.amsToast) {
-            if (shrunkPages > 0) {
+            if (failedPages.length) {
+                window.amsToast(
+                    "PDF downloaded, but page(s) " + failedPages.join(", ") + " of " + canvases.length +
+                    " could not be drawn on this device - those sheets are marked inside the PDF. Please press Download again.",
+                    "error", 9000
+                );
+            } else if (shrunkPages > 0) {
                 window.amsToast(
                     "PDF downloaded \u2713 One block was too tall for its page, so all pages were slightly shrunk to keep one consistent look.",
                     "info", 7000
                 );
             } else {
-                window.amsToast("PDF downloaded \u2713 open it and print/share from your phone", "success", 6000);
+                window.amsToast("PDF downloaded \u2713 all " + canvases.length + " page(s) included - open it and print/share from your phone", "success", 6000);
             }
         }
     }

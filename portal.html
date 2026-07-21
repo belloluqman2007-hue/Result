@@ -34,6 +34,11 @@
       <div style="font-size:11.5px; opacity:.85;">Ameenullah School of Arabic &amp; Islamic Studies</div>
     </div>
     <div class="pt-top-right">
+      <!-- NEW (pack 23 - owner: "Notifications"): bell with unread-message
+           badge; tapping it jumps to the Messages card and marks them read. -->
+      <button class="pt-linkbtn" id="ptBellBtn" type="button" title="Messages" style="position:relative;">
+        &#128276; <span id="ptBellBadge" style="display:none; position:absolute; top:-6px; right:-6px; background:#C0392B; color:#fff; font-size:11px; font-weight:800; border-radius:10px; padding:1px 6px; line-height:1.4;"></span>
+      </button>
       <a class="pt-linkbtn" href="index.html">&#127968; Website</a>
       <button class="pt-linkbtn" id="portalLogoutBtn" type="button">&#128682; Logout</button>
     </div>
@@ -97,6 +102,81 @@
       <h2>&#128394; Exam Timetable</h2>
       <p class="pt-hint">Your class's exam papers - dates are set by the school when writing each exam.</p>
       <div id="ptExams"></div>
+    </section>
+
+    <!-- NEW (pack 23 - owner: "Add Messages: Parent <-> Teacher,
+         Parent <-> School administration"): two-way chat with the school.
+         Replies from the school appear here and raise the bell badge. -->
+    <section class="pt-card portal-no-print" id="ptMsgCard">
+      <h2>&#128172; Messages</h2>
+      <p class="pt-hint">Chat with the school - choose who reads your message. Their replies appear on this page.</p>
+      <div id="ptMsgs" style="margin:6px 0 12px;">
+        <div class="pt-empty">No messages yet. Say salam below - the school replies right here.</div>
+      </div>
+      <form id="ptMsgForm" class="pt-form-grid">
+        <div>
+          <label for="ptMsgTo">Send to</label>
+          <select id="ptMsgTo">
+            <option value="admin">School Administration (office)</option>
+            <option value="teacher">Class Teacher</option>
+          </select>
+        </div>
+        <div style="grid-column:1/-1;">
+          <label for="ptMsgBody">Your message</label>
+          <textarea id="ptMsgBody" rows="3" maxlength="2000" placeholder="Type your message..." required></textarea>
+        </div>
+        <div>
+          <button class="mg-btn-light" id="ptMsgSend" type="submit" style="background:#14532d; color:#fff;">&#128231; Send Message</button>
+        </div>
+      </form>
+      <p class="pt-hint" id="ptMsgNote" style="margin-top:6px;"></p>
+    </section>
+
+    <!-- NEW (pack 23 - owner: "Add settings to the student parent portal
+         where they can change password and other necessary things"). -->
+    <section class="pt-card portal-no-print" id="ptSettingsCard">
+      <h2>&#9881;&#65039; Settings</h2>
+      <p class="pt-hint">Keep your login and contact details up to date.</p>
+
+      <h3 style="margin:10px 0 4px; font-size:15px; color:#14532d;">&#128273; Change Portal Password</h3>
+      <p class="pt-hint">Today you log in with the student's <b>surname</b>. Set your own password below and it replaces the surname from your next login.</p>
+      <form id="ptPwForm" class="pt-form-grid">
+        <div>
+          <label for="ptPwCurrent">Current password (your surname)</label>
+          <input type="password" id="ptPwCurrent" autocomplete="current-password" required>
+        </div>
+        <div>
+          <label for="ptPwNew">New password (min 4 characters)</label>
+          <input type="password" id="ptPwNew" autocomplete="new-password" minlength="4" required>
+        </div>
+        <div>
+          <label for="ptPwNew2">Repeat new password</label>
+          <input type="password" id="ptPwNew2" autocomplete="new-password" minlength="4" required>
+        </div>
+        <div>
+          <button class="mg-btn-light" type="submit">&#128273; Change Password</button>
+        </div>
+      </form>
+
+      <h3 style="margin:18px 0 4px; font-size:15px; color:#14532d;">&#128222; Contact Details (how the school reaches you)</h3>
+      <form id="ptContactForm" class="pt-form-grid">
+        <div>
+          <label for="ptParentName">Parent/Guardian name</label>
+          <input type="text" id="ptParentName" maxlength="160">
+        </div>
+        <div>
+          <label for="ptParentPhone">Phone / WhatsApp</label>
+          <input type="text" id="ptParentPhone" maxlength="40">
+        </div>
+        <div style="grid-column:1/-1;">
+          <label for="ptAddress">Home address</label>
+          <input type="text" id="ptAddress" maxlength="255">
+        </div>
+        <div>
+          <button class="mg-btn-light" type="submit">&#128190; Save Details</button>
+        </div>
+      </form>
+      <p class="pt-hint" id="ptSettingsNote" style="margin-top:6px;"></p>
     </section>
 
     <!-- NEW (pack 15): Where to pay - bank accounts the admin added. -->
