@@ -4,6 +4,60 @@
 
 ---
 
+## Pack 22 — 2026-07-21
+
+Owner requests:
+1. "Change the font in the result let the Arabic font be more clear"
+2. "I can't see messages, notifications, exam timetable in the website"
+3. "If I write a announcement let me decide if it will be for teacher or student or parents or general and also event"
+4. "And let control what were doing also" → interpreted as full EDIT/DELETE control over posted announcements/events.
+
+Changes (all commented in code, additive, backward compatible):
+
+- NEW (css/style.css): Arabic subject names on the result sheet now render in
+  **Amiri (bold, 19px, 1.6 line-height)** — much clearer Quranic-style
+  Arabic on screen and print. Only `#resultTable td:first-child`; numbers,
+  layout and print logic untouched (Result Module rules respected —
+  display-only change the owner explicitly asked for).
+- NEW (server.js): `runPack22Migrations()` — `announcements.audience`
+  (teacher|student|parent|general), `announcements.kind`
+  (announcement|event), `announcements.event_date`, `exams.exam_date`.
+  Guarded + idempotent (checks information_schema first).
+- NEW (server.js): `GET /api/announcements-public` — public website board
+  (general announcements + upcoming school_events, no login).
+- NEW (server.js): `GET /portal/announcements` — student/parent portal sees
+  general + student + parent notices (teachers-only stays hidden).
+- NEW (server.js): `GET /portal/exams` — exam timetable for the student's
+  own class, dated exams first.
+- NEW (server.js): `PUT /api/announcements/:id` — edit announcement/event.
+  POST now whitelists audience/kind, requires a date for events, and
+  auto-adds events into `school_events` (Upcoming Events + website).
+  `/save-exam` now carries `exam_date` (with ER_BAD_FIELD fallbacks).
+- NEW (teacher-dashboard.html + js/dashboard.js + css/modern-ui.css):
+  Notice Board form gains "Who sees it" (Everyone / Teachers / Students /
+  Parents), "Type" (Announcement / Event + date picker), audience badges on
+  each note, and a pencil Edit button (prefills the form, Save Changes →
+  PUT, Cancel editing). Delete already existed and is unchanged.
+- NEW (portal.html + js/portal.js): "School Notices" card (audience badge +
+  event date) and "Exam Timetable" card (own class, dated first) after the
+  Published Results card.
+- NEW (index.html + js/website.js + css/school.css): public
+  "Announcements & School Events" section on the website — green cards for
+  announcements, gold cards for dated events. No login needed.
+- NEW (create-exam.html + js/exam.js): optional **Exam date** field in the
+  exam builder; saved and restored when re-opening a saved exam; shown in
+  the portal timetable.
+- sw.js cache bumped to `ameenullah-shell-v10`.
+
+Verified live (Railway MySQL): migrations applied; POST event → auto
+`school_events` row → appears on public board; PUT edit + DELETE; portal
+filters (student sees general+student, not teacher); `/portal/exams`
+returns the class exam; 401 without session. Browser-verified: dashboard
+badges/edit/PUT payload, portal cards, website board, Arabic cell computed
+style = Amiri 700 19px.
+
+---
+
 # Fix Pack 9 — 17 July 2026 (cover fit + one-page exams + phone view)
 
 Requested fixes, all delivered and tested on desktop AND phone:

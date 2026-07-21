@@ -850,6 +850,49 @@ function pack20Retry(attempt, err) {
 }
 runPack20Migrations(1);
 
+/* ------------------------------------------------------------------
+   NEW (pack 22 - owner requests): announcement AUDIENCES
+   (teacher/student/parent/general) + announcement-or-EVENT kind +
+   exam timetable dates. Guarded + idempotent like packs 15/17/20.
+------------------------------------------------------------------ */
+function runPack22Migrations(attempt) {
+    const conn = addonConnection();
+    conn.connect((err) => {
+        if (err) { conn.destroy(); return pack22Retry(attempt, err); }
+        const alters = [
+            "ALTER TABLE announcements ADD COLUMN audience VARCHAR(16) NOT NULL DEFAULT 'general'",
+            "ALTER TABLE announcements ADD COLUMN kind VARCHAR(16) NOT NULL DEFAULT 'announcement'",
+            "ALTER TABLE announcements ADD COLUMN event_date DATE NULL",
+            "ALTER TABLE exams ADD COLUMN exam_date DATE NULL"
+        ];
+        let missingTable = false;
+        let i = 0;
+        (function nextAlter() {
+            if (i >= alters.length) {
+                conn.end();
+                console.log("Pack 22 setup ready (announcement audiences, exam dates).");
+                return;
+            }
+            conn.query(alters[i++], (qErr) => {
+                if (qErr && qErr.code !== "ER_DUP_FIELDNAME") {
+                    console.log("Pack 22 migration notice:", qErr.code || qErr.message);
+                    if (qErr.code === "ER_NO_SUCH_TABLE") missingTable = true;
+                }
+                if (missingTable) { conn.destroy(); return pack22Retry(attempt, { code: "ER_NO_SUCH_TABLE" }); }
+                nextAlter();
+            });
+        })();
+    });
+}
+function pack22Retry(attempt, err) {
+    if (attempt >= 6) {
+        console.log("Pack 22 setup warning:", err.code || err.message || err);
+        return;
+    }
+    setTimeout(() => runPack22Migrations(attempt + 1), 4000);
+}
+runPack22Migrations(1);
+
 // Rebuild every missing upload file that HAS a database copy (runs once
 // at boot; the request-time middleware covers anything saved later).
 function hydrateUploadedImages() {
@@ -1113,9 +1156,13 @@ app.get("/students", requireLogin, (req, res) => {
 
 /* ---------------- Announcements (notice board) ---------------- */
 
+// NEW (pack 22): whitelisted values shared by the announcement routes.
+const ANN_AUDIENCES = ["teacher", "student", "parent", "general"];
+// CHANGED (pack 21/22): audience + kind + event_date come along; older
+// client pages that only read title/body are unaffected.
 app.get("/api/announcements", requireLogin, (req, res) => {
     connection.query(
-        `SELECT id, title, body, created_at
+        `SELECT id, title, body, audience, kind, event_date, created_at
          FROM announcements ORDER BY created_at DESC LIMIT 50`,
         (err, rows) => {
             if (err) {
@@ -1132,22 +1179,116 @@ app.get("/api/announcements", requireLogin, (req, res) => {
 app.post("/api/announcements", requireLogin, (req, res) => {
     const title = (req.body.title || "").trim();
     const body = (req.body.body || "").trim();
+    /* NEW (pack 22 - owner: "let me decide if it will be for teacher or
+       student or parents or general and also event"): audience + kind are
+       whitelisted; an EVENT with a date also lands on the school events
+       list, so it shows in Upcoming Events and calendars automatically. */
+    const audience = ANN_AUDIENCES.includes(req.body.audience) ? req.body.audience : "general";
+    const kind = req.body.kind === "event" ? "event" : "announcement";
+    const eventDate = /^\d{4}-\d{2}-\d{2}$/.test(req.body.event_date || "") ? req.body.event_date : null;
 
     if (!title) {
         return res.status(400).json({ message: "Announcement title is required." });
     }
+    if (kind === "event" && !eventDate) {
+        return res.status(400).json({ message: "Pick the event date (or choose \"Announcement\" instead)." });
+    }
 
     connection.query(
-        `INSERT INTO announcements (title, body) VALUES (?, ?)`,
-        [title, body],
+        `INSERT INTO announcements (title, body, audience, kind, event_date) VALUES (?, ?, ?, ?, ?)`,
+        [title, body, audience, kind, eventDate],
         (err, result) => {
             if (err) {
+                if (err.code === "ER_BAD_FIELD_ERROR") {
+                    // first-boot window: pack-22 columns still migrating -
+                    // fall back to the legacy columns so posting never fails.
+                    return connection.query(
+                        `INSERT INTO announcements (title, body) VALUES (?, ?)`,
+                        [title, body],
+                        () => res.json({ message: "Announcement posted (audience options unlock in one minute)." })
+                    );
+                }
                 console.log(err);
                 const handled = addonTableMissing(res, err, "save the announcement");
                 if (handled) return handled;
                 return res.status(500).json({ message: "Could not save announcement." });
             }
-            res.json({ message: "Announcement posted.", id: result.insertId });
+            if (kind === "event" && eventDate) {
+                connection.query(
+                    `INSERT INTO school_events (title, event_date, description) VALUES (?, ?, ?)`,
+                    [title, eventDate, body || "Announcement event"],
+                    () => {}
+                );
+            }
+            res.json({ message: kind === "event" ? "Event announced - it also appears in Upcoming Events." : "Announcement posted.", id: result.insertId });
+        }
+    );
+});
+
+// NEW (pack 22 - owner: "let me control what we were doing also"):
+// EDIT an existing announcement/event (delete already existed).
+app.put("/api/announcements/:id", requireLogin, (req, res) => {
+    const title = (req.body.title || "").trim();
+    const body = (req.body.body || "").trim();
+    const audience = ANN_AUDIENCES.includes(req.body.audience) ? req.body.audience : "general";
+    const kind = req.body.kind === "event" ? "event" : "announcement";
+    const eventDate = kind === "event" && /^\d{4}-\d{2}-\d{2}$/.test(req.body.event_date || "") ? req.body.event_date : null;
+    if (!title) return res.status(400).json({ message: "Announcement title is required." });
+    connection.query(
+        `UPDATE announcements SET title = ?, body = ?, audience = ?, kind = ?, event_date = ? WHERE id = ?`,
+        [title, body, audience, kind, eventDate, req.params.id],
+        (err, result) => {
+            if (err) {
+                if (err.code === "ER_BAD_FIELD_ERROR") return res.status(503).json({ message: "Announcements are warming up - try again in one minute." });
+                console.log(err);
+                return res.status(500).json({ message: "Could not update announcement." });
+            }
+            if (!result.affectedRows) return res.status(404).json({ message: "Announcement not found." });
+            res.json({ message: "Announcement updated." });
+        }
+    );
+});
+
+// NEW (pack 22): the PORTAL's own notice board - everything for parents
+// and students plus general news. Teacher-only items stay staff-only.
+app.get("/portal/announcements", (req, res) => {
+    const sid = req.session && req.session.portalStudentId;
+    if (!sid) return res.status(401).json({ message: "Not logged in" });
+    connection.query(
+        `SELECT id, title, body, audience, kind, event_date, created_at
+         FROM announcements
+         WHERE audience IN ('general', 'student', 'parent')
+         ORDER BY created_at DESC LIMIT 20`,
+        (err, rows) => {
+            if (err) {
+                if (err.code === "ER_BAD_FIELD_ERROR") return res.json([]);
+                console.log(err);
+                return res.status(500).json({ message: "Database error" });
+            }
+            res.json(rows);
+        }
+    );
+});
+
+// NEW (pack 22 - owner: "I can't see messages... in the website"): the
+// PUBLIC notice board for the school website - general announcements +
+// upcoming events only, nothing internal ever leaves this gate.
+app.get("/api/announcements-public", (req, res) => {
+    const out = { announcements: [], events: [] };
+    connection.query(
+        `SELECT id, title, body, created_at FROM announcements
+         WHERE audience = 'general' AND kind = 'announcement'
+         ORDER BY created_at DESC LIMIT 10`,
+        (err, rows) => {
+            if (!err && rows) out.announcements = rows;
+            connection.query(
+                `SELECT id, title, event_date, description FROM school_events
+                 WHERE event_date >= CURDATE() ORDER BY event_date ASC LIMIT 10`,
+                (err2, evs) => {
+                    if (!err2 && evs) out.events = evs;
+                    res.json(out);
+                }
+            );
         }
     );
 });
@@ -1830,6 +1971,10 @@ app.delete("/class-signature/:className", requireLogin, (req, res) => {
 
 app.post("/save-exam", requireLogin, (req, res) => {
     const { id, title, class_name, subject, term, session, duration, instructions, body_html } = req.body;
+    // NEW (pack 22): optional exam date feeds the exam timetable. When the
+    // column is absent (pre-pack-22 DB or migration still warming up) the
+    // legacy statements run unchanged below.
+    const examDate = /^\d{4}-\d{2}-\d{2}$/.test(req.body.exam_date || "") ? req.body.exam_date : null;
 
     if (!title || !class_name || !subject || !term || !session || !body_html) {
         return res.status(400).json({ message: "Title, class, subject, term, session, and content are all required." });
@@ -1838,9 +1983,19 @@ app.post("/save-exam", requireLogin, (req, res) => {
     if (id) {
         // Update an existing exam
         connection.query(
-            `UPDATE exams SET title=?, class_name=?, subject=?, term=?, session=?, duration=?, instructions=?, body_html=? WHERE id=?`,
-            [title, class_name, subject, term, session, duration || null, instructions || null, body_html, id],
+            `UPDATE exams SET title=?, class_name=?, subject=?, term=?, session=?, duration=?, instructions=?, body_html=?, exam_date=? WHERE id=?`,
+            [title, class_name, subject, term, session, duration || null, instructions || null, body_html, examDate, id],
             (err) => {
+                if (err && err.code === "ER_BAD_FIELD_ERROR") {
+                    return connection.query(
+                        `UPDATE exams SET title=?, class_name=?, subject=?, term=?, session=?, duration=?, instructions=?, body_html=? WHERE id=?`,
+                        [title, class_name, subject, term, session, duration || null, instructions || null, body_html, id],
+                        (err2) => {
+                            if (err2) { console.log(err2); return res.status(500).json({ message: "Error updating exam." }); }
+                            res.json({ message: "Exam updated successfully.", id });
+                        }
+                    );
+                }
                 if (err) {
                     console.log(err);
                     return res.status(500).json({ message: "Error updating exam." });
@@ -1851,10 +2006,21 @@ app.post("/save-exam", requireLogin, (req, res) => {
     } else {
         // Create a new exam
         connection.query(
-            `INSERT INTO exams (title, class_name, subject, term, session, duration, instructions, body_html, created_by)
-             VALUES (?,?,?,?,?,?,?,?,?)`,
-            [title, class_name, subject, term, session, duration || null, instructions || null, body_html, req.session.username],
+            `INSERT INTO exams (title, class_name, subject, term, session, duration, instructions, body_html, created_by, exam_date)
+             VALUES (?,?,?,?,?,?,?,?,?,?)`,
+            [title, class_name, subject, term, session, duration || null, instructions || null, body_html, req.session.username, examDate],
             (err, result) => {
+                if (err && err.code === "ER_BAD_FIELD_ERROR") {
+                    return connection.query(
+                        `INSERT INTO exams (title, class_name, subject, term, session, duration, instructions, body_html, created_by)
+                         VALUES (?,?,?,?,?,?,?,?,?)`,
+                        [title, class_name, subject, term, session, duration || null, instructions || null, body_html, req.session.username],
+                        (err2, result2) => {
+                            if (err2) { console.log(err2); return res.status(500).json({ message: "Error saving exam." }); }
+                            res.json({ message: "Exam saved successfully.", id: result2.insertId });
+                        }
+                    );
+                }
                 if (err) {
                     console.log(err);
                     return res.status(500).json({ message: "Error saving exam." });
@@ -1863,6 +2029,35 @@ app.post("/save-exam", requireLogin, (req, res) => {
             }
         );
     }
+});
+
+// NEW (pack 22 - owner: exam timetable visible to parents/students):
+// the pupil's OWN class papers only, newest dated first. Nothing about
+// the exam content ever leaves this route - just the schedule.
+app.get("/portal/exams", (req, res) => {
+    const sid = req.session && req.session.portalStudentId;
+    if (!sid) return res.status(401).json({ message: "Not logged in" });
+    connection.query(
+        "SELECT class_name FROM students WHERE student_id = ? LIMIT 1",
+        [sid],
+        (err, stu) => {
+            if (err || !stu.length) return res.json([]);
+            connection.query(
+                `SELECT id, title, subject, term, session, duration, exam_date
+                 FROM exams WHERE class_name = ?
+                 ORDER BY exam_date IS NULL, exam_date DESC, updated_at DESC LIMIT 40`,
+                [stu[0].class_name],
+                (err2, rows) => {
+                    if (err2) {
+                        if (err2.code === "ER_BAD_FIELD_ERROR") return res.json([]);
+                        console.log(err2);
+                        return res.status(500).json({ message: "Database error" });
+                    }
+                    res.json(rows);
+                }
+            );
+        }
+    );
 });
 
 app.get("/exams", requireLogin, (req, res) => {

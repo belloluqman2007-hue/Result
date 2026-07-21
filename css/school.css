@@ -471,3 +471,50 @@ table.mg-table tr:last-child td{ border-bottom:none; }
 }
 .ams-alert-chip.red{ border-color:#F0C4C0; color:#B3261E; background:#FFF5F4; }
 .ams-alert-chip small{ display:block; font-weight:600; color:#8B7A45; font-size:11px; }
+
+/* ==========================================================================
+   NEW (pack 22): website public notice board styling (site theme kept).
+========================================================================== */
+.wb-notices{
+  display:grid;
+  grid-template-columns:repeat(auto-fit, minmax(290px, 1fr));
+  gap:16px;
+  margin-top:20px;
+}
+.wb-note{
+  background:#F6FAF8;
+  border:1px solid #C7DED2;
+  border-left:4px solid #2F9E6E;
+  border-radius:10px;
+  padding:14px 16px;
+}
+.wb-note.wb-event{ border-left-color:#C78B2F; background:#FFF9EF; }
+.wb-note-top{
+  display:flex;
+  justify-content:space-between;
+  align-items:flex-start;
+  gap:10px;
+}
+.wb-note-top b{ color:#0F3D2E; font-size:14.5px; }
+.wb-chip{
+  flex-shrink:0;
+  font-size:11px;
+  font-weight:800;
+  background:#D8EEE2;
+  color:#0F3D2E;
+  padding:3px 10px;
+  border-radius:20px;
+  white-space:nowrap;
+}
+.wb-chip-ev{ background:#FBE7C6; color:#7A4A12; }
+.wb-note p{ font-size:13px; line-height:1.55; color:#3c4a42; margin:8px 0 0; }
+.wb-empty{
+  grid-column:1/-1;
+  text-align:center;
+  color:#5B6B62;
+  font-size:13.5px;
+  padding:26px 10px;
+  background:#F6FAF8;
+  border:1px dashed #C7DED2;
+  border-radius:10px;
+}

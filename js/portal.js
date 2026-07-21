@@ -50,6 +50,8 @@
       loadMyFees();      // NEW (pack 15)
       loadBankAccounts();// NEW (pack 15)
       loadMySubs();      // NEW (pack 15)
+      loadPortalNotices(); // NEW (pack 22): announcements for parents/students
+      loadPortalExams();   // NEW (pack 22): exam timetable for this class
       loadCalendar();    // NEW (pack 15)
     })
     .catch(goLogin);
@@ -226,6 +228,54 @@ function loadMyFees() {
       loadMyPayments(); // NEW (pack 17): payment rows + snapped receipts
     })
     .catch(function () { /* leave hidden */ });
+}
+
+/* NEW (pack 22 - owner: "I can't see messages, notifications, exam
+   timetable"): portal notice board (announcements for parents/students +
+   dated events) and the class's exam timetable. */
+function loadPortalNotices() {
+  fetch("/portal/announcements")
+    .then(function (r) { return r.ok ? r.json() : []; })
+    .then(function (rows) {
+      var card = document.getElementById("ptNoticesCard");
+      var box = document.getElementById("ptNotices");
+      if (!card || !box || !Array.isArray(rows) || !rows.length) return;
+      var AUD = { general: "Everyone", student: "Students", parent: "Parents" };
+      box.innerHTML = rows.map(function (n) {
+        var when = n.kind === "event" && n.event_date
+          ? "Event date: " + esc(String(n.event_date).slice(0, 10))
+          : esc(String(n.created_at || "").slice(0, 10));
+        return '<div class="pt-fee-row" style="align-items:flex-start;"><span style="text-align:left;">' +
+          "<b>" + esc(n.title) + "</b> " +
+          '<small style="color:#5B6B62;">[' + (AUD[n.audience] || "Everyone") + (n.kind === "event" ? " - Event" : "") + "]</small>" +
+          (n.body ? '<br><span style="font-weight:400;">' + esc(n.body) + "</span>" : "") +
+          "</span>" +
+          '<span class="pt-right" style="white-space:nowrap;">' + when + "</span></div>";
+      }).join("");
+      card.style.display = "block";
+    })
+    .catch(function () { /* notices stay hidden */ });
+}
+
+function loadPortalExams() {
+  fetch("/portal/exams")
+    .then(function (r) { return r.ok ? r.json() : []; })
+    .then(function (rows) {
+      var card = document.getElementById("ptExamsCard");
+      var box = document.getElementById("ptExams");
+      if (!card || !box || !Array.isArray(rows) || !rows.length) return;
+      box.innerHTML = '<div class="pt-fee-row head"><span>Paper</span><span class="pt-right">Date</span><span class="pt-right">Duration</span></div>' +
+        rows.map(function (e) {
+          var dt = e.exam_date ? esc(String(e.exam_date).slice(0, 10)) : "To be announced";
+          return '<div class="pt-fee-row"><span style="text-align:left;"><b>' + esc(e.subject) + "</b>" +
+            (e.title ? ' <small style="color:#5B6B62;">(' + esc(e.title) + ")</small>" : "") +
+            '<br><small style="color:#5B6B62;">' + esc(e.term || "") + (e.session ? " - " + esc(e.session) : "") + "</small></span>" +
+            '<span class="pt-right" style="white-space:nowrap;">' + dt + "</span>" +
+            '<span class="pt-right" style="white-space:nowrap;">' + esc(e.duration || "-") + "</span></div>";
+        }).join("");
+      card.style.display = "block";
+    })
+    .catch(function () { /* timetable stays hidden */ });
 }
 
 /* NEW (pack 17 - owner request): "parent will also see it that admin has

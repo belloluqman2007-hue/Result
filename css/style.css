@@ -782,11 +782,17 @@ nav a{
   background:var(--gold-pale);
 }
 
+/* CHANGED (pack 21 - owner: "let the Arabic font be more clear"):
+   the subject column holds ARABIC subject names - Amiri (a real Arabic
+   naskh face) with a larger size reads the harakat far better than
+   Cairo at 14px. VISUAL ONLY - data unchanged. */
 #resultTable td:first-child{
   text-align:left;
-  font-weight:600;
+  font-weight:700;
   color:var(--emerald);
-  font-family:'Cairo', sans-serif;
+  font-family:'Amiri','Cairo',serif;
+  font-size:19px;
+  line-height:1.6;
 }
 
 /* Performance summary */

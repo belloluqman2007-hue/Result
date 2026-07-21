@@ -345,7 +345,31 @@
             <form class="ams-form-row" id="amsAnnouncementForm">
               <input type="text" id="amsAnnTitle" placeholder="Announcement title" required>
               <textarea id="amsAnnBody" placeholder="Write the announcement..."></textarea>
-              <button type="submit" class="m-btn-sm">Post Announcement</button>
+              <!-- NEW (pack 22 - owner request): choose WHO sees it and
+                   whether it is a plain announcement or a dated EVENT
+                   (events also land in Upcoming Events automatically). -->
+              <div class="ams-ann-controls">
+                <label>Who sees it:
+                  <select id="amsAnnAudience">
+                    <option value="general">Everyone (teachers, students &amp; parents + website)</option>
+                    <option value="teacher">Teachers only</option>
+                    <option value="student">Students only</option>
+                    <option value="parent">Parents only</option>
+                  </select>
+                </label>
+                <label>Type:
+                  <select id="amsAnnKind">
+                    <option value="announcement">Announcement</option>
+                    <option value="event">Event (needs a date)</option>
+                  </select>
+                </label>
+                <label id="amsAnnDateWrap" style="display:none;">Event date:
+                  <input type="date" id="amsAnnDate">
+                </label>
+              </div>
+              <button type="submit" class="m-btn-sm" id="amsAnnSubmitBtn">Post Announcement</button>
+              <button type="button" class="m-btn-sm" id="amsAnnCancelEdit" style="display:none; background:#8C3B2E; border-color:#8C3B2E; color:#fff;">Cancel editing</button>
+              <input type="hidden" id="amsAnnEditId" value="">
             </form>
             <div id="amsAnnouncementList"></div>
           </div>

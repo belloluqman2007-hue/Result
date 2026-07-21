@@ -74,3 +74,45 @@
       });
   });
 })();
+
+/* ==========================================================================
+   NEW (pack 22 - owner: "I can't see messages/notifications... in the
+   website"): public notice board - general announcements + upcoming events
+   served by /api/announcements-public (nothing internal ever leaves that
+   route; if it's unreachable the section quietly shows a friendly line).
+========================================================================== */
+(function () {
+  const box = document.getElementById("wbNotices");
+  if (!box) return;
+  const esc = (v) => String(v == null ? "" : v)
+    .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+
+  fetch("/api/announcements-public")
+    .then((r) => (r.ok ? r.json() : null))
+    .then((d) => {
+      const anns = (d && d.announcements) || [];
+      const evs = (d && d.events) || [];
+      if (!anns.length && !evs.length) {
+        box.innerHTML = '<div class="wb-empty">No announcements right now - please check back soon.</div>';
+        return;
+      }
+      let html = "";
+      evs.forEach((e) => {
+        const dstr = String(e.event_date || "").slice(0, 10);
+        html += '<div class="wb-note wb-event">' +
+          '<div class="wb-note-top"><b>' + esc(e.title) + '</b><span class="wb-chip wb-chip-ev">🗓 ' + esc(dstr) + "</span></div>" +
+          (e.description ? '<p>' + esc(e.description) + "</p>" : "") +
+          "</div>";
+      });
+      anns.forEach((n) => {
+        html += '<div class="wb-note">' +
+          '<div class="wb-note-top"><b>' + esc(n.title) + '</b><span class="wb-chip">📢 ' + esc(String(n.created_at || "").slice(0, 10)) + "</span></div>" +
+          (n.body ? '<p>' + esc(n.body) + "</p>" : "") +
+          "</div>";
+      });
+      box.innerHTML = html;
+    })
+    .catch(() => {
+      box.innerHTML = '<div class="wb-empty">Announcements will appear here when the school posts them.</div>';
+    });
+})();

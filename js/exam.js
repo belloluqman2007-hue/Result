@@ -1165,6 +1165,8 @@ function saveExam() {
     const term = document.getElementById("examTerm").value;
     const session = document.getElementById("examSession").value;
     const duration = document.getElementById("examDuration").value.trim();
+    // NEW (pack 22): optional exam date - feeds the portal exam timetable.
+    const examDate = (document.getElementById("examDate") || {}).value || "";
     // CHANGED (multi-exam in one PDF): the classic "instructions" column
     // stores the FIRST cover's instructions; extra covers keep their own
     // inside the saved flow (see serializeFlow).
@@ -1183,6 +1185,7 @@ function saveExam() {
         term,
         session,
         duration,
+        exam_date: examDate, // NEW (pack 22)
         instructions,
         body_html: serializeFlow() // single flow string (was: JSON page array)
     };
@@ -1289,6 +1292,9 @@ function loadExam(id, gotoStep) {
             document.getElementById("examTerm").value = exam.term;
             document.getElementById("examSession").value = exam.session;
             document.getElementById("examDuration").value = exam.duration || "";
+            // NEW (pack 22): restore the saved exam date when present.
+            const dateEl = document.getElementById("examDate");
+            if (dateEl) dateEl.value = exam.exam_date ? String(exam.exam_date).slice(0, 10) : "";
 
             document.getElementById("examClass").value = exam.class_name;
 
