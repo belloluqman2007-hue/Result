@@ -52,7 +52,10 @@
       loadMySubs();      // NEW (pack 15)
       loadPortalNotices(); // NEW (pack 22): announcements for parents/students
       loadPortalExams();   // NEW (pack 22): exam timetable for this class
-      loadPortalMessages(); // NEW (pack 23): two-way messaging with the school
+      // CHANGED (pack 24): do NOT load messages at boot - showing the
+      // thread counts as read, which instantly cleared the bell for
+      // parents who never opened the chat. The thread now loads (and
+      // marks read) exactly when the parent opens the Chat view.
       ptPrefillSettings(student); // NEW (pack 23): Settings card prefill
       loadCalendar();    // NEW (pack 15)
     })
@@ -241,7 +244,12 @@ function loadPortalNotices() {
     .then(function (rows) {
       var card = document.getElementById("ptNoticesCard");
       var box = document.getElementById("ptNotices");
-      if (!card || !box || !Array.isArray(rows) || !rows.length) return;
+      var empty = document.getElementById("ptNoticesEmpty"); // NEW (pack 24)
+      if (!card || !box || !Array.isArray(rows) || !rows.length) {
+        if (empty) empty.style.display = "block"; // NEW (pack 24): friendly empty state
+        return;
+      }
+      if (empty) empty.style.display = "none";
       var AUD = { general: "Everyone", student: "Students", parent: "Parents" };
       box.innerHTML = rows.map(function (n) {
         var when = n.kind === "event" && n.event_date
@@ -578,16 +586,20 @@ function ptSendMessage(ev) {
     .finally(function () { ptMsgSending = false; });
 }
 
-/* --------------------- NOTIFICATIONS (bell) ------------------------- */
+/* --------------------- NOTIFICATIONS (bell + badges, pack 24) -------- */
 function ptRefreshUnread() {
-  var badge = document.getElementById("ptBellBadge");
-  if (!badge) return;
   fetch("/portal/messages/unread")
     .then(function (r) { return r.ok ? r.json() : { count: 0 }; })
     .then(function (d) {
       var c = d && d.count ? d.count : 0;
-      badge.style.display = c > 0 ? "inline-block" : "none";
-      badge.textContent = c > 9 ? "9+" : String(c);
+      var label = c > 9 ? "9+" : String(c);
+      // CHANGED (pack 24): one count feeds the top bell AND both sidebar badges.
+      [["ptBellBadge", "inline-block"], ["ptChatBadge", "inline-block"], ["ptNotifBadge", "inline-block"]].forEach(function (pair) {
+        var el = document.getElementById(pair[0]);
+        if (!el) return;
+        el.style.display = c > 0 ? pair[1] : "none";
+        el.textContent = label;
+      });
     })
     .catch(function () { /* keep old badge */ });
 }
@@ -636,19 +648,132 @@ function ptWireSettings() {
   });
 }
 
-/* Boot the pack-23 widgets (DOM is ready - this script loads last). */
+/* ==========================================================================
+   NEW (pack 24 - owner requests):
+     "make it like the OPay/PalmPay one - press the notification icon, it
+      takes you to another page, you see all notifications listed, press
+      one and it shows you where you need to go."
+   View router for the sidebar shell + the Notifications page builder.
+   ========================================================================== */
+function ptShowView(name) {
+  document.querySelectorAll(".pt-view").forEach(function (v) {
+    v.classList.toggle("pt-view-on", v.getAttribute("data-view") === name);
+  });
+  document.querySelectorAll(".pt-navlink[data-view]").forEach(function (l) {
+    l.classList.toggle("pt-active", l.getAttribute("data-view") === name);
+  });
+  document.body.classList.remove("pt-nav-open");
+  window.scrollTo({ top: 0 });
+  // lazy loaders: only touch the network when the parent actually opens it
+  if (name === "chat") loadPortalMessages();           // shows + marks read -> bell clears
+  if (name === "notifications") loadPortalNotifications();
+}
+
+/* Build the OPay-style list: unread replies, school notices & events,
+   dated exams, recent payments - every row jumps to its own place. */
+function loadPortalNotifications() {
+  var box = document.getElementById("ptNotifList");
+  if (!box) return;
+  box.innerHTML = '<div class="pt-empty">Loading notifications...</div>';
+  var items = [];
+  var done = function () {
+    // newest first across every source
+    items.sort(function (a, b) { return String(b.when).localeCompare(String(a.when)); });
+    if (!items.length) {
+      box.innerHTML = '<div class="pt-empty">Nothing new from the school yet. Messages, notices, exam dates and payments will land here.</div>';
+      return;
+    }
+    box.innerHTML = "";
+    items.forEach(function (it) {
+      var row = document.createElement("button");
+      row.type = "button";
+      row.className = "pt-notif-item" + (it.unread ? " pt-unread" : "");
+      row.innerHTML =
+        '<span class="pt-nico">' + it.icon + "</span>" +
+        '<span class="pt-nt"><b>' + esc(it.title) + "</b><span>" + esc(it.text) + "</span></span>" +
+        '<span class="pt-nwhen">' + esc(String(it.when).slice(0, 10)) + "</span>" +
+        '<span class="pt-nchev">&#8250;</span>';
+      row.addEventListener("click", function () { ptShowView(it.view); });
+      box.appendChild(row);
+    });
+  };
+  // 4 small parallel fetches (all existing routes)
+  var pending = 4;
+  var step = function () { if (--pending === 0) done(); };
+
+  fetch("/portal/messages/unread").then(function (r) { return r.ok ? r.json() : {}; }).then(function (d) {
+    if (d.count > 0) items.push({
+      icon: "&#128172;", title: d.count + " new message" + (d.count > 1 ? "s" : "") + " from the school",
+      text: "Tap to open Chat and read the reply.", when: new Date().toISOString().slice(0, 10),
+      view: "chat", unread: true
+    });
+    step();
+  }).catch(step);
+
+  fetch("/portal/announcements").then(function (r) { return r.ok ? r.json() : []; }).then(function (rows) {
+    (Array.isArray(rows) ? rows : []).slice(0, 6).forEach(function (n) {
+      var isEvent = n.kind === "event";
+      var dt = isEvent && n.event_date ? String(n.event_date).slice(0, 10) : String(n.created_at || "").slice(0, 10);
+      items.push({
+        icon: isEvent ? "&#128197;" : "&#128227;",
+        title: (isEvent ? "Event: " : "Notice: ") + (n.title || ""),
+        text: isEvent && n.event_date ? "Happening on " + dt + (n.body ? " - " + n.body : "") : (n.body || "Tap to read"),
+        when: String(n.created_at || dt), view: "notices", unread: false
+      });
+    });
+    step();
+  }).catch(step);
+
+  fetch("/portal/exams").then(function (r) { return r.ok ? r.json() : []; }).then(function (rows) {
+    var today = new Date().toISOString().slice(0, 10);
+    (Array.isArray(rows) ? rows : []).filter(function (e) { return e.exam_date && String(e.exam_date).slice(0, 10) >= today; })
+      .slice(0, 5).forEach(function (e) {
+        items.push({
+          icon: "&#128394;", title: "Exam: " + (e.subject || e.title || ""),
+          text: "Scheduled for " + String(e.exam_date).slice(0, 10),
+          when: String(e.exam_date).slice(0, 10), view: "exams", unread: false
+        });
+      });
+    step();
+  }).catch(step);
+
+  fetch("/portal/payments").then(function (r) { return r.ok ? r.json() : []; }).then(function (rows) {
+    (Array.isArray(rows) ? rows : []).slice(0, 3).forEach(function (p) {
+      items.push({
+        icon: "&#128184;", title: "Payment recorded: " + (p.fee_type || "School Fee"),
+        text: "The school recorded " + (p.amount != null ? "\u20A6" + Number(p.amount).toLocaleString() : "a payment") + (p.method ? " (" + p.method + ")" : ""),
+        when: String(p.created_at || ""), view: "fees", unread: false
+      });
+    });
+    step();
+  }).catch(step);
+}
+
+/* Boot the pack-23/24 widgets (DOM is ready - this script loads last). */
 (function ptPack23Boot() {
   var msgForm = document.getElementById("ptMsgForm");
   if (msgForm) msgForm.addEventListener("submit", ptSendMessage);
-  var bell = document.getElementById("ptBellBtn");
-  if (bell) bell.addEventListener("click", function () {
-    var card = document.getElementById("ptMsgCard");
-    if (card) card.scrollIntoView({ behavior: "smooth", block: "start" });
-    loadPortalMessages(); // shows + marks read
+
+  // pack 24: sidebar view switching
+  document.querySelectorAll(".pt-navlink[data-view]").forEach(function (link) {
+    link.addEventListener("click", function () { ptShowView(link.getAttribute("data-view")); });
   });
+  document.querySelectorAll("[data-jump]").forEach(function (btn) {
+    btn.addEventListener("click", function () { ptShowView(btn.getAttribute("data-jump")); });
+  });
+  var ham = document.getElementById("ptHam");
+  if (ham) ham.addEventListener("click", function () { document.body.classList.toggle("pt-nav-open"); });
+  var scrim = document.getElementById("ptScrim");
+  if (scrim) scrim.addEventListener("click", function () { document.body.classList.remove("pt-nav-open"); });
+
+  // CHANGED (pack 24): bell opens the Notifications PAGE (OPay-style),
+  // not just a jump to chat.
+  var bell = document.getElementById("ptBellBtn");
+  if (bell) bell.addEventListener("click", function () { ptShowView("notifications"); });
+
   ptWireSettings();
   ptRefreshUnread();
   // gentle poll so a new school reply lights the bell even while the
-  // parent is on another card (the "notifications" the owner asked for).
+  // parent is on another view (the "notifications" the owner asked for).
   setInterval(ptRefreshUnread, 60000);
 })();

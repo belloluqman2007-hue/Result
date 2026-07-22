@@ -263,8 +263,17 @@
             notes.forEach(function (n) {
                 var div = document.createElement("div");
                 div.className = "ams-note";
+                // NEW (pack 22): audience badge (+ event badge/date) and an
+                // EDIT button beside the delete one - full control after
+                // posting, exactly as the owner asked.
+                var AUD_LABEL = { teacher: "Teachers", student: "Students", parent: "Parents", general: "Everyone" };
+                var badges = '<span class="ams-note-badge">' + (AUD_LABEL[n.audience] || "Everyone") + "</span>" +
+                    (n.kind === "event" ? '<span class="ams-note-badge b-event">Event' + (n.event_date ? " - " + String(n.event_date).slice(0, 10) : "") + "</span>" : "");
                 div.innerHTML =
-                    '<div class="ams-note-title"><span></span>' +
+                    '<div class="ams-note-title"><span></span>' + badges +
+                    '<button type="button" class="ams-note-edit" title="Edit announcement">' +
+                    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>' +
+                    "</button>" +
                     '<button type="button" class="ams-note-del" title="Delete announcement">' +
                     '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/></svg>' +
                     "</button></div>" +
@@ -273,6 +282,18 @@
                 div.querySelector(".ams-note-title span").textContent = n.title;
                 div.querySelector(".ams-note-body").textContent = n.body || "";
                 div.querySelector(".ams-note-date").textContent = window.amsTimeAgo(n.created_at);
+                div.querySelector(".ams-note-edit").addEventListener("click", function () {
+                    document.getElementById("amsAnnTitle").value = n.title;
+                    document.getElementById("amsAnnBody").value = n.body || "";
+                    document.getElementById("amsAnnAudience").value = n.audience || "general";
+                    document.getElementById("amsAnnKind").value = n.kind || "announcement";
+                    document.getElementById("amsAnnKind").dispatchEvent(new Event("change"));
+                    document.getElementById("amsAnnDate").value = n.event_date ? String(n.event_date).slice(0, 10) : "";
+                    document.getElementById("amsAnnEditId").value = n.id;
+                    document.getElementById("amsAnnSubmitBtn").textContent = "Save Changes";
+                    document.getElementById("amsAnnCancelEdit").style.display = "inline-block";
+                    document.getElementById("amsAnnouncementForm").scrollIntoView({ behavior: "smooth", block: "center" });
+                });
                 div.querySelector(".ams-note-del").addEventListener("click", function () {
                     window.amsConfirm("Delete announcement?", '"' + n.title + '" will be removed from the notice board.')
                         .then(function (ok) {
@@ -297,27 +318,60 @@
     function initAnnouncementForm() {
         var form = document.getElementById("amsAnnouncementForm");
         if (!form) return;
+
+        /* NEW (pack 22): event date shows only for the Event kind; the form
+           also doubles as an EDITOR (PUT) - Cancel editing restores it. */
+        var kindSel = document.getElementById("amsAnnKind");
+        var dateWrap = document.getElementById("amsAnnDateWrap");
+        function syncKindUI() { dateWrap.style.display = kindSel.value === "event" ? "flex" : "none"; }
+        kindSel.addEventListener("change", syncKindUI);
+        syncKindUI();
+
+        function resetForm() {
+            document.getElementById("amsAnnTitle").value = "";
+            document.getElementById("amsAnnBody").value = "";
+            document.getElementById("amsAnnAudience").value = "general";
+            kindSel.value = "announcement";
+            syncKindUI();
+            document.getElementById("amsAnnDate").value = "";
+            document.getElementById("amsAnnEditId").value = "";
+            document.getElementById("amsAnnSubmitBtn").textContent = "Post Announcement";
+            document.getElementById("amsAnnCancelEdit").style.display = "none";
+        }
+        document.getElementById("amsAnnCancelEdit").addEventListener("click", resetForm);
+
         form.addEventListener("submit", function (e) {
             e.preventDefault();
             var title = document.getElementById("amsAnnTitle").value.trim();
             var body = document.getElementById("amsAnnBody").value.trim();
+            var editId = document.getElementById("amsAnnEditId").value;
             if (!title) {
                 window.amsToast("Please enter an announcement title.", "error");
                 return;
             }
-            fetch("/api/announcements", {
-                method: "POST",
+            var payload = {
+                title: title,
+                body: body,
+                audience: document.getElementById("amsAnnAudience").value,
+                kind: kindSel.value,
+                event_date: document.getElementById("amsAnnDate").value
+            };
+            fetch(editId ? "/api/announcements/" + editId : "/api/announcements", {
+                method: editId ? "PUT" : "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ title: title, body: body })
+                body: JSON.stringify(payload)
             })
                 .then(function (r) { return r.json(); })
                 .then(function (d) {
-                    window.amsToast(d.message || "Announcement posted");
-                    document.getElementById("amsAnnTitle").value = "";
-                    document.getElementById("amsAnnBody").value = "";
-                    loadAnnouncements();
+                    window.amsToast(d.message || (editId ? "Announcement updated" : "Announcement posted"), d.message && /required|date/i.test(d.message) ? "error" : "success");
+                    if (!/required|warming|error|Could not/i.test(d.message || "")) {
+                        resetForm();
+                        loadAnnouncements();
+                        // an event announcement also landed in Upcoming Events
+                        if (payload.kind === "event" && typeof loadEvents === "function") loadEvents();
+                    }
                 })
-                .catch(function () { window.amsToast("Could not post announcement", "error"); });
+                .catch(function () { window.amsToast("Could not save announcement", "error"); });
         });
     }
 
@@ -484,6 +538,154 @@
     };
 
     /* ======================================================
+       NEW (pack 23 - owner requests): MESSAGES (parent <-> teacher /
+       administration), NOTIFICATIONS bell badge, STAFF SETTINGS
+       (change own password). All new routes; nothing existing touched.
+    ====================================================== */
+    function amsEsc(v) {
+        return String(v == null ? "" : v).replace(/[&<>"']/g, function (c) {
+            return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
+        });
+    }
+
+    function amsRefreshMsgBadge() {
+        getJSON("/api/messages/unread").then(function (d) {
+            var c = d && d.count ? d.count : 0;
+            var badge = document.getElementById("amsMsgCount");
+            var chip = document.getElementById("amsMsgUnreadChip");
+            if (badge) {
+                badge.style.display = c > 0 ? "inline-block" : "none";
+                badge.textContent = c > 9 ? "9+" : String(c);
+            }
+            if (chip) {
+                chip.style.display = c > 0 ? "inline-block" : "none";
+                chip.textContent = c + " new";
+            }
+            // NEW (pack 24): the same count also lights the sidebar Chat link.
+            var side = document.getElementById("amsSideChatBadge");
+            if (side) {
+                side.style.display = c > 0 ? "inline-block" : "none";
+                side.textContent = c > 9 ? "9+" : String(c);
+            }
+        }).catch(function () {});
+    }
+
+    function amsLoadMessages() {
+        var box = document.getElementById("amsMsgList");
+        if (!box) return;
+        getJSON("/api/messages").then(function (rows) {
+            rows = Array.isArray(rows) ? rows : [];
+            if (!rows.length) {
+                box.innerHTML = '<div class="ams-empty">No messages yet. Parents write from the Student/Parent portal - they land here.</div>';
+                amsRefreshMsgBadge();
+                return;
+            }
+            box.innerHTML = rows.map(function (m) {
+                var fromParent = m.sender_type === "portal";
+                var sid = fromParent ? m.sender_ref : m.recipient_ref;
+                var who = fromParent ? (m.sender_name || sid) : (m.sender_name || "Staff");
+                var when = String(m.created_at || "").replace("T", " ").slice(0, 16);
+                var unread = fromParent && !m.read_at;
+                return '<div class="ams-msg-item" data-sid="' + amsEsc(sid) + '" style="cursor:pointer; padding:8px 10px; margin:6px 0; border-radius:12px; ' +
+                    (fromParent
+                        ? "background:#eef4ef; border:1px solid " + (unread ? "#2F9E6E" : "#d7e0da") + ";"
+                        : "background:#f7f4ea; border:1px solid #e6ddc4;") + '">' +
+                    '<div style="font-size:11px; font-weight:700; color:#5B6B62;">' +
+                        (fromParent ? "&#128105;&#8205;&#128103;&#8205;&#128102; " : "&#127979; ") + amsEsc(who) +
+                        (m.recipient_class ? ' <span style="font-weight:400;">· class: ' + amsEsc(m.recipient_class) + "</span>" : "") +
+                        ' <span style="float:right; font-weight:400;">' + amsEsc(when) + "</span>" +
+                        (unread ? ' <span style="color:#C0392B;">● NEW</span>' : "") +
+                    "</div>" +
+                    '<div style="font-size:13px; line-height:1.45; white-space:pre-wrap;">' + amsEsc(m.body) + "</div>" +
+                    (fromParent ? '<div style="font-size:11px; color:#14532d; margin-top:2px;">Tap to reply to ' + amsEsc(sid) + "</div>" : "") +
+                "</div>";
+            }).join("");
+            Array.from(box.querySelectorAll(".ams-msg-item")).forEach(function (el) {
+                el.addEventListener("click", function () {
+                    var input = document.getElementById("amsMsgStudentId");
+                    if (input) {
+                        input.value = el.getAttribute("data-sid") || "";
+                        var body = document.getElementById("amsMsgBody");
+                        var info = document.getElementById("amsMsgReplyInfo");
+                        if (info) info.textContent = "Replying to " + input.value + " - type below and press Send.";
+                        if (body) body.focus();
+                    }
+                });
+            });
+            // show = read -> then clear the bell
+            fetch("/api/messages/read", { method: "POST" })
+                .then(function () { amsRefreshMsgBadge(); })
+                .catch(function () {});
+        }).catch(function () {
+            box.innerHTML = '<div class="ams-empty">Could not load messages.</div>';
+        });
+    }
+
+    function amsInitMessaging() {
+        var sendBtn = document.getElementById("amsMsgSend");
+        if (!sendBtn) return;
+        sendBtn.addEventListener("click", function () {
+            var sidEl = document.getElementById("amsMsgStudentId");
+            var bodyEl = document.getElementById("amsMsgBody");
+            var info = document.getElementById("amsMsgReplyInfo");
+            var sid = (sidEl.value || "").trim();
+            var body = (bodyEl.value || "").trim();
+            if (!sid || !body) {
+                if (info) info.textContent = "Pick the student (tap a parent message) and type a reply first.";
+                return;
+            }
+            sendBtn.disabled = true;
+            fetch("/api/messages", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ student_id: sid, body: body })
+            })
+                .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, d: d }; }); })
+                .then(function (res) {
+                    if (info) info.textContent = res.d.message || "";
+                    if (window.amsToast) window.amsToast(res.d.message || (res.ok ? "Sent." : "Failed."), res.ok ? "success" : "error", 4000);
+                    if (res.ok) { bodyEl.value = ""; amsLoadMessages(); }
+                })
+                .catch(function () { if (info) info.textContent = "Network error."; })
+                .finally(function () { sendBtn.disabled = false; });
+        });
+        amsLoadMessages();
+    }
+
+    function amsInitStaffSettings() {
+        getJSON("/me").then(function (me) {
+            var el = document.getElementById("amsWhoAmI");
+            if (el && me && me.loggedIn) {
+                el.innerHTML = "Logged in as <b>" + amsEsc(me.username) + "</b> (" + amsEsc(me.role) + ")";
+            }
+        }).catch(function () {});
+        var btn = document.getElementById("amsPwChangeBtn");
+        if (!btn) return;
+        btn.addEventListener("click", function () {
+            var note = document.getElementById("amsPwNote");
+            var cur = document.getElementById("amsPwCurrent").value;
+            var n1 = document.getElementById("amsPwNew").value;
+            var n2 = document.getElementById("amsPwNew2").value;
+            if (n1 !== n2) { if (note) { note.textContent = "The two new passwords do not match."; note.style.color = "#C0392B"; } return; }
+            fetch("/api/change-password", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ current: cur, newPassword: n1 })
+            })
+                .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, d: d }; }); })
+                .then(function (res) {
+                    if (note) { note.textContent = res.d.message || ""; note.style.color = res.ok ? "#14532d" : "#C0392B"; }
+                    if (res.ok) {
+                        document.getElementById("amsPwCurrent").value = "";
+                        document.getElementById("amsPwNew").value = "";
+                        document.getElementById("amsPwNew2").value = "";
+                    }
+                })
+                .catch(function () { if (note) { note.textContent = "Network error."; note.style.color = "#C0392B"; } });
+        });
+    }
+
+    /* ======================================================
        INIT
     ====================================================== */
     document.addEventListener("DOMContentLoaded", function () {
@@ -497,6 +699,16 @@
         initAnnouncementForm();
         initEventForm();
         updateScoreCount();
+        amsInitMessaging();      // NEW (pack 23): parent<->school messages
+        amsInitStaffSettings();  // NEW (pack 23): change own password
+        amsRefreshMsgBadge();    // NEW (pack 23): notifications bell
+        setInterval(amsRefreshMsgBadge, 60000);
+        var msgBell = document.getElementById("amsMsgBell");
+        if (msgBell) msgBell.addEventListener("click", function () {
+            var panel = document.getElementById("amsMessagesPanel");
+            if (panel) panel.scrollIntoView({ behavior: "smooth", block: "start" });
+            amsLoadMessages(); // shows + clears the unread badge
+        });
 
         /* Keep the visible-row counter in sync when app.js
            adds/removes rows in #scoreTable */

@@ -16,13 +16,19 @@
        route, query, or calculation. It is 100% additive.
    ==================================================================== */
 
-const CACHE_NAME = "ameenullah-shell-v11"; // NEW (pack 23): result font/one-page fix + messaging + notifications + settings + exam-PDF hardening + receipt viewer // NEW (pack 22): clearer Arabic result font + portal notices/exam timetable + website board + announcement audiences/edit // FIX (pack 21): search-as-you-type card + statement fix + clean numbers/font // FIX (pack 20): DB-backed uploads + optional class in bulk // FIX (pack 19): multi-body merge for saved multi-exam booklets // FIX (pack 18): refresh for dashboard calendar removal + exam print/font/step-chooser fixes // FIX (pack 17): refresh for exam engine/calendar/receipts // FIX (pack 16): refresh for the staff calendar viewer // FIX (pack 15): refresh for portal/calendar/finance v2 // FIX (pack 13): force refresh of old cached assets
+const CACHE_NAME = "ameenullah-shell-v12"; // FIX (pack 24): JS/CSS network-first (kills stale "exam shows only cover" code) + portal sidebar redesign + staff Chat page // NEW (pack 23): result font/one-page fix + messaging + notifications + settings + exam-PDF hardening + receipt viewer // NEW (pack 22): clearer Arabic result font + portal notices/exam timetable + website board + announcement audiences/edit // FIX (pack 21): search-as-you-type card + statement fix + clean numbers/font // FIX (pack 20): DB-backed uploads + optional class in bulk // FIX (pack 19): multi-body merge for saved multi-exam booklets // FIX (pack 18): refresh for dashboard calendar removal + exam print/font/step-chooser fixes // FIX (pack 17): refresh for exam engine/calendar/receipts // FIX (pack 16): refresh for the staff calendar viewer // FIX (pack 15): refresh for portal/calendar/finance v2 // FIX (pack 13): force refresh of old cached assets
 
 // Files made available immediately (used by the offline page).
 const PRECACHE = ["offline.html", "images/LOGO.JPG", "icons/icon-192.png"];
 
 // Only these file types are ever cached (static assets only).
 const STATIC_EXT = /\.(css|js|png|jpe?g|gif|svg|webp|ico|woff2?|webmanifest)$/i;
+// FIX (pack 24 - owner: "the exam only shows the cover"): JS and CSS are
+// CODE - serving a stale cached copy first (old behaviour) meant phones
+// could run weeks-old exam/result logic after an update. Code now goes
+// NETWORK-FIRST (fresh the very next load; cache is only the offline
+// fallback). Images/fonts keep the fast stale-while-revalidate path.
+const CODE_EXT = /\.(css|js)$/i;
 
 self.addEventListener("install", (event) => {
   event.waitUntil(precache());
@@ -49,7 +55,11 @@ self.addEventListener("fetch", (event) => {
   const url = new URL(req.url);
   if (url.origin !== self.location.origin) return;
 
-  // Static files (css, js, images...): serve cache fast, then refresh it.
+  // Static files: CODE network-first (pack 24), images/fonts cache-first.
+  if (CODE_EXT.test(url.pathname)) {
+    event.respondWith(networkFirst(req));
+    return;
+  }
   if (STATIC_EXT.test(url.pathname)) {
     event.respondWith(staleWhileRevalidate(req));
     return;
@@ -76,6 +86,20 @@ async function precache() {
       cache.add(file).catch((err) => console.warn("PWA: could not precache", file, err))
     )
   );
+}
+
+// pack 24: fresh copy wins immediately; the cache silently backs up offline.
+async function networkFirst(req) {
+  const cache = await caches.open(CACHE_NAME);
+  try {
+    const fresh = await fetch(req);
+    if (fresh.ok) cache.put(req, fresh.clone());
+    return fresh;
+  } catch (err) {
+    const cached = await cache.match(req);
+    if (cached) return cached;
+    throw err;
+  }
 }
 
 async function staleWhileRevalidate(req) {

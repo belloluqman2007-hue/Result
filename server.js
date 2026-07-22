@@ -190,6 +190,13 @@ app.get("/me", (req, res) => {
 });
 
 // Protect the dashboard pages - must come before express.static
+// NEW (pack 24 - owner: "add chat in the side bar for admin and
+// teachers"): dedicated staff chat page, guarded exactly like the
+// dashboard. Must stay BEFORE express.static.
+app.get("/chat.html", requireLogin, (req, res) => {
+    res.sendFile(path.join(__dirname, "chat.html"));
+});
+
 app.get("/teacher-dashboard.html", requireLogin, (req, res) => {
     res.sendFile(path.join(__dirname, "teacher-dashboard.html"));
 });

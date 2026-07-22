@@ -4,6 +4,52 @@
 
 ---
 
+## Pack 24 — 2026-07-22
+
+Owner requests:
+1. "All the exam I am writing in the create exam is not showing, only the exam cover - fix that."
+2. "Let the student parent portal be organized, it is too rough - maybe it will have a sidebar also. Just make it nice."
+3. "In the notification icon make it like the OPay and PalmPay one - press it, it takes you to another page with all notifications listed, press one and it shows you where you need to go."
+4. "The messaging space in the student parent portal is not working and it is not available in admin and teachers space - add it and name it as Chat in the sidebar and organize everything well."
+
+Root causes found:
+- Exam/cover bug: phones were served STALE cached JS/CSS by the service
+  worker (stale-while-revalidate) for weeks after updates, so old exam
+  code kept running. sw.js now serves JS/CSS **network-first** (v12) —
+  the live engine (verified: wizard + typing produces all pages).
+- Portal messaging "not working": the thread was auto-loaded at login,
+  instantly marking everything read, so parents never saw anything
+  pending; plus the feature was buried in a long scroll. Now a real
+  **Chat** page in the sidebar; the thread loads (and marks read) only
+  when Chat is opened.
+
+Changes (all commented in code; additive, backward compatible):
+
+- FIX (sw.js): JS/CSS now network-first; images/fonts keep SWR; cache
+  bumped to `ameenullah-shell-v12`.
+- REDESIGN (portal.html): app-shell with green sidebar + top bar; every
+  feature is a tidy page — Overview (student card + quick shortcuts),
+  Results, Fees & Payments, Chat, Notifications, Notices, Exam
+  Timetable, Calendar, Settings. ALL element ids preserved; nothing
+  removed. Mobile gets a hamburger drawer + scrim; print rules keep
+  chrome hidden.
+- NEW (js/portal.js): view router `ptShowView()`, lazy per-view loaders,
+  sidebar/badges fed by one unread count, and
+  `loadPortalNotifications()` — the OPay/PalmPay-style page: rows for
+  unread school replies, notices, dated events, upcoming exams and
+  recent payments; tapping a row jumps straight to its page.
+- NEW (chat.html + js/chat.js, server guard `GET /chat.html`): staff
+  **Chat** page — thread list per parent/student with unread dots,
+  conversation bubbles, reply box (Enter sends), 30s gentle refresh.
+  Linked in the dashboard sidebar as "Chat" (with unread badge) for
+  admin AND teachers.
+- CHANGED (js/dashboard.js): the sidebar Chat link shares the same
+  unread count as the bell/panel.
+- CHANGED (js/portal.js): messages no longer auto-load/mark-read at
+  login (badge stays honest until Chat is opened).
+
+---
+
 ## Pack 23 — 2026-07-21
 
 Owner requests:
