@@ -48,6 +48,17 @@
     .ch-compose button{ background:#14532d; color:#fff; border:none; border-radius:11px; padding:0 18px; font-weight:800; cursor:pointer; }
     .ch-empty{ color:#93a19a; text-align:center; margin-top:40px; font-size:14px; padding:0 20px; }
     .ch-note{ font-size:12px; color:#5B6B62; padding:0 16px 10px; }
+    /* NEW (pack 26): new-conversation inline form */
+    .ch-new-btn{ display:block; width:calc(100% - 28px); margin:10px 14px 4px; background:#14532d; color:#fff; border:none; border-radius:10px; padding:10px; font-size:13px; font-weight:800; cursor:pointer; }
+    .ch-new-form{ background:#f4f9f5; border-top:1px solid #e1e9e3; padding:12px 14px; display:none; }
+    .ch-new-form label{ display:block; font-size:11.5px; font-weight:700; color:#5B6B62; margin-bottom:3px; }
+    .ch-new-form input, .ch-new-form textarea{ width:100%; padding:9px 10px; border:1px solid #d7e0da; border-radius:10px; font-size:13px; font-family:inherit; margin-bottom:8px; box-sizing:border-box; }
+    .ch-new-form textarea{ resize:vertical; min-height:64px; }
+    .ch-new-btns{ display:flex; gap:8px; }
+    .ch-new-btns button{ flex:1; padding:9px; border-radius:10px; font-weight:800; font-size:13px; cursor:pointer; border:none; }
+    .ch-new-btns .send{ background:#14532d; color:#fff; }
+    .ch-new-btns .cancel{ background:#fff; color:#1d4a30; border:1px solid #c9d5cc; }
+    .ch-new-note{ font-size:12px; color:#C0392B; min-height:14px; margin-bottom:4px; }
     @media (max-width:820px){
       .ch-shell{ flex-direction:column; }
       .ch-threads{ width:100%; flex-basis:auto; }
@@ -65,6 +76,19 @@
   <div class="ch-shell">
     <div class="ch-threads">
       <h3>PARENT CONVERSATIONS</h3>
+      <!-- NEW (pack 26): staff can start a conversation before the parent does -->
+      <button class="ch-new-btn" type="button" id="chNewBtn">&#128231; + New Conversation</button>
+      <div class="ch-new-form" id="chNewForm">
+        <label for="chNewSid">Student ID</label>
+        <input type="text" id="chNewSid" placeholder="e.g. AM001" autocomplete="off">
+        <label for="chNewBody">Your message</label>
+        <textarea id="chNewBody" placeholder="Type your message to the parent..."></textarea>
+        <div class="ch-new-note" id="chNewNote"></div>
+        <div class="ch-new-btns">
+          <button class="send" type="button" id="chNewSend">&#128231; Send</button>
+          <button class="cancel" type="button" id="chNewCancel">Cancel</button>
+        </div>
+      </div>
       <div id="chThreadList"><div class="ch-empty">Loading...</div></div>
     </div>
     <div class="ch-convo">

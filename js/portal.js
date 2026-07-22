@@ -58,6 +58,8 @@
       // marks read) exactly when the parent opens the Chat view.
       ptPrefillSettings(student); // NEW (pack 23): Settings card prefill
       loadCalendar();    // NEW (pack 15)
+      // NEW (pack 26): attendance record - lazy on first open, prefetch for badge
+      loadAttendance(true);
     })
     .catch(goLogin);
 
@@ -720,6 +722,7 @@ function ptShowView(name) {
   if (name === "notifications") loadPortalNotifications();
   if (name === "exams") loadPortalTimetable("exam");    // NEW (pack 25): published exam schedule
   if (name === "classtt") loadPortalTimetable("class"); // NEW (pack 25): published weekly timetable
+  if (name === "attendance") loadAttendance();           // NEW (pack 26): attendance on demand
 }
 
 /* Build the OPay-style list: unread replies, school notices & events,
@@ -800,6 +803,73 @@ function loadPortalNotifications() {
     });
     step();
   }).catch(step);
+}
+
+/* ==========================================================================
+   NEW (pack 26): Student attendance record viewer.
+   Calls GET /portal/attendance -> [{att_date, status},...].
+   prefetchOnly=true just counts absences for a badge; false = full render.
+   ========================================================================== */
+var ptAttRows = null; // cache so page switch doesn't re-fetch
+function loadAttendance(prefetchOnly) {
+  fetch("/portal/attendance")
+    .then(function (r) { return r.ok ? r.json() : []; })
+    .then(function (rows) {
+      ptAttRows = Array.isArray(rows) ? rows : [];
+      var present = 0, absent = 0, late = 0;
+      ptAttRows.forEach(function (r) {
+        if (r.status === "present") present++;
+        else if (r.status === "absent") absent++;
+        else if (r.status === "late") late++;
+      });
+      var total = present + absent + late;
+
+      if (prefetchOnly) return; // only called to warm the cache on login
+
+      var summBox = document.getElementById("ptAttSummary");
+      var listBox = document.getElementById("ptAttList");
+      if (!summBox || !listBox) return;
+
+      if (!total) {
+        listBox.innerHTML = '<div class="pt-empty">No attendance records yet. The school will add them here as terms progress.</div>';
+        summBox.innerHTML = "";
+        return;
+      }
+
+      // Summary pills
+      var pct = total > 0 ? Math.round((present / total) * 100) : 0;
+      summBox.innerHTML =
+        '<div style="background:#e4f4ea; border:1px solid #b9e0c8; border-radius:11px; padding:10px 16px; min-width:90px; text-align:center;">' +
+          '<div style="font-size:22px; font-weight:800; color:#14532d;">' + present + '</div>' +
+          '<div style="font-size:11px; color:#1d4a30;">Present</div></div>' +
+        '<div style="background:#fdf0e4; border:1px solid #f3d6b0; border-radius:11px; padding:10px 16px; min-width:90px; text-align:center;">' +
+          '<div style="font-size:22px; font-weight:800; color:#B98A1D;">' + late + '</div>' +
+          '<div style="font-size:11px; color:#7a5c10;">Late</div></div>' +
+        '<div style="background:#fdecea; border:1px solid #f3bfbb; border-radius:11px; padding:10px 16px; min-width:90px; text-align:center;">' +
+          '<div style="font-size:22px; font-weight:800; color:#C0392B;">' + absent + '</div>' +
+          '<div style="font-size:11px; color:#8c2020;">Absent</div></div>' +
+        '<div style="background:#f0f4f2; border:1px solid #d5e0da; border-radius:11px; padding:10px 16px; min-width:90px; text-align:center;">' +
+          '<div style="font-size:22px; font-weight:800; color:#1f2d26;">' + pct + '%</div>' +
+          '<div style="font-size:11px; color:#5B6B62;">Attendance rate</div></div>';
+
+      // Dated rows (newest first)
+      var STATUS_LABEL = { present: "&#9989; Present", absent: "&#10060; Absent", late: "&#9203; Late" };
+      var STATUS_COLOR = { present: "#14532d", absent: "#C0392B", late: "#B98A1D" };
+      listBox.innerHTML =
+        '<div class="pt-fee-row head"><span>Date</span><span class="pt-right">Status</span></div>' +
+        ptAttRows.map(function (r) {
+          var d = String(r.att_date || r.created_at || "").slice(0, 10);
+          var st = r.status || "present";
+          return '<div class="pt-fee-row">' +
+            '<span style="text-align:left;">' + esc(d) + '</span>' +
+            '<span class="pt-right" style="font-weight:700; color:' + (STATUS_COLOR[st] || "#1f2d26") + ';">' +
+            (STATUS_LABEL[st] || esc(st)) + '</span></div>';
+        }).join("");
+    })
+    .catch(function () {
+      var listBox = document.getElementById("ptAttList");
+      if (listBox) listBox.innerHTML = '<div class="pt-empty">Could not load attendance. Please try again later.</div>';
+    });
 }
 
 /* Boot the pack-23/24 widgets (DOM is ready - this script loads last). */

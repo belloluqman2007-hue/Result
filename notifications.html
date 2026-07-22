@@ -4,11 +4,9 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Notifications | Ameenullah School</title>
-  <!-- NEW FILE (pack 25 - owner: "Let the notifications work in the admin
-       as it is working in the student parent portal"): OPay/PalmPay-style
-       list for staff - press a row, it takes you where you need to go.
-       Uses only existing routes (/api/messages*, /payment-submissions,
-       /api/events). -->
+  <!-- CHANGED (pack 26): admin users also see overdue fee alerts and
+       pending receipt alerts in addition to the pack-25 items. Teachers
+       still see messages, payment proofs and upcoming events. -->
   <link rel="manifest" href="manifest.webmanifest">
   <meta name="theme-color" content="#2f5021">
   <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
@@ -19,9 +17,11 @@
     .nf-top img{ width:34px; height:34px; border-radius:8px; background:#fff; }
     .nf-back{ margin-left:auto; background:rgba(255,255,255,.14); color:#fff; border:none; padding:8px 14px; border-radius:10px; font-weight:700; text-decoration:none; font-size:13px; }
     .nf-wrap{ max-width:640px; margin:0 auto; padding:16px 14px 40px; }
-    .nf-item{ display:flex; gap:12px; align-items:center; background:#fff; border:1px solid #e1e9e3; border-radius:14px; padding:13px 14px; margin:8px 0; width:100%; cursor:pointer; text-align:left; font-family:inherit; }
+    .nf-section{ font-size:11px; font-weight:800; color:#5B6B62; letter-spacing:.5px; text-transform:uppercase; padding:14px 4px 6px; }
+    .nf-item{ display:flex; gap:12px; align-items:center; background:#fff; border:1px solid #e1e9e3; border-radius:14px; padding:13px 14px; margin:6px 0; width:100%; cursor:pointer; text-align:left; font-family:inherit; }
     .nf-item:hover{ box-shadow:0 4px 14px rgba(0,0,0,.07); }
     .nf-item.unread{ border-color:#2F9E6E; background:#f2faf4; }
+    .nf-item.urgent{ border-color:#C0392B; background:#fdf5f5; }
     .nf-ico{ width:40px; height:40px; flex:0 0 40px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:18px; background:#e8f2ea; color:#1d4a30; }
     .nf-tt{ flex:1; min-width:0; }
     .nf-tt b{ display:block; font-size:14px; }
@@ -43,17 +43,13 @@
   <script>
   (function () {
     var box = document.getElementById("nfList");
+    var isAdmin = false;
     function esc(v){ return String(v==null?"":v).replace(/[&<>"']/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c];}); }
-
-    fetch("/me").then(function(r){return r.json();}).then(function(me){
-      if (!me || !me.loggedIn) { window.location.replace("login.html"); return; }
-      build();
-    }).catch(function(){ window.location.replace("login.html"); });
 
     function row(it) {
       var b = document.createElement("button");
       b.type = "button";
-      b.className = "nf-item" + (it.unread ? " unread" : "");
+      b.className = "nf-item" + (it.urgent ? " urgent" : it.unread ? " unread" : "");
       b.innerHTML = '<span class="nf-ico">' + it.icon + '</span>' +
         '<span class="nf-tt"><b>' + esc(it.title) + '</b><span>' + esc(it.text) + '</span></span>' +
         '<span class="nf-when">' + esc(String(it.when||"").slice(0,10)) + '</span>' +
@@ -62,15 +58,46 @@
       return b;
     }
 
+    function section(label) {
+      var d = document.createElement("div");
+      d.className = "nf-section";
+      d.textContent = label;
+      return d;
+    }
+
+    function render(groups) {
+      box.innerHTML = "";
+      var total = 0;
+      groups.forEach(function (g) {
+        if (!g.items.length) return;
+        total += g.items.length;
+        box.appendChild(section(g.label));
+        g.items.forEach(function (it) { box.appendChild(row(it)); });
+      });
+      if (!total) {
+        box.innerHTML = '<div class="nf-empty">All clear &#10003; &#8212; no new messages, payment proofs, alerts or events right now.</div>';
+      }
+    }
+
+    fetch("/me").then(function(r){return r.json();}).then(function(me){
+      if (!me || !me.loggedIn) { window.location.replace("login.html"); return; }
+      isAdmin = me.role === "admin";
+      build();
+    }).catch(function(){ window.location.replace("login.html"); });
+
     function build() {
-      var items = [];
-      var remaining = 3;
+      var messages = [], proofs = [], events = [], feeAlerts = [], receiptAlerts = [];
+      // Count of outstanding fetches (admin gets 2 extra)
+      var remaining = isAdmin ? 5 : 3;
       var done = function() {
         if (--remaining > 0) return;
-        items.sort(function(a,b){ return String(b.when).localeCompare(String(a.when)); });
-        box.innerHTML = "";
-        if (!items.length) { box.innerHTML = '<div class="nf-empty">All clear - no new messages, payment proofs or events right now.</div>'; return; }
-        items.forEach(function(it){ box.appendChild(row(it)); });
+        render([
+          { label: "&#128172; Messages", items: messages },
+          { label: "&#128184; Payments to review", items: proofs },
+          { label: isAdmin ? "&#9888;&#65039; Fee alerts" : "", items: feeAlerts },
+          { label: isAdmin ? "&#128247; Receipt alerts" : "", items: receiptAlerts },
+          { label: "&#128197; Upcoming events", items: events }
+        ]);
       };
 
       // 1) unread parent messages (one row per parent, jump to Chat)
@@ -80,7 +107,7 @@
           if (m.sender_type !== "portal" || m.read_at) return;
           if (!seen[m.sender_ref]) {
             seen[m.sender_ref] = true;
-            items.push({
+            messages.push({
               icon:"&#128172;", title:(m.sender_name||m.sender_ref),
               text:"New message: " + (m.body||"").slice(0,80),
               when:m.created_at, href:"chat.html", unread:true
@@ -93,9 +120,9 @@
       // 2) payment proofs waiting for review -> Finance
       fetch("/payment-submissions?status=pending").then(function(r){return r.ok ? r.json() : [];}).then(function(rows){
         (Array.isArray(rows)?rows:[]).slice(0,8).forEach(function(p){
-          items.push({
+          proofs.push({
             icon:"&#128184;", title:"Payment proof to review",
-            text:(p.student_id||"") + " - \u20A6" + Number(p.amount||0).toLocaleString() + (p.fee_type? " ("+p.fee_type+")" : ""),
+            text:(p.student_id||"") + " \u2013 \u20A6" + Number(p.amount||0).toLocaleString() + (p.fee_type?" ("+p.fee_type+")" : ""),
             when:p.created_at, href:"finance.html", unread:true
           });
         });
@@ -107,14 +134,40 @@
         var today = new Date().toISOString().slice(0,10);
         (Array.isArray(rows)?rows:[]).filter(function(e){ return e.event_date && String(e.event_date).slice(0,10) >= today; })
           .slice(0,3).forEach(function(e){
-            items.push({
+            events.push({
               icon:"&#128197;", title:"Upcoming: " + (e.title||"School event"),
-              text:"On " + String(e.event_date).slice(0,10) + (e.description? " - "+e.description : ""),
+              text:"On " + String(e.event_date).slice(0,10) + (e.description? " \u2013 "+e.description : ""),
               when:e.event_date, href:"teacher-dashboard.html", unread:false
             });
           });
         done();
       }).catch(done);
+
+      // 4) [ADMIN ONLY] fee-balance alerts (students with large balance)
+      if (isAdmin) {
+        fetch("/fee-alerts").then(function(r){return r.ok ? r.json() : [];}).then(function(rows){
+          (Array.isArray(rows)?rows:[]).slice(0,6).forEach(function(a){
+            feeAlerts.push({
+              icon:"&#9888;&#65039;", title:(a.full_name||a.student_id) + " owes fees",
+              text:"Balance: \u20A6" + Number(a.balance||0).toLocaleString() + (a.class_name ? " \u00B7 " + a.class_name : ""),
+              when:"", href:"finance.html", urgent: Number(a.balance||0) > 0, unread:false
+            });
+          });
+          done();
+        }).catch(done);
+
+        // 5) [ADMIN ONLY] receipt alerts (payments with no receipt snapped)
+        fetch("/receipt-alerts").then(function(r){return r.ok ? r.json() : [];}).then(function(rows){
+          (Array.isArray(rows)?rows:[]).slice(0,6).forEach(function(p){
+            receiptAlerts.push({
+              icon:"&#128247;", title:"Receipt not yet attached",
+              text:(p.full_name||p.student_id) + " \u2013 \u20A6" + Number(p.amount||0).toLocaleString() + " (" + (p.fee_type||"Fee") + ")",
+              when:p.paid_at||"", href:"finance.html", unread:false
+            });
+          });
+          done();
+        }).catch(done);
+      }
     }
   })();
   </script>

@@ -3,10 +3,6 @@ const mysql = require("mysql2");
 
 // Recognizes Railway's auto-injected MySQL variables (MYSQLHOST, etc.)
 // automatically, falls back to our own DB_* names, then local dev defaults.
-console.log("MYSQLHOST:", process.env.MYSQLHOST);
-console.log("DB_HOST:", process.env.DB_HOST);
-console.log("MYSQLPORT:", process.env.MYSQLPORT);
-console.log("DB_PORT:", process.env.DB_PORT);
 
 /* CHANGED (pack 25 - owner: "Build it that it will accept 1000 users and
    will not collapse"): ONE connection serialized every request in the
