@@ -4,6 +4,66 @@
 
 ---
 
+## Pack 25 — 2026-07-22
+
+Owner requests:
+1. "Check the exam out in the PDF - it is not displaying the other questions
+   when downloaded and the sixth page I can't write except just one line."
+2. "Build confidentiality in the project - teacher can't be seeing chat
+   between admin and parents and at others also."
+3. "Let the notifications work in the admin as it is working in student
+   parent portal and remove messages in the dashboard ... create space for
+   them in sidebar."
+4. "Build it that it will accept 1000 users and will not collapse."
+5. "Add settings for teacher also."
+6. "Add exam and class timetable for admin and teachers and will display
+   for students after been published."
+7. "The messaging chat is not working - fix all that."
+
+Root causes found (exam PDF / page-6 writing):
+- css/exam.css set `.exam-flow .exam-body` to `min-height:0`, so every fresh
+  question page rendered 0px tall on phones — nothing to tap, questions
+  landed nowhere and never reached the PDF. Fixed at 250mm (the engine
+  measures the content BLOCKS, never the zone itself — verified safe).
+- `autoFitOnePage()` silently returned nothing when a big segment could not
+  fit even at minimum font — the extra questions were CLIPPED off the PDF
+  instead of moving to a new page. Now it reports "does not fit" and the
+  segment SPILLS across new pages at the floor font size.
+
+Changes (all commented in code; additive, backward compatible):
+
+- FIX (css/exam.css): question pages are 250mm tall again — tappable.
+- FIX (js/exam.js): oversized segments spill onto new pages instead of
+  being clipped; nothing is ever cropped out of the PDF.
+- CONFIDENTIALITY (server.js): a teacher only ever sees chat threads of
+  parents whose children are in the teacher's own classes, plus the
+  teacher's own replies. Admin↔parent chats and other classes' chats are
+  invisible (the old "no class assigned → see everything" fallback is
+  removed from list, unread-count and mark-read).
+- SCALE (db.js): single connection → connection pool (15 connections,
+  keep-alive) — same exported API, zero route changes.
+- SCALE (server.js): sessions moved from in-memory to the MySQL store
+  (survive restarts; logged-in users are never kicked out by a deploy).
+- NEW (notifications.html): staff Notifications page, OPay-style like the
+  parent portal — unread parent mail → Chat, pending fee proofs → Finance,
+  upcoming events → Dashboard. The topbar bell now opens this page.
+- NEW (settings.html): staff Settings page (who am I + change my own
+  password) — works for teachers AND admin.
+- NEW (timetable.html + js/timetable.js): staff build the EXAM timetable
+  and the weekly CLASS timetable per class; ADMIN publishes/unpublishes.
+  Students/parents only see a timetable AFTER publish (portal shows a
+  friendly "not published yet" note before that).
+- NEW (portal.html + js/portal.js): portal sidebar gains "Class Timetable";
+  the Exam Timetable view also shows the published official schedule.
+- DECLUTTER (teacher-dashboard.html + js/dashboard.js): the pack-23
+  Messages and Settings panels are removed from the dashboard; sidebar
+  gains Notifications / Timetables / Settings links; the bell opens the
+  new Notifications page. Score entry is untouched.
+- FIX (sw.js): cache bumped to `ameenullah-shell-v13` so every phone picks
+  up the new pages straight away.
+
+---
+
 ## Pack 24 — 2026-07-22
 
 Owner requests:

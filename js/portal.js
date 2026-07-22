@@ -267,6 +267,57 @@ function loadPortalNotices() {
     .catch(function () { /* notices stay hidden */ });
 }
 
+/* NEW (pack 25 - owner request): "exam and class timetable ... will display
+   for students after been published."
+   Reads the school's PUBLISHED timetable rows for the pupil's own class
+   (server filters by session + class + published=1). Before publish the
+   parent only sees a friendly "not yet" note - nothing leaks early. */
+function loadPortalTimetable(kind) {
+  var isExam = kind === "exam";
+  var card = document.getElementById(isExam ? "ptTtExamCard" : "ptTtClassCard");
+  var box = document.getElementById(isExam ? "ptTtExam" : "ptTtClass");
+  var empty = document.getElementById(isExam ? "ptTtExamEmpty" : "ptTtClassEmpty");
+  if (!card || !box) return;
+  fetch("/portal/timetable/" + kind)
+    .then(function (r) { return r.ok ? r.json() : []; })
+    .then(function (rows) {
+      if (!Array.isArray(rows) || !rows.length) {
+        card.style.display = "none";
+        if (empty) empty.style.display = "block";
+        return;
+      }
+      if (empty) empty.style.display = "none";
+      if (isExam) {
+        box.innerHTML = '<div class="pt-fee-row head"><span>Subject</span><span class="pt-right">Date</span><span class="pt-right">Time</span></div>' +
+          rows.map(function (t) {
+            var dt = t.exam_date ? esc(String(t.exam_date).slice(0, 10)) : "To be announced";
+            var tm = (t.start_time ? esc(String(t.start_time)) : "") + (t.end_time ? " - " + esc(String(t.end_time)) : "");
+            return '<div class="pt-fee-row"><span style="text-align:left;"><b>' + esc(t.subject) + "</b></span>" +
+              '<span class="pt-right" style="white-space:nowrap;">' + dt + "</span>" +
+              '<span class="pt-right" style="white-space:nowrap;">' + (tm || "-") + "</span></div>";
+          }).join("");
+      } else {
+        // group the periods under each day, Monday first
+        var DAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+        var html = "";
+        DAYS.forEach(function (d) {
+          var dayRows = rows.filter(function (t) { return t.day_of_week === d; });
+          if (!dayRows.length) return;
+          html += '<div class="pt-fee-row head"><span>' + d + '</span><span class="pt-right">Period</span><span class="pt-right">Time</span></div>' +
+            dayRows.map(function (t) {
+              var tm = (t.start_time ? esc(String(t.start_time)) : "") + (t.end_time ? " - " + esc(String(t.end_time)) : "");
+              return '<div class="pt-fee-row"><span style="text-align:left;"><b>' + esc(t.subject) + "</b></span>" +
+                '<span class="pt-right">' + (t.period_no != null ? esc(String(t.period_no)) : "-") + "</span>" +
+                '<span class="pt-right" style="white-space:nowrap;">' + (tm || "-") + "</span></div>";
+            }).join("");
+        });
+        box.innerHTML = html;
+      }
+      card.style.display = "block";
+    })
+    .catch(function () { /* timetable stays hidden */ });
+}
+
 function loadPortalExams() {
   fetch("/portal/exams")
     .then(function (r) { return r.ok ? r.json() : []; })
@@ -667,6 +718,8 @@ function ptShowView(name) {
   // lazy loaders: only touch the network when the parent actually opens it
   if (name === "chat") loadPortalMessages();           // shows + marks read -> bell clears
   if (name === "notifications") loadPortalNotifications();
+  if (name === "exams") loadPortalTimetable("exam");    // NEW (pack 25): published exam schedule
+  if (name === "classtt") loadPortalTimetable("class"); // NEW (pack 25): published weekly timetable
 }
 
 /* Build the OPay-style list: unread replies, school notices & events,

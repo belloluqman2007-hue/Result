@@ -581,6 +581,7 @@ function paginateExam() {
        the chosen (full) size, exactly like before. */
     let docFit = Infinity;
     segments.forEach(function (seg) {
+        if (seg.spilled) return; // pack 25: spilled sections ride their own flow, don't drag the shared size down
         if (seg.bodies.some(function (p) { return !!p.querySelector(".manual-page-break"); })) return;
         const c = seg.bodies[0] && seg.bodies[0].querySelector(".page-content");
         const pt = c && parseFloat(c.style.fontSize);
@@ -588,6 +589,7 @@ function paginateExam() {
     });
     if (docFit !== Infinity) {
         segments.forEach(function (seg) {
+            if (seg.spilled) return; // pack 25
             if (seg.bodies.some(function (p) { return !!p.querySelector(".manual-page-break"); })) return;
             const c = seg.bodies[0] && seg.bodies[0].querySelector(".page-content");
             if (c) c.style.fontSize = docFit + "pt";
@@ -624,12 +626,12 @@ function examBaseFontPt() {
    the page - every exam stays as readable as its content allows. */
 function autoFitOnePage(page) {
     const content = page.querySelector(".page-content");
-    if (!content) return;
+    if (!content) return null;
     const base = examBaseFontPt();
     const blocks = Array.from(content.children).filter(function (b) {
         return !b.classList.contains("manual-page-break");
     });
-    if (!blocks.length) { content.style.fontSize = base + "pt"; return; }
+    if (!blocks.length) { content.style.fontSize = base + "pt"; return base; }
 
     const budget = budgetFor(page);
     const measure = function (pt) {
@@ -640,11 +642,14 @@ function autoFitOnePage(page) {
     };
 
     // Fits at the teacher's chosen size? Keep it - the exact paper look.
-    if (measure(base) <= budget + 1) return;
+    if (measure(base) <= budget + 1) return base;
 
-    // Even the floor cannot fit it -> floor stays and the warning chip
-    // explains (same behaviour as before; a question is never split).
-    if (measure(EXAM_MIN_PT) > budget + 1) return;
+    /* CHANGED (pack 25 - owner: "downloaded exam is missing questions"):
+       even the floor cannot fit it -> return NULL so the caller SPILLS
+       the questions onto more pages instead of clipping them off the
+       bottom of a one-page sheet (questions silently vanished from the
+       PDF before). */
+    if (measure(EXAM_MIN_PT) > budget + 1) return null;
 
     // Binary search: LARGEST readable size that fits the one page.
     let lo = EXAM_MIN_PT, hi = base;
@@ -653,6 +658,53 @@ function autoFitOnePage(page) {
         if (measure(mid) <= budget + 1) lo = mid; else hi = mid;
     }
     content.style.fontSize = (Math.floor(lo * 4) / 4) + "pt"; // tidy 0.25pt steps
+    return parseFloat(content.style.fontSize);
+}
+
+/* NEW (pack 25 - owner: "downloaded exam is missing questions; page 6
+   only takes one line"): when even the smallest readable size cannot
+   fit a section on one page, SPILL the questions across as many pages
+   as they need (a question is still never split). Before this, the
+   extra questions sat below the page bottom and were cropped out of the
+   downloaded PDF - on the phone the teacher also saw a body page that
+   looked like it took only one line. Layout: identical to the manual
+   page-break path, minus the markers. The section is flagged .spilled so
+   the booklet-wide shared question size no longer forces it smaller. */
+function spillSegmentAcrossPages(flow, seg) {
+    const first = seg.bodies[0];
+    const firstContent = first.querySelector(".page-content");
+    firstContent.style.fontSize = EXAM_MIN_PT + "pt";
+    seg.spilled = true;
+
+    const blocks = Array.from(firstContent.children).filter(function (b) {
+        return !b.classList.contains("manual-page-break");
+    });
+    let pageIdx = 0;
+    let remaining = budgetFor(first);
+    blocks.forEach(function (block) {
+        const h = outerHeightPx(block);
+        const budget = budgetFor(seg.bodies[pageIdx]);
+        const pageAlreadyHasBlocks = remaining < budget - 0.5;
+        if (h > budget + 1) {
+            // single block taller than a page: own page, warning explains
+            if (pageAlreadyHasBlocks) {
+                pageIdx++;
+                if (!seg.bodies[pageIdx]) seg.bodies.push(appendBodyPage(flow, seg.bodies[pageIdx - 1]));
+            }
+            placeBlock(block, seg.bodies[pageIdx]);
+            pageIdx++;
+            if (!seg.bodies[pageIdx]) seg.bodies.push(appendBodyPage(flow, seg.bodies[pageIdx - 1]));
+            remaining = budgetFor(seg.bodies[pageIdx]);
+        } else if (h > remaining + 1) {
+            pageIdx++;
+            if (!seg.bodies[pageIdx]) seg.bodies.push(appendBodyPage(flow, seg.bodies[pageIdx - 1]));
+            placeBlock(block, seg.bodies[pageIdx]);
+            remaining = budgetFor(seg.bodies[pageIdx]) - h;
+        } else {
+            placeBlock(block, seg.bodies[pageIdx]);
+            remaining -= h;
+        }
+    });
 }
 
 /* Lay out ONE section (cover + its question pages).
@@ -681,7 +733,13 @@ function paginateSegment(flow, seg) {
             page.remove();
         });
         seg.bodies = [seg.bodies[0]];
-        autoFitOnePage(seg.bodies[0]);
+        seg.spilled = false; // pack 25: reset; re-detected below
+        // pack 25: NULL = cannot fit even at the floor -> SPILL across
+        // pages instead of letting questions vanish below the page edge.
+        const fitPt = autoFitOnePage(seg.bodies[0]);
+        if (fitPt === null && firstContent.children.length) {
+            spillSegmentAcrossPages(flow, seg);
+        }
         return;
     }
 

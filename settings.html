@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Settings | Ameenullah School</title>
+  <!-- NEW FILE (pack 25 - owner: "Add settings for teacher also" + make
+       room in the sidebar): staff settings page for BOTH teachers and
+       admin. Talks only to the pack-23 /api/change-password route. -->
+  <link rel="manifest" href="manifest.webmanifest">
+  <meta name="theme-color" content="#2f5021">
+  <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
+  <style>
+    *{ box-sizing:border-box; }
+    body{ margin:0; font-family:'Segoe UI', Arial, sans-serif; background:#eef3ef; color:#1f2d26; }
+    .st-top{ background:linear-gradient(120deg,#14291c,#1d4a30 55%,#276b43); color:#fff; display:flex; align-items:center; gap:12px; padding:12px 16px; }
+    .st-top img{ width:34px; height:34px; border-radius:8px; background:#fff; }
+    .st-back{ margin-left:auto; background:rgba(255,255,255,.14); color:#fff; border:none; padding:8px 14px; border-radius:10px; font-weight:700; text-decoration:none; font-size:13px; }
+    .st-card{ background:#fff; border:1px solid #e1e9e3; border-radius:16px; max-width:460px; margin:26px auto; padding:22px 20px; }
+    .st-card h3{ margin:0 0 4px; color:#14532d; }
+    .st-who{ font-size:13px; color:#5B6B62; margin-bottom:16px; }
+    .st-card label{ display:block; font-size:13px; font-weight:700; margin:10px 0 4px; }
+    .st-card input{ width:100%; padding:11px 12px; border:1px solid #d7e0da; border-radius:11px; font-size:14px; font-family:inherit; }
+    .st-btn{ margin-top:16px; width:100%; background:#14532d; color:#fff; border:none; border-radius:11px; padding:12px; font-weight:800; font-size:15px; cursor:pointer; }
+    .st-note{ margin-top:12px; font-size:13px; text-align:center; min-height:18px; }
+  </style>
+</head>
+<body>
+  <header class="st-top">
+    <img src="images/LOGO.JPG" alt="Logo">
+    <div><b>&#9881;&#65039; Settings</b><div style="font-size:11px; opacity:.85;">Your staff account</div></div>
+    <a class="st-back" href="teacher-dashboard.html">&#8592; Dashboard</a>
+  </header>
+
+  <div class="st-card">
+    <h3>&#128273; Change My Password</h3>
+    <div class="st-who" id="stWho">...</div>
+    <form id="stPwForm">
+      <label for="stCur">Current password</label>
+      <input type="password" id="stCur" autocomplete="current-password" required>
+      <label for="stNew">New password (min 4 characters)</label>
+      <input type="password" id="stNew" autocomplete="new-password" minlength="4" required>
+      <label for="stNew2">Repeat new password</label>
+      <input type="password" id="stNew2" autocomplete="new-password" minlength="4" required>
+      <button class="st-btn" type="submit">&#128273; Change Password</button>
+    </form>
+    <div class="st-note" id="stNote"></div>
+  </div>
+
+  <script>
+  (function () {
+    fetch("/me").then(function (r) { return r.json(); }).then(function (me) {
+      if (!me || !me.loggedIn) { window.location.replace("login.html"); return; }
+      document.getElementById("stWho").innerHTML = "Logged in as <b>" + me.username + "</b> (" + me.role + ")";
+    }).catch(function () { window.location.replace("login.html"); });
+
+    document.getElementById("stPwForm").addEventListener("submit", function (ev) {
+      ev.preventDefault();
+      var note = document.getElementById("stNote");
+      var cur = document.getElementById("stCur").value;
+      var n1 = document.getElementById("stNew").value;
+      var n2 = document.getElementById("stNew2").value;
+      if (n1 !== n2) { note.textContent = "The two new passwords do not match."; note.style.color = "#C0392B"; return; }
+      fetch("/api/change-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ current: cur, newPassword: n1 })
+      })
+        .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, d: d }; }); })
+        .then(function (res) {
+          note.textContent = res.d.message || "";
+          note.style.color = res.ok ? "#14532d" : "#C0392B";
+          if (res.ok) { document.getElementById("stCur").value = ""; document.getElementById("stNew").value = ""; document.getElementById("stNew2").value = ""; }
+        })
+        .catch(function () { note.textContent = "Network error - try again."; note.style.color = "#C0392B"; });
+    });
+  })();
+  </script>
+</body>
+</html>

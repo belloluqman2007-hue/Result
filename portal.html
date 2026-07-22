@@ -156,6 +156,8 @@
       <button class="pt-navlink" data-view="notifications" type="button"><span class="pt-nicon">&#128276;</span> Notifications <span class="pt-nbadge" id="ptNotifBadge"></span></button>
       <button class="pt-navlink" data-view="notices" type="button"><span class="pt-nicon">&#128227;</span> Notices</button>
       <button class="pt-navlink" data-view="exams" type="button"><span class="pt-nicon">&#128394;</span> Exam Timetable</button>
+      <!-- NEW (pack 25): weekly class timetable - shows only after the school publishes it -->
+      <button class="pt-navlink" data-view="classtt" type="button"><span class="pt-nicon">&#128198;</span> Class Timetable</button>
       <button class="pt-navlink" data-view="calendar" type="button"><span class="pt-nicon">&#128197;</span> Calendar</button>
       <button class="pt-navlink" data-view="settings" type="button"><span class="pt-nicon">&#9881;&#65039;</span> Settings</button>
       <div class="pt-side-foot">
@@ -339,6 +341,26 @@
           <p class="pt-hint">Your class's exam papers - dates are set by the school when writing each exam.</p>
           <div id="ptExams"></div>
         </section>
+        <!-- NEW (pack 25 - owner request): the school's official exam schedule.
+             It appears here ONLY after the school publishes it. -->
+        <section class="pt-card portal-no-print" id="ptTtExamCard" style="display:none;">
+          <h2>Official Exam Schedule</h2>
+          <p class="pt-hint">Published by the school - subject, date and time for each paper.</p>
+          <div id="ptTtExam"></div>
+        </section>
+        <div class="pt-empty" id="ptTtExamEmpty" style="display:none;">The exam schedule is not published yet - please check back later.</div>
+      </div>
+
+      <!-- ============ CLASS TIMETABLE (pack 25) ============ -->
+      <div class="pt-view" data-view="classtt">
+        <h1 class="pt-view-title">&#128198; Class Timetable</h1>
+        <!-- NEW (pack 25 - owner request): weekly periods for the pupil's own
+             class. Hidden until the school publishes it. -->
+        <section class="pt-card portal-no-print" id="ptTtClassCard" style="display:none;">
+          <p class="pt-hint">The weekly class periods - published by the school.</p>
+          <div id="ptTtClass"></div>
+        </section>
+        <div class="pt-empty" id="ptTtClassEmpty" style="display:none;">The class timetable is not published yet - please check back later.</div>
       </div>
 
       <!-- ============ CALENDAR ============ -->

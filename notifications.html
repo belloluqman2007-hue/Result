@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Notifications | Ameenullah School</title>
+  <!-- NEW FILE (pack 25 - owner: "Let the notifications work in the admin
+       as it is working in the student parent portal"): OPay/PalmPay-style
+       list for staff - press a row, it takes you where you need to go.
+       Uses only existing routes (/api/messages*, /payment-submissions,
+       /api/events). -->
+  <link rel="manifest" href="manifest.webmanifest">
+  <meta name="theme-color" content="#2f5021">
+  <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
+  <style>
+    *{ box-sizing:border-box; }
+    body{ margin:0; font-family:'Segoe UI', Arial, sans-serif; background:#eef3ef; color:#1f2d26; }
+    .nf-top{ background:linear-gradient(120deg,#14291c,#1d4a30 55%,#276b43); color:#fff; display:flex; align-items:center; gap:12px; padding:12px 16px; position:sticky; top:0; }
+    .nf-top img{ width:34px; height:34px; border-radius:8px; background:#fff; }
+    .nf-back{ margin-left:auto; background:rgba(255,255,255,.14); color:#fff; border:none; padding:8px 14px; border-radius:10px; font-weight:700; text-decoration:none; font-size:13px; }
+    .nf-wrap{ max-width:640px; margin:0 auto; padding:16px 14px 40px; }
+    .nf-item{ display:flex; gap:12px; align-items:center; background:#fff; border:1px solid #e1e9e3; border-radius:14px; padding:13px 14px; margin:8px 0; width:100%; cursor:pointer; text-align:left; font-family:inherit; }
+    .nf-item:hover{ box-shadow:0 4px 14px rgba(0,0,0,.07); }
+    .nf-item.unread{ border-color:#2F9E6E; background:#f2faf4; }
+    .nf-ico{ width:40px; height:40px; flex:0 0 40px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:18px; background:#e8f2ea; color:#1d4a30; }
+    .nf-tt{ flex:1; min-width:0; }
+    .nf-tt b{ display:block; font-size:14px; }
+    .nf-tt span{ display:block; font-size:12.5px; color:#5B6B62; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .nf-when{ font-size:11px; color:#93a19a; white-space:nowrap; }
+    .nf-chev{ color:#b9c7bd; font-size:18px; }
+    .nf-empty{ text-align:center; color:#93a19a; padding:40px 10px; font-size:14px; }
+  </style>
+</head>
+<body>
+  <header class="nf-top">
+    <img src="images/LOGO.JPG" alt="Logo">
+    <div><b>&#128276; Notifications</b><div style="font-size:11px; opacity:.85;">Tap an item to open it</div></div>
+    <a class="nf-back" href="teacher-dashboard.html">&#8592; Dashboard</a>
+  </header>
+
+  <div class="nf-wrap" id="nfList"><div class="nf-empty">Loading...</div></div>
+
+  <script>
+  (function () {
+    var box = document.getElementById("nfList");
+    function esc(v){ return String(v==null?"":v).replace(/[&<>"']/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c];}); }
+
+    fetch("/me").then(function(r){return r.json();}).then(function(me){
+      if (!me || !me.loggedIn) { window.location.replace("login.html"); return; }
+      build();
+    }).catch(function(){ window.location.replace("login.html"); });
+
+    function row(it) {
+      var b = document.createElement("button");
+      b.type = "button";
+      b.className = "nf-item" + (it.unread ? " unread" : "");
+      b.innerHTML = '<span class="nf-ico">' + it.icon + '</span>' +
+        '<span class="nf-tt"><b>' + esc(it.title) + '</b><span>' + esc(it.text) + '</span></span>' +
+        '<span class="nf-when">' + esc(String(it.when||"").slice(0,10)) + '</span>' +
+        '<span class="nf-chev">&#8250;</span>';
+      b.addEventListener("click", function(){ window.location.href = it.href; });
+      return b;
+    }
+
+    function build() {
+      var items = [];
+      var remaining = 3;
+      var done = function() {
+        if (--remaining > 0) return;
+        items.sort(function(a,b){ return String(b.when).localeCompare(String(a.when)); });
+        box.innerHTML = "";
+        if (!items.length) { box.innerHTML = '<div class="nf-empty">All clear - no new messages, payment proofs or events right now.</div>'; return; }
+        items.forEach(function(it){ box.appendChild(row(it)); });
+      };
+
+      // 1) unread parent messages (one row per parent, jump to Chat)
+      fetch("/api/messages").then(function(r){return r.ok ? r.json() : [];}).then(function(rows){
+        var seen = {};
+        (Array.isArray(rows)?rows:[]).forEach(function(m){
+          if (m.sender_type !== "portal" || m.read_at) return;
+          if (!seen[m.sender_ref]) {
+            seen[m.sender_ref] = true;
+            items.push({
+              icon:"&#128172;", title:(m.sender_name||m.sender_ref),
+              text:"New message: " + (m.body||"").slice(0,80),
+              when:m.created_at, href:"chat.html", unread:true
+            });
+          }
+        });
+        done();
+      }).catch(done);
+
+      // 2) payment proofs waiting for review -> Finance
+      fetch("/payment-submissions?status=pending").then(function(r){return r.ok ? r.json() : [];}).then(function(rows){
+        (Array.isArray(rows)?rows:[]).slice(0,8).forEach(function(p){
+          items.push({
+            icon:"&#128184;", title:"Payment proof to review",
+            text:(p.student_id||"") + " - \u20A6" + Number(p.amount||0).toLocaleString() + (p.fee_type? " ("+p.fee_type+")" : ""),
+            when:p.created_at, href:"finance.html", unread:true
+          });
+        });
+        done();
+      }).catch(done);
+
+      // 3) nearest upcoming school events -> Dashboard
+      fetch("/api/events").then(function(r){return r.ok ? r.json() : [];}).then(function(rows){
+        var today = new Date().toISOString().slice(0,10);
+        (Array.isArray(rows)?rows:[]).filter(function(e){ return e.event_date && String(e.event_date).slice(0,10) >= today; })
+          .slice(0,3).forEach(function(e){
+            items.push({
+              icon:"&#128197;", title:"Upcoming: " + (e.title||"School event"),
+              text:"On " + String(e.event_date).slice(0,10) + (e.description? " - "+e.description : ""),
+              when:e.event_date, href:"teacher-dashboard.html", unread:false
+            });
+          });
+        done();
+      }).catch(done);
+    }
+  })();
+  </script>
+</body>
+</html>

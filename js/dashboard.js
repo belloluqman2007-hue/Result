@@ -567,6 +567,12 @@
                 side.style.display = c > 0 ? "inline-block" : "none";
                 side.textContent = c > 9 ? "9+" : String(c);
             }
+            // NEW (pack 25): the sidebar Notifications link shows it too.
+            var sideNotif = document.getElementById("amsSideNotifBadge");
+            if (sideNotif) {
+                sideNotif.style.display = c > 0 ? "inline-block" : "none";
+                sideNotif.textContent = c > 9 ? "9+" : String(c);
+            }
         }).catch(function () {});
     }
 
@@ -699,15 +705,17 @@
         initAnnouncementForm();
         initEventForm();
         updateScoreCount();
-        amsInitMessaging();      // NEW (pack 23): parent<->school messages
-        amsInitStaffSettings();  // NEW (pack 23): change own password
+        /* CHANGED (pack 25 - owner request): the pack-23 Messages and
+           Settings panels moved off the dashboard to their own sidebar
+           pages (chat.html / notifications.html / settings.html), so the
+           two init calls below are removed. The guarded functions stay
+           defined above in case a page still embeds the widgets. */
         amsRefreshMsgBadge();    // NEW (pack 23): notifications bell
         setInterval(amsRefreshMsgBadge, 60000);
         var msgBell = document.getElementById("amsMsgBell");
         if (msgBell) msgBell.addEventListener("click", function () {
-            var panel = document.getElementById("amsMessagesPanel");
-            if (panel) panel.scrollIntoView({ behavior: "smooth", block: "start" });
-            amsLoadMessages(); // shows + clears the unread badge
+            // CHANGED (pack 25): the bell now opens the new Notifications page
+            window.location.href = "notifications.html";
         });
 
         /* Keep the visible-row counter in sync when app.js

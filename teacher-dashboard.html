@@ -50,6 +50,21 @@
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
           Chat <span id="amsSideChatBadge" style="display:none; margin-left:auto; background:#C0392B; color:#fff; font-size:10px; font-weight:800; border-radius:10px; padding:1px 7px;"></span>
         </a>
+        <!-- NEW (pack 25 - owner: "create space for them in sidebar"):
+             Notifications, Timetables and Settings get their own pages
+             (works for admin AND teachers). -->
+        <a href="notifications.html">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg>
+          Notifications <span id="amsSideNotifBadge" style="display:none; margin-left:auto; background:#C0392B; color:#fff; font-size:10px; font-weight:800; border-radius:10px; padding:1px 7px;"></span>
+        </a>
+        <a href="timetable.html">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4"/><path d="M8 2v4"/><path d="M3 10h18"/><path d="M12 14v4"/><path d="M10 16h4"/></svg>
+          Timetables
+        </a>
+        <a href="settings.html">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.9 2.9l-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1a2 2 0 1 1-2.9-2.9l.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9l-.1-.1a2 2 0 1 1 2.9-2.9l.1.1a1.7 1.7 0 0 0 1.9.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.9-.3l.1-.1a2 2 0 1 1 2.9 2.9l-.1.1a1.7 1.7 0 0 0-.3 1.9v.1a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
+          Settings
+        </a>
         <a href="add-student.html">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M19 8v6"/><path d="M22 11h-6"/></svg>
           Add Student
@@ -136,8 +151,9 @@
         <div class="ams-topbar-right">
           <div class="ams-clock" id="amsClock"></div>
           <!-- NEW (pack 23 - owner: "Notifications"): bell with unread parent
-               messages; click jumps to the Messages panel. -->
-          <button class="ams-icon-btn" id="amsMsgBell" title="Messages from parents" style="position:relative;">
+               messages. CHANGED (pack 25): click now opens the new
+               Notifications page (sidebar) instead of a dashboard panel. -->
+          <button class="ams-icon-btn" id="amsMsgBell" title="Notifications" style="position:relative;">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg>
             <span id="amsMsgCount" style="display:none; position:absolute; top:-5px; right:-5px; background:#C0392B; color:#fff; font-size:10px; font-weight:800; border-radius:10px; padding:1px 5px; line-height:1.4;"></span>
           </button>
@@ -402,52 +418,11 @@
           </div>
         </div>
 
-        <!-- ======================================================
-             NEW (pack 23 - owner requests): MESSAGES panel
-             (parent <-> teacher / parent <-> administration) and
-             staff SETTINGS (change own password, works for teachers
-             AND admin). Both fully additive.
-        ====================================================== -->
-        <div class="ams-grid" style="margin-bottom:22px;">
-          <div class="ams-panel ams-col-8" id="amsMessagesPanel">
-            <div class="ams-panel-head">
-              <h3 class="ams-panel-title">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-                Messages
-                <span id="amsMsgUnreadChip" style="display:none; background:#C0392B; color:#fff; font-size:11px; font-weight:800; border-radius:10px; padding:1px 8px; margin-left:8px;"></span>
-              </h3>
-            </div>
-            <div id="amsMsgList"><div class="ams-empty">Loading messages...</div></div>
-            <div style="margin-top:12px; border-top:1px dashed var(--line, #d7e0da); padding-top:10px;">
-              <div id="amsMsgReplyInfo" style="font-size:12px; color:#5B6B62; margin-bottom:6px;">Tap a parent message below to reply - or start a NEW message:</div>
-              <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
-                <input type="text" id="amsMsgStudentId" placeholder="Student ID e.g. AM/26/149 (only to start NEW)" style="flex:1; min-width:180px;">
-                <input type="text" id="amsMsgBody" placeholder="Type your reply..." style="flex:2; min-width:220px;" maxlength="2000">
-                <button type="button" class="m-btn-sm" id="amsMsgSend">&#128231; Send</button>
-              </div>
-            </div>
-          </div>
-          <div class="ams-panel ams-col-4" id="amsSettingsPanel">
-            <div class="ams-panel-head">
-              <h3 class="ams-panel-title">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.9 2.9l-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1a2 2 0 1 1-2.9-2.9l.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9l-.1-.1a2 2 0 1 1 2.9-2.9l.1.1a1.7 1.7 0 0 0 1.9.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.9-.3l.1-.1a2 2 0 1 1 2.9 2.9l-.1.1a1.7 1.7 0 0 0-.3 1.9v.1a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
-                Settings
-              </h3>
-            </div>
-            <div id="amsWhoAmI" style="font-size:13px; color:#5B6B62; margin-bottom:10px;"></div>
-            <label style="font-size:13px; display:block; margin-bottom:6px;">Current password
-              <input type="password" id="amsPwCurrent" autocomplete="current-password" style="width:100%; margin-top:4px;">
-            </label>
-            <label style="font-size:13px; display:block; margin-bottom:6px;">New password (min 4)
-              <input type="password" id="amsPwNew" autocomplete="new-password" style="width:100%; margin-top:4px;">
-            </label>
-            <label style="font-size:13px; display:block; margin-bottom:10px;">Repeat new password
-              <input type="password" id="amsPwNew2" autocomplete="new-password" style="width:100%; margin-top:4px;">
-            </label>
-            <button type="button" class="m-btn-sm" id="amsPwChangeBtn">&#128273; Change My Password</button>
-            <div id="amsPwNote" style="font-size:12px; margin-top:8px;"></div>
-          </div>
-        </div>
+        <!-- CHANGED (pack 25 - owner: "remove messages in the dashboard ...
+             create space for them in sidebar"): the pack-23 Messages and
+             Settings panels moved OUT of the dashboard to their own pages
+             (sidebar links: Chat / Notifications / Settings), so the
+             dashboard stays clean and fast. -->
 
         <!-- ======================================================
              EXISTING: Admin danger zone (unchanged logic & ids).

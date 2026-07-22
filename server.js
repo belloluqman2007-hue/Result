@@ -27,8 +27,78 @@ if (!process.env.SESSION_SECRET) {
     console.log("WARNING: SESSION_SECRET is not set in your environment. Using an insecure default - fine for local development, but you MUST set a real SESSION_SECRET before deploying this online.");
 }
 
+/* NEW (pack 25 - owner: "Build it that it will accept 1000 users and
+   will not collapse"): the default session store keeps every login in
+   PROCESS MEMORY - it warns in production and grows without limit with
+   hundreds of parents/staff. Sessions now live in a MySQL table
+   (survives restarts too). Express-session Store contract, no new
+   packages needed. */
+class MySqlSessionStore extends session.Store {
+    constructor(db) {
+        super();
+        this.db = db;
+        this.tableReady = false;
+        this.ready = new Promise((resolve) => {
+            db.query(
+                `CREATE TABLE IF NOT EXISTS app_sessions (
+                    sid VARCHAR(128) PRIMARY KEY,
+                    sess MEDIUMTEXT NOT NULL,
+                    expires_at BIGINT NOT NULL,
+                    INDEX (expires_at)
+                )`,
+                () => { this.tableReady = true; resolve(); }
+            );
+        });
+        setInterval(() => {
+            if (!this.tableReady) return;
+            db.query("DELETE FROM app_sessions WHERE expires_at < ?", [Date.now()], () => {});
+        }, 1000 * 60 * 60).unref(); // hourly sweep of expired rows
+    }
+    whenReady(cb) {
+        if (this.tableReady) return cb();
+        this.ready.then(cb);
+    }
+    get(sid, cb) {
+        this.whenReady(() => {
+            this.db.query("SELECT sess, expires_at FROM app_sessions WHERE sid = ?", [sid], (err, rows) => {
+                if (err) return cb(null, null); // read hiccup -> treat as logged out, never crash
+                if (!rows || !rows.length) return cb(null, null);
+                if (rows[0].expires_at && rows[0].expires_at < Date.now()) {
+                    return this.destroy(sid, () => cb(null, null));
+                }
+                try { cb(null, JSON.parse(rows[0].sess)); } catch (e) { cb(null, null); }
+            });
+        });
+    }
+    set(sid, sess, cb) {
+        const maxAge = (sess.cookie && sess.cookie.maxAge) || (1000 * 60 * 60 * 8);
+        const expires = Date.now() + maxAge;
+        const data = JSON.stringify(sess);
+        this.whenReady(() => {
+            this.db.query(
+                "INSERT INTO app_sessions (sid, sess, expires_at) VALUES (?,?,?) ON DUPLICATE KEY UPDATE sess = VALUES(sess), expires_at = VALUES(expires_at)",
+                [sid, data, expires],
+                (err) => cb && cb(err)
+            );
+        });
+    }
+    destroy(sid, cb) {
+        this.whenReady(() => {
+            this.db.query("DELETE FROM app_sessions WHERE sid = ?", [sid], (err) => cb && cb(err));
+        });
+    }
+    touch(sid, sess, cb) {
+        const maxAge = (sess.cookie && sess.cookie.maxAge) || (1000 * 60 * 60 * 8);
+        this.whenReady(() => {
+            this.db.query("UPDATE app_sessions SET expires_at = ? WHERE sid = ?", [Date.now() + maxAge, sid], (err) => cb && cb(err));
+        });
+    }
+}
+const sessionStore = new MySqlSessionStore(connection);
+
 app.use(session({
     secret: process.env.SESSION_SECRET || "local-dev-only-insecure-secret-change-me",
+    store: sessionStore, // pack 25: MySQL-backed sessions
     resave: false,
     saveUninitialized: false,
     cookie: {
@@ -195,6 +265,18 @@ app.get("/me", (req, res) => {
 // dashboard. Must stay BEFORE express.static.
 app.get("/chat.html", requireLogin, (req, res) => {
     res.sendFile(path.join(__dirname, "chat.html"));
+});
+
+// NEW (pack 25): staff notifications / settings / timetable pages -
+// same guard as the dashboard (admin AND teachers).
+app.get("/notifications.html", requireLogin, (req, res) => {
+    res.sendFile(path.join(__dirname, "notifications.html"));
+});
+app.get("/settings.html", requireLogin, (req, res) => {
+    res.sendFile(path.join(__dirname, "settings.html"));
+});
+app.get("/timetable.html", requireLogin, (req, res) => {
+    res.sendFile(path.join(__dirname, "timetable.html"));
 });
 
 app.get("/teacher-dashboard.html", requireLogin, (req, res) => {
@@ -945,6 +1027,143 @@ function runPack23Migrations() {
     });
 }
 runPack23Migrations();
+
+/* ------------------------------------------------------------------
+   NEW (pack 25 - owner: "Add exam and class timetable for admin and
+   teachers, and it will display for students after been published").
+   Two tables + publish gate: staff build freely, students/parents only
+   ever see what admin has PUBLISHED. Guarded + idempotent.
+------------------------------------------------------------------ */
+function runPack25Migrations() {
+    const conn = addonConnection();
+    conn.connect((err) => {
+        if (err) { conn.destroy(); return setTimeout(runPack25Migrations, 4000); }
+        const steps = [
+            `CREATE TABLE IF NOT EXISTS exam_timetable (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                class_name VARCHAR(120) NOT NULL,
+                subject VARCHAR(160) NOT NULL,
+                exam_date DATE NULL,
+                start_time VARCHAR(10) DEFAULT '',
+                end_time VARCHAR(10) DEFAULT '',
+                published TINYINT(1) NOT NULL DEFAULT 0,
+                created_by VARCHAR(64) DEFAULT '',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )`,
+            `CREATE TABLE IF NOT EXISTS class_timetable (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                class_name VARCHAR(120) NOT NULL,
+                day_of_week VARCHAR(12) NOT NULL,
+                period_no INT NOT NULL DEFAULT 1,
+                start_time VARCHAR(10) DEFAULT '',
+                end_time VARCHAR(10) DEFAULT '',
+                subject VARCHAR(160) NOT NULL,
+                published TINYINT(1) NOT NULL DEFAULT 0,
+                created_by VARCHAR(64) DEFAULT '',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )`
+        ];
+        let i = 0;
+        (function next() {
+            if (i >= steps.length) { conn.end(); console.log("Pack 25 setup ready (timetables)."); return; }
+            conn.query(steps[i++], (qErr) => {
+                if (qErr) console.log("Pack 25 migration notice:", qErr.code || qErr.message);
+                next();
+            });
+        })();
+    });
+}
+runPack25Migrations();
+
+/* =====================================================================
+   NEW (pack 25): TIMETABLE API - staff CRUD + admin publish + portal.
+===================================================================== */
+["exam", "class"].forEach(function (kind) {
+    const table = kind === "exam" ? "exam_timetable" : "class_timetable";
+
+    // staff: read one class's rows
+    app.get("/api/timetable/" + kind, requireLogin, (req, res) => {
+        const cls = String(req.query.class_name || "");
+        const orderBy = kind === "exam"
+            ? "ORDER BY exam_date IS NULL, exam_date ASC, start_time ASC, id ASC"
+            : "ORDER BY FIELD(day_of_week,'Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'), period_no ASC, id ASC";
+        connection.query(
+            "SELECT * FROM " + table + " WHERE class_name = ? " + orderBy + " LIMIT 400",
+            [cls],
+            (err, rows) => {
+                if (err) { if (err.code === "ER_NO_SUCH_TABLE") return res.json([]); return res.status(500).json({ message: "Database error" }); }
+                res.json(rows);
+            }
+        );
+    });
+
+    // staff (admin + teacher): add a row
+    app.post("/api/timetable/" + kind, requireLogin, (req, res) => {
+        const cls = String(req.body.class_name || "").trim();
+        const subject = String(req.body.subject || "").trim();
+        if (!cls || !subject) return res.status(400).json({ message: "Class and subject are required." });
+        let cols, vals;
+        if (kind === "exam") {
+            cols = "(class_name, subject, exam_date, start_time, end_time, created_by)";
+            vals = [cls, subject, req.body.exam_date || null, String(req.body.start_time || ""), String(req.body.end_time || ""), req.session.username];
+        } else {
+            const day = String(req.body.day_of_week || "").trim();
+            if (!day) return res.status(400).json({ message: "Day is required." });
+            cols = "(class_name, day_of_week, period_no, start_time, end_time, subject, created_by)";
+            vals = [cls, day, Number(req.body.period_no) || 1, String(req.body.start_time || ""), String(req.body.end_time || ""), subject, req.session.username];
+        }
+        connection.query(
+            "INSERT INTO " + table + " " + cols + " VALUES (" + cols.replace(/\(|\)/g, "").split(",").map(() => "?").join(",") + ")",
+            vals,
+            (err) => {
+                if (err) return res.status(500).json({ message: "Database error" });
+                res.json({ message: "Added - remember to Publish when it is ready." });
+            }
+        );
+    });
+
+    app.delete("/api/timetable/" + kind + "/:id", requireLogin, (req, res) => {
+        connection.query("DELETE FROM " + table + " WHERE id = ?", [req.params.id], (err) => {
+            if (err) return res.status(500).json({ message: "Database error" });
+            res.json({ message: "Removed." });
+        });
+    });
+
+    // publish gate: ADMIN ONLY - students never see unpublished rows
+    app.post("/api/timetable/" + kind + "/publish", requireLogin, requireAdmin, (req, res) => {
+        const cls = String(req.body.class_name || "").trim();
+        const pub = req.body.published ? 1 : 0;
+        if (!cls) return res.status(400).json({ message: "Class is required." });
+        connection.query(
+            "UPDATE " + table + " SET published = ? WHERE class_name = ?",
+            [pub, cls],
+            (err) => {
+                if (err) return res.status(500).json({ message: "Database error" });
+                res.json({ message: pub ? "Published - students & parents of " + cls + " can see it now." : "Unpublished - hidden from students again." });
+            }
+        );
+    });
+
+    // portal: student/parent reads ONLY published rows of their own class
+    app.get("/portal/timetable/" + kind, (req, res) => {
+        const sid = req.session && req.session.portalStudentId;
+        if (!sid) return res.status(401).json({ message: "Not logged in" });
+        connection.query("SELECT class_name FROM students WHERE student_id = ? LIMIT 1", [sid], (err, stu) => {
+            if (err || !stu.length) return res.json([]);
+            const orderBy = kind === "exam"
+                ? "ORDER BY exam_date IS NULL, exam_date ASC, start_time ASC, id ASC"
+                : "ORDER BY FIELD(day_of_week,'Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'), period_no ASC, id ASC";
+            connection.query(
+                "SELECT * FROM " + table + " WHERE class_name = ? AND published = 1 " + orderBy + " LIMIT 400",
+                [stu[0].class_name],
+                (err2, rows) => {
+                    if (err2) { if (err2.code === "ER_NO_SUCH_TABLE") return res.json([]); return res.json([]); }
+                    res.json(rows);
+                }
+            );
+        });
+    });
+});
 
 // Rebuild every missing upload file that HAS a database copy (runs once
 // at boot; the request-time middleware covers anything saved later).
@@ -2276,12 +2495,18 @@ app.post("/portal/messages/read", (req, res) => {
 
 // ---- STAFF side ----
 // Which messages may this staff member see?
+// CHANGED (pack 25 - owner: "Build confidentiality in the project -
+// teacher can't be seeing chat between admin and parents and at others
+// also"): teachers ONLY ever see parent->teacher mail for THEIR OWN
+// assigned classes. No more "no classes = see everything" fallback
+// (that leaked other classes' chats). Admin->parent replies stay
+// invisible to teachers; admins keep full oversight.
 function staffMessageFilter(req, cb) {
     const me = req.session.username;
     const isAdmin = req.session.role === "admin";
     if (isAdmin) return cb(null, null); // admins see everything school-bound
     connection.query("SELECT class_name FROM teacher_classes WHERE username = ?", [me], (err, rows) => {
-        if (err) return cb(null, []); // table missing early on -> treat as "sees all"
+        if (err) return cb(null, false); // treat as no mapping
         cb(null, (rows || []).map(r => r.class_name));
     });
 }
@@ -2300,9 +2525,9 @@ app.get("/api/messages", requireLogin, (req, res) => {
                     if (m.sender_type !== "portal") return false;                      // other staff's threads
                     if (isAdmin) return true;                                          // admin sees all parent mail
                     // teacher: parent mail bound for teachers; honour class mapping,
-                    // empty mapping = see all (nothing ever hidden by accident).
+                    // empty mapping = see NOTHING (pack 25 - confidentiality).
                     if (m.recipient_type === "teacher") {
-                        if (!myClasses || !myClasses.length) return true;
+                        if (!myClasses || !myClasses.length) return false; // pack 25: no fallback - confidentiality
                         return myClasses.indexOf(m.recipient_class) !== -1;
                     }
                     return false;
@@ -2325,7 +2550,7 @@ app.get("/api/messages/unread", requireLogin, (req, res) => {
                 const count = (rows || []).filter(m => {
                     if (isAdmin) return true;
                     if (m.recipient_type === "teacher") {
-                        if (!myClasses || !myClasses.length) return true;
+                        if (!myClasses || !myClasses.length) return false; // pack 25: no fallback - confidentiality
                         return myClasses.indexOf(m.recipient_class) !== -1;
                     }
                     return false;
@@ -2367,7 +2592,7 @@ app.post("/api/messages/read", requireLogin, (req, res) => {
                 const ids = (rows || []).filter(m => {
                     if (isAdmin) return true;
                     if (m.recipient_type === "teacher") {
-                        if (!myClasses || !myClasses.length) return true;
+                        if (!myClasses || !myClasses.length) return false; // pack 25: no fallback - confidentiality
                         return myClasses.indexOf(m.recipient_class) !== -1;
                     }
                     return false;

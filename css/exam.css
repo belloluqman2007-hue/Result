@@ -340,12 +340,26 @@ body{
   outline:none;
 }
 
-/* Content zones no longer stretch the page - the ENGINE sizes pages */
+/* CHANGED (pack 25 - owner: "the sixth page I can't write except just
+   one line"): the old "min-height:0 !important" emptied the tap-target
+   of every fresh question page (0px tall = nothing to click on a phone,
+   so new questions landed on the WRONG page or nowhere). The engine
+   measures BLOCKS, never the zone's own height, so a proper writing
+   area is completely safe - zone sizing now lives in the
+   .exam-flow .page-content / .exam-body rules below. */
 .exam-flow .exam-body{
-  min-height:0 !important;
+  min-height:250mm;
 }
 .exam-flow .page-content{
   outline:none;
+  /* FIX (pack 25 - owner: "the sixth page I can't write except just one
+     line"): a freshly-added question page has NO blocks yet, so its
+     content zone collapsed to 0px tall - on the phone there was
+     literally NOTHING to tap into, and new questions landed on the wrong
+     page or nowhere (and were then missing from the PDF too). Give every
+     question zone a full A4 writing area; the pagination engine measures
+     each block separately, so this changes nothing about layout math. */
+  min-height:250mm;
 }
 
 /* ==========================================================================
