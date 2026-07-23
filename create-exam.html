@@ -1,0 +1,423 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Create Exam | Ameenullah School of Arabic and Islamic Studies</title>
+  <link rel="stylesheet" href="css/style.css">
+  <!-- NEW: modern visual upgrade layer (between legacy base + page css) -->
+  <link rel="stylesheet" href="css/modern-ui.css">
+  <link rel="stylesheet" href="css/exam.css">
+
+  <!-- NEW (PWA conversion): makes the site installable as a phone/desktop
+       app with its own icon. Purely additive - no styling or behaviour
+       of this page is changed. -->
+  <link rel="manifest" href="manifest.webmanifest">
+  <meta name="theme-color" content="#2f5021">
+  <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+</head>
+<body onload="checkAuth(); initExam();">
+
+  <!-- Sidebar with ALL exam tools (the pages keep the whole screen) -->
+  <button type="button" class="exam-side-toggle" id="examSideToggle" onclick="toggleExamSidebar()">
+    &#9776; Exam Tools
+  </button>
+  <div class="exam-side-scrim" id="examSideScrim" onclick="toggleExamSidebar(false)"></div>
+
+  <aside class="exam-toolbar-outer exam-sidebar" id="examSidebar">
+    <a href="teacher-dashboard.html" class="nav-btn exam-side-back">&larr; Back to Dashboard</a>
+
+    <!-- ===== STEP 1: exam details (wizard) ===== -->
+    <div id="examStep1">
+
+      <div class="exam-step-head">
+        <span class="exam-step-pill">Step 1 of 2</span>
+        <div>
+          <strong>Exam Details</strong>
+          <span class="exam-step-hint">Choose the class, subject, term and session - then continue to write the questions.</span>
+        </div>
+      </div>
+
+      <div class="exam-meta-bar">
+        <div class="meta-field">
+          <label>Exam Title</label>
+          <input type="text" id="examTitle" placeholder="e.g. 2nd Term Exam - Tajweed">
+        </div>
+
+        <div class="meta-field">
+          <label>Class</label>
+          <select id="examClass"><option value="" disabled selected>Select Class</option></select>
+        </div>
+
+        <div class="meta-field">
+          <label>Subject</label>
+          <select id="examSubject"><option value="" disabled selected>Select class first</option></select>
+        </div>
+
+        <div class="meta-field">
+          <label>Term</label>
+          <select id="examTerm">
+            <option value="" disabled selected>Select Term</option>
+            <option>1st Term</option>
+            <option>2nd Term</option>
+            <option>3rd Term</option>
+          </select>
+        </div>
+
+        <div class="meta-field">
+          <label>Session</label>
+          <select id="examSession">
+            <option value="" disabled selected>Select Session</option>
+            <option>2025/2026</option>
+            <option>2026/2027</option>
+            <option>2027/2028</option>
+            <option>2028/2029</option>
+            <option>2029/2030</option>
+          </select>
+        </div>
+
+        <div class="meta-field">
+          <label>Duration</label>
+          <input type="text" id="examDuration" placeholder="e.g. ساعة واحدة" value="ساعة واحدة" lang="ar">
+        </div>
+
+        <!-- NEW (pack 22 - owner: exam timetable): optional day of this
+             paper; it feeds the portal's Exam Timetable for the class. -->
+        <div class="meta-field">
+          <label>Exam Date (optional)</label>
+          <input type="date" id="examDate">
+        </div>
+
+        <!-- NEW (question font size feature): the teacher picks how big
+             the questions start. Whatever is picked, the questions can
+             NEVER spill to a second page - they shrink automatically to
+             stay on their one page. -->
+        <div class="meta-field">
+          <label>Questions Font Size</label>
+          <select id="examFontSelect" title="Starting size of the questions - it shrinks automatically to keep every exam on ONE page">
+            <option value="22">Small (22pt)</option>
+            <option value="26">Medium (26pt)</option>
+            <option value="32" selected>Large - 32pt (like the school paper)</option>
+            <option value="36">Extra Large (36pt)</option>
+            <option value="40">Huge (40pt)</option>
+          </select>
+        </div>
+
+        <div class="meta-field meta-actions">
+          <button type="button" onclick="generateCoverPage()">Generate Cover Page</button>
+        </div>
+
+        <!-- NEW (request): open a saved exam straight from Step 1 too,
+             not only from Step 2. -->
+        <div class="meta-field meta-actions">
+          <button type="button" onclick="openLoadPanel()">&#128194; Open Saved Exam</button>
+        </div>
+
+        <!-- NEW: printing is possible straight from the details step -->
+        <div class="meta-field meta-actions">
+          <button type="button" onclick="examPrint()">Print / Save as PDF</button>
+          <button type="button" onclick="downloadExamPDF()">&#11015; Download PDF (phone)</button>
+          <!-- NEW (pack 17 - owner request): editable Word export. -->
+          <button type="button" onclick="downloadExamWord()">&#128196; Download Word</button>
+        </div>
+
+        <div class="meta-field meta-actions">
+          <button type="button" class="exam-next-btn" onclick="examGotoStep(2)">Next: Write Questions &rarr;</button>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- ===== STEP 2: the question editor tools ===== -->
+    <div id="examStep2" style="display:none;">
+
+      <div class="exam-step-head">
+        <span class="exam-step-pill">Step 2 of 2</span>
+        <div>
+          <strong>Write the Questions</strong>
+          <span class="exam-step-hint" id="examWizardSummary">Pages are created automatically as you write.</span>
+        </div>
+      </div>
+
+      <div class="exam-actions-bar">
+        <button type="button" onclick="saveExam()">Save Exam</button>
+        <button type="button" onclick="openLoadPanel()">Open Saved Exam</button>
+        <!-- CHANGED (auto pagination, request #1): this now inserts a Word-style
+             page break - pages themselves are created automatically. -->
+        <button type="button" onclick="insertPageBreak()">&#8626; Page Break</button>
+        <button type="button" onclick="removeLastPage()">&#9003; Undo Break</button>
+        <!-- NEW (multi-exam in one PDF): adds ANOTHER cover page + its own
+             question page at the end of the document. Change the details
+             in Step 1 and press "Generate Cover Page" again - it fills the
+             NEW cover. Repeat for every exam, then print ONE pdf. -->
+        <button type="button" onclick="addExamSection()">&#128462; Add Another Exam</button>
+        <button type="button" onclick="examPrint()">Print / Save as PDF</button>
+        <button type="button" onclick="downloadExamPDF()">&#11015; Download PDF (phone)</button>
+        <!-- NEW (pack 17 - owner request): editable Word export. -->
+        <button type="button" onclick="downloadExamWord()">&#128196; Download Word</button>
+        <button type="button" class="exam-back-btn" onclick="examGotoStep(1)">&larr; Exam Details</button>
+      </div>
+
+      <!-- Rich text toolbar -->
+      <div class="exam-format-toolbar">
+        <button type="button" onclick="format('bold')"><b>B</b></button>
+        <button type="button" onclick="format('italic')"><i>I</i></button>
+        <button type="button" onclick="format('underline')"><u>U</u></button>
+        <span class="divider"></span>
+        <!-- NEW (editor upgrade, request #2): super/subscript for math -->
+        <button type="button" onclick="format('superscript')" title="Superscript (x²)">x&sup2;</button>
+        <button type="button" onclick="format('subscript')" title="Subscript (x₂)">x&#8322;</button>
+        <span class="divider"></span>
+        <button type="button" onclick="format('justifyLeft')">&#8676;</button>
+        <button type="button" onclick="format('justifyCenter')">&#8646;</button>
+        <button type="button" onclick="format('justifyRight')">&#8677;</button>
+        <span class="divider"></span>
+        <button type="button" onclick="format('insertUnorderedList')">&bull; List</button>
+        <button type="button" onclick="format('insertOrderedList')">1. List</button>
+        <span class="divider"></span>
+        <button type="button" onclick="insertTable()">Insert Table</button>
+        <!-- NEW (editor upgrade, request #2): insert an image into the exam -->
+        <button type="button" onclick="document.getElementById('examImageInput').click()">&#128247; Image</button>
+        <input type="file" id="examImageInput" accept="image/*" style="display:none;">
+        <span class="divider"></span>
+        <!-- NEW (editor upgrade, request #2): maths/science symbols -->
+        <button type="button" onclick="toggleMathPalette()" id="mathToggleBtn">&sum; Symbols</button>
+        <span class="divider"></span>
+        <label class="toolbar-label">Spacing:</label>
+        <select id="spacingSelect" onchange="setSpacing()">
+          <option value="compact">Compact</option>
+          <option value="normal" selected>Normal</option>
+          <option value="relaxed">Relaxed</option>
+          <option value="spacious">Fill Page (Extra Spacious)</option>
+        </select>
+        <span class="divider"></span>
+        <!-- NEW (pack 17 - owner: "add font size to the exam tools"):
+             the question font size right inside the tools. Mirrors the
+             Step 1 picker both ways (exam.js keeps them in sync). -->
+        <label class="toolbar-label">Font Size:</label>
+        <select id="examFontSelectTools" title="Question font size - same picker as Step 1; auto-fit still protects the page">
+          <option value="22">Small (22pt)</option>
+          <option value="26">Medium (26pt)</option>
+          <option value="32" selected>Large (32pt)</option>
+          <option value="36">Extra Large (36pt)</option>
+          <option value="40">Huge (40pt)</option>
+        </select>
+        <span class="divider"></span>
+        <button type="button" onclick="toggleDirection()" id="dirToggleBtn">RTL / LTR</button>
+        <select id="fontSizeSelect" onchange="setFontSize()">
+          <option value="3">Normal</option>
+          <option value="4">Large</option>
+          <option value="5">Larger</option>
+          <option value="6">X-Large</option>
+        </select>
+        <span class="divider"></span>
+        <button type="button" id="voiceBtn" onclick="toggleVoice()">&#127908; Voice</button>
+        <select id="voiceLang">
+          <option value="ar-SA">Arabic</option>
+          <option value="en-US">English</option>
+        </select>
+      </div>
+
+      <!-- NEW (editor upgrade, request #2): mathematical symbol palette -->
+      <div class="math-palette" id="mathPalette" style="display:none;">
+        <span class="harakat-label">Symbols:</span>
+        <button type="button" onclick="insertSymbol('+')">+</button>
+        <button type="button" onclick="insertSymbol('\u2212')">&minus;</button>
+        <button type="button" onclick="insertSymbol('\u00D7')">&times;</button>
+        <button type="button" onclick="insertSymbol('\u00F7')">&divide;</button>
+        <button type="button" onclick="insertSymbol('=')">=</button>
+        <button type="button" onclick="insertSymbol('\u2260')">&ne;</button>
+        <button type="button" onclick="insertSymbol('\u2264')">&le;</button>
+        <button type="button" onclick="insertSymbol('\u2265')">&ge;</button>
+        <button type="button" onclick="insertSymbol('\u00B1')">&plusmn;</button>
+        <button type="button" onclick="insertSymbol('\u221A')">&radic;</button>
+        <button type="button" onclick="insertSymbol('\u221E')">&infin;</button>
+        <button type="button" onclick="insertSymbol('\u03C0')">&pi;</button>
+        <button type="button" onclick="insertSymbol('\u03B8')">&theta;</button>
+        <button type="button" onclick="insertSymbol('\u2220')">&ang;</button>
+        <button type="button" onclick="insertSymbol('\u2211')">&sum;</button>
+        <button type="button" onclick="insertSymbol('\u00BD')">&frac12;</button>
+        <button type="button" onclick="insertSymbol('\u00BC')">&frac14;</button>
+        <button type="button" onclick="insertSymbol('\u00BE')">&frac34;</button>
+        <button type="button" onclick="insertSymbol('\u00B0')">&deg;</button>
+        <button type="button" onclick="insertSymbol('%')">%</button>
+        <button type="button" onclick="insertSymbol('\u00B2')">&sup2;</button>
+        <button type="button" onclick="insertSymbol('\u00B3')">&sup3;</button>
+      </div>
+
+      <!-- Harakat palette: manual diacritic insertion -->
+      <div class="harakat-palette" id="harakatPalette">
+        <span class="harakat-label">Harakat:</span>
+        <button type="button" onclick="insertHarakat('\u064B')">ً</button>
+        <button type="button" onclick="insertHarakat('\u064C')">ٌ</button>
+        <button type="button" onclick="insertHarakat('\u064D')">ٍ</button>
+        <button type="button" onclick="insertHarakat('\u064E')">َ</button>
+        <button type="button" onclick="insertHarakat('\u064F')">ُ</button>
+        <button type="button" onclick="insertHarakat('\u0650')">ِ</button>
+        <button type="button" onclick="insertHarakat('\u0651')">ّ</button>
+        <button type="button" onclick="insertHarakat('\u0652')">ْ</button>
+        <button type="button" onclick="insertHarakat('\u0653')">ٓ</button>
+        <button type="button" onclick="insertHarakat('\u0640')">ـ</button>
+      </div>
+
+    </div>
+  </aside>
+
+  <!-- ===== MAIN AREA: the exam pages get the whole remaining screen =====
+       CHANGED (auto pagination, request #1): #examFlow is ONE continuous
+       editable area spanning every page. The teacher simply keeps
+       typing; exam.js measures the content and moves whole question
+       blocks onto new pages automatically - a single question is NEVER
+       split across two pages. -->
+  <!-- NEW (multi-exam in one PDF): the pristine cover markup. exam.js
+       stamps this into page 1 AND into every extra cover added with
+       "Add Another Exam". Value hooks are .js-cover-* CLASSES (not ids),
+       because one document may hold many covers at once. -->
+  <template id="examCoverTemplate">
+      <div class="cover-header" contenteditable="false">
+        <img src="images/bismillah.png" class="cover-bismillah" alt="بسم الله الرحمن الرحيم">
+
+        <img src="images/LOGO.JPG" class="cover-logo" alt="School Logo">
+
+        <h1 class="cover-arabic-name" lang="ar">مَدْرَسَةُ أَمِينِ اللهِ لِلْعُلُومِ الْعَرَبِيَّةِ الْإِسْلَامِيَّةِ</h1>
+        <h2 class="cover-english-name" dir="ltr">AMEENULLAH SCHOOL OF ARABIC AND ISLAMIC STUDIES</h2>
+
+        <div class="cover-divider"></div>
+
+        <p class="cover-address" dir="ltr">3, Temidire Street off Ondo Benin Road, Ijebu-Ode, Ogun State, Nigeria.</p>
+        <p class="cover-tel" dir="ltr">Tel: 08062445559, 08058306889.</p>
+        <p class="cover-email" dir="ltr">E-mail: <a href="mailto:madrasatuameenillah22@gmail.com">madrasatuameenillah22@gmail.com</a></p>
+        <p class="cover-motto"><span class="motto-ar" lang="ar">الشِّعَارُ: الْعِلْمُ وَالْعِبَادَةُ.</span><span class="motto-en" dir="ltr">MOTTO: KNOWLEDGE AND WORSHIP.</span></p>
+      </div>
+
+      <div class="cover-exam-details" contenteditable="false">
+        <p class="cover-exam-period js-cover-period" lang="ar">اِمْتِحَانُ الْفَتْرَةِ ... لِلْعَامِ الدِّرَاسِيِّ ....\....</p>
+
+        <table class="cover-info-table">
+          <tr>
+            <td class="label">الْإِسْـــمُ:</td>
+            <td class="blank-line" colspan="3"></td>
+          </tr>
+          <tr>
+            <td class="label">الْمَــــــادَّةُ:</td>
+            <td class="value js-cover-subject">-</td>
+            <td class="label">رَقْمُ الْقَبُولِ:</td>
+            <td class="blank-line-short"></td>
+          </tr>
+          <tr>
+            <td class="label">الْمُـــــدَّةُ:</td>
+            <td class="value js-cover-duration" colspan="3">سَاعَةٌ وَاحِدَةٌ.</td>
+          </tr>
+          <tr>
+            <td class="label">الْفَصْلُ:</td>
+            <td class="value js-cover-class" colspan="3">-</td>
+          </tr>
+        </table>
+      </div>
+
+      <!-- CHANGED: rules are plain lines with the numeral typed into the
+           text (١. ٢. ٣. ٤.) - automatic list numbers drifted to the left
+           edge on some devices; typed ones always stay on the right. The
+           teacher can still edit these lines freely. -->
+      <div class="cover-instructions js-cover-instructions" contenteditable="true">
+        <p class="instructions-title">إِرْشَادَاتُ الْاِمْتِحَانِ:</p>
+        <p class="instruction-line">١. لَا تَفْتَحْ حَتَّى تُؤْمَرَ بِذَلِكَ.</p>
+        <p class="instruction-line">٢. لَا تُضَيِّعْ هَذِهِ وَرَقَةَ السُّؤَالِ.</p>
+        <p class="instruction-line">٣. اِسْتَعِنْ بِاللَّهِ.</p>
+        <p class="instruction-line">٤. ثُمَّ ابْدَأَ.</p>
+      </div>
+
+      <div class="cover-footer" contenteditable="false">
+        <p class="cover-wish" lang="ar">مع تمنياتي لكم بالنجاح.</p>
+        <p class="cover-code js-cover-code" dir="ltr">AMSAIS@2026/1447</p>
+      </div>
+  </template>
+
+  <!-- FIX (pack 18): .no-result-print marker keeps the result-module print
+       guard in css/style.css (which is also loaded on this page) from hiding
+       the exam editor when the user opens Chrome's print dialog. -->
+  <main class="exam-main no-result-print">
+
+    <div class="exam-pages exam-flow" id="examFlow" contenteditable="true" dir="rtl">
+
+      <!-- PAGE 1: THE COVER PAGE.
+           CHANGED (school paper design): rebuilt as an exact on-screen
+           replica of the school's own printed exam papers - bismillah
+           banner, logo, school names, thick black rule, address/tel/e-mail,
+           motto row, exam period, name/subject/admission/duration/class
+           lines and the numbered instructions. It is PURE chrome: NO
+           questions are typed on page 1; questions start on page 2. -->
+      <div class="exam-page page-one" id="coverPage"></div>
+
+      <!-- PAGE 2 (auto-managed): a PLAIN question page - no school header,
+           exactly like the school's real papers (CHANGED (school paper
+           design)). The engine adds/removes these automatically as the
+           teacher writes; a question is never split across two pages. -->
+      <div class="exam-page body-page">
+        <div class="page-content exam-body spacing-normal">
+          <p>ابدأ كتابة الامتحان هنا...</p>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Word-style page break helper (pages themselves are automatic) -->
+    <div class="exam-next-page-wrap">
+      <button type="button" class="exam-next-btn" onclick="insertPageBreak()">&#8626; Insert Page Break</button>
+      <p>Pages are added automatically as you write - a question is never split across two pages. Use a page break only when you want to force a question to start on a fresh page.</p>
+    </div>
+
+  </main>
+
+  <!-- NEW (pack 18 - owner: "let me be able to decide either to go to step
+       1 or 2"): when the Open button of a saved exam is clicked, this small
+       chooser asks where to open it - Step 1 (details) or Step 2 (writing).
+       It stacks on top of the saved-exams list. -->
+  <div id="loadStepOverlay" class="load-panel-overlay load-step-overlay" style="display:none;">
+    <div class="load-panel load-step-panel">
+      <h3>Open saved exam</h3>
+      <p id="loadStepExamName" class="load-step-name"></p>
+      <div class="load-step-actions">
+        <button type="button" id="loadStepBtn1">Step 1 &ndash; Details</button>
+        <button type="button" id="loadStepBtn2">Step 2 &ndash; Write Questions</button>
+      </div>
+      <button type="button" onclick="closeLoadStepPanel()" class="close-btn">Cancel</button>
+    </div>
+  </div>
+
+  <!-- Load Saved Exam panel -->
+  <div id="loadPanelOverlay" class="load-panel-overlay" style="display:none;">
+    <div class="load-panel">
+      <h3>Saved Exams</h3>
+      <button type="button" onclick="closeLoadPanel()" class="close-btn">Close</button>
+      <table id="savedExamsTable">
+        <tr>
+          <th>Title</th>
+          <th>Class</th>
+          <th>Subject</th>
+          <th>Term</th>
+          <th>Session</th>
+          <th>Action</th>
+        </tr>
+      </table>
+    </div>
+  </div>
+
+  <!-- NEW: shared UI helpers (toasts, dark mode) - additive -->
+  <script src="js/ui.js"></script>
+  <script src="js/app.js"></script>
+  <script src="js/subject.js"></script>
+  <!-- NEW (PDF download): local copies of jsPDF + html2canvas, used only
+       by the "Download PDF" button. No CDN/internet dependency. -->
+  <script src="js/vendor/jspdf.umd.min.js"></script>
+  <script src="js/vendor/html2canvas.min.js"></script>
+  <script src="js/exam.js"></script>
+
+  <!-- NEW (PDF reliability fix) -->
+  <script src="src/utils/exam-pdf-fix.js"></script>
+
+  <!-- NEW (PWA conversion): registers the service worker + install button. Additive only. -->
+  <script src="js/pwa.js" defer></script>
+</body>
+</html>

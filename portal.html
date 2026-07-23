@@ -1,0 +1,466 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Student &amp; Parent Portal | Ameenullah School of Arabic and Islamic Studies</title>
+  <!-- Legacy stylesheet provides the FROZEN report-card design (untouched). -->
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/modern-ui.css">
+  <!-- NEW (pack 13): portal styles (+ print rules that only hide portal
+       chrome; the report card itself keeps its original design). -->
+  <link rel="stylesheet" href="css/school.css">
+
+  <!-- Same Arabic letter-joining fix as the Check Result page (unchanged rules) -->
+  <style>
+    [lang="ar"]{ font-family:'Amiri','Cairo',serif; letter-spacing:normal !important; }
+    #reportLevel{ letter-spacing:normal !important; }
+  </style>
+
+  <!-- ================================================================
+       NEW (pack 24 - owner: "let the student parent portal be organized,
+       is too rough, maybe it will have a sidebar also, just make it
+       nice"): app-shell layout - green sidebar + one tidy page (view)
+       at a time, exactly like modern school apps. Only CHROME styles;
+       every feature/card/element keeps its original id and behaviour.
+  ================================================================ -->
+  <style>
+    :root{ --pt-ink:#1f2d26; }
+    body.pt-body{ background:#eef3ef; }
+
+    .pt-shell{ min-height:100vh; display:flex; flex-direction:column; }
+    .pt-maintop{
+      background:linear-gradient(120deg,#14291c,#1d4a30 55%,#276b43);
+      color:#fff; display:flex; align-items:center; gap:10px;
+      padding:10px 14px; position:sticky; top:0; z-index:40;
+      box-shadow:0 2px 10px rgba(0,0,0,.18);
+    }
+    .pt-maintop img{ width:34px; height:34px; border-radius:8px; background:#fff; }
+    .pt-maintop .pt-tt{ font-weight:800; font-size:15px; line-height:1.2; }
+    .pt-maintop .pt-tt small{ display:block; font-weight:500; font-size:11px; opacity:.85; }
+    .pt-ham{ display:none; background:rgba(255,255,255,.14); border:none; color:#fff;
+      width:38px; height:38px; border-radius:10px; font-size:18px; }
+
+    .pt-layout{ display:flex; flex:1; align-items:stretch; }
+
+    .pt-sidenav{
+      width:238px; flex:0 0 238px;
+      background:linear-gradient(180deg,#14291c,#1d4a30 70%,#20573a);
+      color:#fff; padding:18px 12px; display:flex; flex-direction:column; gap:2px;
+      position:sticky; top:54px; align-self:flex-start; min-height:calc(100vh - 54px);
+    }
+    .pt-sidenav .pt-side-brand{ display:flex; align-items:center; gap:9px; padding:4px 8px 14px; border-bottom:1px solid rgba(255,255,255,.12); margin-bottom:10px; }
+    .pt-sidenav .pt-side-brand img{ width:38px; height:38px; border-radius:9px; background:#fff; }
+    .pt-sidenav .pt-side-brand b{ font-size:12.5px; line-height:1.25; display:block; }
+    .pt-sidenav .pt-side-brand small{ font-size:10px; opacity:.75; }
+    .pt-navlink{
+      display:flex; align-items:center; gap:10px; padding:10px 12px;
+      border-radius:11px; color:rgba(255,255,255,.92); text-decoration:none;
+      font-size:14px; font-weight:600; border:none; background:transparent;
+      width:100%; text-align:left; cursor:pointer; font-family:inherit;
+    }
+    .pt-navlink:hover{ background:rgba(255,255,255,.10); }
+    .pt-navlink.pt-active{ background:#fff; color:#1d4a30; }
+    .pt-navlink .pt-nicon{ width:20px; text-align:center; }
+    .pt-navlink .pt-nbadge{ margin-left:auto; background:#C0392B; color:#fff; font-size:10.5px;
+      font-weight:800; border-radius:10px; padding:1px 7px; display:none; }
+    .pt-navlink.pt-active .pt-nbadge{ background:#1d4a30; color:#fff; }
+    .pt-side-foot{ margin-top:auto; padding-top:12px; border-top:1px solid rgba(255,255,255,.12); }
+
+    .pt-mainnew{ flex:1; padding:20px 18px 70px; max-width:900px; margin:0 auto; width:100%; }
+
+    .pt-view{ display:none; }
+    .pt-view.pt-view-on{ display:block; }
+    .pt-view-title{ font-size:20px; color:#14532d; margin:2px 0 12px; font-weight:800; }
+
+    .pt-quick{ display:flex; flex-wrap:wrap; gap:8px; margin-top:14px; }
+    .pt-quick button{
+      border:1px solid #d7e0da; background:#fff; border-radius:999px;
+      padding:7px 14px; font-size:13px; font-weight:700; color:#1d4a30; cursor:pointer;
+    }
+    .pt-quick button:hover{ background:#1d4a30; color:#fff; }
+
+    /* OPay/PalmPay-style notification rows (pack 24) */
+    .pt-notif-item{
+      display:flex; gap:12px; align-items:center; background:#fff;
+      border:1px solid #e1e9e3; border-radius:14px; padding:12px 14px;
+      margin:8px 0; cursor:pointer; text-align:left; width:100%;
+      font-family:inherit; transition:box-shadow .15s;
+    }
+    .pt-notif-item:hover{ box-shadow:0 4px 14px rgba(0,0,0,.07); }
+    .pt-notif-item .pt-nico{
+      width:40px; height:40px; flex:0 0 40px; border-radius:50%;
+      display:flex; align-items:center; justify-content:center; font-size:18px;
+      background:#e8f2ea; color:#1d4a30;
+    }
+    .pt-notif-item.pt-unread{ border-color:#2F9E6E; background:#f2faf4; }
+    .pt-notif-item .pt-nt{ flex:1; min-width:0; }
+    .pt-notif-item .pt-nt b{ display:block; font-size:14px; color:var(--pt-ink); }
+    .pt-notif-item .pt-nt span{ display:block; font-size:12.5px; color:#5B6B62; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .pt-notif-item .pt-nwhen{ font-size:11px; color:#93a19a; white-space:nowrap; }
+    .pt-notif-item .pt-nchev{ color:#b9c7bd; font-size:18px; }
+
+    .pt-scrim{ display:none; position:fixed; inset:0; background:rgba(0,0,0,.4); z-index:49; }
+    body.pt-nav-open .pt-scrim{ display:block; }
+
+    @media (max-width:860px){
+      .pt-ham{ display:block; }
+      .pt-sidenav{
+        position:fixed; left:0; top:0; z-index:50; height:100vh; min-height:100vh;
+        transform:translateX(-105%); transition:transform .22s ease;
+        width:250px; flex-basis:250px;
+      }
+      body.pt-nav-open .pt-sidenav{ transform:none; }
+      .pt-mainnew{ padding:14px 12px 60px; }
+    }
+    @media print{
+      .pt-sidenav, .pt-maintop, .pt-ham, .pt-scrim{ display:none !important; }
+      .pt-mainnew{ padding:0; max-width:none; }
+    }
+  </style>
+
+  <link rel="manifest" href="manifest.webmanifest">
+  <meta name="theme-color" content="#2f5021">
+  <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+</head>
+<body class="pt-body">
+<div class="pt-shell">
+
+  <!-- Top app bar (pack 24 redesign). Bell opens the Notifications page
+       (OPay-style) - the badge counts unread school replies. -->
+  <header class="pt-maintop portal-no-print">
+    <button class="pt-ham" id="ptHam" type="button" aria-label="Menu">&#9776;</button>
+    <img src="images/LOGO.JPG" alt="School Logo">
+    <div class="pt-tt">Student &amp; Parent Portal<small>Ameenullah School of Arabic &amp; Islamic Studies</small></div>
+    <div style="margin-left:auto; display:flex; gap:8px; align-items:center;">
+      <!-- pack 23 + CHANGED (pack 24): bell now opens the notifications PAGE -->
+      <button class="pt-linkbtn" id="ptBellBtn" type="button" title="Notifications" style="position:relative;">
+        &#128276; <span id="ptBellBadge" style="display:none; position:absolute; top:-6px; right:-6px; background:#C0392B; color:#fff; font-size:11px; font-weight:800; border-radius:10px; padding:1px 6px; line-height:1.4;"></span>
+      </button>
+    </div>
+  </header>
+
+  <div class="pt-layout">
+
+    <!-- Sidebar navigation (pack 24). data-view links switch the page. -->
+    <aside class="pt-sidenav portal-no-print" id="ptSideNav">
+      <div class="pt-side-brand">
+        <img src="images/LOGO.JPG" alt="Logo">
+        <div><b>Ameenullah Portal</b><small>Student &amp; Parent</small></div>
+      </div>
+      <button class="pt-navlink pt-active" data-view="overview" type="button"><span class="pt-nicon">&#127968;</span> Overview</button>
+      <button class="pt-navlink" data-view="results" type="button"><span class="pt-nicon">&#128202;</span> Results</button>
+      <button class="pt-navlink" data-view="fees" type="button"><span class="pt-nicon">&#128184;</span> Fees &amp; Payments</button>
+      <button class="pt-navlink" data-view="chat" type="button"><span class="pt-nicon">&#128172;</span> Chat <span class="pt-nbadge" id="ptChatBadge"></span></button>
+      <button class="pt-navlink" data-view="notifications" type="button"><span class="pt-nicon">&#128276;</span> Notifications <span class="pt-nbadge" id="ptNotifBadge"></span></button>
+      <button class="pt-navlink" data-view="notices" type="button"><span class="pt-nicon">&#128227;</span> Notices</button>
+      <button class="pt-navlink" data-view="exams" type="button"><span class="pt-nicon">&#128394;</span> Exam Timetable</button>
+      <!-- NEW (pack 25): weekly class timetable - shows only after the school publishes it -->
+      <button class="pt-navlink" data-view="classtt" type="button"><span class="pt-nicon">&#128198;</span> Class Timetable</button>
+      <!-- NEW (pack 26): attendance record for this student -->
+      <button class="pt-navlink" data-view="attendance" type="button"><span class="pt-nicon">&#128203;</span> Attendance</button>
+      <button class="pt-navlink" data-view="calendar" type="button"><span class="pt-nicon">&#128197;</span> Calendar</button>
+      <button class="pt-navlink" data-view="settings" type="button"><span class="pt-nicon">&#9881;&#65039;</span> Settings</button>
+      <div class="pt-side-foot">
+        <a class="pt-navlink" href="index.html"><span class="pt-nicon">&#127760;</span> School Website</a>
+        <button class="pt-navlink" id="portalLogoutBtn" type="button"><span class="pt-nicon">&#128682;</span> Logout</button>
+      </div>
+    </aside>
+    <div class="pt-scrim" id="ptScrim"></div>
+
+    <main class="pt-mainnew">
+
+      <!-- ============ OVERVIEW ============ -->
+      <div class="pt-view pt-view-on" data-view="overview">
+        <h1 class="pt-view-title">&#127968; Overview</h1>
+        <!-- Student information card -->
+        <section class="pt-card portal-no-print">
+          <h2>Student Information</h2>
+          <p class="pt-hint">These details come from the official school register.</p>
+          <div class="pt-child">
+            <img id="ptPhoto" src="images/default.png" alt="Student Photo"
+                 onerror="this.onerror=null; this.src='images/default.png';">
+            <div>
+              <div class="pt-child-name" id="ptName">...</div>
+              <div class="pt-child-meta">
+                <span>Student ID: <b id="ptId">...</b></span>
+                <span>Class: <b id="ptClass">...</b></span>
+                <span>Gender: <b id="ptGender">...</b></span>
+                <span>Date of Birth: <b id="ptDob">...</b></span>
+              </div>
+            </div>
+          </div>
+          <!-- pack 24: quick shortcuts so parents find things instantly -->
+          <div class="pt-quick">
+            <button type="button" data-jump="results">&#128202; My Results</button>
+            <button type="button" data-jump="fees">&#128184; My Fees</button>
+            <button type="button" data-jump="chat">&#128172; Chat with School</button>
+            <button type="button" data-jump="exams">&#128394; Exam Timetable</button>
+          </div>
+        </section>
+      </div>
+
+      <!-- ============ RESULTS ============ -->
+      <div class="pt-view" data-view="results">
+        <h1 class="pt-view-title">&#128202; Results</h1>
+        <!-- Published results -->
+        <section class="pt-card portal-no-print">
+          <h2>Published Results</h2>
+          <p class="pt-hint">A result shows here only <b>after the school publishes it</b>. If nothing shows yet, please check back later.</p>
+          <div id="ptTerms">
+            <div class="pt-empty">Loading published results...</div>
+          </div>
+        </section>
+
+        <!-- Report sheet viewer (design = the original/frozen report card) -->
+        <section class="pt-card" id="ptReportCardWrap" style="display:none;">
+          <div class="portal-no-print" style="display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-bottom:14px;">
+            <h2 style="margin:0;">Official Report Sheet</h2>
+            <span style="margin-left:auto; display:flex; gap:8px; flex-wrap:wrap;">
+              <button class="mg-btn" id="ptPrintBtn" type="button">&#128424;&#65039; Print Report</button>
+              <button class="mg-btn-light" id="ptCloseReport" type="button">&#10006; Close</button>
+            </span>
+          </div>
+          <div id="ptReport"></div>
+        </section>
+      </div>
+
+      <!-- ============ FEES & PAYMENTS ============ -->
+      <div class="pt-view" data-view="fees">
+        <h1 class="pt-view-title">&#128184; Fees &amp; Payments</h1>
+        <!-- NEW (pack 15): My Fees & Balance - per fee TYPE, with printable
+             statement. -->
+        <section class="pt-card portal-no-print" id="ptFeesCard" style="display:none;">
+          <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+            <h2 style="margin:0;">&#128184; My Fees &amp; Balance</h2>
+            <span style="margin-left:auto;">
+              <button class="mg-btn-light" id="ptStmtBtn" type="button">&#11015; Statement (PDF)</button>
+            </span>
+          </div>
+          <p class="pt-hint" id="ptFeesHint">Fees set by the school for your class.</p>
+          <div id="ptFees"></div>
+        </section>
+
+        <!-- NEW (pack 15): Where to pay - bank accounts the admin added. -->
+        <section class="pt-card portal-no-print" id="ptBankCard" style="display:none;">
+          <h2>&#127974; Where to Pay</h2>
+          <p class="pt-hint">Pay into ANY of these official school accounts, keep your proof, then upload it below.</p>
+          <div id="ptBanks"></div>
+        </section>
+
+        <!-- NEW (pack 15): upload payment proof (screenshot/PDF). -->
+        <section class="pt-card portal-no-print">
+          <h2>&#128395;&#65039; Send Payment Proof</h2>
+          <p class="pt-hint">After paying by transfer/bank, upload the screenshot or PDF of your payment here. The school reviews and confirms it.</p>
+          <form id="ptProofForm" class="pt-form-grid" enctype="multipart/form-data">
+            <div>
+              <label for="ptPayType">Fee Type</label>
+              <select id="ptPayType"></select>
+            </div>
+            <div>
+              <label for="ptPayTerm">Term</label>
+              <select id="ptPayTerm">
+                <option>1st Term</option><option>2nd Term</option><option>3rd Term</option>
+              </select>
+            </div>
+            <div>
+              <label for="ptPaySession">Session</label>
+              <select id="ptPaySession"></select>
+            </div>
+            <div>
+              <label for="ptPayAmount">Amount Paid (&#8358;)</label>
+              <input type="number" id="ptPayAmount" min="1" placeholder="e.g. 25000" required>
+            </div>
+            <div>
+              <label for="ptPayNote">Note (optional)</label>
+              <input type="text" id="ptPayNote" placeholder="e.g. transfer from GTBank">
+            </div>
+            <div>
+              <label for="ptEvidence">Screenshot / PDF of payment</label>
+              <input type="file" id="ptEvidence" accept="image/png, image/jpeg, application/pdf" required>
+            </div>
+            <button class="mg-btn" type="submit" id="ptProofBtn">&#9201; Send for Review</button>
+            <div class="pt-msg" id="ptProofMsg"></div>
+          </form>
+          <div id="ptMySubs" style="margin-top:16px;"></div>
+        </section>
+      </div>
+
+      <!-- ============ CHAT (pack 23, renamed/organized pack 24) ============ -->
+      <div class="pt-view" data-view="chat">
+        <h1 class="pt-view-title">&#128172; Chat</h1>
+        <section class="pt-card portal-no-print" id="ptMsgCard">
+          <p class="pt-hint">Chat with the school - choose who reads your message. Their replies appear on this page.</p>
+          <div id="ptMsgs" style="margin:6px 0 12px;">
+            <div class="pt-empty">No messages yet. Say salam below - the school replies right here.</div>
+          </div>
+          <form id="ptMsgForm" class="pt-form-grid">
+            <div>
+              <label for="ptMsgTo">Send to</label>
+              <select id="ptMsgTo">
+                <option value="admin">School Administration (office)</option>
+                <option value="teacher">Class Teacher</option>
+              </select>
+            </div>
+            <div style="grid-column:1/-1;">
+              <label for="ptMsgBody">Your message</label>
+              <textarea id="ptMsgBody" rows="3" maxlength="2000" placeholder="Type your message..." required></textarea>
+            </div>
+            <div>
+              <button class="mg-btn-light" id="ptMsgSend" type="submit" style="background:#14532d; color:#fff;">&#128231; Send Message</button>
+            </div>
+          </form>
+          <p class="pt-hint" id="ptMsgNote" style="margin-top:6px;"></p>
+        </section>
+      </div>
+
+      <!-- ============ NOTIFICATIONS (pack 24 - OPay/PalmPay style) ============ -->
+      <div class="pt-view" data-view="notifications">
+        <h1 class="pt-view-title">&#128276; Notifications</h1>
+        <p class="pt-hint" style="margin:0 0 6px;">Everything new from the school - tap any item to open it.</p>
+        <div id="ptNotifList">
+          <div class="pt-empty">Loading notifications...</div>
+        </div>
+      </div>
+
+      <!-- ============ NOTICES ============ -->
+      <div class="pt-view" data-view="notices">
+        <h1 class="pt-view-title">&#128227; School Notices</h1>
+        <!-- NEW (pack 22): school announcements for parents/students + dated events. -->
+        <section class="pt-card portal-no-print" id="ptNoticesCard" style="display:none;">
+          <p class="pt-hint">Announcements and events from the school.</p>
+          <div id="ptNotices"></div>
+        </section>
+        <div class="pt-empty" id="ptNoticesEmpty" style="display:none;">No notices yet - when the school posts one, it shows here.</div>
+      </div>
+
+      <!-- ============ EXAM TIMETABLE ============ -->
+      <div class="pt-view" data-view="exams">
+        <h1 class="pt-view-title">&#128394; Exam Timetable</h1>
+        <!-- NEW (pack 22): the pupil's own class papers with dates. -->
+        <section class="pt-card portal-no-print" id="ptExamsCard" style="display:none;">
+          <p class="pt-hint">Your class's exam papers - dates are set by the school when writing each exam.</p>
+          <div id="ptExams"></div>
+        </section>
+        <!-- NEW (pack 25 - owner request): the school's official exam schedule.
+             It appears here ONLY after the school publishes it. -->
+        <section class="pt-card portal-no-print" id="ptTtExamCard" style="display:none;">
+          <h2>Official Exam Schedule</h2>
+          <p class="pt-hint">Published by the school - subject, date and time for each paper.</p>
+          <div id="ptTtExam"></div>
+        </section>
+        <div class="pt-empty" id="ptTtExamEmpty" style="display:none;">The exam schedule is not published yet - please check back later.</div>
+      </div>
+
+      <!-- ============ CLASS TIMETABLE (pack 25) ============ -->
+      <div class="pt-view" data-view="classtt">
+        <h1 class="pt-view-title">&#128198; Class Timetable</h1>
+        <!-- NEW (pack 25 - owner request): weekly periods for the pupil's own
+             class. Hidden until the school publishes it. -->
+        <section class="pt-card portal-no-print" id="ptTtClassCard" style="display:none;">
+          <p class="pt-hint">The weekly class periods - published by the school.</p>
+          <div id="ptTtClass"></div>
+        </section>
+        <div class="pt-empty" id="ptTtClassEmpty" style="display:none;">The class timetable is not published yet - please check back later.</div>
+      </div>
+
+      <!-- ============ ATTENDANCE (pack 26) ============ -->
+      <div class="pt-view" data-view="attendance">
+        <h1 class="pt-view-title">&#128203; Attendance Record</h1>
+        <section class="pt-card portal-no-print">
+          <p class="pt-hint">Your attendance record as marked by the school. Contact the school if any date looks wrong.</p>
+          <!-- Summary bar -->
+          <div id="ptAttSummary" style="display:flex; gap:10px; flex-wrap:wrap; margin-bottom:14px;"></div>
+          <!-- Dated list -->
+          <div id="ptAttList"><div class="pt-empty">Loading attendance...</div></div>
+        </section>
+      </div>
+
+      <!-- ============ CALENDAR ============ -->
+      <div class="pt-view" data-view="calendar">
+        <h1 class="pt-view-title">&#128197; School Calendar</h1>
+        <!-- NEW (pack 15): the madrasah calendar - appears ONLY when published. -->
+        <section class="pt-card portal-no-print" id="ptCalCard" style="display:none;">
+          <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+            <h2 style="margin:0;">&#128197; School Calendar</h2>
+            <span style="margin-left:auto;">
+              <button class="mg-btn-light" id="ptCalPdfBtn" type="button">&#11015; Download PDF</button>
+            </span>
+          </div>
+          <p class="pt-hint" id="ptCalHint">The official term calendar from the school.</p>
+        </section>
+        <!-- NEW (pack 15): calendar sheet renders here (read-only). -->
+        <section class="pt-card portal-no-print" id="ptCalWrap" style="display:none; overflow-x:auto; padding:10px;">
+          <div id="ptCalHolder"></div>
+        </section>
+      </div>
+
+      <!-- ============ SETTINGS (pack 23) ============ -->
+      <div class="pt-view" data-view="settings">
+        <h1 class="pt-view-title">&#9881;&#65039; Settings</h1>
+        <section class="pt-card portal-no-print" id="ptSettingsCard">
+          <p class="pt-hint">Keep your login and contact details up to date.</p>
+
+          <h3 style="margin:10px 0 4px; font-size:15px; color:#14532d;">&#128273; Change Portal Password</h3>
+          <p class="pt-hint">Today you log in with the student's <b>surname</b>. Set your own password below and it replaces the surname from your next login.</p>
+          <form id="ptPwForm" class="pt-form-grid">
+            <div>
+              <label for="ptPwCurrent">Current password (your surname)</label>
+              <input type="password" id="ptPwCurrent" autocomplete="current-password" required>
+            </div>
+            <div>
+              <label for="ptPwNew">New password (min 4 characters)</label>
+              <input type="password" id="ptPwNew" autocomplete="new-password" minlength="4" required>
+            </div>
+            <div>
+              <label for="ptPwNew2">Repeat new password</label>
+              <input type="password" id="ptPwNew2" autocomplete="new-password" minlength="4" required>
+            </div>
+            <div>
+              <button class="mg-btn-light" type="submit">&#128273; Change Password</button>
+            </div>
+          </form>
+
+          <h3 style="margin:18px 0 4px; font-size:15px; color:#14532d;">&#128222; Contact Details (how the school reaches you)</h3>
+          <form id="ptContactForm" class="pt-form-grid">
+            <div>
+              <label for="ptParentName">Parent/Guardian name</label>
+              <input type="text" id="ptParentName" maxlength="160">
+            </div>
+            <div>
+              <label for="ptParentPhone">Phone / WhatsApp</label>
+              <input type="text" id="ptParentPhone" maxlength="40">
+            </div>
+            <div style="grid-column:1/-1;">
+              <label for="ptAddress">Home address</label>
+              <input type="text" id="ptAddress" maxlength="255">
+            </div>
+            <div>
+              <button class="mg-btn-light" type="submit">&#128190; Save Details</button>
+            </div>
+          </form>
+          <p class="pt-hint" id="ptSettingsNote" style="margin-top:6px;"></p>
+        </section>
+      </div>
+
+    </main>
+  </div>
+</div>
+
+  <!-- NEW (pack 15): PDF libs + fee statement maker + calendar renderer -->
+  <script src="js/vendor/html2canvas.min.js"></script>
+  <script src="js/vendor/jspdf.umd.min.js"></script>
+  <script src="js/ams-pdf.js"></script>
+  <script src="js/calendar-render.js"></script>
+  <!-- EXISTING frozen report-card builder (unchanged file, reused) -->
+  <script src="js/report-card.js"></script>
+  <!-- NEW (portal results reliability fix) -->
+  <script src="src/utils/portal-results-fix.js"></script>
+
+  <!-- NEW (pack 13): portal logic -->
+  <script src="js/portal.js"></script>
+  <!-- PWA (unchanged) -->
+  <script src="js/pwa.js" defer></script>
+</body>
+</html>

@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Student Result</title>
+  <link rel="stylesheet" href="css/style.css">
+
+  <!-- NEW (PWA conversion): makes the site installable as a phone/desktop
+       app with its own icon. Purely additive - no styling or behaviour
+       of this page is changed. -->
+  <link rel="manifest" href="manifest.webmanifest">
+  <meta name="theme-color" content="#2f5021">
+  <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+</head>
+<body>
+  
+  <header>
+    <h2>Student Result</h2>
+  </header>
+
+  <div class="result-box">
+    <h3>Result Slip</h3>
+    <table>
+      <tr>
+        <th>subject</th>
+        <th>CA</th>
+        <th>Exam</th>
+        <th>Total</th>
+      </tr>
+
+      <tr>
+        <td>Mathematics</td>
+        <td>25</td>
+        <td>60</td>
+        <td>85</td>
+      </tr>
+
+      <tr>
+        <td>English</td>
+        <td>20</td>
+        <td>55</td>
+        <td>75</td>
+      </tr>
+    </table>
+  </div>
+
+  <!-- NEW (result module protection) -->
+  <script src="src/utils/result-protection/result-wrapper.js"></script>
+
+  <!-- NEW (PWA conversion): registers the service worker + install button. Additive only. -->
+  <script src="js/pwa.js" defer></script>
+</body>
+</html>
