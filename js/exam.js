@@ -42,11 +42,53 @@ function initExam() {
 
     const flow = document.getElementById("examFlow");
 
-    // Re-paginate shortly after every edit (debounced for speed).
+    /* CHANGED (pack 26 - owner: "Fix the exam that is not rendering all my
+       questions after been downloaded and not yet effective to use and
+       very stressful"):
+       Root cause of the stress + the missing questions: the layout used to
+       re-paginate 300ms after EVERY keystroke. On a phone that re-layout
+       moved the paragraph being typed in mid-word - the caret jumped or
+       the keyboard flickered closed ("very stressful", "can't write on
+       this page"), and letters Android was still holding could be dropped,
+       so typed text went missing before the PDF was ever built.
+       Now: while typing, the refresh waits for a real pause (800ms);
+       Arabic IME composition is left alone completely; and the text caret
+       is saved + restored around every refresh (blocks are MOVED by the
+       engine, never rebuilt, so the selection survives). Auto-flow to new
+       pages still happens exactly as before. */
     let paginateTimer = null;
-    flow.addEventListener("input", function () {
+    function keepExamCaret(fn) {
+        const sel = window.getSelection();
+        let saved = null;
+        try {
+            if (sel && sel.rangeCount) {
+                const r = sel.getRangeAt(0);
+                if (flow.contains(r.startContainer) && flow.contains(r.endContainer)) {
+                    saved = r.cloneRange();
+                }
+            }
+        } catch (e) {}
+        fn();
+        if (saved) {
+            try {
+                if (flow.contains(saved.startContainer) && flow.contains(saved.endContainer)) {
+                    sel.removeAllRanges();
+                    sel.addRange(saved);
+                }
+            } catch (e) { /* caret anchor genuinely gone - leave as is */ }
+        }
+    }
+    function scheduleTypingPaginate(delay) {
         clearTimeout(paginateTimer);
-        paginateTimer = setTimeout(paginateExam, 300);
+        paginateTimer = setTimeout(function () { keepExamCaret(paginateExam); }, delay);
+    }
+    flow.addEventListener("input", function (e) {
+        if (e && e.isComposing) return; // mid Arabic IME composition: hands off
+        scheduleTypingPaginate(800);
+    });
+    // tapping out of the page text = refresh the layout promptly
+    flow.addEventListener("focusout", function () {
+        scheduleTypingPaginate(200);
     });
 
     // Images load asynchronously - re-measure once they arrive.

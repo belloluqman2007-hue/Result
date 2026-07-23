@@ -695,52 +695,53 @@
        INIT
     ====================================================== */
     document.addEventListener("DOMContentLoaded", function () {
-        /* Only run on pages that have the dashboard widgets */
-        if (!document.getElementById("amsClassCount")) return;
+        /* CHANGED (pack 26 - owner: "move student score, load student and
+           notices ... to the sidebar"): the score entry + scores table moved
+           to scores.html and the Notice Board to notices.html. This init no
+           longer assumes one page holds every widget - each group starts
+           ONLY when its own elements exist here. Behaviour per page is
+           unchanged (all ids and handlers are the same ones as before). */
+        var hasDash   = !!document.getElementById("amsClassCount");
+        var hasBoard  = !!document.getElementById("amsAnnouncementForm");
+        var hasEvents = !!document.getElementById("amsEventForm");
+        var hasScores = !!document.getElementById("scoreTable");
 
-        loadDashboardStats();
-        loadActivity();
-        loadAnnouncements();
-        loadEvents();
-        initAnnouncementForm();
-        initEventForm();
-        updateScoreCount();
-        /* CHANGED (pack 25 - owner request): the pack-23 Messages and
-           Settings panels moved off the dashboard to their own sidebar
-           pages (chat.html / notifications.html / settings.html), so the
-           two init calls below are removed. The guarded functions stay
-           defined above in case a page still embeds the widgets. */
-        amsRefreshMsgBadge();    // NEW (pack 23): notifications bell
-        setInterval(amsRefreshMsgBadge, 60000);
-        var msgBell = document.getElementById("amsMsgBell");
-        if (msgBell) msgBell.addEventListener("click", function () {
-            // CHANGED (pack 25): the bell now opens the new Notifications page
-            window.location.href = "notifications.html";
-        });
+        if (hasDash) {
+            loadDashboardStats();
+            loadActivity();
+            amsRefreshMsgBadge();    // NEW (pack 23): notifications bell
+            setInterval(amsRefreshMsgBadge, 60000);
+            var msgBell = document.getElementById("amsMsgBell");
+            if (msgBell) msgBell.addEventListener("click", function () {
+                // CHANGED (pack 25): the bell now opens the new Notifications page
+                window.location.href = "notifications.html";
+            });
 
-        /* Keep the visible-row counter in sync when app.js
-           adds/removes rows in #scoreTable */
-        var table = document.getElementById("scoreTable");
-        if (table && window.MutationObserver) {
-            new MutationObserver(function () { updateScoreCount(); })
-                .observe(table, { childList: true, subtree: false });
+            /* Redraw charts on resize (debounced) */
+            var resizeTimer = null;
+            window.addEventListener("resize", function () {
+                clearTimeout(resizeTimer);
+                resizeTimer = setTimeout(function () {
+                    getJSON("/dashboard-stats").then(function (stats) {
+                        drawClassChart(stats.studentsPerClass || []);
+                        drawGradeChart(stats.gradeDistribution || []);
+                    }).catch(function () {});
+                }, 220);
+            });
         }
 
-        /* Redraw charts on resize (debounced) */
-        var resizeTimer = null;
-        window.addEventListener("resize", function () {
-            clearTimeout(resizeTimer);
-            resizeTimer = setTimeout(function () {
-                getJSON("/dashboard-stats").then(function (stats) {
-                    drawClassChart(stats.studentsPerClass || []);
-                    drawGradeChart(stats.gradeDistribution || []);
-                }).catch(function () {});
-            }, 220);
-        });
+        if (hasBoard)  { loadAnnouncements(); initAnnouncementForm(); }
+        if (hasEvents) { loadEvents(); initEventForm(); }
 
-        /* Refresh stats after a score is saved/deleted so widgets
-           stay honest (hook AFTER app.js save completes by polling
-           when a toast appears is fragile - instead reload stats
-           whenever the score table changes) */
+        if (hasScores) {
+            updateScoreCount();
+            /* Keep the visible-row counter in sync when app.js
+               adds/removes rows in #scoreTable */
+            var table = document.getElementById("scoreTable");
+            if (table && window.MutationObserver) {
+                new MutationObserver(function () { updateScoreCount(); })
+                    .observe(table, { childList: true, subtree: false });
+            }
+        }
     });
 })();

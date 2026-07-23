@@ -186,9 +186,26 @@ a.sc-mod-row:hover{ background:#F2F8F5; border-radius:8px; }
     display:block !important; margin:0 !important; padding:0 !important;
     max-width:none !important; gap:0 !important; background:#fff !important;
   }
+  /* FIX (pack 26 - owner: "portal not displaying result if downloaded"):
+     the pack-24 .pt-shell wrapper must also survive the frozen style.css
+     print guard (belt-and-braces next to its no-result-print marker). */
+  body > .pt-shell:not(#reportContainer){
+    display:block !important; margin:0 !important; padding:0 !important;
+    max-width:none !important; gap:0 !important; background:#fff !important;
+  }
   .pt-card{ display:none !important; border:none !important; padding:0 !important; margin:0 !important; box-shadow:none !important; }
   #ptReportCardWrap{ display:block !important; padding:0 !important; margin:0 !important; border:none !important; }
   #ptReport{ display:block !important; padding:0 !important; margin:0 !important; }
+  /* pack 26: un-collapse the view chain around the report (the sidebar
+     shell uses flex on screen; print needs a plain block flow). */
+  .pt-shell{ display:block !important; }
+  .pt-mainnew{ display:block !important; margin:0 !important; padding:0 !important; max-width:none !important; width:auto !important; overflow:visible !important; }
+  .pt-view{ display:none !important; }
+  .pt-view.pt-view-on{ display:block !important; padding:0 !important; margin:0 !important; }
+  /* pack 26: the "Results" page title must NOT print - it stole the last
+     ~50px and pushed the signature strip onto a blank-ish page 2. The
+     report sheet must stay exactly ONE A4 like the Check Result page. */
+  .pt-view-title{ display:none !important; }
 }
 
 /* NEW (pack 14 - attendance): "already taken today" warning banner */

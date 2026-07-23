@@ -279,6 +279,15 @@ app.get("/timetable.html", requireLogin, (req, res) => {
     res.sendFile(path.join(__dirname, "timetable.html"));
 });
 
+// NEW (pack 26): the sections the owner moved OUT of the dashboard now
+// live on their own pages - same guard as the dashboard (admin + teachers).
+app.get("/scores.html", requireLogin, (req, res) => {
+    res.sendFile(path.join(__dirname, "scores.html"));
+});
+app.get("/notices.html", requireLogin, (req, res) => {
+    res.sendFile(path.join(__dirname, "notices.html"));
+});
+
 app.get("/teacher-dashboard.html", requireLogin, (req, res) => {
     res.sendFile(path.join(__dirname, "teacher-dashboard.html"));
 });

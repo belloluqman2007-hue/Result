@@ -109,6 +109,19 @@
         </div>
         <p class="mg-note">The session marked <b>Current</b> is pre-selected on the Publish page and Finance page. Existing pages with fixed session lists keep working as before.</p>
       </div>
+      <!-- CHANGED (pack 26 - owner: "wipe all students to school
+           settings"): the Admin Danger Zone moved here from the dashboard.
+           Same id + same wipeAllData() handler (app.js is already loaded
+           above; it shows this block for admins exactly like before). -->
+      <div class="mg-card" style="grid-column:1 / -1;">
+        <div id="adminDangerZone" style="display:none; padding:20px; background:#FBEAE6; border:1px solid #8C3B2E; border-radius:16px;">
+          <strong style="color:#8C3B2E; font-family:'Cairo', sans-serif;">Admin: Danger Zone</strong>
+          <p style="font-size:13px; color:#555; margin:6px 0 10px;">
+            This permanently deletes ALL results and ALL student records from the database. Use this only to clear test data before real use.
+          </p>
+          <button type="button" onclick="wipeAllData()" style="background:#8C3B2E; border-color:#8C3B2E; color:#fdf3ef;">Wipe All Results &amp; Students</button>
+        </div>
+      </div>
     </div>
 
     <div class="mg-msg" id="setMsg"></div>
@@ -118,6 +131,18 @@
   <script src="js/app.js"></script>
   <!-- NEW (pack 14) -->
   <script src="js/school-settings.js"></script>
+  <script>
+  /* NEW (pack 26): show the moved Danger Zone for admins. app.js
+     checkAuth() would do it, but it exits early on pages that have no
+     #welcomeMessage element (this page never had one), so this page shows
+     the zone itself - same /me check, admin-only page anyway. */
+  fetch("/me").then(function (r) { return r.json(); }).then(function (data) {
+    if (data && data.loggedIn && data.role === "admin") {
+      var dz = document.getElementById("adminDangerZone");
+      if (dz) dz.style.display = "block";
+    }
+  }).catch(function () {});
+  </script>
   <script src="js/pwa.js" defer></script>
 </body>
 </html>

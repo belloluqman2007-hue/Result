@@ -125,7 +125,15 @@
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
 </head>
 <body class="pt-body">
-<div class="pt-shell">
+<!-- FIX (pack 26 - owner: "the student parent portal is not displaying
+     result if downloaded"): pack 24's redesign wrapped the whole portal in
+     this .pt-shell div, so the FROZEN style.css print guard
+     (body > *:not(#reportContainer):not(.no-result-print){display:none})
+     hid the ENTIRE app at print time -> the saved/printed result PDF came
+     out blank. The no-result-print marker (same trick as pack 18's exam
+     editor) exempts the shell; school.css print rules then hide the
+     sidebar/topbar/cards and print ONLY the report sheet. -->
+<div class="pt-shell no-result-print">
 
   <!-- Top app bar (pack 24 redesign). Bell opens the Notifications page
        (OPay-style) - the badge counts unread school replies. -->
@@ -158,8 +166,6 @@
       <button class="pt-navlink" data-view="exams" type="button"><span class="pt-nicon">&#128394;</span> Exam Timetable</button>
       <!-- NEW (pack 25): weekly class timetable - shows only after the school publishes it -->
       <button class="pt-navlink" data-view="classtt" type="button"><span class="pt-nicon">&#128198;</span> Class Timetable</button>
-      <!-- NEW (pack 26): attendance record for this student -->
-      <button class="pt-navlink" data-view="attendance" type="button"><span class="pt-nicon">&#128203;</span> Attendance</button>
       <button class="pt-navlink" data-view="calendar" type="button"><span class="pt-nicon">&#128197;</span> Calendar</button>
       <button class="pt-navlink" data-view="settings" type="button"><span class="pt-nicon">&#9881;&#65039;</span> Settings</button>
       <div class="pt-side-foot">
@@ -365,18 +371,6 @@
         <div class="pt-empty" id="ptTtClassEmpty" style="display:none;">The class timetable is not published yet - please check back later.</div>
       </div>
 
-      <!-- ============ ATTENDANCE (pack 26) ============ -->
-      <div class="pt-view" data-view="attendance">
-        <h1 class="pt-view-title">&#128203; Attendance Record</h1>
-        <section class="pt-card portal-no-print">
-          <p class="pt-hint">Your attendance record as marked by the school. Contact the school if any date looks wrong.</p>
-          <!-- Summary bar -->
-          <div id="ptAttSummary" style="display:flex; gap:10px; flex-wrap:wrap; margin-bottom:14px;"></div>
-          <!-- Dated list -->
-          <div id="ptAttList"><div class="pt-empty">Loading attendance...</div></div>
-        </section>
-      </div>
-
       <!-- ============ CALENDAR ============ -->
       <div class="pt-view" data-view="calendar">
         <h1 class="pt-view-title">&#128197; School Calendar</h1>
@@ -455,9 +449,6 @@
   <script src="js/calendar-render.js"></script>
   <!-- EXISTING frozen report-card builder (unchanged file, reused) -->
   <script src="js/report-card.js"></script>
-  <!-- NEW (portal results reliability fix) -->
-  <script src="src/utils/portal-results-fix.js"></script>
-
   <!-- NEW (pack 13): portal logic -->
   <script src="js/portal.js"></script>
   <!-- PWA (unchanged) -->

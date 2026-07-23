@@ -4,157 +4,221 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Ameenullah School of Arabic and Islamic Studies | Official Website</title>
-  <link rel="stylesheet" href="css/style.css">
-  <!-- NEW (pack 13/15): real school website. CHANGED (pack 15, owner
-       request): the "Portal Modules" section was REMOVED and the whole
-       page redesigned to be finer and more interesting. -->
-  <link rel="stylesheet" href="css/school.css">
+  <!-- CHANGED (pack 26 - owner: "Arrange the website view outside and
+       beautiful it very well before logins. Design every section ... so
+       beautiful that if you see it once you have to look again."):
+       full redesign - sticky glass header, patterned emerald hero, lifted
+       cards, dark notice board, role cards, richer admission + footer.
+       ALL ids, links and form fields kept EXACTLY (js/website.js +
+       /admission-enquiry untouched); only presentation is new. -->
+  <link rel="stylesheet" href="css/style.css">   <!-- fonts (Cairo/Amiri) + root vars -->
+  <link rel="stylesheet" href="css/website.css"> <!-- NEW (pack 26): the redesign -->
 
   <link rel="manifest" href="manifest.webmanifest">
-  <meta name="theme-color" content="#2f5021">
+  <meta name="theme-color" content="#0B2E22">
   <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
 </head>
-<body>
+<body class="wb2-body">
 
-  <!-- ======================= HEADER ======================= -->
-  <header class="sc-header">
-    <img src="images/LOGO.JPG" alt="School Logo">
-    <div class="sc-brand">
-      Ameenullah School of Arabic &amp; Islamic Studies
-      <small>Knowledge and Worship &middot; Ijebu-Ode, Ogun State</small>
+  <!-- ======================= HEADER (sticky glass) ======================= -->
+  <header class="wb2-head">
+    <div class="wb2-wrap wb2-head-in">
+      <img class="wb2-logo" src="images/LOGO.JPG" alt="School Logo">
+      <div class="wb2-brand">
+        Ameenullah School
+        <small>ARABIC &amp; ISLAMIC STUDIES - IJEBU-ODE</small>
+      </div>
+      <nav class="wb2-nav">
+        <a href="#about">About</a>
+        <a href="#programs">Programs</a>
+        <a href="#notices">Notices</a>
+        <a href="#admission">Admission</a>
+        <a href="#login" class="wb2-cta">&#128272; Portal Login</a>
+      </nav>
     </div>
-    <nav class="sc-nav">
-      <a href="#about">About</a>
-      <a href="#programs">Programs</a>
-      <a href="#admission">Admission</a>
-      <a href="#login" class="sc-nav-cta">Portal Login</a>
-    </nav>
   </header>
 
-  <!-- ======================== HERO ======================== -->
-  <section class="sc-hero">
-    <img src="images/LOGO.JPG" alt="Ameenullah School Logo">
-    <h1>AMEENULLAH SCHOOL OF ARABIC AND ISLAMIC STUDIES</h1>
-    <div class="sc-hero-ar" lang="ar">مدرسة أمين اللّه للعلوم العربيّة الإسلاميّة</div>
-    <div class="sc-hero-motto">Motto: Knowledge and Worship &middot; <span lang="ar">العلم والعبادة</span></div>
-    <div class="sc-hero-badges">
-      <span class="sc-hero-badge">&#128218; Qur'an &amp; Arabic Excellence</span>
-      <span class="sc-hero-badge">&#128202; Digital Results &amp; Report Cards</span>
-      <span class="sc-hero-badge">&#128101; Parent Portal &amp; Online Payments</span>
-    </div>
-    <div class="sc-cta-row">
-      <a class="sc-btn sc-btn-gold" href="#admission">&#127979; Apply for Admission</a>
-      <a class="sc-btn sc-btn-light" href="portal-login.html">&#128218; Check Result</a>
-      <a class="sc-btn sc-btn-light" href="#login">&#128272; Portal Login</a>
-    </div>
-  </section>
-
-  <!-- ======================== ABOUT ======================= -->
-  <section class="sc-section" id="about">
-    <h2>Welcome to Ameenullah</h2>
-    <p class="sc-sub">
-      A citadel of Arabic and Islamic learning in Ijebu-Ode, raising students on the
-      beautiful balance of <b>knowledge</b> and <b>worship</b>. From resumption tests to
-      report sheets, our whole school runs smoothly on a modern digital portal - and
-      parents follow everything from their phones.
-    </p>
-    <div class="sc-stats">
-      <div class="sc-stat"><b>&#128223;</b>Results Online, Anywhere</div>
-      <div class="sc-stat"><b>&#128197;</b>Attendance &amp; Term Calendars</div>
-      <div class="sc-stat"><b>&#127974;</b>Fees, Receipts &amp; Balances</div>
-      <div class="sc-stat"><b>&#9998;</b>Signed Digital Report Sheets</div>
+  <!-- ============================ HERO ============================ -->
+  <section class="wb2-hero">
+    <div class="wb2-wrap wb2-hero-in">
+      <img class="wb2-hero-logo" src="images/LOGO.JPG" alt="Ameenullah School Logo">
+      <div class="wb2-hero-badge-line">&#11088; Knowledge &amp; Worship &#11088;</div>
+      <h1>Ameenullah School of<br>Arabic &amp; Islamic Studies</h1>
+      <div class="wb2-hero-ar" lang="ar">مدرسة أمين اللّه للعلوم العربيّة الإسلاميّة</div>
+      <div class="wb2-hero-motto">Motto: Knowledge and Worship &middot; <span lang="ar">العلم والعبادة</span></div>
+      <div class="wb2-chips">
+        <span class="wb2-chip">&#128366;&#65039; Qur'an &amp; Arabic Excellence</span>
+        <span class="wb2-chip">&#128202; Digital Results &amp; Report Cards</span>
+        <span class="wb2-chip">&#128101; Parent Portal &amp; Online Payments</span>
+      </div>
+      <div class="wb2-cta-row">
+        <a class="wb2-btn wb2-btn-gold" href="#admission">&#127979; Apply for Admission</a>
+        <a class="wb2-btn wb2-btn-ghost" href="portal-login.html">&#128218; Check Result</a>
+        <a class="wb2-btn wb2-btn-ghost" href="#login">&#128272; Portal Login</a>
+      </div>
+      <div class="wb2-scroll">Explore<span></span></div>
     </div>
   </section>
 
-  <!-- ===================== WHY CHOOSE US =================== -->
-  <section class="sc-section" style="background:#fff; max-width:none;">
-    <div style="max-width:1100px; margin:0 auto;">
-      <h2>Why Parents Choose Us</h2>
-      <p class="sc-sub">A school where deen and discipline meet modern tools.</p>
-      <div class="sc-why-grid">
-        <div class="sc-why-card"><span class="ico">&#128366;&#65039;</span><b>Qur'an Memorisation</b><p>Dedicated Tahfeedhul-Qur'an evenings (Thursdays - Saturdays) with close mentoring.</p></div>
-        <div class="sc-why-card"><span class="ico">&#128037;</span><b>Arabic Excellence</b><p>Structured Arabic &amp; Islamic studies from the foundation to the advanced sanaawiy classes.</p></div>
-        <div class="sc-why-card"><span class="ico">&#128105;&#127995;&#8205;&#127979;</span><b>Caring Teachers</b><p>Weekly evaluations keep our teachers sharp, punctual and accountable.</p></div>
-        <div class="sc-why-card"><span class="ico">&#128241;</span><b>Parent Connection</b><p>Results, fees, calendars and payment proofs - all from the parent portal on your phone.</p></div>
-        <div class="sc-why-card"><span class="ico">&#128737;&#65039;</span><b>Safe &amp; Organised</b><p>Daily registers, term calendars and clear communication keep everyone informed.</p></div>
-        <div class="sc-why-card"><span class="ico">&#11088;</span><b>Character First</b><p>Knowledge <i>and</i> worship - our motto shapes confident, well-mannered students.</p></div>
+  <!-- ================== FEATURE STRIP (overlaps hero) ================== -->
+  <div class="wb2-wrap wb2-strip">
+    <div class="wb2-strip-grid">
+      <div class="wb2-mini wb2-rv"><span class="ico">&#128223;</span><b>Results Online, Anywhere</b><p>Published report sheets - one tap on any phone.</p></div>
+      <div class="wb2-mini wb2-rv"><span class="ico">&#128197;</span><b>Attendance &amp; Calendars</b><p>Daily registers and the official term calendar.</p></div>
+      <div class="wb2-mini wb2-rv"><span class="ico">&#127974;</span><b>Fees, Receipts &amp; Balances</b><p>Clear fee records with receipt photos.</p></div>
+      <div class="wb2-mini wb2-rv"><span class="ico">&#9998;</span><b>Signed Report Sheets</b><p>Class teacher &amp; principal signatures, digitally.</p></div>
+    </div>
+  </div>
+
+  <!-- ============================ ABOUT ============================ -->
+  <section class="wb2-sec" id="about" style="padding-top:60px;">
+    <div class="wb2-wrap wb2-about-grid wb2-rv">
+      <div class="wb2-adm-info">
+        <span class="wb2-kicker">Welcome to Ameenullah</span>
+        <h2 class="wb2-title">A Citadel of Arabic &amp;<br>Islamic Learning</h2>
+        <div class="wb2-ar-flair" lang="ar">بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ</div>
+        <p class="wb2-about-txt">
+          In the heart of Ijebu-Ode, we raise students on the beautiful balance of
+          <b>knowledge</b> and <b>worship</b>. From resumption tests to signed report
+          sheets, our whole school runs smoothly on a modern digital portal - and
+          parents follow everything from their phones.
+        </p>
+      </div>
+      <div class="wb2-stats">
+        <div class="wb2-stat"><span class="ico">&#128366;&#65039;</span><b>Full Hifz &amp; Tajweed Track</b></div>
+        <div class="wb2-stat"><span class="ico">&#128218;</span><b>Structured Arabic Curriculum</b></div>
+        <div class="wb2-stat"><span class="ico">&#128737;&#65039;</span><b>Safe, Organised &amp; Accountable</b></div>
+        <div class="wb2-stat"><span class="ico">&#128241;</span><b>Parents Connected 24/7</b></div>
       </div>
     </div>
   </section>
 
-  <!-- ====================== PROGRAMS ====================== -->
-  <section class="sc-section" id="programs">
-    <h2>Our Programs</h2>
-    <p class="sc-sub">Carefully designed tracks for every stage of your child's growth.</p>
-    <div class="sc-prog-band">
-      <div class="sc-prog"><b>&#127802; Foundation (Ibtida'i)</b><p>Strong start in Arabic reading, writing, memorisation and morals, with Fridays' general revision.</p></div>
-      <div class="sc-prog"><b>&#128218; Middle (I'dadi)</b><p>Grammar, fiqh and tajweed deepened, with guided memorisation and weekly lectures.</p></div>
-      <div class="sc-prog"><b>&#129489;&#127995;&#8205;&#127979; Advanced (Thanawi)</b><p>Advanced texts, research habits and preparation for higher Islamic learning.</p></div>
-      <div class="sc-prog"><b>&#128366;&#65039; Tahfeedhul-Qur'an</b><p>Evening memorisation classes - Thursdays, Fridays &amp; Saturdays, 4:00PM till sunset.</p></div>
+  <!-- ===================== WHY CHOOSE US =================== -->
+  <section class="wb2-sec wb2-alt">
+    <div class="wb2-wrap">
+      <div class="wb2-head-line wb2-rv">
+        <span class="wb2-kicker">Why Parents Choose Us</span>
+        <h2 class="wb2-title">Where Deen &amp; Discipline<br>Meet Modern Tools</h2>
+      </div>
+      <div class="wb2-why-grid">
+        <div class="wb2-why wb2-rv"><span class="ico">&#128366;&#65039;</span><b>Qur'an Memorisation</b><p>Dedicated Tahfeedhul-Qur'an evenings (Thursdays - Saturdays) with close mentoring.</p></div>
+        <div class="wb2-why wb2-rv"><span class="ico">&#128037;</span><b>Arabic Excellence</b><p>Structured Arabic &amp; Islamic studies from the foundation to the advanced sanaawiy classes.</p></div>
+        <div class="wb2-why wb2-rv"><span class="ico">&#128105;&#127995;&#8205;&#127979;</span><b>Caring Teachers</b><p>Weekly evaluations keep our teachers sharp, punctual and accountable.</p></div>
+        <div class="wb2-why wb2-rv"><span class="ico">&#128241;</span><b>Parent Connection</b><p>Results, fees, calendars and payment proofs - all from the parent portal on your phone.</p></div>
+        <div class="wb2-why wb2-rv"><span class="ico">&#128737;&#65039;</span><b>Safe &amp; Organised</b><p>Daily registers, term calendars and clear communication keep everyone informed.</p></div>
+        <div class="wb2-why wb2-rv"><span class="ico">&#11088;</span><b>Character First</b><p>Knowledge <i>and</i> worship - our motto shapes confident, well-mannered students.</p></div>
+      </div>
     </div>
   </section>
 
-  <!-- ================= PUBLIC NOTICE BOARD (pack 22 - owner: "I can't
-       see messages, notifications... in the website") ================= -->
-  <section class="sc-section" id="notices" style="background:#fff; max-width:none;">
-    <div style="max-width:1100px; margin:0 auto;">
-      <h2>&#128227; Announcements &amp; School Events</h2>
-      <p class="sc-sub">Latest news from the school - right here, no login needed.</p>
+  <!-- ========================== PROGRAMS ========================== -->
+  <section class="wb2-sec" id="programs">
+    <div class="wb2-wrap">
+      <div class="wb2-head-line wb2-rv">
+        <span class="wb2-kicker">Our Programs</span>
+        <h2 class="wb2-title">A Track for Every Stage<br>of Your Child's Growth</h2>
+      </div>
+      <div class="wb2-prog-grid">
+        <div class="wb2-prog wb2-rv"><span class="big">&#127802;</span><b>Foundation (Ibtida'i)</b><p>Strong start in Arabic reading, writing, memorisation and morals, with Fridays' general revision.</p></div>
+        <div class="wb2-prog wb2-rv"><span class="big">&#128218;</span><b>Middle (I'dadi)</b><p>Grammar, fiqh and tajweed deepened, with guided memorisation and weekly lectures.</p></div>
+        <div class="wb2-prog wb2-rv"><span class="big">&#129489;&#127995;&#8205;&#127979;</span><b>Advanced (Thanawi)</b><p>Advanced texts, research habits and preparation for higher Islamic learning.</p></div>
+        <div class="wb2-prog wb2-rv"><span class="big">&#128366;&#65039;</span><b>Tahfeedhul-Qur'an</b><p>Evening memorisation classes - Thursdays, Fridays &amp; Saturdays, 4:00PM till sunset.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- =============== PUBLIC NOTICE BOARD (pack 22 feature,
+       pack 26 redesign - #wbNotices id + .wb-note classes kept) =============== -->
+  <section class="wb2-sec wb2-board" id="notices">
+    <div class="wb2-wrap">
+      <div class="wb2-head-line wb2-rv">
+        <span class="wb2-kicker">&#128227; Notice Board</span>
+        <h2 class="wb2-title">Announcements &amp; School Events</h2>
+        <p class="wb2-sub">Latest news from the school - right here, no login needed.</p>
+      </div>
       <div id="wbNotices" class="wb-notices">
         <!-- filled by js/website.js -->
       </div>
     </div>
   </section>
 
-  <!-- ================= HOW TO APPLY ================= -->
-  <section class="sc-section" id="howto" style="background:#fff; max-width:none;">
-    <div style="max-width:1100px; margin:0 auto;">
-      <h2>Admission in 3 Easy Steps</h2>
-      <p class="sc-sub">From interest to enrolment - simple and fast.</p>
-      <div class="sc-steps">
-        <div class="sc-step"><span class="num">1</span><b>Send an Enquiry</b><p>Fill the short form below (or call us). The school receives it instantly.</p></div>
-        <div class="sc-step"><span class="num">2</span><b>We Contact You</b><p>Management reaches out, answers your questions and confirms admission.</p></div>
-        <div class="sc-step"><span class="num">3</span><b>Portal Activated</b><p>Your child is added to the register - their Student/Parent portal starts working immediately.</p></div>
+  <!-- ===================== HOW TO APPLY ===================== -->
+  <section class="wb2-sec wb2-alt" id="howto">
+    <div class="wb2-wrap">
+      <div class="wb2-head-line wb2-rv">
+        <span class="wb2-kicker">Admission in 3 Easy Steps</span>
+        <h2 class="wb2-title">From Interest to Enrolment -<br>Simple and Fast</h2>
+      </div>
+      <div class="wb2-steps-wrap wb2-rv">
+        <div class="wb2-steps">
+          <div class="wb2-step"><span class="num">1</span><b>Send an Enquiry</b><p>Fill the short form below (or call us). The school receives it instantly.</p></div>
+          <div class="wb2-step"><span class="num">2</span><b>We Contact You</b><p>Management reaches out, answers your questions and confirms admission.</p></div>
+          <div class="wb2-step"><span class="num">3</span><b>Portal Activated</b><p>Your child is added to the register - their Student/Parent portal starts working immediately.</p></div>
+        </div>
       </div>
     </div>
   </section>
 
-  <!-- ================= LOGIN BY ROLE ================= -->
-  <section class="sc-section" id="login">
-    <h2>Portal Login</h2>
-    <p class="sc-sub">Accounts are activated by the school management. Once activated, log in with your role:</p>
-    <div class="sc-role-grid">
-      <a class="sc-role-card" href="login.html">
-        <span class="sc-role-ico">&#128737;&#65039;</span>
-        <b>Admin</b>
-        <p>Full management: results, publishing, finance, attendance, admissions.</p>
-      </a>
-      <a class="sc-role-card" href="login.html">
-        <span class="sc-role-ico">&#128105;&#127995;&#8205;&#127979;</span>
-        <b>Teacher</b>
-        <p>Score entry, attendance, exams, report sheets and class tools.</p>
-      </a>
-      <a class="sc-role-card" href="portal-login.html">
-        <span class="sc-role-ico">&#129489;&#8205;&#127979;</span>
-        <b>Student</b>
-        <p>Log in with your Student ID and surname to view published results and fees.</p>
-      </a>
-      <a class="sc-role-card" href="portal-login.html">
-        <span class="sc-role-ico">&#128106;</span>
-        <b>Parent</b>
-        <p>Log in with your child's Student ID and surname to follow progress and pay fees.</p>
-      </a>
+  <!-- ====================== LOGIN BY ROLE ====================== -->
+  <section class="wb2-sec wb2-login" id="login">
+    <div class="wb2-wrap">
+      <div class="wb2-head-line wb2-rv">
+        <span class="wb2-kicker">&#128272; Portal Login</span>
+        <h2 class="wb2-title">Choose Your Role to Enter</h2>
+        <p class="wb2-sub">Accounts are activated by the school management. Once activated, log in with your role:</p>
+      </div>
+      <div class="wb2-role-grid">
+        <a class="wb2-role wb2-rv" href="login.html">
+          <span class="ico">&#128737;&#65039;</span>
+          <b>Admin</b>
+          <p>Full management: results, publishing, finance, attendance, admissions.</p>
+          <span class="go">Enter &rarr;</span>
+        </a>
+        <a class="wb2-role wb2-rv" href="login.html">
+          <span class="ico">&#128105;&#127995;&#8205;&#127979;</span>
+          <b>Teacher</b>
+          <p>Score entry, attendance, exams, report sheets and class tools.</p>
+          <span class="go">Enter &rarr;</span>
+        </a>
+        <a class="wb2-role wb2-rv" href="portal-login.html">
+          <span class="ico">&#129489;&#8205;&#127979;</span>
+          <b>Student</b>
+          <p>Log in with your Student ID and surname to view published results and fees.</p>
+          <span class="go">Enter &rarr;</span>
+        </a>
+        <a class="wb2-role wb2-rv" href="portal-login.html">
+          <span class="ico">&#128106;</span>
+          <b>Parent</b>
+          <p>Log in with your child's Student ID and surname to follow progress and pay fees.</p>
+          <span class="go">Enter &rarr;</span>
+        </a>
+      </div>
     </div>
   </section>
 
   <!-- ==================== ADMISSION FORM ==================== -->
-  <section class="sc-section" id="admission" style="background:#fff; max-width:none;">
-    <div style="max-width:1100px; margin:0 auto;">
-      <h2>Interested in Our School?</h2>
-      <p class="sc-sub">Fill this short form and the school management will contact you. When your child is admitted and added to the school register by management, their Student/Parent portal login is activated automatically.</p>
+  <section class="wb2-sec" id="admission">
+    <div class="wb2-wrap wb2-adm-grid wb2-rv">
+      <div class="wb2-adm-info">
+        <span class="wb2-kicker">Interested in Our School?</span>
+        <h2 class="wb2-title">Start Your Child's<br>Journey Today</h2>
+        <p class="wb2-about-txt">
+          Fill this short form and the school management will contact you. When your
+          child is admitted and added to the school register by management, their
+          Student/Parent portal login is activated automatically.
+        </p>
+        <div class="wb2-contact-card">
+          <b>&#128222; Prefer to talk first?</b>
+          <div class="wb2-contact-row">&#128241;<span>08062445559</span></div>
+          <div class="wb2-contact-row">&#128241;<span>08058306889</span></div>
+          <div class="wb2-contact-row">&#128231;<span>madrasatuameenillah22@gmail.com</span></div>
+          <div class="wb2-contact-row">&#128205;<span>3, Temidire Street, Off Ondo Road, Ijebu-Ode, Ogun State.</span></div>
+        </div>
+      </div>
 
-      <form class="sc-form" id="admissionForm">
+      <!-- ids kept EXACTLY for js/website.js -->
+      <form class="wb2-form" id="admissionForm">
         <div>
           <label for="admChild">Child's Full Name *</label>
           <input type="text" id="admChild" required placeholder="e.g. Ahmad Musa Ibrahim">
@@ -175,23 +239,43 @@
           <label for="admMessage">Message (optional)</label>
           <textarea id="admMessage" rows="3" placeholder="Any question or extra information"></textarea>
         </div>
-        <button class="sc-btn sc-btn-green" type="submit" id="admSubmit">&#128233; Send Enquiry</button>
+        <button class="wb2-btn wb2-btn-gold" type="submit" id="admSubmit" style="justify-content:center;">&#128232; Send Enquiry</button>
         <div class="sc-form-msg" id="admMsg"></div>
-        <div class="sc-form-note">You can also call us directly: <b>08062445559</b>, <b>08058306889</b></div>
+        <div class="wb2-form-note">You can also call us directly: <b>08062445559</b>, <b>08058306889</b></div>
       </form>
     </div>
   </section>
 
-  <!-- ======================= FOOTER ======================= -->
-  <footer class="sc-footer">
-    <b>AMEENULLAH SCHOOL OF ARABIC AND ISLAMIC STUDIES</b>
-    <div class="sc-footer-ar" lang="ar">مدرسة أمين اللّه للعلوم العربيّة الإسلاميّة</div>
-    <div id="scFooterAddr">3, Temidire Street, Off Ondo Road, Ijebu-Ode, Ogun State.</div>
-    <div id="scFooterContact">Tel: 08062445559, 08058306889 &middot; Email: madrasatuameenillah22@gmail.com</div>
-    <div style="margin-top:10px; opacity:.75;">&copy; <span id="scYear"></span> Ameenullah School of Arabic and Islamic Studies. All rights reserved.</div>
+  <!-- ========================== FOOTER ========================== -->
+  <footer class="wb2-foot">
+    <div class="wb2-wrap">
+      <img class="wb2-foot-logo" src="images/LOGO.JPG" alt="School Logo">
+      <b>AMEENULLAH SCHOOL OF ARABIC AND ISLAMIC STUDIES</b>
+      <div class="wb2-foot-ar" lang="ar">مدرسة أمين اللّه للعلوم العربيّة الإسلاميّة</div>
+      <div class="wb2-foot-line" id="scFooterAddr">3, Temidire Street, Off Ondo Road, Ijebu-Ode, Ogun State.</div>
+      <div class="wb2-foot-line" id="scFooterContact">Tel: 08062445559, 08058306889 &middot; Email: madrasatuameenillah22@gmail.com</div>
+      <div class="wb2-foot-copy">&copy; <span id="scYear"></span> Ameenullah School of Arabic and Islamic Studies. All rights reserved.</div>
+    </div>
   </footer>
 
   <script src="js/website.js"></script>
   <script src="js/pwa.js" defer></script>
+  <script>
+    /* NEW (pack 26): gentle scroll-reveal for the site sections.
+       Purely presentational; every section stays readable without JS. */
+    (function () {
+      var els = document.querySelectorAll(".wb2-rv");
+      if (!("IntersectionObserver" in window) || !els.length) {
+        els.forEach(function (el) { el.classList.add("wb2-in"); });
+        return;
+      }
+      var io = new IntersectionObserver(function (entries) {
+        entries.forEach(function (en) {
+          if (en.isIntersecting) { en.target.classList.add("wb2-in"); io.unobserve(en.target); }
+        });
+      }, { threshold: 0.12 });
+      els.forEach(function (el) { io.observe(el); });
+    })();
+  </script>
 </body>
 </html>

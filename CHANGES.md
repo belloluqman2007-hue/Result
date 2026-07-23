@@ -4,6 +4,74 @@
 
 ---
 
+## Pack 26 — 2026-07-23
+
+Owner requests:
+1. "Move student score, load student and notices and messages to the
+   sidebar, and wipe all students to school settings, and rearrange the
+   sidebar to be accurate with nice icons."
+2. "Fix the student parent portal - it is not displaying result if
+   downloaded, but it is displaying in admin and teachers portal."
+3. "Fix the exam that is not rendering all my questions after been
+   downloaded and not yet effective to use and very stressful."
+4. "Arrange the website view outside and beautiful it very well before
+   logins."
+5. "Design every section in the website - so beautiful that if you see it
+   once you have to look again."
+
+Root causes found:
+- Portal download/print BLANK: the frozen style.css print guard hides
+  every direct child of <body> except #reportContainer/.no-result-print -
+  and pack 24 wrapped the whole portal in a new `.pt-shell` div, so the
+  ENTIRE app was hidden at print time. Admin/teacher pages (Check Result)
+  kept the old structure - which is why staff were fine and only the
+  parent portal printed blank.
+- Exam "stressful" + questions missing: the layout re-paginated 300ms
+  after EVERY keystroke. Mid-word on a phone that re-layout moves the
+  paragraph being typed - the caret jumps / keyboard flickers, and
+  letters the IME was still holding could be dropped before the PDF was
+  ever downloaded.
+
+Changes (all commented in code; additive, backward compatible):
+
+- FIX (portal.html + css/school.css): `.pt-shell` now carries the
+  no-result-print marker + the print chain (shell/main/view) is reset
+  and the "Results" page title hides at print. The downloaded/printed
+  report is EXACTLY one A4, identical to the staff Check Result page
+  (verified live on a real student: header, 13 subjects, summary,
+  remarks, signatures - 1 page).
+- FIX (js/exam.js): typing-driven re-pagination now waits for a real
+  pause (800ms), ignores Arabic IME composition entirely, and SAVES +
+  RESTORES the text caret across every re-layout. Tapping out refreshes
+  immediately. Auto-flow to new pages unchanged.
+- MOVED (scores.html NEW): the whole Result Entry Module (enter-score
+  form, load-results row, filter toolbar, #scoreTable) - same ids, same
+  handlers, same scripts; now in the sidebar as "Student Scores".
+- MOVED (notices.html NEW): the Notice Board (announcements/events form
+  + list) - same ids, driven by the same dashboard.js; sidebar "Notices".
+- MOVED (school-settings.html): the Admin Danger Zone (wipe all) now
+  lives under School Settings (same id + wipeAllData()).
+- REARRANGED (teacher-dashboard.html): sidebar re-grouped Main /
+  Students / Teaching Tools / Administration / Account; every link has
+  its own distinct icon (Add Student / Admissions / Manage Users no
+  longer share one icon). Dashboard keeps: stats, charts, calendar,
+  events, recent activity, promote students.
+- WIRED (js/dashboard.js): init is now per-widget - dashboard widgets,
+  notice board and score counter each start only where their elements
+  exist, so all three pages behave exactly as before.
+- REDESIGN (index.html + css/website.css NEW): sticky glass header;
+  emerald hero with gold lattice, Arabic calligraphy and CTAs; feature
+  strip overlapping the hero; About + stat cards; Why cards with lift;
+  program cards; dark Notice Board; 3-step admission with guide line;
+  glowing role-login cards; admission form card + contact card; rich
+  footer; gentle scroll-reveal. js/website.js and /admission-enquiry
+  untouched - same ids, same behaviour.
+- GUARDS (server.js): scores.html & notices.html require staff login
+  (admin + teachers), same as the dashboard.
+- sw.js cache bumped to `ameenullah-shell-v14`.
+
+---
+
 ## Pack 25 — 2026-07-22
 
 Owner requests:

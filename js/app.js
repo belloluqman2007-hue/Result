@@ -518,6 +518,14 @@ function loadSubjects() {
     let subjectSelect = document.getElementById("subject");
     if (!subjectSelect) return;
 
+    // FIX (pack 26 - owner: "very stressful"): this list is rebuilt on
+    // every class change AND on every quick-card refresh, which silently
+    // WIPED a subject the teacher had already chosen (the form then
+    // refused to save). Remember the current choice and restore it if it
+    // still exists in the refreshed list - same pattern
+    // loadClassesIntoSelects() already used for classes.
+    const previousSubject = subjectSelect.value;
+
     if (!selectedClass) {
         subjectSelect.innerHTML =
             '<option value="" disabled selected>Select a class first</option>';
@@ -547,6 +555,14 @@ function loadSubjects() {
                     </option>`;
 
             });
+
+            // FIX (pack 26): restore the teacher's earlier choice if it is
+            // still in the refreshed list (no wipe on quick-card refresh).
+            if (previousSubject) {
+                const stillThere = Array.from(subjectSelect.options)
+                    .some(o => o.value === previousSubject);
+                if (stillThere) subjectSelect.value = previousSubject;
+            }
 
         })
         .catch(error => console.log(error));
