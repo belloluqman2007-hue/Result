@@ -1298,3 +1298,13 @@ body{
 }
 .ams-ai-tip{ margin:0; padding:0 16px 14px; font-size:12px; color:#7d8f84; }
 @media print{ .ams-ai-scrim{ display:none !important; } } /* NEW (pack 27): never in the PDF */
+
+/* NEW (pack 28): floating page counter while the exam PDF is being built -
+   "Building PDF... page 3 of 7" so long exams never feel frozen. */
+.ams-pdfprog{
+  position:fixed; left:50%; bottom:18px; transform:translateX(-50%); z-index:9995;
+  background:linear-gradient(120deg,#0e3b26,#14532d); color:#fff; font-weight:800; font-size:13.5px;
+  padding:11px 18px; border-radius:999px; box-shadow:0 10px 26px rgba(10,25,15,.4);
+  pointer-events:none; white-space:nowrap;
+}
+@media print{ .ams-pdfprog{ display:none !important; } }

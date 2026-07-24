@@ -61,7 +61,8 @@ function finSwitchTab(name, btn) {
 }
 
 function finReloadTab() {
-  if (finTab === "fees") loadFeeStructure();
+  // CHANGED (pack 28): the Fees tab is now the guided setup (loadFeeSetup)
+  if (finTab === "fees") { loadFeeSetup(); loadFeesOverview(); }
   else if (finTab === "pay") loadPayStudents();
   else if (finTab === "exp") loadExpenses();
   else loadSummary();
@@ -77,13 +78,18 @@ function initFinance() {
     .then(function (classes) {
       var sel = document.getElementById("payClass");
       sel.innerHTML = '<option value="">Select Class</option>';
+      // NEW (pack 28): the fee-setup class picker gets the same list
+      var clsSel = document.getElementById("finCls");
+      if (clsSel) clsSel.innerHTML = '<option value="" disabled selected>Select Class</option>';
       (classes || []).forEach(function (c) {
         var opt = document.createElement("option");
         opt.value = c.class_name;
         opt.textContent = c.class_name;
         sel.appendChild(opt);
+        if (clsSel) clsSel.appendChild(opt.cloneNode(true));
       });
       loadExpenses();
+      if (clsSel) loadFeesOverview(); // NEW (pack 28): warm the overview on first open
     })
     .catch(function () { /* leave defaults */ });
 
@@ -170,6 +176,201 @@ function saveFeeStructure() {
       else finNotify("\u2705 " + savedCount + " class fees saved [" + currentFeeType() + "] for " + ts.term + " - " + ts.session, true);
     })
     .catch(function () { finNotify("Network error - fees NOT saved.", false); });
+}
+
+/* ==========================================================================
+   NEW (pack 28 - owner: "Organize the finance section well ... select class
+   term session and select school fee and put the money, and put other money
+   also ... so parent will see what they are paying for"): the guided
+   per-class charges setup. Storage is the SAME /fee-structure2 table.
+   ========================================================================== */
+
+/* row model: {type, amount (string), isNew} rendered in #finChargeRows */
+function finChargeRowHtml(type, amount, isMain) {
+  var row = document.createElement("div");
+  row.className = "fin-charge-row" + (isMain ? " main" : "");
+  row.dataset.type = type;
+  row.innerHTML =
+    '<span class="nm">' + escHtml(type) + (isMain ? "<small>main charge - cannot be removed</small>" : "<small>other money</small>") + "</span>" +
+    '<input type="number" min="0" placeholder="0" value="' + (amount === "" ? "" : Number(amount)) + '">';
+  if (!isMain) {
+    var x = document.createElement("button");
+    x.type = "button";
+    x.className = "fin-charge-x";
+    x.innerHTML = "&times;";
+    x.title = "Remove this charge from this class";
+    x.addEventListener("click", function () { finRemoveCharge(row); });
+    row.appendChild(x);
+  }
+  row.querySelector("input").addEventListener("input", finChargeTotal);
+  return row;
+}
+function escHtml(v) {
+  return String(v == null ? "" : v).replace(/[&<>"']/g, function (c) {
+    return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
+  });
+}
+function finChargeTotal() {
+  var total = 0, filled = 0;
+  document.querySelectorAll("#finChargeRows .fin-charge-row input").forEach(function (i) {
+    if (i.value !== "" && Number(i.value) >= 0) { total += Number(i.value); filled++; }
+  });
+  var el = document.getElementById("finTotalLine");
+  el.textContent = filled
+    ? "Total per term for this class: " + naira(total) + (filled > 1 ? "  (" + filled + " charges)" : "")
+    : "";
+}
+
+/* Load the ONE class's charges for the toolbar's term/session */
+function loadFeeSetup() {
+  var clsEl = document.getElementById("finCls");
+  var card = document.getElementById("finSetupCard");
+  if (!clsEl || !card) return;
+  var cls = clsEl.value, ts = finTermSession();
+  if (!cls) { card.style.display = "none"; return; }
+  if (!ts.session) { finNotify("Type the session first (e.g. 2026/2027).", false); return; }
+  card.style.display = "flex";
+  document.getElementById("finSetupTitle").textContent = "Charges for " + cls + "  -  " + ts.term + ", " + ts.session;
+  var box = document.getElementById("finChargeRows");
+  box.innerHTML = '<div class="fin-ov-empty">Loading charges...</div>';
+  fetch("/fee-structure2?term=" + encodeURIComponent(ts.term) + "&session=" + encodeURIComponent(ts.session))
+    .then(function (r) { return r.ok ? r.json() : []; })
+    .then(function (rows) {
+      rows = Array.isArray(rows) ? rows : [];
+      var mine = rows.filter(function (f) { return f.class_name === cls; });
+      box.innerHTML = "";
+      // School Fee always first (main charge)
+      var sf = mine.find(function (f) { return f.fee_type === "School Fee"; });
+      box.appendChild(finChargeRowHtml("School Fee", sf ? sf.amount : "", true));
+      mine.filter(function (f) { return f.fee_type !== "School Fee"; })
+          .sort(function (a, b) { return a.fee_type.localeCompare(b.fee_type); })
+          .forEach(function (f) { box.appendChild(finChargeRowHtml(f.fee_type, f.amount, false)); });
+      finChargeTotal();
+    })
+    .catch(function () { box.innerHTML = '<div class="fin-ov-empty">Could not load charges - check connection.</div>'; });
+}
+
+/* "put other money also" - append a new charge row */
+function finAddCharge() {
+  var nameEl = document.getElementById("finNewName");
+  var amtEl = document.getElementById("finNewAmount");
+  var name = nameEl.value.trim();
+  if (!name) { finNotify("Type the name of the other money first (e.g. PTA Fee).", false); return; }
+  var box = document.getElementById("finChargeRows");
+  var dup = Array.prototype.some.call(box.children, function (row) {
+    return (row.dataset.type || "").toLowerCase() === name.toLowerCase();
+  });
+  if (dup) { finNotify("\"" + name + "\" is already in the list - just type its amount.", false); return; }
+  var row = finChargeRowHtml(name, amtEl.value === "" ? "" : amtEl.value, false);
+  row.dataset.isNew = "1";
+  box.appendChild(row);
+  nameEl.value = "";
+  amtEl.value = "";
+  finChargeTotal();
+  row.querySelector("input").focus();
+}
+
+/* X on a non-main charge: if it was already saved, delete it on the server */
+function finRemoveCharge(row) {
+  var type = row.dataset.type;
+  if (type === "School Fee") return;
+  var cls = document.getElementById("finCls").value, ts = finTermSession();
+  var drop = function () { row.remove(); finChargeTotal(); loadFeesOverview(); };
+  if (row.dataset.isNew) { drop(); return; } // never saved - just remove the row
+  if (!confirm("Remove \"" + type + "\" from " + cls + " for " + ts.term + " - " + ts.session + "?\n(Payments already recorded stay on record.)")) return;
+  fetch("/fee-structure2", {
+    method: "DELETE",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ fee_type: type, class_name: cls, term: ts.term, session: ts.session })
+  })
+    .then(function (r) {
+      if (r.ok) { finNotify("\u{1F5D1} " + type + " removed from " + cls + ".", true); drop(); }
+      else finNotify("Could not remove (admin account required).", false);
+    })
+    .catch(function () { finNotify("Network error.", false); });
+}
+
+/* Save every visible charge row for THIS class (+ term/session above) */
+function saveFeeSetup() {
+  var cls = document.getElementById("finCls").value, ts = finTermSession();
+  if (!cls) { finNotify("Choose the class first.", false); return; }
+  if (!ts.session) { finNotify("Type the session first (e.g. 2026/2027).", false); return; }
+  var rows = Array.prototype.slice.call(document.querySelectorAll("#finChargeRows .fin-charge-row"));
+  var items = rows.map(function (row) {
+    return { type: row.dataset.type, amount: row.querySelector("input").value };
+  }).filter(function (it) { return it.amount !== "" && Number(it.amount) >= 0; });
+  if (!items.length) { finNotify("Enter at least one amount first.", false); return; }
+
+  // 1) make sure any brand-new charge NAMES exist as fee types (best effort)
+  var newTypes = items
+    .filter(function (it) { return !finTypes.some(function (t) { return t.name.toLowerCase() === it.type.toLowerCase(); }); })
+    .map(function (it) { return it.type; });
+  var typeChain = Promise.resolve();
+  newTypes.forEach(function (name) {
+    typeChain = typeChain.then(function () {
+      return fetch("/fee-type", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: name })
+      }).catch(function () { /* fine if it fails - the charge still saves */ });
+    });
+  });
+
+  // 2) save the charges one after another (server upserts each)
+  typeChain.then(function () {
+    var saved = 0, failed = false;
+    var chain = Promise.resolve();
+    items.forEach(function (it) {
+      chain = chain.then(function () {
+        if (failed) return;
+        return fetch("/fee-structure2", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ fee_type: it.type, class_name: cls, term: ts.term, session: ts.session, amount: Number(it.amount) })
+        }).then(function (r) { if (!r.ok) failed = true; else saved++; });
+      });
+    });
+    chain.then(function () {
+      if (failed) finNotify("Some charges could not be saved (admin account required).", false);
+      else finNotify("\u2705 " + saved + " charge(s) saved for " + cls + " - parents see them itemized now.", true);
+      loadFeeTypes();
+      loadFeeSetup();
+      loadFeesOverview();
+    }).catch(function () { finNotify("Network error - charges NOT saved.", false); });
+  });
+}
+
+/* Step 3 - every class's charges for the toolbar's term/session, at a glance */
+function loadFeesOverview() {
+  var box = document.getElementById("finFeesOverview");
+  if (!box) return;
+  var ts = finTermSession();
+  if (!ts.session) { box.innerHTML = '<div class="fin-ov-empty">Type the session first (e.g. 2026/2027).</div>'; return; }
+  box.innerHTML = '<div class="fin-ov-empty">Loading...</div>';
+  Promise.all([
+    fetch("/classes").then(function (r) { return r.ok ? r.json() : []; }),
+    fetch("/fee-structure2?term=" + encodeURIComponent(ts.term) + "&session=" + encodeURIComponent(ts.session))
+      .then(function (r) { return r.ok ? r.json() : []; })
+  ]).then(function (res) {
+    var classes = Array.isArray(res[0]) ? res[0] : [];
+    var rows = Array.isArray(res[1]) ? res[1] : [];
+    if (!classes.length) { box.innerHTML = '<div class="fin-ov-empty">No classes found.</div>'; return; }
+    var html = "";
+    classes.forEach(function (c) {
+      var mine = rows.filter(function (f) { return f.class_name === c.class_name; });
+      var chips = mine.length
+        ? mine.map(function (f) {
+            return '<span class="fin-ov-chip' + (f.fee_type === "School Fee" ? " main" : "") + '">' +
+                   escHtml(f.fee_type) + ": " + naira(f.amount) + "</span>";
+          }).join("")
+        : '<span style="color:#B3261E; font-size:12.5px;">No charges set yet</span>';
+      var total = mine.reduce(function (a, f) { return a + (Number(f.amount) || 0); }, 0);
+      html += '<div class="fin-ov-row">' +
+                '<span class="fin-ov-cls">' + escHtml(c.class_name) + "</span>" +
+                '<span class="fin-ov-chips">' + chips + "</span>" +
+                '<span class="fin-ov-total">' + (mine.length ? "Total: " + naira(total) : "") + "</span>" +
+              "</div>";
+    });
+    box.innerHTML = html;
+  }).catch(function () { box.innerHTML = '<div class="fin-ov-empty">Could not load the overview.</div>'; });
 }
 
 /* -------------------------------- payments --------------------------- */
@@ -584,6 +785,16 @@ function loadFeeTypes() {
 }
 
 function fillTypeSelects() {
+  // NEW (pack 28): the "other money name" box also suggests existing names
+  var dl = document.getElementById("finTypeList");
+  if (dl) {
+    dl.innerHTML = "";
+    finTypes.forEach(function (t) {
+      var o = document.createElement("option");
+      o.value = t.name;
+      dl.appendChild(o);
+    });
+  }
   ["finType", "payType"].forEach(function (id) {
     var sel = document.getElementById(id);
     if (!sel) return;

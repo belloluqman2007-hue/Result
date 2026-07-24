@@ -583,3 +583,69 @@ table.mg-table tr:last-child td{ border-bottom:none; }
 .wa-sendfab:hover{ background:#017561; }
 .wa-sendfab:active{ transform:scale(.92); }
 .wa-sendfab svg{ width:22px; height:22px; }
+
+/* ==========================================================================
+   NEW (pack 28 - owner requests): portal chat extras - smaller ticks,
+   Admin/Teacher conversation tabs, mic + recording bar, voice bubbles;
+   and the reorganized "My Fees & Balance" itemized display.
+   ========================================================================== */
+/* smaller read-ticks ("the two tick marks are too big") */
+.wa-tk{ width:13px; height:13px; }
+/* conversation tabs - Office / Class Teacher */
+.ptchat-tabs{ display:flex; gap:6px; background:#EDF1EE; padding:5px; border-radius:12px; margin:0 0 10px; }
+.ptchat-tab{
+  flex:1; border:none; background:transparent; padding:9px 6px; border-radius:9px; cursor:pointer;
+  font-size:13px; font-weight:800; color:#5B6B62; font-family:inherit; transition:background .15s, color .15s;
+}
+.ptchat-tab.active{ background:#fff; color:#14532d; box-shadow:0 2px 6px rgba(17,27,33,.12); }
+/* mic button + recording bar (voice notes) */
+.wa-micfab{
+  width:46px; height:46px; border-radius:50%; border:none; cursor:pointer; flex:0 0 46px;
+  background:#F0F2F5; color:#54656F; display:flex; align-items:center; justify-content:center;
+  transition:background .15s, color .15s;
+}
+.wa-micfab:hover{ background:#E2E8EB; color:#111B21; }
+.wa-micfab:disabled{ opacity:.45; cursor:default; }
+.wa-micfab svg{ width:22px; height:22px; }
+.wa-recbar{
+  flex:1; display:none; align-items:center; gap:10px; background:#fff; border:1px solid #E1E7E2;
+  border-radius:22px; padding:11px 14px;
+}
+.wa-composer.recording .wa-inputwrap, .wa-composer.recording .wa-micfab{ display:none; }
+.wa-composer.recording .wa-recbar{ display:flex; }
+.wa-recdot{ width:11px; height:11px; border-radius:50%; background:#E01E2B; animation:waBlink 1s infinite; }
+@keyframes waBlink{ 0%,100%{ opacity:1; } 50%{ opacity:.25; } }
+.wa-rectime{ font-size:15px; font-weight:700; color:#111B21; font-variant-numeric:tabular-nums; }
+.wa-rechint{ font-size:12px; color:#8696A0; flex:1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.wa-reccancel{ border:none; background:transparent; color:#C0392B; font-weight:700; font-size:13px; cursor:pointer; }
+.wa-audio-wrap{ display:flex; align-items:center; gap:8px; min-width:220px; }
+.wa-audio-wrap audio{ height:34px; max-width:240px; outline:none; }
+.wa-audio-dur{ font-size:12px; color:#667781; white-space:nowrap; }
+
+/* --- reorganized My Fees & Balance ("what am I paying for / what have I paid") --- */
+.ptfee-item{
+  background:#fff; border:1px solid #e4eae6; border-radius:12px; padding:12px 14px; margin:9px 0;
+  box-shadow:0 1px 2px rgba(17,27,33,.04);
+}
+.ptfee-top{ display:flex; align-items:baseline; gap:8px; }
+.ptfee-name{ font-weight:800; color:#1d3527; font-size:14.5px; flex:1; }
+.ptfee-badge{ font-size:10px; font-weight:800; padding:2px 8px; border-radius:8px; letter-spacing:.3px; }
+.ptfee-badge.paid{ background:#E2F5E9; color:#0e7a40; }
+.ptfee-badge.owing{ background:#FDECEA; color:#B3261E; }
+.ptfee-amts{ display:flex; gap:14px; margin-top:6px; font-size:12.5px; color:#5B6B62; flex-wrap:wrap; }
+.ptfee-amts b{ color:#1f2d26; font-size:13px; }
+.ptfee-amts .due b{ color:#14532d; }
+.ptfee-amts .paidc b{ color:#0e7a40; }
+.ptfee-amts .owec b{ color:#B3261E; }
+.ptfee-bar{ height:7px; border-radius:4px; background:#EDF1EE; margin-top:8px; overflow:hidden; }
+.ptfee-fill{ height:100%; border-radius:4px; background:linear-gradient(90deg,#1C8A55,#2FA46E); transition:width .4s ease; }
+.ptfee-total{
+  display:flex; align-items:center; justify-content:space-between; gap:10px; margin-top:12px; padding:12px 14px;
+  border-radius:12px; font-weight:800; font-size:14px;
+}
+.ptfee-total.owing{ background:#FFF6E9; border:1px solid #F2DDB4; color:#8a5b12; }
+.ptfee-total.clear{ background:#E9F7EF; border:1px solid #C4E8D2; color:#0e7a40; }
+.ptfee-hist-head{
+  margin:16px 0 6px; font-size:12px; font-weight:800; color:#41564a; text-transform:uppercase; letter-spacing:.5px;
+  border-top:1px dashed #d7e0da; padding-top:12px;
+}

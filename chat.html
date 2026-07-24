@@ -186,7 +186,99 @@
       .ch-msgs{ padding:14px 4% 8px; }
       .ch-bub{ max-width:84%; }
     }
-  </style>
+  
+    /* ================= pack 28 additions ================= */
+    /* smaller read-ticks (owner: "the two tick marks are too big") */
+    .ch-meta svg{ width:13px; height:13px; }
+    .ch-tprev .tk svg{ width:11px; height:11px; vertical-align:-1px; }
+    /* new-chat compose button */
+    .ch-newbtn{
+      width:40px; height:40px; border-radius:50%; border:none; cursor:pointer; margin-left:auto;
+      background:transparent; display:flex; align-items:center; justify-content:center; color:#54656F;
+    }
+    .ch-newbtn:hover{ background:#E2E8EB; }
+    .ch-newbtn svg{ width:22px; height:22px; }
+    /* new-chat overlay (WHO do you want to chat with?) */
+    .ch-newchat{
+      position:absolute; inset:0; background:#fff; z-index:30; display:none; flex-direction:column;
+    }
+    .ch-newchat.open{ display:flex; }
+    .ch-newchat-head{
+      background:#00A884; color:#fff; padding:10px 12px; display:flex; align-items:center; gap:12px; min-height:58px;
+    }
+    .ch-newchat-head .x{ background:transparent; border:none; color:#fff; width:36px; height:36px; border-radius:50%; cursor:pointer; display:flex; align-items:center; justify-content:center; }
+    .ch-newchat-head .x svg{ width:20px; height:20px; }
+    .ch-newchat-head b{ font-size:16px; }
+    .ch-newchat-head small{ display:block; font-size:11.5px; opacity:.85; }
+    .ch-newresults{ flex:1; overflow-y:auto; }
+    .ch-newrow{
+      display:flex; align-items:center; gap:12px; width:100%; text-align:left; border:none; background:#fff;
+      padding:10px 14px; cursor:pointer; font-family:inherit; border-bottom:1px solid #F3F5F4;
+    }
+    .ch-newrow:hover{ background:#F5F6F6; }
+    .ch-newrow .sub{ font-size:12.5px; color:#667781; }
+    .ch-newhint{ padding:18px 16px; color:#8696A0; font-size:13.5px; text-align:center; }
+    /* audience chip (Office / Teacher) in the conversation header */
+    .ch-thchip{
+      display:inline-block; font-size:10px; font-weight:800; padding:1px 7px; border-radius:8px; vertical-align:1px;
+      background:#E5F6EF; color:#0B8468; margin-left:6px; letter-spacing:.2px;
+    }
+    .ch-thchip.teacher{ background:#EAF1FB; color:#1D5FB8; }
+    .ch-list-chip{
+      flex:0 0 auto; font-size:10px; font-weight:800; padding:1px 6px; border-radius:7px;
+      background:#E5F6EF; color:#0B8468;
+    }
+    .ch-list-chip.teacher{ background:#EAF1FB; color:#1D5FB8; }
+    /* profile slide-over ("press the name -> student information") */
+    .ch-profile{
+      position:absolute; top:0; right:0; bottom:0; width:min(92%, 340px); background:#F0F2F5; z-index:25;
+      transform:translateX(102%); transition:transform .22s ease; display:flex; flex-direction:column;
+      box-shadow:-6px 0 18px rgba(17,27,33,.18);
+    }
+    .ch-profile.open{ transform:none; }
+    .ch-profile-head{ background:#00A884; color:#fff; padding:12px 14px; display:flex; align-items:center; gap:10px; }
+    .ch-profile-head .x{ background:transparent; border:none; color:#fff; cursor:pointer; width:34px; height:34px; border-radius:50%; display:flex; align-items:center; justify-content:center; }
+    .ch-profile-head .x svg{ width:19px; height:19px; }
+    .ch-profile-body{ flex:1; overflow-y:auto; padding:14px 12px 30px; }
+    .ch-pcard{ background:#fff; border-radius:12px; padding:16px; margin-bottom:10px; box-shadow:0 1px 1px rgba(17,27,33,.06); }
+    .ch-pava{
+      width:110px; height:110px; border-radius:50%; margin:4px auto 10px; display:flex; align-items:center; justify-content:center;
+      color:#fff; font-size:42px; font-weight:700; text-transform:uppercase; overflow:hidden;
+    }
+    .ch-pava img{ width:100%; height:100%; object-fit:cover; }
+    .ch-pname{ text-align:center; font-size:18px; font-weight:700; color:#111B21; }
+    .ch-psub{ text-align:center; font-size:13px; color:#667781; margin-top:2px; }
+    .ch-prow{ padding:7px 0; border-bottom:1px solid #F0F2F5; font-size:14px; }
+    .ch-prow:last-child{ border-bottom:none; }
+    .ch-prow .lbl{ font-size:11px; font-weight:800; color:#00A884; text-transform:uppercase; letter-spacing:.4px; }
+    .ch-prow .val{ margin-top:2px; color:#111B21; }
+    .ch-prow .val a{ color:#0B8468; font-weight:700; text-decoration:none; }
+    /* mic + recording bar (voice notes) */
+    .ch-micfab{
+      width:46px; height:46px; border-radius:50%; border:none; cursor:pointer; flex:0 0 46px;
+      background:#F0F2F5; color:#54656F; display:flex; align-items:center; justify-content:center;
+    }
+    .ch-micfab:hover{ background:#E2E8EB; color:#111B21; }
+    .ch-micfab:disabled{ opacity:.45; cursor:default; }
+    .ch-micfab svg{ width:22px; height:22px; }
+    .ch-recbar{
+      flex:1; display:none; align-items:center; gap:10px; background:#fff; border-radius:22px; padding:11px 14px;
+      box-shadow:0 1px 1px rgba(17,27,33,.06);
+    }
+    .ch-composer.recording .ch-inputwrap, .ch-composer.recording .ch-micfab{ display:none; }
+    .ch-composer.recording .ch-recbar{ display:flex; }
+    .ch-recdot{ width:11px; height:11px; border-radius:50%; background:#E01E2B; animation:chBlink 1s infinite; }
+    @keyframes chBlink{ 0%,100%{ opacity:1; } 50%{ opacity:.25; } }
+    .ch-rectime{ font-size:15px; font-weight:700; color:#111B21; font-variant-numeric:tabular-nums; }
+    .ch-rechint{ font-size:12px; color:#8696A0; flex:1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .ch-reccancel{ border:none; background:transparent; color:#C0392B; font-weight:700; font-size:13px; cursor:pointer; }
+    .ch-audio-wrap{ display:flex; align-items:center; gap:8px; min-width:210px; }
+    .ch-audio-wrap audio{ height:34px; max-width:230px; outline:none; }
+    .ch-audio-dur{ font-size:12px; color:#667781; white-space:nowrap; }
+    /* keep the desktop layout aware of absolutely-positioned children */
+    .ch-list{ position:relative; }
+    .ch-convo{ position:relative; }
+</style>
 </head>
 <body>
   <div class="ch-app">
@@ -198,7 +290,12 @@
           <div class="t">Chats</div>
           <div class="s" id="chMeLine">Parent messages</div>
         </div>
-        <a class="ch-homebtn" href="teacher-dashboard.html" title="Back to Dashboard" aria-label="Back to Dashboard">
+        <!-- NEW (pack 28 - owner: "let me select who I want to chat with"):
+             compose button starts a brand-new conversation -->
+        <button type="button" class="ch-newbtn" id="chNewBtn" title="New chat" aria-label="New chat">
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M20.7 3.3a1 1 0 0 0-1.4 0l-1.8 1.8 3.2 3.2 1.8-1.8a1 1 0 0 0 0-1.4zM3 17.2V21h3.8L17.9 9.9l-3.2-3.2z"/></svg>
+        </button>
+        <a class="ch-homebtn" style="margin-left:0;" href="teacher-dashboard.html" title="Back to Dashboard" aria-label="Back to Dashboard">
           <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 3.2 2.8 11h2.4v9.2h5.6v-6h2.4v6h5.6V11h2.4z"/></svg>
         </a>
       </div>
@@ -210,6 +307,28 @@
       </div>
       <div class="ch-threadlist" id="chThreadList">
         <div class="ch-listempty">Loading chats...</div>
+      </div>
+
+      <!-- NEW (pack 28): WHO do you want to chat with? - slides over the list -->
+      <div class="ch-newchat" id="chNewChat" aria-hidden="true">
+        <div class="ch-newchat-head">
+          <button type="button" class="x" id="chNewClose" aria-label="Close">
+            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20z"/></svg>
+          </button>
+          <div>
+            <b>New chat</b>
+            <small>Search any student &amp; start the conversation</small>
+          </div>
+        </div>
+        <div class="ch-search" style="background:#fff;">
+          <div class="ch-searchbox">
+            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M15.5 14h-.79l-.28-.27a6.5 6.5 0 1 0-.7.7l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0A4.5 4.5 0 1 1 14 9.5 4.5 4.5 0 0 1 9.5 14z"/></svg>
+            <input type="text" id="chNewSearch" placeholder="Type a name, class or student ID" autocomplete="off">
+          </div>
+        </div>
+        <div class="ch-newresults" id="chNewResults">
+          <div class="ch-newhint">Type at least 2 letters to search for a parent.<br>Tap a student to open the chat.</div>
+        </div>
       </div>
     </section>
 
@@ -233,10 +352,33 @@
         </div>
       </div>
 
-      <div class="ch-composer">
+      <!-- NEW (pack 28 - owner: "press the name -> student information"):
+           WhatsApp-style contact card, slides in from the right -->
+      <div class="ch-profile" id="chProfile" aria-hidden="true">
+        <div class="ch-profile-head">
+          <button type="button" class="x" id="chProfileClose" aria-label="Close">
+            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20z"/></svg>
+          </button>
+          <b>Student info</b>
+        </div>
+        <div class="ch-profile-body" id="chProfileBody"></div>
+      </div>
+
+      <div class="ch-composer" id="chComposer">
         <div class="ch-inputwrap">
           <textarea id="chBody" rows="1" placeholder="Type a message" maxlength="2000" disabled></textarea>
         </div>
+        <!-- NEW (pack 28): recording bar replaces the input while recording -->
+        <div class="ch-recbar">
+          <span class="ch-recdot"></span>
+          <span class="ch-rectime" id="chRecTime">0:00</span>
+          <span class="ch-rechint">Recording voice note&hellip; tap &#10095; to send</span>
+          <button type="button" class="ch-reccancel" id="chRecCancel">Cancel</button>
+        </div>
+        <!-- NEW (pack 28 - owner: "Allow voice note"): mic button -->
+        <button type="button" class="ch-micfab" id="chMicBtn" disabled aria-label="Record a voice note" title="Voice note">
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 15a3.5 3.5 0 0 0 3.5-3.5v-6a3.5 3.5 0 1 0-7 0v6A3.5 3.5 0 0 0 12 15zm6-3.5a6 6 0 0 1-12 0H4a8 8 0 0 0 7 7.94V22h2v-2.06A8 8 0 0 0 20 11.5z"/></svg>
+        </button>
         <button type="button" class="ch-sendfab" id="chSend" disabled aria-label="Send">
           <svg viewBox="0 0 24 24" fill="currentColor"><path d="M3.4 20.4 22.85 12 3.4 3.6 3.39 10l12.8 2-12.8 2z"/></svg>
         </button>

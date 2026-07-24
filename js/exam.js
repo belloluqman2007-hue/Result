@@ -1618,6 +1618,45 @@ function capturePageScales(lite) {
     if (lite) return [1.25, 1];
     return phone ? [1.75, 1.5, 1.25, 1] : [2, 1.5, 1];
 }
+/* NEW (pack 28 - owner: "the exam 4 page is not displaying after download
+   untill now but the remaining is displaying"): two more guards for that
+   exact one-blank-page symptom.
+   1) IMAGE-FIRST WAIT: on slower phones a big inserted photo is not
+      decoded yet when the snapshot fires, so THAT page alone could paint
+      empty. We now wait for every image inside the frozen page copy to
+      fully decode (max 4s) before photographing it.
+   2) BLANK-CANVAS DETECTOR: after the photo we sample the result - if the
+      page clearly has text but the canvas is ~pure white, we treat it as a
+      failed capture so the retry/second-chance system fixes it instead of
+      shipping a blank sheet. */
+function amsWaitForImages(root) {
+    var imgs = Array.from(root.querySelectorAll("img"));
+    if (!imgs.length) return Promise.resolve();
+    return Promise.all(imgs.map(function (img) {
+        if (img.complete && img.naturalWidth) return Promise.resolve();
+        var decoded = img.decode ? img.decode() : new Promise(function (res) {
+            img.onload = res; img.onerror = res;
+        });
+        var timeout = new Promise(function (res) { setTimeout(res, 4000); });
+        return Promise.race([decoded.catch(function () {}), timeout]);
+    })).then(function () {});
+}
+function amsCanvasLooksBlank(cv) {
+    try {
+        var probe = document.createElement("canvas");
+        probe.width = 48; probe.height = 68;
+        var ctx = probe.getContext("2d", { willReadFrequently: true });
+        ctx.drawImage(cv, 0, 0, 48, 68);
+        var data = ctx.getImageData(0, 0, 48, 68).data;
+        var ink = 0;
+        for (var i = 0; i < data.length; i += 16) { // every 4th pixel
+            if (data[i] < 242 || data[i + 1] < 242 || data[i + 2] < 242) ink++;
+        }
+        return ink < 4; // fewer than ~0.3% of sampled pixels have any ink
+    } catch (e) {
+        return false; // cannot sample -> trust the capture
+    }
+}
 function capturePageWithRetries(page, lite) {
     var scales = capturePageScales(lite);
     function attempt(i) {
@@ -1632,11 +1671,20 @@ function capturePageWithRetries(page, lite) {
         document.body.appendChild(stage);
         var fontsReady = (document.fonts && document.fonts.ready) || Promise.resolve();
         return fontsReady.then(function () {
+            return amsWaitForImages(clone); // pack 28: decode photos first
+        }).then(function () {
             return html2canvas(clone, { scale: scales[i], backgroundColor: "#ffffff", useCORS: true });
         }).then(function (cv) {
             stage.remove();
             // A blank/empty canvas (0x0 or 1x1) is as bad as a thrown error.
             if (!cv || cv.width < 10 || cv.height < 10) throw new Error("empty canvas");
+            // pack 28: page has text but painted white -> call it a failure
+            // so the retry fixes it instead of downloading a blank page 4.
+            var hasText = (clone.textContent || "").trim().length > 4;
+            if (hasText && amsCanvasLooksBlank(cv)) {
+                try { cv.width = 0; cv.height = 0; } catch (e) {}
+                throw new Error("blank canvas");
+            }
             return cv;
         }).catch(function (err) {
             try { stage.remove(); } catch (e) {}
@@ -1722,12 +1770,22 @@ function downloadExamPDF(openInViewer) {
     var i = 0;
     var phonePace = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
 
+    /* NEW (pack 28): always-visible page counter - the teacher can SEE
+       page 3 of 7, page 4 of 7... instead of wondering if the phone hung
+       (the old download felt frozen on long exams). */
+    var prog = document.createElement("div");
+    prog.className = "ams-pdfprog";
+    document.body.appendChild(prog);
+    function progShow(txt) { prog.textContent = txt; }
+    function progDone() { try { prog.remove(); } catch (e) {} }
+
     function captureNext() {
         if (i >= pages.length) {
             secondChance(finishPdf); // NEW (pack 27): failed pages get one more try
             return;
         }
         var pageNum = i + 1;
+        progShow("Building PDF\u2026 page " + pageNum + " of " + pages.length);
         capturePageWithRetries(pages[i], false)
             .then(function (cv) { images[i] = canvasToShot(cv); })
             .catch(function () {
@@ -1766,6 +1824,7 @@ function downloadExamPDF(openInViewer) {
                 return done();
             }
             var pNum = queue.shift();
+            progShow("Retrying page " + pNum + " of " + pages.length + "\u2026"); // pack 28: counter shows the second chance too
             setTimeout(function () {
                 capturePageWithRetries(pages[pNum - 1], true) // lite mode: lightest scales
                     .then(function (cv) { images[pNum - 1] = canvasToShot(cv); })
@@ -1778,6 +1837,7 @@ function downloadExamPDF(openInViewer) {
 
     function finishPdf() {
         flow.classList.remove("ams-capturing");
+        progDone(); // pack 28: remove the page counter
 
         images = images.filter(Boolean);
         if (!images.length) {

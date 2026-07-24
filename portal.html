@@ -297,25 +297,33 @@
       <div class="pt-view" data-view="chat">
         <h1 class="pt-view-title">&#128172; Chat</h1>
         <section class="pt-card portal-no-print" id="ptMsgCard">
-          <p class="pt-hint">Chat with the school - choose who reads your message. Their replies appear on this page.</p>
+          <p class="pt-hint">Chat with the school - tap a tab to choose WHO you are talking to. Each side is its own conversation, and their replies land there. You can also send voice notes &#128206;&#127908;.</p>
+          <!-- NEW (pack 28 - owner: "different chat for admin and teacher"):
+               two separate conversations, WhatsApp-style tabs -->
+          <div class="ptchat-tabs" id="ptChatTabs" role="tablist">
+            <button type="button" class="ptchat-tab active" data-thread="admin">&#127979; School Office</button>
+            <button type="button" class="ptchat-tab" data-thread="teacher">&#128105;&#127995;&#8205;&#127979; Class Teacher</button>
+          </div>
           <div id="ptMsgs" style="margin:6px 0 12px;">
             <div class="pt-empty">No messages yet. Say salam below - the school replies right here.</div>
           </div>
-          <form id="ptMsgForm" class="pt-form-grid">
-            <div>
-              <label for="ptMsgTo">Send to</label>
-              <select id="ptMsgTo">
-                <option value="admin">School Administration (office)</option>
-                <option value="teacher">Class Teacher</option>
-              </select>
-            </div>
-            <!-- CHANGED (pack 27 - owner: "Make the chat be like Whatsapp"):
-                 WhatsApp-style pill composer - growing textarea + round green
-                 send button. Same ids, same submit handler. -->
-            <div class="wa-composer">
+          <form id="ptMsgForm">
+            <input type="hidden" id="ptMsgTo" value="admin">
+            <!-- CHANGED (pack 27): WhatsApp-style pill composer.
+                 CHANGED (pack 28): mic button + recording bar for voice notes. -->
+            <div class="wa-composer" id="ptComposer">
               <div class="wa-inputwrap">
                 <textarea id="ptMsgBody" rows="1" maxlength="2000" placeholder="Type a message" required></textarea>
               </div>
+              <div class="wa-recbar">
+                <span class="wa-recdot"></span>
+                <span class="wa-rectime" id="ptRecTime">0:00</span>
+                <span class="wa-rechint">Recording&hellip;</span>
+                <button type="button" class="wa-reccancel" id="ptRecCancel">Cancel</button>
+              </div>
+              <button type="button" class="wa-micfab" id="ptMicBtn" aria-label="Record a voice note" title="Voice note">
+                <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 15a3.5 3.5 0 0 0 3.5-3.5v-6a3.5 3.5 0 1 0-7 0v6A3.5 3.5 0 0 0 12 15zm6-3.5a6 6 0 0 1-12 0H4a8 8 0 0 0 7 7.94V22h2v-2.06A8 8 0 0 0 20 11.5z"/></svg>
+              </button>
               <button class="wa-sendfab" id="ptMsgSend" type="submit" aria-label="Send">
                 <svg viewBox="0 0 24 24" fill="currentColor"><path d="M3.4 20.4 22.85 12 3.4 3.6 3.39 10l12.8 2-12.8 2z"/></svg>
               </button>

@@ -57,7 +57,7 @@
     </div>
 
     <div class="mg-tabs">
-      <button class="mg-tab active" type="button" onclick="finSwitchTab('fees', this)">&#127979; Fee Structure</button>
+      <button class="mg-tab active" type="button" onclick="finSwitchTab('fees', this)">&#128181; Fees Setup</button>
       <button class="mg-tab" type="button" onclick="finSwitchTab('pay', this)">&#128184; Payments</button>
       <button class="mg-tab" type="button" onclick="finSwitchTab('subs', this)">&#128395;&#65039; Parent Payments <span id="subsBadge" style="display:none; background:#D64541; color:#fff; border-radius:999px; padding:1px 8px; font-size:11px;"></span></button>
       <button class="mg-tab" type="button" onclick="finSwitchTab('exp', this)">&#128177; Expenses</button>
@@ -66,36 +66,67 @@
 
     <!-- Fee structure -->
     <div class="mg-panel active" id="finPanelFees">
-      <!-- NEW (pack 15): fee TYPES - school fee, developmental fee, exam
-           fee, and any custom ones the admin creates. -->
-      <div class="mg-toolbar" style="margin-bottom:8px;">
-        <div class="mg-field">
-          <label for="finType">Fee Type</label>
-          <select id="finType" onchange="loadFeeStructure()"></select>
-        </div>
-        <button class="mg-btn-light" type="button" onclick="toggleTypeMgr()">&#128193; Manage Fee Types</button>
-      </div>
-      <div id="typeMgr" style="display:none; margin-bottom:14px;" class="mg-card">
-        <h3>&#128193; Fee Types</h3>
-        <div class="mg-toolbar">
-          <div class="mg-field">
-            <label for="newTypeName">New Fee Type</label>
-            <input type="text" id="newTypeName" placeholder="e.g. Uniform Fee">
+      <!-- CHANGED (pack 28 - owner: "Organize the finance section well and
+           let admin select class term session and select school fee and put
+           the money, and put other money also"): guided 3-step setup -
+           1) pick the class (term & session are chosen above), 2) set the
+           School Fee and any OTHER charges for exactly that class,
+           3) see every class at a glance. Same /fee-structure2 storage. -->
+      <div class="fin-step">
+        <span class="fin-stepnum">1</span>
+        <div style="flex:1;">
+          <h3 style="margin:0 0 2px;">Choose the class</h3>
+          <p class="mg-note" style="margin:0 0 8px;">Term &amp; session come from the amber toolbar above - the charges you save apply to exactly that class, term and session.</p>
+          <div class="mg-toolbar">
+            <div class="mg-field" style="min-width:min(100%, 300px);">
+              <label for="finCls">Class</label>
+              <select id="finCls" onchange="loadFeeSetup()"><option value="" disabled selected>Select Class</option></select>
+            </div>
           </div>
-          <button class="mg-btn" type="button" onclick="addFeeType()">&#10133; Add</button>
         </div>
-        <div id="typeChips" style="display:flex; gap:8px; flex-wrap:wrap;"></div>
-        <p class="mg-note">Removing a type only hides it from this picker - old payments stay recorded.</p>
       </div>
-      <div class="mg-toolbar">
-        <button class="mg-btn-light" type="button" onclick="loadFeeStructure()">Load Classes &amp; Fees</button>
-        <button class="mg-btn" type="button" onclick="saveFeeStructure()">&#128190; Save All Fees (selected type)</button>
+
+      <div class="fin-step" id="finSetupCard" style="display:none;">
+        <span class="fin-stepnum">2</span>
+        <div style="flex:1; min-width:0;">
+          <h3 style="margin:0 0 2px;" id="finSetupTitle">Charges</h3>
+          <p class="mg-note" style="margin:0 0 10px;"><b>School Fee</b> is the main charge. Add any <b>other money</b> under it (PTA, Uniform, Books...) - parents see each one <b>itemized</b> in their portal.</p>
+          <div id="finChargeRows"></div>
+          <div class="fin-addrow">
+            <input type="text" id="finNewName" list="finTypeList" placeholder="Other money name - e.g. PTA Fee, Uniform" maxlength="60">
+            <datalist id="finTypeList"></datalist>
+            <input type="number" id="finNewAmount" min="0" placeholder="&#8358; amount">
+            <button class="mg-btn-light" type="button" onclick="finAddCharge()">&#10133; Add</button>
+          </div>
+          <div class="fin-total-line" id="finTotalLine"></div>
+          <div class="mg-toolbar" style="margin-top:10px;">
+            <button class="mg-btn" type="button" onclick="saveFeeSetup()">&#128190; Save All Charges for This Class</button>
+            <button class="mg-btn-light" type="button" onclick="toggleTypeMgr()">&#128193; Manage Charge Names</button>
+          </div>
+          <div id="typeMgr" style="display:none; margin-top:12px;" class="mg-card">
+            <h3>&#128193; Charge Names</h3>
+            <div class="mg-toolbar">
+              <div class="mg-field">
+                <label for="newTypeName">New Charge Name</label>
+                <input type="text" id="newTypeName" placeholder="e.g. Uniform Fee">
+              </div>
+              <button class="mg-btn" type="button" onclick="addFeeType()">&#10133; Add</button>
+            </div>
+            <div id="typeChips" style="display:flex; gap:8px; flex-wrap:wrap;"></div>
+            <p class="mg-note">Removing a name only hides it from pickers - old payments stay recorded.</p>
+          </div>
+        </div>
       </div>
-      <div class="mg-table-wrap">
-        <table class="mg-table" id="feeTable">
-          <thead><tr><th>Class</th><th>Fee per Term (&#8358;)</th></tr></thead>
-          <tbody><tr><td colspan="2" style="text-align:center; color:#5B6B62;">Press "Load Classes &amp; Fees" to begin. Saving is admin-only.</td></tr></tbody>
-        </table>
+
+      <div class="fin-step">
+        <span class="fin-stepnum">3</span>
+        <div style="flex:1; min-width:0;">
+          <div style="display:flex; align-items:center; gap:10px; margin-bottom:8px;">
+            <h3 style="margin:0;">All classes at a glance</h3>
+            <button class="mg-btn-light" type="button" style="margin-left:auto;" onclick="loadFeesOverview()">&#128260; Refresh</button>
+          </div>
+          <div id="finFeesOverview"><div class="fin-ov-empty">Choose a class above, or press Refresh - every class's charges for the selected term &amp; session appear here.</div></div>
+        </div>
       </div>
     </div>
 

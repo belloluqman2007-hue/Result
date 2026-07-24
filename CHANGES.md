@@ -4,6 +4,99 @@
 
 ---
 
+## Pack 29 — 2026-07-24
+
+Owner requests:
+1. "I don't need the ai remark - remove it and turn it to chat."
+2. "Chatting with ai effectively and fluently."
+3. "Make all the ai working."
+
+Changes:
+- REMOVED the one-note AI Remarks feature (owner's instruction). The
+  page (ai-remarks.html) and its old script/route are GONE. Dashboard
+  tile renamed to "AI Chat" (same filename, no links broken).
+- NEW staff AI Chat: fluent multi-turn conversation (WhatsApp-style
+  bubbles, typing indicator, suggestion chips, copy button, Enter to
+  send, history remembered on the device until "New" is pressed).
+  Server route POST /api/ai/chat with a school-voice system prompt and
+  a polite per-staff hourly limit. Teachers can still ask it to draft
+  remarks - the remark job lives on inside the chat.
+- NEW in-app AI switch-on (the "make all the AI working" fix): the
+  admin pastes the free AI key once ON THE CHAT PAGE -> saved in the new
+  ai_config table -> instantly wakes EVERY AI feature (staff chat, exam
+  question writer, website assistant). No Render dashboard, no redeploy.
+  Key is tested on save (verified flag), and GET only ever shows the
+  last 4 characters. Environment variables still work; the in-app key
+  wins. All AI routes now resolve config via aiConfig().
+- sw.js cache bump to ameenullah-shell-v17.
+
+---
+
+## Pack 28 — 2026-07-24
+
+Owner requests:
+1. "In the chat let me select who I want to chat with and search for who
+   I will chat with."
+2. "The two [tick] marks after sending messages is too big."
+3. "Allow voice note."
+4. "Let the chat also display same way in student portal also different
+   chat for admin and teacher."
+5. "Organize the finance section well and let admin select class term
+   session and select school fee and put the money, and put other money
+   also so parent will see what they are paying for and what they have
+   paid for and organize it well also."
+6. "In results put select class to download all results in PDF exactly
+   how it is displaying ... and don't remove anything else."
+7. "The exam 4 page is not displaying after download until now but the
+   remaining is displaying."
+8. "In chat if I press the top where students name is it should display
+   student information like Whatsapp."
+9. "Fix all that and look for any other bugs."
+
+What changed:
+- CHAT (staff):
+  - NEW CHAT: compose (pencil) button opens a searchable student list
+    (new GET /api/chat-students; teachers limited to their mapped
+    classes - pack-25 confidentiality kept). Tap a student -> a brand-new
+    conversation opens (pendingThread pattern; first message creates it).
+  - VOICE NOTES: mic button records (MediaRecorder, 2-min cap), uploads
+    to POST /api/messages/voice; audio STORED IN THE DATABASE
+    (voice_data LONGBLOB - survives Render deploys, unlike disk) and
+    streamed by GET /voice/:id (staff/owner checks). Playable bubbles
+    with duration on both sides; while recording, the green plane sends.
+  - TWO THREADS: messages gain a `thread` column ('admin'/'teacher').
+    Office and Class Teacher conversations show as SEPARATE chats with
+    chips; replies land in the right one. Backfilled from recipient_type.
+  - STUDENT INFO: tapping the conversation header opens a WhatsApp-style
+    contact card (photo, ID, class, gender, DOB, parent, tel: link,
+    address) from /student/:id.
+  - Ticks shrunk 16px -> 13px (owner: "too big").
+- PORTAL chat: two tabs (School Office / Class Teacher) - separate
+  conversations rendered from thread; mic + recording bar + voice
+  bubbles identical to the staff side; ticks shrunk.
+- FINANCE (admin): Fees tab rebuilt into a guided 3-step setup:
+  1) choose the class (term/session from the toolbar), 2) set School
+  Fee plus ANY other charges with amounts for exactly that class
+  (+add row, X removes - new DELETE /fee-structure2 route, School Fee
+  protected), running total shown; 3) all-classes overview chips for the
+  term/session. Same /fee-structure2 storage - nothing re-recorded.
+- PORTAL fees: every charge is now its own card (Fee / Paid / Balance,
+  PAID/OWING badge, green progress bar) + one clear total strip +
+  organized "What You Have Paid" history with receipt links.
+- EXAM page 4 (blank-page-after-download): added IMAGE-DECODE wait
+  before photographing a page (big phone photos could paint empty), a
+  BLANK-CANVAS detector (text page that paints white = failed capture
+  -> retried), plus an always-visible "Building PDF... page N of M"
+  counter. Second-chance retry pass kept (pack 27).
+- RESULTS: whole-class broadsheet "Download Whole Class (PDF)" verified
+  working on class-results.html (class + term + session -> PDF exactly
+  like the screen broadsheet); nothing removed.
+- server.js: pack-28 guarded migrations (messages: thread/kind/duration/
+  voice_data/voice_mime) + the new routes above. No existing route or
+  calculation changed.
+
+---
+
 ## Pack 27 — 2026-07-24
 
 Owner requests:

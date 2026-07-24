@@ -952,6 +952,92 @@ function pack20Retry(attempt, err) {
 }
 runPack20Migrations(1);
 
+/* ==================================================================
+   NEW (pack 28 - owner: "Allow voice note ... also different chat for
+   admin and teacher"): messages table grows:
+     1. thread    - 'admin' or 'teacher' so the parent portal shows TWO
+                    separate conversations (office vs class teacher).
+     2. kind      - 'text' or 'voice'.
+     3. duration  - voice-note length in seconds.
+     4. voice_data + voice_mime - the audio lives IN the database
+        (Render's disk is wiped on every deploy; DB is forever).
+   Guarded + idempotent, same pattern as packs 15/17/20/22.
+================================================================== */
+function runPack28Migrations(attempt) {
+    const conn = addonConnection();
+    conn.connect((err) => {
+        if (err) { conn.destroy(); return pack28Retry(attempt, err); }
+        const alters = [
+            "ALTER TABLE messages ADD COLUMN thread VARCHAR(8) NOT NULL DEFAULT 'admin'",
+            "ALTER TABLE messages ADD COLUMN kind VARCHAR(8) NOT NULL DEFAULT 'text'",
+            "ALTER TABLE messages ADD COLUMN duration INT NULL",
+            "ALTER TABLE messages ADD COLUMN voice_data LONGBLOB NULL",
+            "ALTER TABLE messages ADD COLUMN voice_mime VARCHAR(64) NULL"
+        ];
+        let missingTable = false;
+        let i = 0;
+        (function nextAlter() {
+            if (i >= alters.length) {
+                // backfill: parent mail's thread is exactly who it was sent to
+                conn.query("UPDATE messages SET thread = recipient_type WHERE sender_type = 'portal'", () => {
+                    conn.end();
+                    console.log("Pack 28 setup ready (voice notes + admin/teacher chat threads).");
+                });
+                return;
+            }
+            conn.query(alters[i++], (qErr) => {
+                if (qErr && qErr.code !== "ER_DUP_FIELDNAME") {
+                    console.log("Pack 28 migration notice:", qErr.code || qErr.message);
+                    if (qErr.code === "ER_NO_SUCH_TABLE") missingTable = true;
+                }
+                if (missingTable) { conn.destroy(); return pack28Retry(attempt, { code: "ER_NO_SUCH_TABLE" }); }
+                nextAlter();
+            });
+        })();
+    });
+}
+function pack28Retry(attempt, err) {
+    if (attempt >= 6) {
+        console.log("Pack 28 setup warning:", err.code || err.message || err);
+        return;
+    }
+    setTimeout(() => runPack28Migrations(attempt + 1), 4000);
+}
+runPack28Migrations(1);
+
+/* ==================================================================
+   NEW (pack 29 - owner: "make all the ai working"): the admin can now
+   add the free AI key INSIDE the app (AI Chat page) - it is stored in
+   the `ai_config` table below and instantly wakes up EVERY AI feature
+   (staff AI chat, exam question writer, website assistant). No Render
+   dashboard, no redeploy. Guarded + idempotent like the packs above.
+================================================================== */
+function runPack29Migrations(attempt) {
+    const conn = addonConnection();
+    conn.connect((err) => {
+        if (err) { conn.destroy(); return pack29Retry(attempt, err); }
+        conn.query(
+            "CREATE TABLE IF NOT EXISTS ai_config (" +
+            "id TINYINT PRIMARY KEY DEFAULT 1, " +
+            "api_key VARCHAR(512) NULL, " +
+            "base_url VARCHAR(255) NULL, " +
+            "model VARCHAR(128) NULL, " +
+            "updated_by VARCHAR(60) NULL, " +
+            "updated_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP)",
+            (qErr) => {
+                if (qErr) console.log("Pack 29 migration notice:", qErr.code || qErr.message);
+                conn.end();
+                if (!qErr) console.log("Pack 29 setup ready (AI key can be saved inside the app).");
+            }
+        );
+    });
+}
+function pack29Retry(attempt, err) {
+    if (attempt >= 6) { console.log("Pack 29 setup warning:", err.code || err.message || err); return; }
+    setTimeout(() => runPack29Migrations(attempt + 1), 4000);
+}
+runPack29Migrations(1);
+
 /* ------------------------------------------------------------------
    NEW (pack 22 - owner requests): announcement AUDIENCES
    (teacher/student/parent/general) + announcement-or-EVENT kind +
@@ -2449,7 +2535,8 @@ app.get("/portal/messages", (req, res) => {
     const sid = req.session && req.session.portalStudentId;
     if (!sid) return res.status(401).json({ message: "Not logged in" });
     connection.query(
-        `SELECT id, sender_type, sender_ref, sender_name, recipient_type, recipient_ref, recipient_class, body, created_at, read_at
+        `SELECT id, sender_type, sender_ref, sender_name, recipient_type, recipient_ref, recipient_class, body, created_at, read_at,
+                thread, kind, duration
          FROM messages
          WHERE (sender_type = 'portal' AND sender_ref = ?)
             OR (recipient_type = 'parent' AND recipient_ref = ?)
@@ -2484,10 +2571,12 @@ app.post("/portal/messages", (req, res) => {
     connection.query("SELECT full_name, class_name FROM students WHERE student_id = ? LIMIT 1", [sid], (err, stu) => {
         if (err || !stu.length) return res.status(500).json({ message: "Database error" });
         const student = stu[0];
+        // CHANGED (pack 28): thread = who the parent wrote to, so the two
+        // conversations (office / class teacher) stay separate.
         connection.query(
-            `INSERT INTO messages (sender_type, sender_ref, sender_name, recipient_type, recipient_ref, recipient_class, body)
-             VALUES ('portal', ?, ?, ?, '', ?, ?)`,
-            [sid, (student.full_name || sid) + " (parent)", to, to === "teacher" ? (student.class_name || "") : "", body],
+            `INSERT INTO messages (sender_type, sender_ref, sender_name, recipient_type, recipient_ref, recipient_class, body, thread)
+             VALUES ('portal', ?, ?, ?, '', ?, ?, ?)`,
+            [sid, (student.full_name || sid) + " (parent)", to, to === "teacher" ? (student.class_name || "") : "", body, to],
             (iErr) => {
                 if (iErr) return res.status(500).json({ message: "Database error" });
                 res.json({ message: "Message sent to the " + (to === "teacher" ? "class teacher" : "school office") + "." });
@@ -2529,7 +2618,8 @@ app.get("/api/messages", requireLogin, (req, res) => {
     const isAdmin = req.session.role === "admin";
     staffMessageFilter(req, (fErr, myClasses) => {
         connection.query(
-            `SELECT id, sender_type, sender_ref, sender_name, recipient_type, recipient_ref, recipient_class, body, created_at, read_at
+            `SELECT id, sender_type, sender_ref, sender_name, recipient_type, recipient_ref, recipient_class, body, created_at, read_at,
+                    thread, kind, duration
              FROM messages ORDER BY created_at DESC LIMIT 400`,
             (err, rows) => {
                 if (err) { if (err.code === "ER_NO_SUCH_TABLE") return res.json([]); return res.status(500).json({ message: "Database error" }); }
@@ -2579,13 +2669,16 @@ app.post("/api/messages", requireLogin, (req, res) => {
     const studentId = String(req.body.student_id || "").trim();
     const body = String(req.body.body || "").trim().slice(0, 2000);
     if (!studentId || !body) return res.status(400).json({ message: "Student and message are required." });
+    // CHANGED (pack 28): the reply lands in the SAME conversation
+    // (office thread or class-teacher thread) the message came from.
+    const thread = req.body.thread === "teacher" ? "teacher" : "admin";
     connection.query("SELECT full_name FROM students WHERE student_id = ? LIMIT 1", [studentId], (err, stu) => {
         if (err) return res.status(500).json({ message: "Database error" });
         if (!stu.length) return res.status(404).json({ message: "No student with that ID - check it and try again." });
         connection.query(
-            `INSERT INTO messages (sender_type, sender_ref, sender_name, recipient_type, recipient_ref, recipient_class, body)
-             VALUES ('staff', ?, ?, 'parent', ?, '', ?)`,
-            [me, me + " (" + req.session.role + ")", studentId, body],
+            `INSERT INTO messages (sender_type, sender_ref, sender_name, recipient_type, recipient_ref, recipient_class, body, thread)
+             VALUES ('staff', ?, ?, 'parent', ?, '', ?, ?)`,
+            [me, me + " (" + req.session.role + ")", studentId, body, thread],
             (iErr) => {
                 if (iErr) return res.status(500).json({ message: "Database error" });
                 res.json({ message: "Reply sent to the parent." });
@@ -2618,6 +2711,129 @@ app.post("/api/messages/read", requireLogin, (req, res) => {
 });
 
 /* ==========================================================================
+   NEW (pack 28 - owner requests): CHAT EXTRAS.
+   1) /api/chat-students  - staff searches for a parent to START a chat
+      with ("select who I want to chat with"). Teachers are limited to
+      their mapped classes (pack-25 confidentiality, same rule as mail).
+   2) /api/messages/voice + /portal/messages/voice - voice notes. The
+      audio is stored IN the messages table (voice_data) - never on the
+      ephemeral server disk, so it survives every Render deploy.
+   3) GET /voice/:id - streams one voice note, only to people allowed to
+      see that conversation.
+   ========================================================================== */
+app.get("/api/chat-students", requireLogin, (req, res) => {
+    const q = String(req.query.q || "").trim();
+    if (q.length < 2) return res.json([]);
+    const isAdmin = req.session.role === "admin";
+    staffMessageFilter(req, (fErr, myClasses) => {
+        if (!isAdmin && (!myClasses || !myClasses.length)) return res.json([]); // pack 25: no mapping = see nothing
+        let sql = "SELECT student_id, full_name, class_name, gender FROM students WHERE (full_name LIKE ? OR student_id LIKE ?)";
+        const params = ["%" + q + "%", "%" + q + "%"];
+        if (!isAdmin) {
+            sql += " AND class_name IN (" + myClasses.map(() => "?").join(",") + ")";
+            params.push.apply(params, myClasses);
+        }
+        sql += " ORDER BY full_name LIMIT 20";
+        connection.query(sql, params, (err, rows) => {
+            if (err) { console.log(err); return res.status(500).json({ message: "Database error" }); }
+            res.json(rows);
+        });
+    });
+});
+
+// multer keeps the audio in memory only (it goes straight to the DB)
+const uploadVoice = multer({
+    storage: multer.memoryStorage(),
+    limits: { fileSize: 6 * 1024 * 1024 },
+    fileFilter: (req, file, cb) => {
+        const ok = /^(audio|video)\/(webm|ogg|mpeg|mp3|mp4|x-m4a|m4a|aac|wav)/.test(file.mimetype || "");
+        cb(ok ? null : new Error("Only audio recordings are allowed."), ok);
+    }
+});
+
+app.post("/api/messages/voice", requireLogin, (req, res) => {
+    uploadVoice.single("voice")(req, res, (upErr) => {
+        if (upErr || !req.file) return res.status(400).json({ message: (upErr && upErr.message) || "No recording received." });
+        const me = req.session.username;
+        const studentId = String(req.body.student_id || "").trim();
+        const thread = req.body.thread === "teacher" ? "teacher" : "admin";
+        const duration = Math.max(1, Math.min(600, parseInt(req.body.duration, 10) || 0)) || null;
+        if (!studentId) return res.status(400).json({ message: "Student is required." });
+        connection.query("SELECT full_name FROM students WHERE student_id = ? LIMIT 1", [studentId], (err, stu) => {
+            if (err) return res.status(500).json({ message: "Database error" });
+            if (!stu.length) return res.status(404).json({ message: "No student with that ID." });
+            connection.query(
+                `INSERT INTO messages (sender_type, sender_ref, sender_name, recipient_type, recipient_ref, recipient_class, body, thread, kind, duration, voice_data, voice_mime)
+                 VALUES ('staff', ?, ?, 'parent', ?, '', ?, ?, 'voice', ?, ?, ?)`,
+                [me, me + " (" + req.session.role + ")", studentId, "\u{1F3D9} Voice note", thread, duration, req.file.buffer, req.file.mimetype],
+                (iErr) => {
+                    if (iErr) { console.log(iErr); return res.status(500).json({ message: "Database error" }); }
+                    res.json({ message: "Voice note sent." });
+                }
+            );
+        });
+    });
+});
+
+app.post("/portal/messages/voice", (req, res) => {
+    const sid = req.session && req.session.portalStudentId;
+    if (!sid) return res.status(401).json({ message: "Not logged in" });
+    uploadVoice.single("voice")(req, res, (upErr) => {
+        if (upErr || !req.file) return res.status(400).json({ message: (upErr && upErr.message) || "No recording received." });
+        const to = req.body.to === "teacher" ? "teacher" : "admin";
+        const duration = Math.max(1, Math.min(600, parseInt(req.body.duration, 10) || 0)) || null;
+        connection.query("SELECT full_name, class_name FROM students WHERE student_id = ? LIMIT 1", [sid], (err, stu) => {
+            if (err || !stu.length) return res.status(500).json({ message: "Database error" });
+            const student = stu[0];
+            connection.query(
+                `INSERT INTO messages (sender_type, sender_ref, sender_name, recipient_type, recipient_ref, recipient_class, body, thread, kind, duration, voice_data, voice_mime)
+                 VALUES ('portal', ?, ?, ?, '', ?, ?, ?, 'voice', ?, ?, ?)`,
+                [sid, (student.full_name || sid) + " (parent)", to, to === "teacher" ? (student.class_name || "") : "",
+                 "\u{1F3D9} Voice note", to, duration, req.file.buffer, req.file.mimetype],
+                (iErr) => {
+                    if (iErr) { console.log(iErr); return res.status(500).json({ message: "Database error" }); }
+                    res.json({ message: "Voice note sent to the " + (to === "teacher" ? "class teacher" : "school office") + "." });
+                }
+            );
+        });
+    });
+});
+
+// stream ONE voice note; only people who may see the conversation
+app.get("/voice/:id", (req, res) => {
+    const id = Number(req.params.id) || 0;
+    const sid = req.session && req.session.portalStudentId;
+    const staffUser = req.session && req.session.userId;
+    if (!sid && !staffUser) return res.status(401).send("Not logged in");
+    connection.query(
+        "SELECT id, sender_type, sender_ref, recipient_ref, recipient_class, voice_data, voice_mime, kind FROM messages WHERE id = ? LIMIT 1",
+        [id],
+        (err, rows) => {
+            if (err) return res.status(500).send("Database error");
+            const m = rows && rows[0];
+            if (!m || m.kind !== "voice" || !m.voice_data) return res.status(404).send("Voice note not found");
+            const serve = () => {
+                res.setHeader("Content-Type", m.voice_mime || "audio/webm");
+                res.setHeader("Content-Length", m.voice_data.length);
+                res.setHeader("Cache-Control", "private, max-age=86400");
+                res.send(m.voice_data);
+            };
+            if (sid) {
+                // parent may only open their own conversation's audio
+                if (m.sender_ref === sid || m.recipient_ref === sid) return serve();
+                return res.status(403).send("Not your conversation");
+            }
+            if (req.session.role === "admin") return serve();
+            if (m.sender_type === "staff" && m.sender_ref === req.session.username) return serve(); // my own note
+            staffMessageFilter(req, (fErr, myClasses) => {
+                if (m.sender_type === "portal" && myClasses && myClasses.indexOf(m.recipient_class) !== -1) return serve();
+                return res.status(403).send("Not your conversation");
+            });
+        }
+    );
+});
+
+/* ==========================================================================
    NEW (pack 27 - owner: "Can we build ai inside the project"): AI CORE.
    --------------------------------------------------------------------------
    The AI brain lives OUTSIDE this server. It speaks the standard OpenAI
@@ -2632,30 +2848,60 @@ app.post("/api/messages/read", requireLogin, (req, res) => {
    Privacy: only the prompt text (e.g. a topic, or an average score) is
    ever sent to the AI service - never passwords or whole databases.
    ========================================================================== */
-const AI_API_KEY  = String(process.env.AI_API_KEY || "").trim();
-const AI_BASE_URL = String(process.env.AI_BASE_URL || "https://generativelanguage.googleapis.com/v1beta/openai").trim().replace(/\/+$/, "");
-const AI_MODEL    = String(process.env.AI_MODEL || "gemini-2.0-flash").trim();
-
-function aiEnabled() { return !!AI_API_KEY; }
+/* CHANGED (pack 29): the AI key can now come from TWO places -
+     1) the ai_config row the admin saves inside the app (wins), or
+     2) the classic environment variables (still work exactly as before).
+   aiConfig() resolves them with a 10-second cache so chats stay fast. */
+const AI_ENV = {
+    key:  String(process.env.AI_API_KEY || "").trim(),
+    base: String(process.env.AI_BASE_URL || "https://generativelanguage.googleapis.com/v1beta/openai").trim().replace(/\/+$/, ""),
+    model:String(process.env.AI_MODEL || "gemini-2.0-flash").trim()
+};
+let aiCfgCache = { at: 0, cfg: null };
+function aiConfig() {
+    if (aiCfgCache.cfg && Date.now() - aiCfgCache.at < 10000) return Promise.resolve(aiCfgCache.cfg);
+    return new Promise(function (resolve) {
+        connection.query("SELECT * FROM ai_config WHERE id = 1", function (err, rows) {
+            let cfg;
+            if (err) { // table not created yet (or db hiccup) - env still works
+                cfg = { key: AI_ENV.key, base: AI_ENV.base, model: AI_ENV.model, source: AI_ENV.key ? "env" : "" };
+            } else {
+                const db = rows && rows.length ? rows[0] : {};
+                const dbKey = String(db.api_key || "").trim();
+                cfg = {
+                    key:  dbKey || AI_ENV.key,
+                    base: String(db.base_url || "").trim().replace(/\/+$/, "") || AI_ENV.base,
+                    model:String(db.model || "").trim() || AI_ENV.model,
+                    source: dbKey ? "app" : (AI_ENV.key ? "env" : ""),
+                    updatedBy: db.updated_by || "", updatedAt: db.updated_at || null
+                };
+            }
+            aiCfgCache = { at: Date.now(), cfg: cfg };
+            resolve(cfg);
+        });
+    });
+}
+function aiBustCache() { aiCfgCache = { at: 0, cfg: null }; }
 function aiNotReady(res) {
     return res.status(503).json({
-        error: "The AI is not switched on yet. It takes one free key - the office can add it in a minute. Nothing else is affected."
+        error: "The AI is not switched on yet. The admin can switch it on in one minute from the AI Chat page (the switch-on card). Nothing else is affected."
     });
 }
 
 /* One small POST to the AI service (OpenAI chat-completions shape), built on
    node's own http/https so NO new packages are needed. 30s hard timeout. */
-function aiChat(messages, opts) {
+function aiChat(messages, opts, cfg) {
+    cfg = cfg || AI_ENV; // safety net - callers always pass it
     opts = opts || {};
     return new Promise(function (resolve, reject) {
         const body = JSON.stringify({
-            model: AI_MODEL,
+            model: cfg.model,
             messages: messages,
             temperature: typeof opts.temperature === "number" ? opts.temperature : 0.5,
             max_tokens: opts.maxTokens || 900
         });
         let u;
-        try { u = new URL(AI_BASE_URL + "/chat/completions"); }
+        try { u = new URL(cfg.base + "/chat/completions"); }
         catch (e) { return reject(new Error("AI_BASE_URL is not a valid address")); }
         const lib = u.protocol === "http:" ? require("http") : require("https");
         const req = lib.request({
@@ -2665,7 +2911,7 @@ function aiChat(messages, opts) {
             path: u.pathname + u.search,
             headers: {
                 "Content-Type": "application/json",
-                "Authorization": "Bearer " + AI_API_KEY,
+                "Authorization": "Bearer " + cfg.key,
                 "Content-Length": Buffer.byteLength(body)
             }
         }, function (aiRes) {
@@ -2706,14 +2952,16 @@ function aiParseJson(text) {
 /* Public status ping - the three AI UIs use it to show "AI ready" vs a
    gentle "coming soon" note. Reveals nothing secret. */
 app.get("/api/ai/status", (req, res) => {
-    res.json({ enabled: aiEnabled() });
+    // CHANGED (pack 29): key may live in the app now - check both places
+    aiConfig().then(function (cfg) { res.json({ enabled: !!cfg.key }); });
 });
 
 /* ---------- AI FEATURE 1: exam question generator (staff) ---------------
    Teacher gives class + subject + topic; AI drafts numbered questions the
    teacher can still edit before printing (AI proposes, teacher disposes). */
 app.post("/api/ai/exam-questions", requireLogin, async (req, res) => {
-    if (!aiEnabled()) return aiNotReady(res);
+    const cfg = await aiConfig(); // CHANGED (pack 29): in-app key counts too
+    if (!cfg.key) return aiNotReady(res);
     const f = k => String(req.body[k] == null ? "" : req.body[k]).trim();
     const className = f("className").slice(0, 80);
     const subject   = f("subject").slice(0, 80);
@@ -2736,7 +2984,7 @@ app.post("/api/ai/exam-questions", requireLogin, async (req, res) => {
         " JSON shape: {\"questions\":[{\"question\":\"text\",\"options\":[\"A. ...\",\"B. ...\",\"C. ...\",\"D. ...\"] or null}]}";
 
     try {
-        const text = await aiChat([{ role: "system", content: sys }, { role: "user", content: usr }], { maxTokens: 2000, temperature: 0.65 });
+        const text = await aiChat([{ role: "system", content: sys }, { role: "user", content: usr }], { maxTokens: 2000, temperature: 0.65 }, cfg);
         const data = aiParseJson(text);
         const list = Array.isArray(data) ? data : (data && data.questions);
         if (!Array.isArray(list)) throw new Error("AI sent no questions");
@@ -2756,42 +3004,118 @@ app.post("/api/ai/exam-questions", requireLogin, async (req, res) => {
     }
 });
 
-/* ---------- AI FEATURE 2: report-card remark writer (staff) -------------
-   Turns an average (plus best/weak subjects) into a warm, honest teacher
-   remark. One student per call - the page loops for "generate all". */
-app.post("/api/ai/remark", requireLogin, async (req, res) => {
-    if (!aiEnabled()) return aiNotReady(res);
-    const f = k => String(req.body[k] == null ? "" : req.body[k]).trim();
-    const name     = f("name").slice(0, 80);
-    const average  = Math.max(0, Math.min(100, parseFloat(f("average")) || 0));
-    const className= f("className").slice(0, 60);
-    const term     = f("term").slice(0, 30);
-    const best     = f("best").slice(0, 60);
-    const weak     = f("weak").slice(0, 60);
+/* ---------- REMOVED (pack 29 - owner: "I don't need the ai remark,
+   remove it and turn it to chat"): the one-note AI Remarks page and its
+   /api/ai/remark route are GONE. Teachers now chat with the AI fluently
+   on the AI Chat page (ai-remarks.html) - they can still ask the chat to
+   draft a remark for any student whenever they want. ------------------- */
+
+/* ---------- AI FEATURE 2: STAFF AI CHAT (pack 29) ---------------------
+   Free-flowing, multi-turn conversation for logged-in staff. The page
+   keeps the conversation and sends it here each time; the school voice
+   (system prompt) is added server-side so the AI always stays the
+   "school AI". Per-staff hourly limit keeps the free AI quota safe. */
+const aiStaffHits = Object.create(null); // username -> { count, resetAt }
+setInterval(function () { // sweep expired buckets (memory hygiene)
+    const now = Date.now();
+    Object.keys(aiStaffHits).forEach(function (k) { if (aiStaffHits[k].resetAt < now) delete aiStaffHits[k]; });
+}, 600000).unref();
+
+app.post("/api/ai/chat", requireLogin, async (req, res) => {
+    const cfg = await aiConfig();
+    if (!cfg.key) return aiNotReady(res);
+    const who = req.session.username || "?";
+    const now = Date.now();
+    let bucket = aiStaffHits[who];
+    if (!bucket || bucket.resetAt < now) bucket = aiStaffHits[who] = { count: 0, resetAt: now + 3600000 };
+    if (++bucket.count > 40) {
+        return res.status(429).json({ error: "You have chatted a lot this hour - take a short break and continue in a little while." });
+    }
+    const hist = (Array.isArray(req.body.messages) ? req.body.messages : [])
+        .slice(-24).map(function (m) {
+            const role = m && m.role === "assistant" ? "assistant" : "user";
+            return { role: role, content: String(m && m.content || "").slice(0, 4000) };
+        }).filter(function (m) { return m.content; });
+    if (!hist.length) return res.status(400).json({ error: "Type something first." });
 
     const sys =
-        "You write class-teacher remarks for report cards at an Arabic/Islamic school in Nigeria. " +
-        "Return ONE remark only: 1-2 short sentences (35 words max), warm but honest, no emojis, " +
-        "no quotation marks, no student names inside the remark. Below 50% be firm but hopeful; " +
-        "50-69% encourage harder work; 70%+ praise excellence. You may end with a short Islamic " +
-        "touch (e.g. Barakallahu feehi) only for very good results.";
-    const usr =
-        "Average: " + average + "%" +
-        (className ? " | Class: " + className : "") +
-        (term ? " | Term: " + term : "") +
-        (best ? " | Strongest subject: " + best : "") +
-        (weak ? " | Weakest subject: " + weak : "") +
-        (name ? " | (Student is " + name.split(" ")[0] + " - do NOT use the name in the remark)" : "");
+        "You are AMSAIS AI, the clever, warm assistant built into the school result system used by the staff of " +
+        "Ameenullah School of Arabic and Islamic Studies (AMSAIS), Lagos, Nigeria. The person chatting with you is a teacher or school administrator. " +
+        "Chat naturally and fluently, like a helpful colleague sitting next to them. You can help with: writing report-card remarks, exam questions, " +
+        "letters and messages to parents, teaching ideas and lesson tips, simple English-Arabic translation, Islamic knowledge to support lessons, " +
+        "and general school-office writing. " +
+        "Style: simple friendly English; short paragraphs; lists or numbered points when helpful; **bold** the key words; keep answers focused and " +
+        "offer to go deeper at the end if it is a big topic. A short Islamic greeting is fine when greeted. " +
+        "You CANNOT look up private student records, fee balances or results, and you CANNOT perform actions inside the app - if asked, kindly " +
+        "point them to the right page in the menu. Never invent school fees, dates or policies.";
 
     try {
-        let text = await aiChat([{ role: "system", content: sys }, { role: "user", content: usr }], { maxTokens: 140, temperature: 0.7 });
-        text = text.replace(/[\r\n]+/g, " ").replace(/^["'\u201C\u201D]+|["'\u201C\u201D]+$/g, "").trim().slice(0, 260);
-        if (!text) throw new Error("AI sent an empty remark");
-        res.json({ remark: text });
+        const text = await aiChat([{ role: "system", content: sys }].concat(hist), { maxTokens: 800, temperature: 0.7 }, cfg);
+        res.json({ reply: text.trim().slice(0, 4000) });
     } catch (e) {
-        console.log("AI remark error:", e && e.message);
+        console.log("AI chat error:", e && e.message);
         res.status(502).json({ error: "The AI stumbled - please try again in a moment." });
     }
+});
+
+/* ---------- ADMIN AI SWITCH-ON (pack 29) ------------------------------
+   The admin pastes the free key once on the AI Chat page -> it lands in
+   ai_config -> EVERY AI feature (chat, exam questions, website assistant)
+   wakes up at once. GET never returns the full key (only the last 4
+   characters) so it is safe to draw the "connected" state. */
+app.get("/api/ai/config", requireAdmin, async (req, res) => {
+    const cfg = await aiConfig();
+    res.json({
+        enabled: !!cfg.key,
+        source: cfg.source || "",
+        keyTail: cfg.key ? "\u2026" + cfg.key.slice(-4) : "",
+        baseUrl: cfg.base,
+        model: cfg.model,
+        updatedBy: cfg.source === "app" ? (cfg.updatedBy || "") : ""
+    });
+});
+
+app.post("/api/ai/config", requireAdmin, async (req, res) => {
+    const apiKey  = String(req.body.apiKey  || "").trim().slice(0, 400);
+    const baseUrl = String(req.body.baseUrl || "").trim().slice(0, 200);
+    const model   = String(req.body.model   || "").trim().slice(0, 80);
+    if (apiKey && !/^[\x20-\x7E]+$/.test(apiKey)) {
+        return res.status(400).json({ error: "That key has odd characters - copy and paste it again carefully." });
+    }
+    if (baseUrl && !/^https?:\/\//i.test(baseUrl)) {
+        return res.status(400).json({ error: "The service address must start with https:// - or leave it empty to use the default." });
+    }
+    const doSave = function (done) {
+        if (!apiKey) { // empty key = REMOVE the in-app key (env key is untouched)
+            connection.query("DELETE FROM ai_config WHERE id = 1", function (dErr) {
+                if (dErr) return res.status(500).json({ error: "Could not remove the key - database error." });
+                aiBustCache();
+                res.json({ saved: true, cleared: true });
+            });
+            return;
+        }
+        const sql =
+            "INSERT INTO ai_config (id, api_key, base_url, model, updated_by) VALUES (1, ?, ?, ?, ?) " +
+            "ON DUPLICATE KEY UPDATE api_key = VALUES(api_key), base_url = VALUES(base_url), " +
+            "model = VALUES(model), updated_by = VALUES(updated_by)";
+        connection.query(sql, [apiKey, baseUrl || null, model || null, req.session.username || "admin"], function (err) {
+            if (err) return res.status(500).json({ error: "Could not save the key - database error." });
+            aiBustCache();
+            done();
+        });
+    };
+    doSave(async function () {
+        try { /* one tiny test ping - the admin knows instantly it truly works */
+            const fresh = await aiConfig();
+            await aiChat([{ role: "user", content: "Reply with the single word: OK" }], { maxTokens: 8, temperature: 0 }, fresh);
+            res.json({ saved: true, cleared: false, verified: true });
+        } catch (e) {
+            res.json({
+                saved: true, cleared: false, verified: false,
+                note: "Saved, but the test call failed: " + (e && e.message || "service error") + ". Check the key and press Save again."
+            });
+        }
+    });
 });
 
 /* ---------- AI FEATURE 3: website school assistant (public) -------------
@@ -2803,8 +3127,9 @@ setInterval(function () { // sweep expired buckets every 10 min (memory hygiene)
     Object.keys(aiAssistantHits).forEach(function (k) { if (aiAssistantHits[k].resetAt < now) delete aiAssistantHits[k]; });
 }, 600000).unref();
 
-app.post("/api/ai/assistant", (req, res) => {
-    if (!aiEnabled()) return aiNotReady(res);
+app.post("/api/ai/assistant", async (req, res) => {
+    const cfg = await aiConfig(); // CHANGED (pack 29): in-app key counts too
+    if (!cfg.key) return aiNotReady(res);
     const ip = req.ip || req.connection.remoteAddress || "?";
     const now = Date.now();
     let bucket = aiAssistantHits[ip];
@@ -2843,7 +3168,8 @@ app.post("/api/ai/assistant", (req, res) => {
         try {
             const text = await aiChat(
                 [{ role: "system", content: sys }].concat(history, [{ role: "user", content: message }]),
-                { maxTokens: 320, temperature: 0.6 }
+                { maxTokens: 320, temperature: 0.6 },
+                cfg
             );
             res.json({ reply: text.trim().slice(0, 1200) });
         } catch (e) {
@@ -4511,6 +4837,30 @@ app.post("/fee-structure2", requireLogin, requireAdmin, (req, res) => {
         (err) => {
             if (err) { console.log(err); return res.status(500).json({ message: "Database error" }); }
             res.json({ message: "Fee saved", fee_type: feeType, class_name: className, amount });
+        }
+    );
+});
+
+/* NEW (pack 28 - finance tidy-up): remove ONE charge (e.g. a mistaken
+   "Uniform Fee") from ONE class for a term/session. The other classes and
+   fee types are untouched. Payments already recorded stay on record. */
+app.delete("/fee-structure2", requireLogin, requireAdmin, (req, res) => {
+    const feeType = (req.body.fee_type || "").trim();
+    const className = (req.body.class_name || "").trim();
+    const term = (req.body.term || "").trim();
+    const session = (req.body.session || "").trim();
+    if (!feeType || !className || !term || !session) {
+        return res.status(400).json({ message: "fee_type, class_name, term and session are all required." });
+    }
+    if (feeType === "School Fee") {
+        return res.status(400).json({ message: "The School Fee row cannot be deleted - set it to 0 instead." });
+    }
+    connection.query(
+        "DELETE FROM fee_structure2 WHERE fee_type = ? AND class_name = ? AND term = ? AND session = ?",
+        [feeType, className, term, session],
+        (err, out) => {
+            if (err) { console.log(err); return res.status(500).json({ message: "Database error" }); }
+            res.json({ message: "Charge removed", deleted: out.affectedRows || 0 });
         }
     );
 });

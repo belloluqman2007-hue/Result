@@ -211,24 +211,39 @@ function loadMyFees() {
       ptFeeTS = ptPickTermSession(ptFeeRows);
       var viewRows = ptFeeRows.filter(function (r) { return r.term === ptFeeTS.term && r.session === ptFeeTS.session; });
 
-      var html = '<div class="pt-fee-row head"><span>Fee Type</span><span class="pt-right">Fee</span><span class="pt-right">Paid</span><span class="pt-right">Balance</span></div>';
+      /* CHANGED (pack 28 - owner: "organize it well ... parent will see
+         what they are paying for and what they have paid for"): every
+         charge is its own neat card - amount, paid so far, balance and a
+         green progress bar; one clear total strip at the bottom. */
+      var html = "";
       var tF = 0, tP = 0, tB = 0;
       viewRows.forEach(function (r) {
-        tF += Number(r.fee); tP += Number(r.paid); tB += Number(r.balance);
-        var state = (Number(r.balance) <= 0 && Number(r.fee) > 0)
-          ? '<span class="pt-status-paid">PAID</span>' : '<span class="pt-status-owing">OWING</span>';
-        html += '<div class="pt-fee-row"><span><b>' + esc(r.fee_type) + '</b> ' + state + '</span>' +
-                '<span class="pt-right">' + ptNaira(r.fee) + '</span>' +
-                '<span class="pt-right">' + ptNaira(r.paid) + '</span>' +
-                '<span class="pt-right"><b>' + ptNaira(r.balance) + '</b></span></div>';
+        var fee = Number(r.fee) || 0, paid = Number(r.paid) || 0, bal = Number(r.balance) || 0;
+        tF += fee; tP += paid; tB += bal;
+        var cleared = bal <= 0 && fee > 0;
+        var pct = fee > 0 ? Math.min(100, Math.round((paid / fee) * 100)) : 100;
+        html +=
+          '<div class="ptfee-item">' +
+            '<div class="ptfee-top">' +
+              '<span class="ptfee-name">' + esc(r.fee_type) + "</span>" +
+              '<span class="ptfee-badge ' + (cleared ? "paid" : "owing") + '">' + (cleared ? "PAID" : "OWING") + "</span>" +
+            "</div>" +
+            '<div class="ptfee-amts">' +
+              '<span class="due">Fee: <b>' + ptNaira(fee) + "</b></span>" +
+              '<span class="paidc">Paid: <b>' + ptNaira(paid) + "</b></span>" +
+              '<span class="owec">Balance: <b>' + ptNaira(bal) + "</b></span>" +
+            "</div>" +
+            '<div class="ptfee-bar"><div class="ptfee-fill" style="width:' + pct + '%;"></div></div>' +
+          "</div>";
       });
-      html += '<div class="pt-fee-row pt-fee-total"><span>TOTAL (' + esc(ptFeeTS.term) + ' - ' + esc(ptFeeTS.session) + ')</span>' +
-              '<span class="pt-right">' + ptNaira(tF) + '</span>' +
-              '<span class="pt-right">' + ptNaira(tP) + '</span>' +
-              '<span class="pt-right"><b>' + ptNaira(tB) + '</b></span></div>';
+      html += '<div class="ptfee-total ' + (tB <= 0 ? "clear" : "owing") + '">' +
+              "<span>TOTAL - " + esc(ptFeeTS.term) + ", " + esc(ptFeeTS.session) + "</span>" +
+              "<span>" + (tB <= 0
+                ? "All cleared ✓ (" + ptNaira(tP) + " paid)"
+                : ptNaira(tB) + " left of " + ptNaira(tF)) + "</span></div>";
       box.innerHTML = html;
       document.getElementById("ptFeesHint").textContent =
-        "Showing " + ptFeeTS.term + " - " + ptFeeTS.session + ".";
+        "What the school charges for this term, what you have paid, and what is left - for " + ptStudent.class_name + ".";
       card.style.display = "block";
       loadMyPayments(); // NEW (pack 17): payment rows + snapped receipts
     })
@@ -351,8 +366,10 @@ function loadMyPayments() {
       if (!box || !Array.isArray(rows)) return;
       ptPaymentsRows = rows; // FIX (pack 21): keep the rows for the statement PDF
       if (!rows.length) return;
-      var html = '<div style="margin-top:10px; border-top:1px dashed #d7e0da; padding-top:10px;">' +
-        '<div class="pt-fee-row head"><span>Payments Recorded by the School</span><span class="pt-right">Amount</span><span class="pt-right">Receipt</span></div>';
+      // CHANGED (pack 28): same list, organized under a clear heading
+      // ("what you have paid") matching the new fee cards above it.
+      var html = '<div class="ptfee-hist-head">&#9989; What You Have Paid (confirmed by the school)</div>' +
+        '<div class="pt-fee-row head"><span>Payment</span><span class="pt-right">Amount</span><span class="pt-right">Receipt</span></div>';
       rows.forEach(function (p) {
         var dt = p.created_at ? String(p.created_at).slice(0, 10) : "-";
         var label = esc(p.fee_type || "School Fee") + ' <small style="color:#5B6B62;">' + esc(dt) + (p.method ? " \u00B7 " + esc(p.method) : "") + "</small>";
@@ -367,7 +384,6 @@ function loadMyPayments() {
                 '<span class="pt-right">' + ptNaira(p.amount) + '</span>' +
                 '<span class="pt-right">' + rec + '</span></div>';
       });
-      html += "</div>";
       box.insertAdjacentHTML("beforeend", html);
     })
     .catch(function () { /* receipts stay hidden */ });
@@ -585,11 +601,27 @@ function ptPrefillSettings(st) {
    double-tick receipts (blue once the school has read the message).
    Same data, same logic - only the look changes. Styles: .wa-* in
    css/school.css. */
+var ptMsgRows = [];          // NEW (pack 28): full mail, split into threads
+var ptChatThread = "admin";  // NEW (pack 28): active conversation tab
+
+/* NEW (pack 28): which conversation a message belongs to.
+   Parent mail: who it was sent to; staff replies carry their thread;
+   very old replies default to the office thread. */
+function ptThreadOf(m) {
+  if (m.thread === "teacher" || m.thread === "admin") return m.thread;
+  return m.sender_type === "portal" ? (m.recipient_type === "teacher" ? "teacher" : "admin") : "admin";
+}
+
 function ptRenderMessages(rows) {
   var box = document.getElementById("ptMsgs");
   if (!box) return;
-  if (!rows.length) {
-    box.innerHTML = '<div class="pt-empty">No messages yet. Say salam below - the school replies right here.</div>';
+  if (rows) ptMsgRows = rows; // remember for tab switches without refetching
+  var viewRows = ptMsgRows.filter(function (m) { return ptThreadOf(m) === ptChatThread; });
+  if (!viewRows.length) {
+    box.innerHTML = '<div class="pt-empty">' +
+      (ptChatThread === "teacher"
+        ? "No messages with the class teacher yet. Say salam below!"
+        : "No messages with the school office yet. Say salam below!") + "</div>";
     return;
   }
   var MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"];
@@ -603,9 +635,10 @@ function ptRenderMessages(rows) {
   function ticks(read){
     return '<svg viewBox="0 0 18 12" class="wa-tk'+(read?" read":"")+'" fill="currentColor" aria-hidden="true">'+
       '<path d="M12.6.6 5.9 7.9 4 6 2.8 7.2l3.1 3.4L13.8 1.8zM17.2.6l-6.7 7.3-.6-.6-1.1 1.2 1.7 2.1L18.4 1.8z"/></svg>'; }
+  function dur(s){ s=Math.max(0,Number(s)||0); var m2=Math.floor(s/60), r=Math.floor(s%60); return m2+":"+(r<10?"0"+r:r); }
   var html = "";
   var lastDay = "";
-  rows.forEach(function (m) {
+  viewRows.forEach(function (m) { // CHANGED (pack 28): only the ACTIVE thread's messages
     var day = dayLabel(m.created_at);
     if (day && day !== lastDay) {
       html += '<div class="wa-daywrap"><span class="wa-day">' + esc(day) + "</span></div>";
@@ -613,10 +646,18 @@ function ptRenderMessages(rows) {
     }
     var mine = m.sender_type === "portal";
     var who = m.sender_name || "School";
+    var bodyHtml;
+    if (m.kind === "voice") { // NEW (pack 28): playable voice bubble
+      bodyHtml = '<div class="wa-audio-wrap">' +
+        '<audio controls preload="metadata" src="/voice/' + encodeURIComponent(m.id) + '"></audio>' +
+        (m.duration ? '<span class="wa-audio-dur">' + esc(dur(m.duration)) + "</span>" : "") + "</div>";
+    } else {
+      bodyHtml = esc(m.body);
+    }
     html += '<div class="wa-row ' + (mine ? "mine" : "theirs") + '">' +
       '<div class="wa-bub">' +
         (mine ? "" : '<div class="wa-who">' + esc(who) + "</div>") +
-        esc(m.body) +
+        bodyHtml +
         '<span class="wa-meta">' + esc(clock(m.created_at)) + (mine ? ticks(!!m.read_at) : "") + "</span>" +
       "</div></div>";
   });
@@ -639,6 +680,9 @@ function loadPortalMessages() {
 var ptMsgSending = false;
 function ptSendMessage(ev) {
   ev.preventDefault();
+  // NEW (pack 28): while recording, the green plane SENDs the voice note
+  // (WhatsApp behaviour) instead of the empty text box.
+  if (typeof ptRecorder !== "undefined" && ptRecorder) { ptStopRec(true); return; }
   if (ptMsgSending) return;
   var toSel = document.getElementById("ptMsgTo");
   var bodyEl = document.getElementById("ptMsgBody");
@@ -843,6 +887,110 @@ function loadPortalNotifications() {
         ptSendMessage(ev);
       }
     });
+  }
+
+  /* ============ NEW (pack 28): Admin / Class Teacher conversation tabs ====
+     Two separate chats - switching tabs re-renders the bubbles and aims
+     the composer at that side. #ptMsgTo (hidden) stays the value holder
+     that ptSendMessage already used. */
+  var chatTabs = document.getElementById("ptChatTabs");
+  if (chatTabs) {
+    chatTabs.addEventListener("click", function (ev) {
+      var b = ev.target.closest(".ptchat-tab");
+      if (!b) return;
+      chatTabs.querySelectorAll(".ptchat-tab").forEach(function (t) { t.classList.remove("active"); });
+      b.classList.add("active");
+      ptChatThread = b.getAttribute("data-thread") === "teacher" ? "teacher" : "admin";
+      document.getElementById("ptMsgTo").value = ptChatThread;
+      ptRenderMessages(); // re-render from ptMsgRows (no refetch needed)
+    });
+  }
+
+  /* ============ NEW (pack 28 - owner: "Allow voice note") ============
+     Tap the mic -> talk -> tap the green plane to send (or Cancel).
+     Uploads to /portal/messages/voice; audio shows as a playable bubble. */
+  var ptMicBtn = document.getElementById("ptMicBtn");
+  var ptRecorder = null, ptRecChunks = [], ptRecStart = 0, ptRecTimer = null, ptRecStream = null;
+  var ptRecOK = !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia && window.MediaRecorder);
+  if (ptMicBtn && !ptRecOK) { ptMicBtn.disabled = true; ptMicBtn.title = "Voice notes are not supported on this browser"; }
+
+  function ptPickMime() {
+    var c = ["audio/webm;codecs=opus", "audio/webm", "audio/mp4", "audio/ogg;codecs=opus", "audio/mpeg"];
+    for (var i = 0; i < c.length; i++) {
+      try { if (MediaRecorder.isTypeSupported(c[i])) return c[i]; } catch (e) {}
+    }
+    return "";
+  }
+
+  if (ptMicBtn) ptMicBtn.addEventListener("click", function () {
+    if (ptRecorder) { ptStopRec(true); return; }
+    navigator.mediaDevices.getUserMedia({ audio: true }).then(function (stream) {
+      ptRecStream = stream;
+      ptRecChunks = [];
+      var mime = ptPickMime();
+      ptRecorder = mime ? new MediaRecorder(stream, { mimeType: mime }) : new MediaRecorder(stream);
+      ptRecorder.ondataavailable = function (ev) { if (ev.data && ev.data.size) ptRecChunks.push(ev.data); };
+      ptRecorder.onstop = function () {
+        var blob = new Blob(ptRecChunks, { type: (ptRecorder && ptRecorder.mimeType) || "audio/webm" });
+        var sendIt = ptRecorder._amsSend;
+        ptRecorder = null;
+        if (ptRecStream) { ptRecStream.getTracks().forEach(function (tr) { tr.stop(); }); ptRecStream = null; }
+        clearInterval(ptRecTimer);
+        document.getElementById("ptComposer").classList.remove("recording");
+        if (sendIt) ptUploadVoice(blob, Math.round((Date.now() - ptRecStart) / 1000));
+      };
+      ptRecStart = Date.now();
+      ptRecorder.start(250);
+      document.getElementById("ptComposer").classList.add("recording");
+      var timeEl = document.getElementById("ptRecTime");
+      timeEl.textContent = "0:00";
+      ptRecTimer = setInterval(function () {
+        var s = Math.round((Date.now() - ptRecStart) / 1000);
+        var mm = Math.floor(s / 60), rr = s % 60;
+        timeEl.textContent = mm + ":" + (rr < 10 ? "0" + rr : rr);
+        if (s >= 120) ptStopRec(true);
+      }, 500);
+    }).catch(function () {
+      var note = document.getElementById("ptMsgNote");
+      note.textContent = "Microphone blocked - allow mic access for this site and try again.";
+      note.style.color = "#C0392B";
+    });
+  });
+
+  function ptStopRec(andSend) {
+    if (!ptRecorder) return;
+    ptRecorder._amsSend = !!andSend;
+    try { ptRecorder.stop(); } catch (e) {}
+  }
+  var ptRecCancelBtn = document.getElementById("ptRecCancel");
+  if (ptRecCancelBtn) ptRecCancelBtn.addEventListener("click", function () { ptStopRec(false); });
+
+  function ptUploadVoice(blob, seconds) {
+    var note = document.getElementById("ptMsgNote");
+    if (!blob || !blob.size) return;
+    if (blob.size > 6 * 1024 * 1024) {
+      note.textContent = "That recording is too large - keep it under 2 minutes.";
+      note.style.color = "#C0392B";
+      return;
+    }
+    note.textContent = "Sending voice note...";
+    note.style.color = "";
+    var fd = new FormData();
+    var ext = (blob.type || "").indexOf("mp4") !== -1 ? "m4a" : ((blob.type || "").indexOf("ogg") !== -1 ? "ogg" : "webm");
+    fd.append("voice", blob, "note." + ext);
+    fd.append("to", ptChatThread);
+    fd.append("duration", String(Math.max(1, seconds || 1)));
+    fetch("/portal/messages/voice", { method: "POST", body: fd })
+      .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, d: d }; }); })
+      .then(function (res) {
+        note.textContent = res.d.message || (res.ok ? "Voice note sent." : "Could not send.");
+        note.style.color = res.ok ? "#14532d" : "#C0392B";
+        if (res.ok) loadPortalMessages();
+      })
+      .catch(function () {
+        note.textContent = "Network error - the voice note was not sent.";
+        note.style.color = "#C0392B";
+      });
   }
 
   // pack 24: sidebar view switching
