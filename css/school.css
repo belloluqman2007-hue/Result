@@ -535,3 +535,51 @@ table.mg-table tr:last-child td{ border-bottom:none; }
   border:1px dashed #C7DED2;
   border-radius:10px;
 }
+
+/* ==========================================================================
+   NEW (pack 27 - owner: "Make the chat be like Whatsapp"): parent-portal
+   chat restyle to match the new WhatsApp-style staff Chat page - wallpaper
+   thread, white incoming / light-green outgoing bubbles, day pills, clock
+   + double-tick receipts, pill composer with a round send button.
+   ========================================================================== */
+#ptMsgs{
+  background-color:#EFEAE2; border-radius:14px; padding:14px 12px 8px;
+  max-height:52vh; overflow-y:auto; overscroll-behavior:contain;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140' viewBox='0 0 140 140'%3E%3Cg fill='%23b9ac9c' fill-opacity='0.16'%3E%3Ccircle cx='20' cy='22' r='2.4'/%3E%3Cpath d='M60 14l4 8-8 .5z'/%3E%3Crect x='104' y='18' width='6' height='6' rx='1.4'/%3E%3Cpath d='M28 66q6-6 12 0t12 0' fill='none' stroke='%23b9ac9c' stroke-opacity='0.16' stroke-width='2.2'/%3E%3Ccircle cx='96' cy='60' r='2.6'/%3E%3Cpath d='M118 84l5 9-9.5 1z'/%3E%3Crect x='14' y='106' width='7' height='7' rx='1.6'/%3E%3Ccircle cx='64' cy='112' r='2.2'/%3E%3Cpath d='M96 122q5-5 10 0t10 0' fill='none' stroke='%23b9ac9c' stroke-opacity='0.16' stroke-width='2'/%3E%3C/g%3E%3C/svg%3E");
+}
+.wa-row{ display:flex; margin:2px 0; }
+.wa-row.mine{ justify-content:flex-end; }
+.wa-bub{
+  max-width:min(78%, 520px); padding:6px 8px 6px 10px; border-radius:9px; position:relative;
+  font-size:14.5px; line-height:1.42; color:#111B21; white-space:pre-wrap; word-break:break-word;
+  box-shadow:0 1px 1px rgba(17,27,33,.12);
+}
+.wa-row.theirs .wa-bub{ background:#FFFFFF; border-top-left-radius:2px; }
+.wa-row.mine .wa-bub{ background:#D9FDD3; border-top-right-radius:2px; }
+.wa-who{ font-size:11.5px; font-weight:700; color:#0B8468; margin-bottom:2px; }
+.wa-meta{ float:right; display:inline-flex; align-items:center; gap:4px; margin:8px 0 0 10px; font-size:11px; color:#667781; user-select:none; }
+.wa-tk{ width:16px; height:16px; }
+.wa-tk.read{ color:#53BDEB; }
+.wa-daywrap{ display:flex; justify-content:center; margin:8px 0 10px; }
+.wa-day{
+  background:#FDF3C6; color:#54656F; font-size:11.5px; font-weight:600; padding:5px 12px;
+  border-radius:8px; box-shadow:0 1px 1px rgba(17,27,33,.08); text-transform:uppercase; letter-spacing:.3px;
+}
+/* WhatsApp-style pill composer */
+#ptMsgForm .wa-composer{ display:flex; align-items:flex-end; gap:8px; grid-column:1/-1; }
+.wa-inputwrap{
+  flex:1; background:#fff; border:1px solid #E1E7E2; border-radius:22px; display:flex; align-items:flex-end;
+  padding:3px 4px; box-shadow:0 1px 1px rgba(17,27,33,.05);
+}
+.wa-inputwrap textarea{
+  flex:1; border:none !important; outline:none; resize:none; box-shadow:none !important;
+  font-size:15px; padding:8px 10px; background:transparent; max-height:120px; line-height:1.4;
+}
+.wa-sendfab{
+  width:46px; height:46px; border-radius:50%; border:none; cursor:pointer; flex:0 0 46px;
+  background:#00A884; color:#fff; display:flex; align-items:center; justify-content:center;
+  box-shadow:0 2px 5px rgba(17,27,33,.2); transition:transform .08s, background .15s;
+}
+.wa-sendfab:hover{ background:#017561; }
+.wa-sendfab:active{ transform:scale(.92); }
+.wa-sendfab svg{ width:22px; height:22px; }

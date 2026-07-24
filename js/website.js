@@ -116,3 +116,134 @@
       box.innerHTML = '<div class="wb-empty">Announcements will appear here when the school posts them.</div>';
     });
 })();
+
+/* ==========================================================================
+   NEW (pack 27 - owner: "Can we build ai inside the project"):
+   WEBSITE AI ASSISTANT. Floating bubble -> chat panel. Talks ONLY to the
+   same-origin /api/ai/assistant route (the key lives on the server).
+   Conversation history is kept in sessionStorage (gone when the tab
+   closes). When the AI key is not configured yet, the widget still opens
+   and replies with a gentle explanation - nothing else on the site is
+   touched.
+   ========================================================================== */
+(function () {
+  "use strict";
+  var fab = document.getElementById("wb2AiFab");
+  var panel = document.getElementById("wb2AiPanel");
+  if (!fab || !panel) return;
+
+  var log = document.getElementById("wb2AiLog");
+  var input = document.getElementById("wb2AiInput");
+  var sendBtn = document.getElementById("wb2AiSend");
+  var chips = document.getElementById("wb2AiChips");
+  var state = document.getElementById("wb2AiState");
+  var hist = [];
+  var busy = false;
+
+  function esc(v) {
+    return String(v == null ? "" : v).replace(/[&<>"']/g, function (c) {
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
+    });
+  }
+  function saveHist() {
+    try { sessionStorage.setItem("amsAiHist", JSON.stringify(hist.slice(-10))); } catch (e) {}
+  }
+  function loadHist() {
+    try { hist = JSON.parse(sessionStorage.getItem("amsAiHist") || "[]"); } catch (e) { hist = []; }
+  }
+  function bubble(role, text, isErr) {
+    var row = document.createElement("div");
+    row.className = "wb2-ai-row " + (role === "user" ? "user" : "bot");
+    row.innerHTML = '<div class="wb2-ai-bub' + (isErr ? " err" : "") + '">' + esc(text) + "</div>";
+    log.appendChild(row);
+    log.scrollTop = log.scrollHeight;
+    return row;
+  }
+  function typing(on) {
+    var t = log.querySelector(".wb2-ai-typing");
+    if (t) t.remove();
+    if (on) {
+      var row = document.createElement("div");
+      row.className = "wb2-ai-row bot wb2-ai-typing";
+      row.innerHTML = '<div class="wb2-ai-bub"><span class="dot"></span><span class="dot"></span><span class="dot"></span></div>';
+      log.appendChild(row);
+      log.scrollTop = log.scrollHeight;
+    }
+  }
+  function greet() {
+    bubble("assistant",
+      "As-salaamu alaykum! \uD83D\uDC4B I am the Ameenullah school assistant. " +
+      "Ask me about checking results, admission, our programs, or anything about the school.");
+  }
+  function openPanel() {
+    panel.classList.add("wb2-ai-open");
+    panel.setAttribute("aria-hidden", "false");
+    if (!log.children.length) {
+      loadHist();
+      if (hist.length) {
+        hist.forEach(function (h) { bubble(h.role, h.content); });
+      } else {
+        greet();
+      }
+    }
+    setTimeout(function () { input.focus(); }, 200);
+  }
+  function closePanel() {
+    panel.classList.remove("wb2-ai-open");
+    panel.setAttribute("aria-hidden", "true");
+  }
+
+  function send(text) {
+    text = (text || "").trim();
+    if (!text || busy) return;
+    chips.style.display = "none"; // one-tap hints hide after first use
+    bubble("user", text);
+    hist.push({ role: "user", content: text });
+    saveHist();
+    input.value = "";
+    busy = true;
+    typing(true);
+    fetch("/api/ai/assistant", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ message: text, history: hist.slice(-8) })
+    })
+      .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, d: d }; }); })
+      .then(function (res) {
+        typing(false);
+        if (res.ok && res.d.reply) {
+          bubble("assistant", res.d.reply);
+          hist.push({ role: "assistant", content: res.d.reply });
+          saveHist();
+        } else {
+          // friendly note (AI off / rate limit / hiccup) - never a dead end
+          bubble("assistant",
+            (res.d && res.d.error) ||
+            "I could not answer just now - please try again, or use the contact details at the bottom of the page.", true);
+        }
+      })
+      .catch(function () {
+        typing(false);
+        bubble("assistant", "No connection right now - please check your data and try again.", true);
+      })
+      .finally(function () { busy = false; });
+  }
+
+  fab.addEventListener("click", function () {
+    if (panel.classList.contains("wb2-ai-open")) closePanel(); else openPanel();
+  });
+  document.getElementById("wb2AiClose").addEventListener("click", closePanel);
+  sendBtn.addEventListener("click", function () { send(input.value); });
+  input.addEventListener("keydown", function (ev) { if (ev.key === "Enter") send(input.value); });
+  chips.addEventListener("click", function (ev) {
+    var b = ev.target.closest("button[data-q]");
+    if (b) send(b.getAttribute("data-q"));
+  });
+
+  /* Tell the header when the AI is awake (purely cosmetic). */
+  fetch("/api/ai/status").then(function (r) { return r.json(); }).then(function (d) {
+    state.textContent = d.enabled
+      ? "Online - ask me about results, admission, programs\u2026"
+      : "Hello! Ask about the school (full AI answers coming soon).";
+  }).catch(function () {});
+})();

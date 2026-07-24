@@ -1604,8 +1604,22 @@ function capturePageAsA4(page) {
    ever give up - and we NEVER quietly drop a page: a clearly-labelled
    fallback sheet takes its place so the PDF always has the full page count
    and the teacher is told which page needs a retry. */
-function capturePageWithRetries(page) {
-    var scales = [2, 1.5, 1];
+/* CHANGED (pack 27 - owner: "The page 4 of the exam is not downloading"):
+   phone memory was the real enemy - each A4 snapshot at scale 2 is a
+   ~17-megapixel canvas (~35MB of RAM), and by the 4th page many phones
+   silently killed the capture (the page then vanished from the PDF).
+   Phones now START at a lighter scale and step down from there; laptops
+   keep full quality. `lite=true` (the automatic second-chance pass) goes
+   straight to the lightest scales - a slightly softer page always beats a
+   missing page. */
+function capturePageScales(lite) {
+    var phone = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent) ||
+        (navigator.deviceMemory && navigator.deviceMemory <= 4);
+    if (lite) return [1.25, 1];
+    return phone ? [1.75, 1.5, 1.25, 1] : [2, 1.5, 1];
+}
+function capturePageWithRetries(page, lite) {
+    var scales = capturePageScales(lite);
     function attempt(i) {
         if (i >= scales.length) return Promise.reject(new Error("capture failed"));
         var stage = document.createElement("div");
@@ -1684,47 +1698,96 @@ function downloadExamPDF(openInViewer) {
     flow.classList.add("ams-capturing"); // hides screen-only chips/tools
     deselectExamImage();
 
-    var canvases = [];
-    var failedPages = []; // pack 23: track any page that needed the fallback sheet
+    /* CHANGED (pack 27 - owner: "The page 4 of the exam is not downloading"):
+       we used to keep EVERY page's giant canvas alive until the end - a
+       handful of ~35MB canvases that crashed the tab on ordinary phones
+       mid-way (the download simply died around page 4). Now each captured
+       page is compressed to a JPEG string IMMEDIATELY and its canvas is
+       destroyed before the next page starts, so memory stays flat no
+       matter how many pages the exam has. */
+    function canvasToShot(cv) {
+        var shot = null;
+        try {
+            shot = { url: cv.toDataURL("image/jpeg", 0.93), w: cv.width, h: cv.height };
+            if (!shot.url || shot.url.length < 50) shot = null; // corrupt encode = treat as failure
+        } catch (e) { shot = null; }
+        try { cv.width = 0; cv.height = 0; } catch (e) {}       // free the RAM either way
+        // throw -> the caller's .catch counts this page for the second-chance pass
+        if (!shot) throw new Error("jpeg encode failed");
+        return shot;
+    }
+
+    var images = [];      // one {url,w,h} per page - cheap strings, no canvases
+    var failedPages = []; // pages that needed an automatic second chance
     var i = 0;
+    var phonePace = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
 
     function captureNext() {
         if (i >= pages.length) {
-            finishPdf();
+            secondChance(finishPdf); // NEW (pack 27): failed pages get one more try
             return;
         }
-        // CHANGED (device-proof): capture the hidden A4 copy, not the
-        // on-screen (possibly phone-shrunken) page itself.
-        // pack 23: retries included; a page is NEVER skipped silently -
-        // worst case it becomes a labelled fallback sheet so the exam
-        // always downloads with its full set of pages.
         var pageNum = i + 1;
-        capturePageWithRetries(pages[i])
-            .then(function (cv) { canvases.push(cv); })
+        capturePageWithRetries(pages[i], false)
+            .then(function (cv) { images[i] = canvasToShot(cv); })
             .catch(function () {
-                console.log("Exam PDF: page " + pageNum + " could not be captured after retries.");
+                console.log("Exam PDF: page " + pageNum + " could not be captured (will retry once more).");
                 failedPages.push(pageNum);
-                canvases.push(buildFallbackPageCanvas(pageNum));
+                images[i] = null; // placeholder - second chance or fallback fills it
             })
             .then(function () {
                 i++;
                 // small pause between pages: keeps phone memory healthy on
-                // long exams (was a burst of full-size canvases back-to-back).
-                setTimeout(captureNext, 60);
+                // long exams; phones get a slightly longer breather.
+                setTimeout(captureNext, phonePace ? 140 : 60);
             });
+    }
+
+    /* NEW (pack 27): automatic second chance. If any page failed its first
+       capture (phone memory hiccup), wait a moment, then re-capture JUST
+       those pages at the lightest quality. Only a page that fails TWICE
+       becomes the labelled fallback sheet - so a busy phone no longer
+       "loses" page 4. */
+    function secondChance(done) {
+        if (!failedPages.length) return done();
+        var queue = failedPages.slice();
+        var stillFailed = [];
+        if (window.amsToast) {
+            window.amsToast("Almost there - retrying page(s) " + queue.join(", ") + "\u2026", "info", 3200);
+        }
+        function redoOne() {
+            if (!queue.length) {
+                // whatever is still missing becomes a labelled fallback sheet
+                stillFailed.forEach(function (pNum) {
+                    try { images[pNum - 1] = canvasToShot(buildFallbackPageCanvas(pNum)); }
+                    catch (e) { /* the slot stays empty only if even plain drawing failed */ }
+                });
+                failedPages = stillFailed;
+                return done();
+            }
+            var pNum = queue.shift();
+            setTimeout(function () {
+                capturePageWithRetries(pages[pNum - 1], true) // lite mode: lightest scales
+                    .then(function (cv) { images[pNum - 1] = canvasToShot(cv); })
+                    .catch(function () { stillFailed.push(pNum); })
+                    .then(redoOne);
+            }, 450);
+        }
+        redoOne();
     }
 
     function finishPdf() {
         flow.classList.remove("ams-capturing");
 
-        if (!canvases.length) {
+        images = images.filter(Boolean);
+        if (!images.length) {
             if (window.amsToast) window.amsToast("Could not build the PDF - please try again.", "error");
             return;
         }
 
         // ONE global fit for ALL pages: identical margins + text size.
-        var fits = canvases.map(function (cv) {
-            var hMmAtFullWidth = (cv.height * 210) / cv.width;
+        var fits = images.map(function (im) {
+            var hMmAtFullWidth = (im.h * 210) / im.w;
             return hMmAtFullWidth > 297 ? 297 / hMmAtFullWidth : 1;
         });
         var globalFit = Math.min.apply(null, fits.concat([1]));
@@ -1732,13 +1795,14 @@ function downloadExamPDF(openInViewer) {
 
         var pdf = new window.jspdf.jsPDF({ unit: "mm", format: "a4" });
 
-        canvases.forEach(function (cv, idx) {
-            var hMmAtFullWidth = (cv.height * 210) / cv.width;
+        images.forEach(function (im, idx) {
+            var hMmAtFullWidth = (im.h * 210) / im.w;
             var finalW = 210 * globalFit;
             var finalH = Math.min(hMmAtFullWidth * globalFit, 297);
             if (idx > 0) pdf.addPage();
-            pdf.addImage(cv.toDataURL("image/jpeg", 0.95), "JPEG", (210 - finalW) / 2, 0, finalW, finalH);
+            pdf.addImage(im.url, "JPEG", (210 - finalW) / 2, 0, finalW, finalH);
         });
+        images = []; // release the strings too
 
         if (openInViewer && typeof pdf.output === "function") {
             // Android print path: open the PDF so it can be printed/shared
@@ -1757,8 +1821,7 @@ function downloadExamPDF(openInViewer) {
         if (window.amsToast) {
             if (failedPages.length) {
                 window.amsToast(
-                    "PDF downloaded, but page(s) " + failedPages.join(", ") + " of " + canvases.length +
-                    " could not be drawn on this device - those sheets are marked inside the PDF. Please press Download again.",
+                    "PDF downloaded, but page(s) " + failedPages.join(", ") + " really could not be drawn on this device - those sheets are marked inside the PDF. Please press Download again.",
                     "error", 9000
                 );
             } else if (shrunkPages > 0) {
@@ -1767,7 +1830,7 @@ function downloadExamPDF(openInViewer) {
                     "info", 7000
                 );
             } else {
-                window.amsToast("PDF downloaded \u2713 all " + canvases.length + " page(s) included - open it and print/share from your phone", "success", 6000);
+                window.amsToast("PDF downloaded \u2713 all pages included - open it and print/share from your phone", "success", 6000);
             }
         }
     }
@@ -1861,3 +1924,147 @@ function downloadExamWord() {
         window.amsToast("Word file downloaded — open it in Word/WPS to edit, then print from there.", "success", 6000);
     }
 }
+
+/* ==========================================================================
+   NEW (pack 27 - owner: "Can we build ai inside the project"):
+   AI EXAM QUESTION GENERATOR.
+   --------------------------------------------------------------------------
+   The teacher types a TOPIC; the AI (server route /api/ai/exam-questions)
+   drafts numbered questions which are inserted into the paper as ordinary
+   paragraphs - indistinguishable from typed text, so pagination, auto-fit,
+   printing, saving and downloading all work on them exactly as before.
+   Numbering CONTINUES from the questions already on the paper (adding
+   10 AI questions after 14 hand-written ones gives questions 15-24).
+   AI proposes, the teacher disposes: everything stays editable.
+   ========================================================================== */
+function amsAiEsc(v) {
+    return String(v == null ? "" : v).replace(/[&<>"']/g, function (c) {
+        return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
+    });
+}
+
+/* The content zone new questions go to: the LAST question page's zone
+   (the pagination engine spreads them across pages from there). */
+function amsAiTargetZone() {
+    var zones = document.querySelectorAll("#examFlow .exam-page .page-content");
+    return zones.length ? zones[zones.length - 1] : null;
+}
+
+/* Highest hand-typed question number on the paper so far (so AI questions
+   continue the sequence instead of restarting at 1). */
+function amsAiNextNumber() {
+    var max = 0;
+    document.querySelectorAll("#examFlow .page-content p, #examFlow .page-content li, #examFlow .page-content div")
+        .forEach(function (el) {
+            var m = (el.textContent || "").match(/^\s*(\d{1,3})\s*[.)]/);
+            if (m) max = Math.max(max, parseInt(m[1], 10));
+        });
+    return max + 1;
+}
+
+window.amsOpenAiModal = function () {
+    var flow = document.getElementById("examFlow");
+    if (!flow || !flow.querySelector(".exam-page")) {
+        if (window.amsToast) window.amsToast("Generate the cover page first (Step 1), then let the AI write questions.", "info");
+        return;
+    }
+    // Show which exam the AI is writing for (read-only, taken from Step 1).
+    var clsSel = document.getElementById("examClass");
+    var subSel = document.getElementById("examSubject");
+    var clsTxt = clsSel && clsSel.selectedIndex >= 0 ? clsSel.options[clsSel.selectedIndex].text : "";
+    var subTxt = subSel && subSel.selectedIndex >= 0 ? subSel.options[subSel.selectedIndex].text : "";
+    var who = [subTxt && subTxt.indexOf("Select") !== 0 ? subTxt : "", clsTxt && clsTxt.indexOf("Select") !== 0 ? clsTxt : ""]
+        .filter(Boolean).join(" · ");
+    document.getElementById("amsAiFor").textContent = who ? ("for " + who) : "for this exam";
+
+    var modal = document.getElementById("amsAiModal");
+    modal.style.display = "flex";
+    if (!modal.dataset.boundClose) { // click the dim area = close (bind once)
+        modal.dataset.boundClose = "1";
+        modal.addEventListener("click", function (ev) { if (ev.target === modal) window.amsCloseAiModal(); });
+    }
+    var st = document.getElementById("amsAiStatus");
+    st.textContent = "";
+    st.className = "ams-ai-status";
+    setTimeout(function () { document.getElementById("amsAiTopic").focus(); }, 60);
+};
+
+window.amsCloseAiModal = function () {
+    document.getElementById("amsAiModal").style.display = "none";
+};
+
+window.amsGenerateAiQuestions = function () {
+    var topic = (document.getElementById("amsAiTopic").value || "").trim();
+    var st = document.getElementById("amsAiStatus");
+    if (!topic) {
+        st.textContent = "Type a topic first - e.g. Surah Al-Fatihah, or Fractions.";
+        st.className = "ams-ai-status err";
+        return;
+    }
+    var clsSel = document.getElementById("examClass");
+    var subSel = document.getElementById("examSubject");
+    var payload = {
+        className: clsSel && clsSel.selectedIndex >= 0 ? clsSel.options[clsSel.selectedIndex].text : "",
+        subject: subSel && subSel.selectedIndex >= 0 ? subSel.options[subSel.selectedIndex].text : "",
+        topic: topic,
+        count: parseInt(document.getElementById("amsAiCount").value, 10) || 5,
+        qtype: document.getElementById("amsAiType").value,
+        marks: (document.getElementById("amsAiMarks").value || "").trim()
+    };
+    var go = document.getElementById("amsAiGo");
+    go.disabled = true;
+    st.textContent = "The AI is writing " + payload.count + " question(s)\u2026 (usually under 20 seconds)";
+    st.className = "ams-ai-status busy";
+
+    fetch("/api/ai/exam-questions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+    })
+        .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, d: d }; }); })
+        .then(function (res) {
+            if (!res.ok) {
+                st.textContent = res.d && res.d.error ? res.d.error : "The AI stumbled - try again.";
+                st.className = "ams-ai-status err";
+                return;
+            }
+            var list = res.d.questions || [];
+            var zone = amsAiTargetZone();
+            if (!zone) {
+                st.textContent = "Generate the cover page first.";
+                st.className = "ams-ai-status err";
+                return;
+            }
+            var marksTxt = payload.marks ? " (" + payload.marks + (/\d/.test(payload.marks) && !/mark/i.test(payload.marks) ? " marks" : "") + ")" : "";
+            var n = amsAiNextNumber();
+            var added = 0;
+            list.forEach(function (q) {
+                var p = document.createElement("p");
+                var html = "<b>" + n + ".</b> " + amsAiEsc(q.question) + amsAiEsc(marksTxt);
+                if (q.options && q.options.length) {
+                    // normalise option labels to A. B. C. D. whatever the AI sent
+                    var opts = q.options.map(function (o, j) {
+                        var clean = String(o).replace(/^\s*[A-Fa-f]\s*[.)]\s*/, "");
+                        return "<b>" + String.fromCharCode(65 + j) + ".</b> " + amsAiEsc(clean);
+                    });
+                    html += "<br>&nbsp;&nbsp;&nbsp;" + opts.join("&nbsp;&nbsp;&nbsp;&nbsp;");
+                }
+                p.innerHTML = html;
+                zone.appendChild(p); // typed-text look: the engine takes it from here
+                n++;
+                added++;
+            });
+            window.amsCloseAiModal();
+            paginateExam(); // reflow pages with the new questions included
+            var pagesNow = document.querySelectorAll("#examFlow .exam-page");
+            if (pagesNow.length) pagesNow[pagesNow.length - 1].scrollIntoView({ behavior: "smooth", block: "start" });
+            if (window.amsToast) {
+                window.amsToast(added + " AI question(s) added \u2713 read through and edit before printing.", "success", 6000);
+            }
+        })
+        .catch(function () {
+            st.textContent = "Network error - check your connection and try again.";
+            st.className = "ams-ai-status err";
+        })
+        .finally(function () { go.disabled = false; });
+};

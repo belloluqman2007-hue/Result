@@ -309,12 +309,16 @@
                 <option value="teacher">Class Teacher</option>
               </select>
             </div>
-            <div style="grid-column:1/-1;">
-              <label for="ptMsgBody">Your message</label>
-              <textarea id="ptMsgBody" rows="3" maxlength="2000" placeholder="Type your message..." required></textarea>
-            </div>
-            <div>
-              <button class="mg-btn-light" id="ptMsgSend" type="submit" style="background:#14532d; color:#fff;">&#128231; Send Message</button>
+            <!-- CHANGED (pack 27 - owner: "Make the chat be like Whatsapp"):
+                 WhatsApp-style pill composer - growing textarea + round green
+                 send button. Same ids, same submit handler. -->
+            <div class="wa-composer">
+              <div class="wa-inputwrap">
+                <textarea id="ptMsgBody" rows="1" maxlength="2000" placeholder="Type a message" required></textarea>
+              </div>
+              <button class="wa-sendfab" id="ptMsgSend" type="submit" aria-label="Send">
+                <svg viewBox="0 0 24 24" fill="currentColor"><path d="M3.4 20.4 22.85 12 3.4 3.6 3.39 10l12.8 2-12.8 2z"/></svg>
+              </button>
             </div>
           </form>
           <p class="pt-hint" id="ptMsgNote" style="margin-top:6px;"></p>

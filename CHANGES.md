@@ -4,6 +4,68 @@
 
 ---
 
+## Pack 27 — 2026-07-24
+
+Owner requests:
+1. "Make the chat be like Whatsapp and in the public website the Quran
+   icon is not there."
+2. "The page 4 of the exam is not downloading. Fix all the problems in
+   the exam."
+3. "Can we build ai inside the project" (owner picked: exam question
+   generator + report-card remarks writer + website assistant).
+
+Root causes found:
+- Quran icon: the glyph used (U+1F56E, `&#128366;`) is an unsupported
+  Unicode character - most phones render an empty box. Replaced in all
+  4 spots by an inline SVG (book in currentColor + gold crescent with
+  transparent pages, so it sits cleanly on dark chips, green tiles and
+  cards alike).
+- Exam page 4: phone MEMORY, not layout. Every captured A4 page at
+  scale 2 is a ~35MB canvas, and all of them were kept alive until the
+  PDF finished - ordinary phones ran out of RAM right around page 4 and
+  the capture silently died. Now each page is compressed to a JPEG
+  string IMMEDIATELY and its canvas destroyed, phones capture at a
+  lighter scale, pacing breathers are longer on phones, and any failed
+  page gets an automatic SECOND-CHANCE re-capture before ever falling
+  back to a labelled sheet.
+
+What changed:
+- chat.html + js/chat.js: full WhatsApp redesign - conversation list
+  with round coloured avatars, live search, unread green pills, day
+  separators, white/light-green bubbles, per-message clocks, double-tick
+  read receipts (blue once the other side reads), auto-grow composer,
+  Enter-to-send, mobile slide-in conversation with back arrow.
+- portal.html + js/portal.js + css/school.css: the parent side mirrors
+  the same WhatsApp look (wallpaper, bubbles, day pills, ticks, pill
+  composer with round send button).
+- js/exam.js: memory-safe PDF pipeline (canvasToShot streaming,
+  capturePageScales phone/laptop adaptive, secondChance pass); AI modal
+  logic - questions inserted as ordinary paragraphs continuing the
+  existing numbering, then paginateExam().
+- create-exam.html + css/exam.css: "✨ AI: Write Questions" button +
+  generator modal (topic, count, theory/objective/mixed, marks).
+- server.js: AI core (AI_API_KEY / AI_BASE_URL / AI_MODEL env; zero new
+  packages - raw https client, 30s timeout) + endpoints
+  /api/ai/status, /api/ai/exam-questions, /api/ai/remark,
+  /api/ai/assistant (public, 20/hour per visitor) + /ai-remarks.html
+  guard. With no key set every AI answer is a friendly
+  "not switched on yet" - the rest of the system is unaffected.
+- ai-remarks.html + js/ai-remarks.js: NEW staff page (sidebar: Teaching
+  Tools -> AI Remarks). Loads read-only /class-results, shows averages,
+  sparkle per row or Generate All, remarks stay EDITABLE and print as a
+  clean remarks sheet. Report-card generation itself is NOT touched.
+- index.html + css/website.css + js/website.js: floating AI assistant
+  bubble on the public website - WhatsApp-light panel, starter chips,
+  typing dots, session-history; plus the 4 Quran SVG icons.
+- teacher-dashboard.html: Teaching Tools gains "AI Remarks" (sparkle
+  icon).
+- sw.js: cache bumped to ameenullah-shell-v15.
+
+Compatibility: no route/DB/calculation changes; all AI features are
+additive and degrade gracefully when AI_API_KEY is unset.
+
+---
+
 ## Pack 26 — 2026-07-23
 
 Owner requests:

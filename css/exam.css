@@ -1238,3 +1238,63 @@ body{
   transform:none !important;
   overflow:hidden; /* crop exactly at the A4 edge - never grow the page */
 }
+
+/* ==========================================================================
+   NEW (pack 27 - AI): the "AI: Write Questions" button + generator modal.
+   Gold-spark accent to read as "AI" while staying inside the school
+   emerald palette. Mobile-first, sits above everything on the exam page.
+   ========================================================================== */
+.ams-ai-btn{
+  background:linear-gradient(135deg,#c9930a,#e8b822) !important; color:#231a02 !important;
+  font-weight:800 !important;
+}
+.ams-ai-btn:hover{ filter:brightness(1.06); }
+.ams-ai-scrim{
+  position:fixed; inset:0; z-index:9990; background:rgba(10,20,14,.55); backdrop-filter:blur(3px);
+  display:flex; align-items:center; justify-content:center; padding:14px;
+}
+.ams-ai-card{
+  width:100%; max-width:520px; background:#fff; border-radius:18px; overflow:hidden;
+  box-shadow:0 24px 60px rgba(0,0,0,.35); animation:amsAiPop .18s ease;
+}
+@keyframes amsAiPop{ from{ transform:scale(.94) translateY(8px); opacity:0; } to{ transform:none; opacity:1; } }
+.ams-ai-head{
+  display:flex; align-items:center; gap:12px; padding:14px 16px;
+  background:linear-gradient(120deg,#0e3b26,#14532d 55%,#0f6a44); color:#fff;
+}
+.ams-ai-head b{ font-size:16px; display:block; }
+.ams-ai-head small{ font-size:12px; opacity:.88; }
+.ams-ai-spark{
+  width:42px; height:42px; border-radius:12px; flex:0 0 42px; display:flex; align-items:center; justify-content:center;
+  background:linear-gradient(135deg,#f3c94e,#d9a419); box-shadow:0 4px 10px rgba(0,0,0,.28);
+}
+.ams-ai-spark svg{ width:24px; height:24px; }
+.ams-ai-x{
+  margin-left:auto; background:rgba(255,255,255,.14); color:#fff; border:none; width:34px; height:34px;
+  border-radius:10px; font-size:20px; cursor:pointer; line-height:1;
+}
+.ams-ai-x:hover{ background:rgba(255,255,255,.25); }
+.ams-ai-body{ padding:16px; }
+.ams-ai-lbl{ display:block; font-size:12px; font-weight:700; color:#41564a; margin:0 0 4px; }
+.ams-ai-body input[type="text"], .ams-ai-body select{
+  width:100%; padding:10px 12px; border:1px solid #d7e0da; border-radius:10px; font-size:14px;
+  font-family:inherit; background:#fff;
+}
+.ams-ai-row{ display:flex; gap:10px; margin-top:12px; }
+.ams-ai-row > div{ flex:1; min-width:0; }
+.ams-ai-status{ min-height:18px; margin-top:10px; font-size:13px; color:#5B6B62; }
+.ams-ai-status.err{ color:#C0392B; font-weight:700; }
+.ams-ai-status.busy{ color:#8a6d12; font-weight:700; }
+.ams-ai-foot{ display:flex; gap:10px; padding:0 16px 14px; }
+.ams-ai-go{
+  flex:1; border:none; border-radius:11px; padding:12px; font-weight:800; font-size:14px; cursor:pointer;
+  background:linear-gradient(135deg,#c9930a,#e8b822); color:#231a02;
+}
+.ams-ai-go:hover{ filter:brightness(1.06); }
+.ams-ai-go:disabled{ opacity:.55; cursor:default; }
+.ams-ai-cancel{
+  border:1.5px solid #d7e0da; background:#fff; color:#41564a; border-radius:11px; padding:12px 18px;
+  font-weight:700; cursor:pointer;
+}
+.ams-ai-tip{ margin:0; padding:0 16px 14px; font-size:12px; color:#7d8f84; }
+@media print{ .ams-ai-scrim{ display:none !important; } } /* NEW (pack 27): never in the PDF */

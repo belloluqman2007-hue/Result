@@ -141,6 +141,11 @@
       </div>
 
       <div class="exam-actions-bar">
+        <!-- NEW (pack 27 - AI): the AI question generator. Opens a small
+             modal (subject + class taken from Step 1), the AI drafts
+             numbered questions straight into the paper, teacher edits
+             anything before printing. -->
+        <button type="button" class="ams-ai-btn" onclick="amsOpenAiModal()">&#10024; AI: Write Questions</button>
         <button type="button" onclick="saveExam()">Save Exam</button>
         <button type="button" onclick="openLoadPanel()">Open Saved Exam</button>
         <!-- CHANGED (auto pagination, request #1): this now inserts a Word-style
@@ -404,6 +409,55 @@
     </div>
   </div>
 
+  <!-- NEW (pack 27 - AI): the question-generator modal. Subject and class
+       are read from Step 1 automatically; the teacher only types a topic,
+       picks a count and style, and the AI drafts the questions into the
+       paper (always editable afterwards). -->
+  <div class="ams-ai-scrim" id="amsAiModal" style="display:none;">
+    <div class="ams-ai-card" role="dialog" aria-modal="true" aria-labelledby="amsAiTitle">
+      <div class="ams-ai-head">
+        <span class="ams-ai-spark">
+          <svg viewBox="0 0 24 24" fill="none"><path d="M12 2l1.9 6.1L20 10l-6.1 1.9L12 18l-1.9-6.1L4 10l6.1-1.9L12 2z" fill="#231a02"/><path d="M19 15l.9 2.6 2.6.9-2.6.9L19 22l-.9-2.6-2.6-.9 2.6-.9L19 15z" fill="#231a02" opacity=".75"/></svg>
+        </span>
+        <div>
+          <b id="amsAiTitle">AI Question Writer</b>
+          <small id="amsAiFor">for this exam</small>
+        </div>
+        <button type="button" class="ams-ai-x" onclick="amsCloseAiModal()" aria-label="Close">&times;</button>
+      </div>
+      <div class="ams-ai-body">
+        <label class="ams-ai-lbl" for="amsAiTopic">Topic (what should the questions cover?)</label>
+        <input type="text" id="amsAiTopic" placeholder="e.g. Surah Al-Fatihah meanings, or Present tense verbs, or Fractions" maxlength="180">
+        <div class="ams-ai-row">
+          <div>
+            <label class="ams-ai-lbl" for="amsAiCount">How many?</label>
+            <select id="amsAiCount">
+              <option>5</option><option>10</option><option>15</option><option>20</option>
+            </select>
+          </div>
+          <div>
+            <label class="ams-ai-lbl" for="amsAiType">Style</label>
+            <select id="amsAiType">
+              <option value="theory">Theory (write answers)</option>
+              <option value="objective">Objective (A - D)</option>
+              <option value="mixed">Mixed</option>
+            </select>
+          </div>
+          <div>
+            <label class="ams-ai-lbl" for="amsAiMarks">Marks each (optional)</label>
+            <input type="text" id="amsAiMarks" placeholder="e.g. 2" maxlength="10">
+          </div>
+        </div>
+        <div class="ams-ai-status" id="amsAiStatus"></div>
+      </div>
+      <div class="ams-ai-foot">
+        <button type="button" class="ams-ai-go" id="amsAiGo" onclick="amsGenerateAiQuestions()">&#10024; Write the questions</button>
+        <button type="button" class="ams-ai-cancel" onclick="amsCloseAiModal()">Cancel</button>
+      </div>
+      <p class="ams-ai-tip">The AI drafts; <b>you</b> remain the examiner - read through and edit before printing.</p>
+    </div>
+  </div>
+
   <!-- NEW: shared UI helpers (toasts, dark mode) - additive -->
   <script src="js/ui.js"></script>
   <script src="js/app.js"></script>
@@ -413,9 +467,6 @@
   <script src="js/vendor/jspdf.umd.min.js"></script>
   <script src="js/vendor/html2canvas.min.js"></script>
   <script src="js/exam.js"></script>
-
-  <!-- NEW (PDF reliability fix) -->
-  <script src="src/utils/exam-pdf-fix.js"></script>
 
   <!-- NEW (PWA conversion): registers the service worker + install button. Additive only. -->
   <script src="js/pwa.js" defer></script>

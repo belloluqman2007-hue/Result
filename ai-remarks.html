@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AI Remarks | Ameenullah School</title>
+  <!-- NEW FILE (pack 27 - owner: "Can we build ai inside the project"):
+       AI report-card remark writer. Pick class + term + session, load the
+       class averages (read-only /class-results), then press the sparkle on
+       a row - or "Generate all" - and the AI drafts a warm, honest
+       teacher's remark for each student. Every remark stays EDITABLE and
+       printable as a remarks sheet. This page NEVER changes result
+       calculations or report cards - it is a helper tool only. -->
+  <link rel="manifest" href="manifest.webmanifest">
+  <meta name="theme-color" content="#2f5021">
+  <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
+  <style>
+    /* Staff page chrome - identical pattern to notices.html / chat.html */
+    *{ box-sizing:border-box; }
+    body{ margin:0; font-family:'Segoe UI', Arial, sans-serif; background:#eef3ef; color:#1f2d26; }
+    .rm-top{
+      background:linear-gradient(120deg,#14291c,#1d4a30 55%,#276b43); color:#fff;
+      display:flex; align-items:center; gap:12px; padding:12px 16px;
+      position:sticky; top:0; z-index:20; box-shadow:0 2px 10px rgba(0,0,0,.18);
+    }
+    .rm-top img{ width:34px; height:34px; border-radius:8px; background:#fff; }
+    .rm-top b{ font-size:16px; }
+    .rm-top small{ display:block; font-size:11px; opacity:.85; }
+    .rm-back{
+      margin-left:auto; background:rgba(255,255,255,.14); color:#fff; border:none;
+      padding:8px 14px; border-radius:10px; font-weight:700; cursor:pointer; text-decoration:none;
+      font-size:13px;
+    }
+    .rm-wrap{ max-width:1020px; margin:0 auto; padding:16px 14px 60px; }
+    .rm-card{ background:#fff; border:1px solid #e1e9e3; border-radius:16px; padding:18px; box-shadow:0 2px 10px rgba(20,41,28,.05); }
+    .rm-hero{
+      background:linear-gradient(120deg,#0e3b26,#14532d 55%,#0f6a44); color:#fff; border-radius:14px;
+      padding:16px 18px; margin-bottom:16px; display:flex; gap:14px; align-items:center;
+    }
+    .rm-hero .spark{
+      width:46px; height:46px; border-radius:14px; flex:0 0 46px; display:flex; align-items:center; justify-content:center;
+      background:linear-gradient(135deg,#f3c94e,#d9a419); box-shadow:0 4px 12px rgba(0,0,0,.25);
+    }
+    .rm-hero .spark svg{ width:26px; height:26px; }
+    .rm-hero h1{ margin:0; font-size:18px; }
+    .rm-hero p{ margin:3px 0 0; font-size:12.5px; opacity:.9; line-height:1.5; }
+    .rm-controls{ display:flex; flex-wrap:wrap; gap:10px; align-items:flex-end; margin-bottom:6px; }
+    .rm-controls .fg{ flex:1 1 150px; }
+    .rm-controls label{ display:block; font-size:12px; font-weight:700; color:#41564a; margin-bottom:4px; }
+    .rm-controls select{
+      width:100%; padding:10px 12px; border:1px solid #d7e0da; border-radius:10px; font-size:14px;
+      background:#fff; font-family:inherit;
+    }
+    .rm-btn{
+      border:none; border-radius:10px; padding:11px 16px; font-weight:800; font-size:13.5px; cursor:pointer;
+      background:#14532d; color:#fff;
+    }
+    .rm-btn:hover{ background:#0e3b26; }
+    .rm-btn:disabled{ opacity:.55; cursor:default; }
+    .rm-btn.all{ background:linear-gradient(135deg,#c9930a,#e8b822); color:#231a02; }
+    .rm-btn.all:hover{ filter:brightness(1.05); }
+    .rm-btn.print{ background:#fff; color:#14532d; border:1.5px solid #14532d; }
+    .rm-status{ font-size:13px; color:#5B6B62; margin:4px 0 0; min-height:18px; }
+    .rm-status.err{ color:#C0392B; font-weight:700; }
+    .rm-tablewrap{ overflow-x:auto; margin-top:14px; border:1px solid #e6ece8; border-radius:12px; }
+    table.rm-table{ width:100%; border-collapse:collapse; min-width:760px; }
+    .rm-table th{
+      background:#f0f6f1; color:#2c4a38; font-size:12px; text-transform:uppercase; letter-spacing:.4px;
+      text-align:left; padding:10px 12px; border-bottom:1px solid #e1e9e3;
+    }
+    .rm-table td{ padding:10px 12px; border-bottom:1px solid #f0f4f1; font-size:13.5px; vertical-align:top; }
+    .rm-table tr:last-child td{ border-bottom:none; }
+    .rm-name{ font-weight:700; color:#1d3527; }
+    .rm-sub{ font-size:11.5px; color:#7d8f84; }
+    .rm-avg{ font-weight:800; }
+    .rm-avg.good{ color:#0e7a40; } .rm-avg.mid{ color:#b07a06; } .rm-avg.low{ color:#b03a26; }
+    .rm-remark{
+      width:100%; min-width:250px; min-height:52px; border:1px solid #d7e0da; border-radius:9px;
+      padding:8px 10px; font-size:13px; font-family:inherit; resize:vertical; line-height:1.45;
+    }
+    .rm-one{
+      border:none; cursor:pointer; border-radius:9px; padding:8px 10px; font-size:14px;
+      background:linear-gradient(135deg,#f3c94e,#d9a419); box-shadow:0 2px 6px rgba(201,147,10,.35);
+      transition:transform .1s;
+    }
+    .rm-one:hover{ transform:scale(1.08); }
+    .rm-one:disabled{ opacity:.5; cursor:default; transform:none; }
+    .rm-note{
+      margin-top:12px; background:#fdf7e2; border:1px solid #f0e3b0; color:#6d5a12; border-radius:10px;
+      padding:10px 14px; font-size:12.5px; line-height:1.55; display:none;
+    }
+    .rm-empty{ text-align:center; color:#93a19a; padding:30px 10px; font-size:14px; }
+
+    /* printable remarks sheet - only this prints */
+    #armSheet{ display:none; }
+    @media print{
+      body{ background:#fff; }
+      .rm-top,.rm-wrap{ display:none !important; }
+      #armSheet{ display:block; font-family:Georgia, 'Times New Roman', serif; color:#111; padding:8px; }
+      #armSheet h1{ font-size:20px; text-align:center; margin:0 0 2px; color:#14532d; }
+      #armSheet .sub{ text-align:center; font-size:13px; margin:0 0 14px; color:#444; }
+      #armSheet table{ width:100%; border-collapse:collapse; }
+      #armSheet th,#armSheet td{ border:1px solid #999; padding:8px 10px; font-size:13px; text-align:left; vertical-align:top; }
+      #armSheet th{ background:#eee; }
+      #armSheet .sig{ margin-top:26px; display:flex; justify-content:space-between; font-size:13px; }
+    }
+  </style>
+</head>
+<body>
+  <header class="rm-top">
+    <img src="images/LOGO.JPG" alt="Logo">
+    <div><b>&#10024; AI Remarks</b><small>AI writes the teacher's remark - you review, edit and print</small></div>
+    <a class="rm-back" href="teacher-dashboard.html">&larr; Dashboard</a>
+  </header>
+
+  <main class="rm-wrap">
+    <div class="rm-card">
+      <div class="rm-hero">
+        <span class="spark">
+          <svg viewBox="0 0 24 24" fill="none"><path d="M12 2l1.9 6.1L20 10l-6.1 1.9L12 18l-1.9-6.1L4 10l6.1-1.9L12 2z" fill="#231a02"/><path d="M19 15l.9 2.6L22.5 18.5l-2.6.9L19 22l-.9-2.6-2.6-.9 2.6-.9L19 15z" fill="#231a02" opacity=".75"/><path d="M5 1l.7 2.1L7.8 3.8 5.7 4.5 5 6.6 4.3 4.5 2.2 3.8l2.1-.7L5 1z" fill="#231a02" opacity=".55"/></svg>
+        </span>
+        <div>
+          <h1>AI Remark Writer</h1>
+          <p>Load a class's results and let the AI draft each student's report-card remark from their average and strongest/weakest subjects. <b>You stay in charge:</b> every remark is editable before you print.</p>
+        </div>
+      </div>
+
+      <div class="rm-controls">
+        <div class="fg">
+          <label for="armClass">Class</label>
+          <select id="armClass"><option value="" disabled selected>Loading classes...</option></select>
+        </div>
+        <div class="fg">
+          <label for="armTerm">Term</label>
+          <select id="armTerm">
+            <option>1st Term</option>
+            <option>2nd Term</option>
+            <option>3rd Term</option>
+          </select>
+        </div>
+        <div class="fg">
+          <label for="armSession">Session</label>
+          <select id="armSession">
+            <option>2025/2026</option>
+            <option selected>2026/2027</option>
+            <option>2027/2028</option>
+            <option>2028/2029</option>
+          </select>
+        </div>
+        <button class="rm-btn" id="armLoadBtn" type="button">&#128269; Load Class</button>
+        <button class="rm-btn all" id="armAllBtn" type="button" disabled>&#10024; Generate All</button>
+        <button class="rm-btn print" id="armPrintBtn" type="button" disabled>&#128438; Print Remarks Sheet</button>
+      </div>
+      <div class="rm-status" id="armStatus">Pick a class, term and session, then load the class.</div>
+      <div class="rm-note" id="armNote"></div>
+
+      <div class="rm-tablewrap">
+        <table class="rm-table">
+          <thead>
+            <tr><th style="width:36px;">#</th><th>Student</th><th style="width:70px;">Average</th><th>Teacher's Remark (editable)</th><th style="width:64px;">AI</th></tr>
+          </thead>
+          <tbody id="armRows">
+            <tr><td colspan="5" class="rm-empty">No class loaded yet.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </main>
+
+  <!-- printable remarks sheet (filled by js/ai-remarks.js just before printing) -->
+  <div id="armSheet"></div>
+
+  <script src="js/ui.js"></script>
+  <script src="js/ai-remarks.js"></script>
+</body>
+</html>

@@ -287,6 +287,10 @@ app.get("/scores.html", requireLogin, (req, res) => {
 app.get("/notices.html", requireLogin, (req, res) => {
     res.sendFile(path.join(__dirname, "notices.html"));
 });
+// NEW (pack 27): the AI Remarks helper page - staff only, same guard style.
+app.get("/ai-remarks.html", requireLogin, (req, res) => {
+    res.sendFile(path.join(__dirname, "ai-remarks.html"));
+});
 
 app.get("/teacher-dashboard.html", requireLogin, (req, res) => {
     res.sendFile(path.join(__dirname, "teacher-dashboard.html"));
@@ -2610,6 +2614,242 @@ app.post("/api/messages/read", requireLogin, (req, res) => {
                 connection.query("UPDATE messages SET read_at = NOW() WHERE id IN (" + ids.join(",") + ")", () => res.json({ message: "ok" }));
             }
         );
+    });
+});
+
+/* ==========================================================================
+   NEW (pack 27 - owner: "Can we build ai inside the project"): AI CORE.
+   --------------------------------------------------------------------------
+   The AI brain lives OUTSIDE this server. It speaks the standard OpenAI
+   chat-completions format, so it works out of the box with a FREE Google
+   Gemini key and also with Groq/OpenRouter/OpenAI - just set environment
+   values (Render dashboard -> Environment):
+     AI_API_KEY  = the secret key (free one: aistudio.google.com -> Get API key)
+     AI_BASE_URL = default https://generativelanguage.googleapis.com/v1beta/openai
+     AI_MODEL    = default gemini-2.0-flash
+   With no key set, every AI endpoint answers a friendly "not switched on
+   yet" message and the rest of the system is completely unaffected.
+   Privacy: only the prompt text (e.g. a topic, or an average score) is
+   ever sent to the AI service - never passwords or whole databases.
+   ========================================================================== */
+const AI_API_KEY  = String(process.env.AI_API_KEY || "").trim();
+const AI_BASE_URL = String(process.env.AI_BASE_URL || "https://generativelanguage.googleapis.com/v1beta/openai").trim().replace(/\/+$/, "");
+const AI_MODEL    = String(process.env.AI_MODEL || "gemini-2.0-flash").trim();
+
+function aiEnabled() { return !!AI_API_KEY; }
+function aiNotReady(res) {
+    return res.status(503).json({
+        error: "The AI is not switched on yet. It takes one free key - the office can add it in a minute. Nothing else is affected."
+    });
+}
+
+/* One small POST to the AI service (OpenAI chat-completions shape), built on
+   node's own http/https so NO new packages are needed. 30s hard timeout. */
+function aiChat(messages, opts) {
+    opts = opts || {};
+    return new Promise(function (resolve, reject) {
+        const body = JSON.stringify({
+            model: AI_MODEL,
+            messages: messages,
+            temperature: typeof opts.temperature === "number" ? opts.temperature : 0.5,
+            max_tokens: opts.maxTokens || 900
+        });
+        let u;
+        try { u = new URL(AI_BASE_URL + "/chat/completions"); }
+        catch (e) { return reject(new Error("AI_BASE_URL is not a valid address")); }
+        const lib = u.protocol === "http:" ? require("http") : require("https");
+        const req = lib.request({
+            method: "POST",
+            hostname: u.hostname,
+            port: u.port || (u.protocol === "http:" ? 80 : 443),
+            path: u.pathname + u.search,
+            headers: {
+                "Content-Type": "application/json",
+                "Authorization": "Bearer " + AI_API_KEY,
+                "Content-Length": Buffer.byteLength(body)
+            }
+        }, function (aiRes) {
+            let raw = "";
+            aiRes.on("data", function (c) {
+                raw += c;
+                if (raw.length > 200000) req.destroy(new Error("AI reply too large")); // safety cap
+            });
+            aiRes.on("end", function () {
+                let data = null;
+                try { data = JSON.parse(raw); } catch (e) { return reject(new Error("AI reply was not JSON")); }
+                if (aiRes.statusCode >= 400) {
+                    const m = data && data.error && data.error.message ? data.error.message : ("AI service error " + aiRes.statusCode);
+                    return reject(new Error(m));
+                }
+                const text = data && data.choices && data.choices[0] && data.choices[0].message
+                    ? (data.choices[0].message.content || "") : "";
+                if (!text.trim()) return reject(new Error("AI sent an empty reply"));
+                resolve(text);
+            });
+        });
+        req.setTimeout(30000, function () { req.destroy(new Error("The AI took too long - please try again")); });
+        req.on("error", reject);
+        req.write(body);
+        req.end();
+    });
+}
+
+/* Tolerant JSON extractor - AI models sometimes wrap JSON in code fences. */
+function aiParseJson(text) {
+    let t = String(text || "").trim().replace(/^```(?:json)?/i, "").replace(/```\s*$/, "").trim();
+    try { return JSON.parse(t); } catch (e) { /* fall through */ }
+    const m = t.match(/(\{[\s\S]*\}|\[[\s\S]*\])/);
+    if (m) return JSON.parse(m[1]);
+    throw new Error("AI reply was not valid JSON");
+}
+
+/* Public status ping - the three AI UIs use it to show "AI ready" vs a
+   gentle "coming soon" note. Reveals nothing secret. */
+app.get("/api/ai/status", (req, res) => {
+    res.json({ enabled: aiEnabled() });
+});
+
+/* ---------- AI FEATURE 1: exam question generator (staff) ---------------
+   Teacher gives class + subject + topic; AI drafts numbered questions the
+   teacher can still edit before printing (AI proposes, teacher disposes). */
+app.post("/api/ai/exam-questions", requireLogin, async (req, res) => {
+    if (!aiEnabled()) return aiNotReady(res);
+    const f = k => String(req.body[k] == null ? "" : req.body[k]).trim();
+    const className = f("className").slice(0, 80);
+    const subject   = f("subject").slice(0, 80);
+    const topic     = f("topic").slice(0, 200);
+    const qtype     = ["objective", "theory", "mixed"].indexOf(f("qtype")) !== -1 ? f("qtype") : "theory";
+    const count     = Math.max(1, Math.min(20, parseInt(f("count"), 10) || 5));
+    const marks     = f("marks").slice(0, 12);
+    if (!topic) return res.status(400).json({ error: "Please type a topic first." });
+
+    const sys =
+        "You are an expert exam setter for Ameenullah School of Arabic and Islamic Studies " +
+        "in Lagos, Nigeria - an Arabic/Islamic school that also teaches general subjects. " +
+        "You write clear, correct, age-appropriate exam questions. Use English or Arabic " +
+        "to suit the subject. Reply with JSON only - no commentary, no markdown fences.";
+    const usr =
+        "Write " + count + " " + qtype + " exam question(s) for class \"" + (className || "secondary") +
+        "\" in the subject \"" + (subject || "general") + "\" on this topic: \"" + topic + "\"." +
+        (marks ? " Each question carries " + marks + "." : "") +
+        (qtype !== "theory" ? " Every objective question must have exactly 4 options labelled A, B, C, D." : "") +
+        " JSON shape: {\"questions\":[{\"question\":\"text\",\"options\":[\"A. ...\",\"B. ...\",\"C. ...\",\"D. ...\"] or null}]}";
+
+    try {
+        const text = await aiChat([{ role: "system", content: sys }, { role: "user", content: usr }], { maxTokens: 2000, temperature: 0.65 });
+        const data = aiParseJson(text);
+        const list = Array.isArray(data) ? data : (data && data.questions);
+        if (!Array.isArray(list)) throw new Error("AI sent no questions");
+        const cleaned = list.slice(0, count).map(function (q) {
+            const obj = { question: String(q && q.question || "").trim().slice(0, 700) };
+            if (Array.isArray(q && q.options)) {
+                const opts = q.options.map(o => String(o || "").trim().slice(0, 140)).filter(Boolean).slice(0, 6);
+                if (opts.length >= 2) obj.options = opts;
+            }
+            return obj;
+        }).filter(q => q.question);
+        if (!cleaned.length) throw new Error("AI sent no usable questions");
+        res.json({ questions: cleaned });
+    } catch (e) {
+        console.log("AI exam-questions error:", e && e.message);
+        res.status(502).json({ error: "The AI stumbled - please try again in a moment." });
+    }
+});
+
+/* ---------- AI FEATURE 2: report-card remark writer (staff) -------------
+   Turns an average (plus best/weak subjects) into a warm, honest teacher
+   remark. One student per call - the page loops for "generate all". */
+app.post("/api/ai/remark", requireLogin, async (req, res) => {
+    if (!aiEnabled()) return aiNotReady(res);
+    const f = k => String(req.body[k] == null ? "" : req.body[k]).trim();
+    const name     = f("name").slice(0, 80);
+    const average  = Math.max(0, Math.min(100, parseFloat(f("average")) || 0));
+    const className= f("className").slice(0, 60);
+    const term     = f("term").slice(0, 30);
+    const best     = f("best").slice(0, 60);
+    const weak     = f("weak").slice(0, 60);
+
+    const sys =
+        "You write class-teacher remarks for report cards at an Arabic/Islamic school in Nigeria. " +
+        "Return ONE remark only: 1-2 short sentences (35 words max), warm but honest, no emojis, " +
+        "no quotation marks, no student names inside the remark. Below 50% be firm but hopeful; " +
+        "50-69% encourage harder work; 70%+ praise excellence. You may end with a short Islamic " +
+        "touch (e.g. Barakallahu feehi) only for very good results.";
+    const usr =
+        "Average: " + average + "%" +
+        (className ? " | Class: " + className : "") +
+        (term ? " | Term: " + term : "") +
+        (best ? " | Strongest subject: " + best : "") +
+        (weak ? " | Weakest subject: " + weak : "") +
+        (name ? " | (Student is " + name.split(" ")[0] + " - do NOT use the name in the remark)" : "");
+
+    try {
+        let text = await aiChat([{ role: "system", content: sys }, { role: "user", content: usr }], { maxTokens: 140, temperature: 0.7 });
+        text = text.replace(/[\r\n]+/g, " ").replace(/^["'\u201C\u201D]+|["'\u201C\u201D]+$/g, "").trim().slice(0, 260);
+        if (!text) throw new Error("AI sent an empty remark");
+        res.json({ remark: text });
+    } catch (e) {
+        console.log("AI remark error:", e && e.message);
+        res.status(502).json({ error: "The AI stumbled - please try again in a moment." });
+    }
+});
+
+/* ---------- AI FEATURE 3: website school assistant (public) -------------
+   A receptionist-style chat bubble on the public website. Answers only
+   school/website questions. Rate-limited per visitor to keep it polite. */
+const aiAssistantHits = Object.create(null); // ip -> { count, resetAt }
+setInterval(function () { // sweep expired buckets every 10 min (memory hygiene)
+    const now = Date.now();
+    Object.keys(aiAssistantHits).forEach(function (k) { if (aiAssistantHits[k].resetAt < now) delete aiAssistantHits[k]; });
+}, 600000).unref();
+
+app.post("/api/ai/assistant", (req, res) => {
+    if (!aiEnabled()) return aiNotReady(res);
+    const ip = req.ip || req.connection.remoteAddress || "?";
+    const now = Date.now();
+    let bucket = aiAssistantHits[ip];
+    if (!bucket || bucket.resetAt < now) bucket = aiAssistantHits[ip] = { count: 0, resetAt: now + 3600000 };
+    if (++bucket.count > 20) {
+        return res.status(429).json({ error: "You have asked a lot this hour - please chat with the office directly, or come back a little later." });
+    }
+    const message = String(req.body.message || "").trim().slice(0, 600);
+    if (!message) return res.status(400).json({ error: "Type a question first." });
+    const history = (Array.isArray(req.body.history) ? req.body.history : [])
+        .slice(-8).map(function (h) {
+            const role = h && h.role === "assistant" ? "assistant" : "user";
+            return { role: role, content: String(h && h.content || "").slice(0, 300) };
+        }).filter(h => h.content);
+
+    // Live school facts (name, address, phone...) keep answers accurate.
+    connection.query("SELECT * FROM school_settings WHERE id = 1", async (sErr, srows) => {
+        const st = (!sErr && srows && srows.length) ? srows[0] : {};
+        const facts =
+            "School: Ameenullah School of Arabic and Islamic Studies (AMSAIS), Lagos, Nigeria. " +
+            "Motto: Knowledge and Worship. " +
+            (st.address ? "Address: " + st.address + ". " : "") +
+            (st.phone ? "Phone: " + st.phone + ". " : "") +
+            (st.email ? "Email: " + st.email + ". " : "") +
+            "Programs: Foundation (Ibtida'i), Middle (I'dadi), Advanced (Thanawi) Arabic/Islamic classes, " +
+            "and Tahfeedhul-Qur'an evening memorisation (Thursday-Saturday, 4PM till sunset). " +
+            "Website features: parents check results in the Parent Portal (student ID + surname as password), " +
+            "chat with the school, see notices, timetables and calendars, upload payment evidence, and apply " +
+            "for admission with the website form.";
+        const sys =
+            "You are the friendly front-desk assistant of Ameenullah School. Use ONLY these facts: " + facts +
+            " Rules: answer in 1-4 short sentences, warm and simple English (parents may not be technical). " +
+            "NEVER invent fees, dates, results or policies - if unsure, say the school office will confirm " +
+            "and share the contact details if known. If a question is not about the school or this website, " +
+            "politely say you only answer school questions. A short Islamic greeting is fine when greeted.";
+        try {
+            const text = await aiChat(
+                [{ role: "system", content: sys }].concat(history, [{ role: "user", content: message }]),
+                { maxTokens: 320, temperature: 0.6 }
+            );
+            res.json({ reply: text.trim().slice(0, 1200) });
+        } catch (e) {
+            console.log("AI assistant error:", e && e.message);
+            res.status(502).json({ error: "The assistant is taking a short break - please try again in a moment." });
+        }
     });
 });
 

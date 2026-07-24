@@ -2,104 +2,247 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>Chat | Ameenullah School</title>
   <!-- NEW FILE (pack 24 - owner: "messaging is not available in admin and
        teachers space - add it and name it as chat in the side bar and
        organize everything well"): dedicated two-pane chat for ALL staff.
        Talks only to the pack-23 /api/messages routes; nothing existing
-       is changed by adding this page. -->
+       is changed by adding this page.
+       CHANGED (pack 27 - owner: "Make the chat be like Whatsapp"): full
+       WhatsApp-style redesign - chat list with round avatars, search,
+       wallpaper conversation pane, green outgoing bubbles, double-tick
+       read receipts, day separators and a mobile slide-in view with a
+       back arrow. Same routes, same IDs used by js/chat.js. -->
   <link rel="manifest" href="manifest.webmanifest">
-  <meta name="theme-color" content="#2f5021">
+  <meta name="theme-color" content="#075E54">
   <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
   <style>
-    *{ box-sizing:border-box; }
-    body{ margin:0; font-family:'Segoe UI', Arial, sans-serif; background:#eef3ef; color:#1f2d26; }
-    .ch-top{
-      background:linear-gradient(120deg,#14291c,#1d4a30 55%,#276b43); color:#fff;
-      display:flex; align-items:center; gap:12px; padding:12px 16px;
-      position:sticky; top:0; z-index:5; box-shadow:0 2px 10px rgba(0,0,0,.18);
+    *{ box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+    html,body{ height:100%; }
+    body{
+      margin:0; font-family:'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+      background:#111B21; color:#111B21; overflow:hidden;
     }
-    .ch-top img{ width:34px; height:34px; border-radius:8px; background:#fff; }
-    .ch-top b{ font-size:16px; }
-    .ch-back{
-      margin-left:auto; background:rgba(255,255,255,.14); color:#fff; border:none;
-      padding:8px 14px; border-radius:10px; font-weight:700; cursor:pointer; text-decoration:none;
-      font-size:13px;
+
+    /* ------- app shell: fills the screen like the WhatsApp app ------- */
+    .ch-app{
+      display:flex; height:100dvh; max-width:1600px; margin:0 auto; background:#fff;
     }
-    .ch-shell{ display:flex; gap:14px; padding:14px; max-width:1100px; margin:0 auto; align-items:flex-start; }
-    .ch-threads{ width:300px; flex:0 0 300px; background:#fff; border:1px solid #e1e9e3; border-radius:14px; overflow:hidden; }
-    .ch-threads h3{ margin:0; padding:12px 14px; font-size:13px; color:#5B6B62; border-bottom:1px solid #eef1ee; letter-spacing:.3px; }
-    .ch-thread{ display:block; width:100%; text-align:left; border:none; background:#fff; padding:12px 14px; cursor:pointer; border-bottom:1px solid #f2f5f2; font-family:inherit; }
-    .ch-thread:hover{ background:#f4f9f5; }
-    .ch-thread.on{ background:#e8f2ea; border-left:3px solid #1d4a30; }
-    .ch-thread b{ display:block; font-size:13.5px; }
-    .ch-thread span{ display:block; font-size:12px; color:#5B6B62; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-    .ch-thread .ch-dot{ float:right; background:#C0392B; color:#fff; font-size:10px; font-weight:800; border-radius:10px; padding:1px 7px; }
-    .ch-convo{ flex:1; background:#fff; border:1px solid #e1e9e3; border-radius:14px; display:flex; flex-direction:column; min-height:70vh; }
-    .ch-convo-head{ padding:12px 16px; border-bottom:1px solid #eef1ee; font-weight:800; color:#14532d; }
-    .ch-msgs{ flex:1; padding:14px 16px; overflow-y:auto; max-height:62vh; }
-    .ch-bub{ max-width:78%; padding:8px 12px; border-radius:14px; margin:6px 0; font-size:14px; line-height:1.45; white-space:pre-wrap; }
-    .ch-bub .ch-meta{ font-size:10.5px; opacity:.7; font-weight:700; margin-bottom:2px; }
-    .ch-bub.parent{ background:#eef4ef; border:1px solid #d7e0da; border-bottom-left-radius:4px; margin-right:auto; }
-    .ch-bub.staff{ background:#14532d; color:#fff; border-bottom-right-radius:4px; margin-left:auto; }
-    .ch-compose{ display:flex; gap:8px; padding:12px 14px; border-top:1px solid #eef1ee; }
-    .ch-compose input{ flex:1; padding:11px 12px; border:1px solid #d7e0da; border-radius:11px; font-size:14px; font-family:inherit; }
-    .ch-compose button{ background:#14532d; color:#fff; border:none; border-radius:11px; padding:0 18px; font-weight:800; cursor:pointer; }
-    .ch-empty{ color:#93a19a; text-align:center; margin-top:40px; font-size:14px; padding:0 20px; }
-    .ch-note{ font-size:12px; color:#5B6B62; padding:0 16px 10px; }
-    /* NEW (pack 26): new-conversation inline form */
-    .ch-new-btn{ display:block; width:calc(100% - 28px); margin:10px 14px 4px; background:#14532d; color:#fff; border:none; border-radius:10px; padding:10px; font-size:13px; font-weight:800; cursor:pointer; }
-    .ch-new-form{ background:#f4f9f5; border-top:1px solid #e1e9e3; padding:12px 14px; display:none; }
-    .ch-new-form label{ display:block; font-size:11.5px; font-weight:700; color:#5B6B62; margin-bottom:3px; }
-    .ch-new-form input, .ch-new-form textarea{ width:100%; padding:9px 10px; border:1px solid #d7e0da; border-radius:10px; font-size:13px; font-family:inherit; margin-bottom:8px; box-sizing:border-box; }
-    .ch-new-form textarea{ resize:vertical; min-height:64px; }
-    .ch-new-btns{ display:flex; gap:8px; }
-    .ch-new-btns button{ flex:1; padding:9px; border-radius:10px; font-weight:800; font-size:13px; cursor:pointer; border:none; }
-    .ch-new-btns .send{ background:#14532d; color:#fff; }
-    .ch-new-btns .cancel{ background:#fff; color:#1d4a30; border:1px solid #c9d5cc; }
-    .ch-new-note{ font-size:12px; color:#C0392B; min-height:14px; margin-bottom:4px; }
-    @media (max-width:820px){
-      .ch-shell{ flex-direction:column; }
-      .ch-threads{ width:100%; flex-basis:auto; }
-      .ch-convo{ width:100%; }
+
+    /* ------- LEFT: chat list ------- */
+    .ch-list{
+      width:360px; flex:0 0 360px; display:flex; flex-direction:column;
+      background:#fff; border-right:1px solid #E9EDEF; min-width:0;
+    }
+    .ch-list-head{
+      background:#F0F2F5; padding:10px 14px; display:flex; align-items:center; gap:12px;
+      min-height:60px;
+    }
+    .ch-list-head img{ width:40px; height:40px; border-radius:50%; background:#fff; object-fit:cover; }
+    .ch-list-head .t{ font-size:17px; font-weight:700; color:#111B21; line-height:1.2; }
+    .ch-list-head .s{ font-size:12px; color:#667781; }
+    .ch-homebtn{
+      margin-left:auto; width:40px; height:40px; border-radius:50%; border:none; cursor:pointer;
+      background:transparent; display:flex; align-items:center; justify-content:center; color:#54656F;
+      text-decoration:none;
+    }
+    .ch-homebtn:hover{ background:#E2E8EB; }
+    .ch-homebtn svg{ width:22px; height:22px; }
+    .ch-search{ padding:8px 10px; background:#fff; }
+    .ch-searchbox{
+      display:flex; align-items:center; gap:10px; background:#F0F2F5; border-radius:10px; padding:0 12px;
+      height:38px;
+    }
+    .ch-searchbox svg{ width:16px; height:16px; color:#54656F; flex:0 0 auto; }
+    .ch-searchbox input{
+      border:none; outline:none; background:transparent; flex:1; font-size:14px; color:#111B21; font-family:inherit;
+    }
+    .ch-threadlist{ flex:1; overflow-y:auto; overscroll-behavior:contain; }
+    .ch-thread{
+      display:flex; align-items:center; gap:12px; width:100%; text-align:left; border:none;
+      background:#fff; padding:10px 14px; cursor:pointer; font-family:inherit;
+    }
+    .ch-thread:hover{ background:#F5F6F6; }
+    .ch-thread.on{ background:#F0F2F5; }
+    .ch-ava{
+      width:49px; height:49px; border-radius:50%; flex:0 0 49px; display:flex; align-items:center;
+      justify-content:center; color:#fff; font-weight:700; font-size:18px; letter-spacing:.4px;
+      text-transform:uppercase; user-select:none;
+    }
+    .ch-tinfo{ flex:1; min-width:0; border-bottom:1px solid #F0F2F5; padding:4px 0 12px; }
+    .ch-thread:last-child .ch-tinfo{ border-bottom:none; }
+    .ch-trow{ display:flex; align-items:baseline; gap:8px; }
+    .ch-tname{ flex:1; font-size:15.5px; font-weight:600; color:#111B21; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .ch-ttime{ font-size:12px; color:#667781; flex:0 0 auto; }
+    .ch-ttime.hot{ color:#25D366; font-weight:700; }
+    .ch-trow2{ display:flex; align-items:center; gap:6px; margin-top:2px; }
+    .ch-tprev{
+      flex:1; font-size:13.5px; color:#667781; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+    }
+    .ch-tprev .tk{ color:#53BDEB; }
+    .ch-unread{
+      flex:0 0 auto; background:#25D366; color:#fff; font-size:12px; font-weight:800; min-width:20px;
+      height:20px; border-radius:10px; display:flex; align-items:center; justify-content:center; padding:0 6px;
+    }
+    .ch-listempty{ color:#8696A0; text-align:center; padding:36px 24px; font-size:14px; line-height:1.6; }
+
+    /* ------- RIGHT: conversation ------- */
+    .ch-convo{ flex:1; display:flex; flex-direction:column; min-width:0; background:#EFEAE2; position:relative; }
+    .ch-convo-head{
+      background:#F0F2F5; padding:8px 12px; display:flex; align-items:center; gap:12px; min-height:60px;
+      border-left:1px solid #E9EDEF; z-index:2;
+    }
+    .ch-backarrow{
+      display:none; width:38px; height:38px; border:none; background:transparent; cursor:pointer;
+      align-items:center; justify-content:center; color:#54656F; border-radius:50%; margin-left:-6px;
+    }
+    .ch-backarrow svg{ width:22px; height:22px; }
+    .ch-cava{
+      width:42px; height:42px; border-radius:50%; flex:0 0 42px; display:flex; align-items:center;
+      justify-content:center; color:#fff; font-weight:700; font-size:16px; text-transform:uppercase; user-select:none;
+    }
+    .ch-cmeta{ min-width:0; flex:1; }
+    .ch-cname{ font-size:16px; font-weight:600; color:#111B21; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .ch-csub{ font-size:12.5px; color:#667781; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .ch-placeholder-head{ color:#8696A0; font-size:15px; }
+
+    /* the famous WhatsApp doodle wallpaper (subtle school-neutral pattern) */
+    .ch-msgs{
+      flex:1; overflow-y:auto; overscroll-behavior:contain; padding:18px 7% 10px; position:relative;
+      background-color:#EFEAE2;
+      background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140' viewBox='0 0 140 140'%3E%3Cg fill='%23b9ac9c' fill-opacity='0.16'%3E%3Ccircle cx='20' cy='22' r='2.4'/%3E%3Cpath d='M60 14l4 8-8 .5z'/%3E%3Crect x='104' y='18' width='6' height='6' rx='1.4'/%3E%3Cpath d='M28 66q6-6 12 0t12 0' fill='none' stroke='%23b9ac9c' stroke-opacity='0.16' stroke-width='2.2'/%3E%3Ccircle cx='96' cy='60' r='2.6'/%3E%3Cpath d='M118 84l5 9-9.5 1z'/%3E%3Crect x='14' y='106' width='7' height='7' rx='1.6'/%3E%3Ccircle cx='64' cy='112' r='2.2'/%3E%3Cpath d='M96 122q5-5 10 0t10 0' fill='none' stroke='%23b9ac9c' stroke-opacity='0.16' stroke-width='2'/%3E%3C/g%3E%3C/svg%3E");
+    }
+    .ch-daywrap{ display:flex; justify-content:center; margin:10px 0 12px; }
+    .ch-day{
+      background:#FDF3C6; color:#54656F; font-size:12px; font-weight:600; padding:6px 14px;
+      border-radius:8px; box-shadow:0 1px 1px rgba(17,27,33,.08); text-transform:uppercase; letter-spacing:.3px;
+    }
+    .ch-row{ display:flex; margin:2px 0; }
+    .ch-row.mine{ justify-content:flex-end; }
+    .ch-bub{
+      max-width:min(68%, 560px); padding:6px 8px 6px 10px; border-radius:9px; position:relative;
+      font-size:14.5px; line-height:1.42; color:#111B21; white-space:pre-wrap; word-break:break-word;
+      box-shadow:0 1px 1px rgba(17,27,33,.12);
+    }
+    .ch-row.theirs .ch-bub{ background:#FFFFFF; border-top-left-radius:2px; }
+    .ch-row.mine .ch-bub{ background:#D9FDD3; border-top-right-radius:2px; }
+    .ch-who{ font-size:11.5px; font-weight:700; color:#0B8468; margin-bottom:2px; }
+    .ch-row.mine .ch-who{ display:none; }
+    .ch-meta{
+      float:right; display:inline-flex; align-items:center; gap:4px; margin:8px 0 0 10px;
+      font-size:11px; color:#667781; user-select:none;
+    }
+    .ch-meta svg{ width:16px; height:16px; }
+    .ch-meta .read{ color:#53BDEB; }
+    .ch-emptyconvo{
+      margin:14px auto; max-width:420px; text-align:center; background:#FDF3C6; color:#54656F;
+      font-size:12.5px; padding:8px 14px; border-radius:8px; box-shadow:0 1px 1px rgba(17,27,33,.08);
+    }
+    .ch-idle{
+      position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center;
+      background:#F7F8FA; color:#8696A0; text-align:center; padding:20px; gap:8px;
+    }
+    .ch-idle svg{ width:120px; height:120px; opacity:.5; }
+    .ch-idle .big{ font-size:26px; font-weight:300; color:#41525D; }
+    .ch-idle .small{ font-size:14px; max-width:420px; line-height:1.6; }
+
+    /* ------- composer ------- */
+    .ch-composer{
+      display:flex; align-items:flex-end; gap:8px; padding:8px 12px calc(8px + env(safe-area-inset-bottom));
+      background:#F0F2F5; z-index:2;
+    }
+    .ch-inputwrap{
+      flex:1; background:#fff; border-radius:22px; display:flex; align-items:flex-end; padding:6px 6px;
+      box-shadow:0 1px 1px rgba(17,27,33,.06);
+    }
+    .ch-inputwrap textarea{
+      flex:1; border:none; outline:none; resize:none; font-family:inherit; font-size:15px; color:#111B21;
+      max-height:120px; padding:8px 10px; background:transparent; line-height:1.4;
+    }
+    .ch-sendfab{
+      width:46px; height:46px; border-radius:50%; border:none; cursor:pointer; flex:0 0 46px;
+      background:#00A884; color:#fff; display:flex; align-items:center; justify-content:center;
+      box-shadow:0 2px 5px rgba(17,27,33,.2); transition:transform .08s, background .15s;
+    }
+    .ch-sendfab:hover{ background:#017561; }
+    .ch-sendfab:active{ transform:scale(.92); }
+    .ch-sendfab:disabled{ background:#A7C7BF; cursor:default; }
+    .ch-sendfab svg{ width:22px; height:22px; }
+    .ch-note{ font-size:11.5px; color:#667781; text-align:center; padding:4px 12px 8px; background:#F0F2F5; }
+    .ch-note.err{ color:#C0392B; font-weight:600; }
+    .ch-note.ok{ color:#0B8468; font-weight:600; }
+
+    /* ------- MOBILE: one pane at a time, like the WhatsApp app ------- */
+    @media (max-width:860px){
+      .ch-list{ width:100%; flex:1 1 auto; border-right:none; }
+      .ch-convo{
+        position:fixed; inset:0; transform:translateX(100%);
+        transition:transform .22s ease; z-index:20; display:none;
+      }
+      body.ch-open .ch-convo{ display:flex; transform:translateX(0); }
+      body.ch-open .ch-list{ display:none; }
+      .ch-backarrow{ display:flex; }
+      .ch-msgs{ padding:14px 4% 8px; }
+      .ch-bub{ max-width:84%; }
     }
   </style>
 </head>
 <body>
-  <header class="ch-top">
-    <img src="images/LOGO.JPG" alt="Logo">
-    <div><b>&#128172; Chat</b><div style="font-size:11px; opacity:.85;">Messages between parents and the school</div></div>
-    <a class="ch-back" href="teacher-dashboard.html">&#8592; Dashboard</a>
-  </header>
-
-  <div class="ch-shell">
-    <div class="ch-threads">
-      <h3>PARENT CONVERSATIONS</h3>
-      <!-- NEW (pack 26): staff can start a conversation before the parent does -->
-      <button class="ch-new-btn" type="button" id="chNewBtn">&#128231; + New Conversation</button>
-      <div class="ch-new-form" id="chNewForm">
-        <label for="chNewSid">Student ID</label>
-        <input type="text" id="chNewSid" placeholder="e.g. AM001" autocomplete="off">
-        <label for="chNewBody">Your message</label>
-        <textarea id="chNewBody" placeholder="Type your message to the parent..."></textarea>
-        <div class="ch-new-note" id="chNewNote"></div>
-        <div class="ch-new-btns">
-          <button class="send" type="button" id="chNewSend">&#128231; Send</button>
-          <button class="cancel" type="button" id="chNewCancel">Cancel</button>
+  <div class="ch-app">
+    <!-- ================= LEFT: conversation list ================= -->
+    <section class="ch-list" id="chListPanel">
+      <div class="ch-list-head">
+        <img src="images/LOGO.JPG" alt="School logo">
+        <div>
+          <div class="t">Chats</div>
+          <div class="s" id="chMeLine">Parent messages</div>
+        </div>
+        <a class="ch-homebtn" href="teacher-dashboard.html" title="Back to Dashboard" aria-label="Back to Dashboard">
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 3.2 2.8 11h2.4v9.2h5.6v-6h2.4v6h5.6V11h2.4z"/></svg>
+        </a>
+      </div>
+      <div class="ch-search">
+        <div class="ch-searchbox">
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M15.5 14h-.79l-.28-.27a6.5 6.5 0 1 0-.7.7l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0A4.5 4.5 0 1 1 14 9.5 4.5 4.5 0 0 1 9.5 14z"/></svg>
+          <input type="text" id="chSearch" placeholder="Search name or class" autocomplete="off">
         </div>
       </div>
-      <div id="chThreadList"><div class="ch-empty">Loading...</div></div>
-    </div>
-    <div class="ch-convo">
-      <div class="ch-convo-head" id="chConvoHead">Pick a conversation</div>
-      <div class="ch-msgs" id="chMsgs"><div class="ch-empty">Select a parent on the left to read the conversation and reply.</div></div>
-      <div class="ch-note" id="chNote">Replies go straight to the parent's portal (their bell lights up).</div>
-      <div class="ch-compose">
-        <input type="text" id="chBody" placeholder="Type your reply..." maxlength="2000" disabled>
-        <button type="button" id="chSend" disabled>&#128231; Send</button>
+      <div class="ch-threadlist" id="chThreadList">
+        <div class="ch-listempty">Loading chats...</div>
       </div>
-    </div>
+    </section>
+
+    <!-- ================= RIGHT: open conversation ================= -->
+    <section class="ch-convo" id="chConvoPanel">
+      <div class="ch-convo-head">
+        <button type="button" class="ch-backarrow" id="chBackList" aria-label="Back to chats">
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20z"/></svg>
+        </button>
+        <!-- CHANGED (pack 27): header content (avatar + name) is rendered by js/chat.js -->
+        <div id="chConvoHead" style="display:flex; align-items:center; gap:12px; min-width:0; flex:1;">
+          <span class="ch-placeholder-head">Pick a conversation</span>
+        </div>
+      </div>
+
+      <div class="ch-msgs" id="chMsgs">
+        <div class="ch-idle" id="chIdle">
+          <svg viewBox="0 0 120 120" fill="none"><circle cx="60" cy="60" r="54" stroke="#8696A0" stroke-width="2" opacity=".5"/><path d="M38 52c0-6 5-11 11-11h22c6 0 11 5 11 11v10c0 6-5 11-11 11H58l-12 10v-10c-5-.5-8-5.5-8-11z" fill="#DDE3E7"/><circle cx="52" cy="57" r="3" fill="#8696A0"/><circle cx="62" cy="57" r="3" fill="#8696A0"/><circle cx="72" cy="57" r="3" fill="#8696A0"/></svg>
+          <div class="big">School Chat</div>
+          <div class="small">Pick a conversation on the left to read it and reply. Your replies appear instantly in the parent's portal.</div>
+        </div>
+      </div>
+
+      <div class="ch-composer">
+        <div class="ch-inputwrap">
+          <textarea id="chBody" rows="1" placeholder="Type a message" maxlength="2000" disabled></textarea>
+        </div>
+        <button type="button" class="ch-sendfab" id="chSend" disabled aria-label="Send">
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M3.4 20.4 22.85 12 3.4 3.6 3.39 10l12.8 2-12.8 2z"/></svg>
+        </button>
+      </div>
+      <div class="ch-note" id="chNote">Replies go straight to the parent's portal.</div>
+    </section>
   </div>
 
   <script src="js/chat.js"></script>

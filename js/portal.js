@@ -58,8 +58,6 @@
       // marks read) exactly when the parent opens the Chat view.
       ptPrefillSettings(student); // NEW (pack 23): Settings card prefill
       loadCalendar();    // NEW (pack 15)
-      // NEW (pack 26): attendance record - lazy on first open, prefetch for badge
-      loadAttendance(true);
     })
     .catch(goLogin);
 
@@ -581,6 +579,12 @@ function ptPrefillSettings(st) {
 }
 
 /* ------------------------- MESSAGES UI ------------------------------ */
+/* CHANGED (pack 27 - owner: "Make the chat be like Whatsapp"): the parent
+   side now mirrors the new staff chat - WhatsApp wallpaper, light-green
+   outgoing bubbles, white incoming bubbles, per-message clock and
+   double-tick receipts (blue once the school has read the message).
+   Same data, same logic - only the look changes. Styles: .wa-* in
+   css/school.css. */
 function ptRenderMessages(rows) {
   var box = document.getElementById("ptMsgs");
   if (!box) return;
@@ -588,19 +592,36 @@ function ptRenderMessages(rows) {
     box.innerHTML = '<div class="pt-empty">No messages yet. Say salam below - the school replies right here.</div>';
     return;
   }
-  box.innerHTML = rows.map(function (m) {
+  var MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+  function dObj(v){ var d = new Date(String(v||"").replace(" ","T")); return isNaN(d.getTime()) ? null : d; }
+  function sameDay(a,b){ return a.getFullYear()===b.getFullYear() && a.getMonth()===b.getMonth() && a.getDate()===b.getDate(); }
+  function clock(v){ var d=dObj(v); if(!d) return ""; var h=d.getHours(), m=d.getMinutes(); return (h<10?"0"+h:h)+":"+(m<10?"0"+m:m); }
+  function dayLabel(v){ var d=dObj(v); if(!d) return ""; var now=new Date();
+    if (sameDay(d,now)) return "Today";
+    var y=new Date(now); y.setDate(now.getDate()-1); if (sameDay(d,y)) return "Yesterday";
+    var lbl = d.getDate()+" "+MONTHS[d.getMonth()]; if (d.getFullYear()!==now.getFullYear()) lbl += " "+d.getFullYear(); return lbl; }
+  function ticks(read){
+    return '<svg viewBox="0 0 18 12" class="wa-tk'+(read?" read":"")+'" fill="currentColor" aria-hidden="true">'+
+      '<path d="M12.6.6 5.9 7.9 4 6 2.8 7.2l3.1 3.4L13.8 1.8zM17.2.6l-6.7 7.3-.6-.6-1.1 1.2 1.7 2.1L18.4 1.8z"/></svg>'; }
+  var html = "";
+  var lastDay = "";
+  rows.forEach(function (m) {
+    var day = dayLabel(m.created_at);
+    if (day && day !== lastDay) {
+      html += '<div class="wa-daywrap"><span class="wa-day">' + esc(day) + "</span></div>";
+      lastDay = day;
+    }
     var mine = m.sender_type === "portal";
-    var who = mine ? "You" : (m.sender_name || "School");
-    var when = String(m.created_at || "").replace("T", " ").slice(0, 16);
-    return '<div style="display:flex; justify-content:' + (mine ? "flex-end" : "flex-start") + "; margin:6px 0;\">" +
-      '<div style="max-width:82%; padding:8px 12px; border-radius:14px; ' +
-      (mine
-        ? "background:#14532d; color:#fff; border-bottom-right-radius:4px;"
-        : "background:#eef4ef; color:#1f2d26; border:1px solid #d7e0da; border-bottom-left-radius:4px;") + '">' +
-      '<div style="font-size:11px; opacity:.75; font-weight:700;">' + esc(who) + " · " + esc(when) + "</div>" +
-      '<div style="font-size:14px; line-height:1.45; white-space:pre-wrap;">' + esc(m.body) + "</div>" +
+    var who = m.sender_name || "School";
+    html += '<div class="wa-row ' + (mine ? "mine" : "theirs") + '">' +
+      '<div class="wa-bub">' +
+        (mine ? "" : '<div class="wa-who">' + esc(who) + "</div>") +
+        esc(m.body) +
+        '<span class="wa-meta">' + esc(clock(m.created_at)) + (mine ? ticks(!!m.read_at) : "") + "</span>" +
       "</div></div>";
-  }).join("");
+  });
+  box.innerHTML = html;
+  box.scrollTop = box.scrollHeight; // land on the newest message, like WhatsApp
 }
 
 function loadPortalMessages() {
@@ -722,7 +743,6 @@ function ptShowView(name) {
   if (name === "notifications") loadPortalNotifications();
   if (name === "exams") loadPortalTimetable("exam");    // NEW (pack 25): published exam schedule
   if (name === "classtt") loadPortalTimetable("class"); // NEW (pack 25): published weekly timetable
-  if (name === "attendance") loadAttendance();           // NEW (pack 26): attendance on demand
 }
 
 /* Build the OPay-style list: unread replies, school notices & events,
@@ -805,77 +825,25 @@ function loadPortalNotifications() {
   }).catch(step);
 }
 
-/* ==========================================================================
-   NEW (pack 26): Student attendance record viewer.
-   Calls GET /portal/attendance -> [{att_date, status},...].
-   prefetchOnly=true just counts absences for a badge; false = full render.
-   ========================================================================== */
-var ptAttRows = null; // cache so page switch doesn't re-fetch
-function loadAttendance(prefetchOnly) {
-  fetch("/portal/attendance")
-    .then(function (r) { return r.ok ? r.json() : []; })
-    .then(function (rows) {
-      ptAttRows = Array.isArray(rows) ? rows : [];
-      var present = 0, absent = 0, late = 0;
-      ptAttRows.forEach(function (r) {
-        if (r.status === "present") present++;
-        else if (r.status === "absent") absent++;
-        else if (r.status === "late") late++;
-      });
-      var total = present + absent + late;
-
-      if (prefetchOnly) return; // only called to warm the cache on login
-
-      var summBox = document.getElementById("ptAttSummary");
-      var listBox = document.getElementById("ptAttList");
-      if (!summBox || !listBox) return;
-
-      if (!total) {
-        listBox.innerHTML = '<div class="pt-empty">No attendance records yet. The school will add them here as terms progress.</div>';
-        summBox.innerHTML = "";
-        return;
-      }
-
-      // Summary pills
-      var pct = total > 0 ? Math.round((present / total) * 100) : 0;
-      summBox.innerHTML =
-        '<div style="background:#e4f4ea; border:1px solid #b9e0c8; border-radius:11px; padding:10px 16px; min-width:90px; text-align:center;">' +
-          '<div style="font-size:22px; font-weight:800; color:#14532d;">' + present + '</div>' +
-          '<div style="font-size:11px; color:#1d4a30;">Present</div></div>' +
-        '<div style="background:#fdf0e4; border:1px solid #f3d6b0; border-radius:11px; padding:10px 16px; min-width:90px; text-align:center;">' +
-          '<div style="font-size:22px; font-weight:800; color:#B98A1D;">' + late + '</div>' +
-          '<div style="font-size:11px; color:#7a5c10;">Late</div></div>' +
-        '<div style="background:#fdecea; border:1px solid #f3bfbb; border-radius:11px; padding:10px 16px; min-width:90px; text-align:center;">' +
-          '<div style="font-size:22px; font-weight:800; color:#C0392B;">' + absent + '</div>' +
-          '<div style="font-size:11px; color:#8c2020;">Absent</div></div>' +
-        '<div style="background:#f0f4f2; border:1px solid #d5e0da; border-radius:11px; padding:10px 16px; min-width:90px; text-align:center;">' +
-          '<div style="font-size:22px; font-weight:800; color:#1f2d26;">' + pct + '%</div>' +
-          '<div style="font-size:11px; color:#5B6B62;">Attendance rate</div></div>';
-
-      // Dated rows (newest first)
-      var STATUS_LABEL = { present: "&#9989; Present", absent: "&#10060; Absent", late: "&#9203; Late" };
-      var STATUS_COLOR = { present: "#14532d", absent: "#C0392B", late: "#B98A1D" };
-      listBox.innerHTML =
-        '<div class="pt-fee-row head"><span>Date</span><span class="pt-right">Status</span></div>' +
-        ptAttRows.map(function (r) {
-          var d = String(r.att_date || r.created_at || "").slice(0, 10);
-          var st = r.status || "present";
-          return '<div class="pt-fee-row">' +
-            '<span style="text-align:left;">' + esc(d) + '</span>' +
-            '<span class="pt-right" style="font-weight:700; color:' + (STATUS_COLOR[st] || "#1f2d26") + ';">' +
-            (STATUS_LABEL[st] || esc(st)) + '</span></div>';
-        }).join("");
-    })
-    .catch(function () {
-      var listBox = document.getElementById("ptAttList");
-      if (listBox) listBox.innerHTML = '<div class="pt-empty">Could not load attendance. Please try again later.</div>';
-    });
-}
-
 /* Boot the pack-23/24 widgets (DOM is ready - this script loads last). */
 (function ptPack23Boot() {
   var msgForm = document.getElementById("ptMsgForm");
   if (msgForm) msgForm.addEventListener("submit", ptSendMessage);
+  /* NEW (pack 27): WhatsApp composer behaviour - Enter sends, Shift+Enter
+     adds a new line, and the box grows as you type. */
+  var msgBody = document.getElementById("ptMsgBody");
+  if (msgBody) {
+    msgBody.addEventListener("input", function () {
+      msgBody.style.height = "auto";
+      msgBody.style.height = Math.min(msgBody.scrollHeight, 120) + "px";
+    });
+    msgBody.addEventListener("keydown", function (ev) {
+      if (ev.key === "Enter" && !ev.shiftKey) {
+        ev.preventDefault();
+        ptSendMessage(ev);
+      }
+    });
+  }
 
   // pack 24: sidebar view switching
   document.querySelectorAll(".pt-navlink[data-view]").forEach(function (link) {
