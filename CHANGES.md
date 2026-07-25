@@ -4,6 +4,16 @@
 
 ---
 
+## Pack 31b — 2026-07-25
+
+Google Search Console verification (owner pasted the token):
+- meta name="google-site-verification" added to the homepage head.
+- NEW FILE googlez78gd5ZFlM0Uo8Y_tBVvz_Gunc0j6rZpbOFg5eM5-xo.html in the
+  site root (Google's alternate proof method - either one passes).
+- sw.js cache bump to ameenullah-shell-v20.
+
+---
+
 ## Pack 31 — 2026-07-25
 
 Owner asks:
