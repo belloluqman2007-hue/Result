@@ -234,10 +234,35 @@
        CHANGED (pack 30): optional 3rd arg `cutGuide` = list of allowed
        vertical cut positions in canvas pixels (row bottoms). A page then
        NEVER splits a table row in half - the cut snaps to the nearest
-       allowed edge above the ideal page end. Returns the jsPDF instance. */
+       allowed edge above the ideal page end. Returns the jsPDF instance.
+       FIX (pack 34 - owner: "zip result is not proper, it is longer than
+       one page"): ONE clean page per result whenever the card only
+       overflows a little. If the card is at most ~1.43 pages tall, the
+       whole card is scaled down uniformly (never below ~69% size, so the
+       text stays readable) and centred on a single A4 page. Only truly
+       huge cards (17+ subjects) still split across pages, snapped to
+       row edges - never a stray sliver page. */
     window.amsCanvasToA4Pdf = function (canvas, quality, cutGuide) {
         const pdf = new window.jspdf.jsPDF({ unit: "mm", format: "a4" });
         const pageHeightPx = Math.ceil((297 / 210) * canvas.width); // px per A4 page at canvas scale
+
+        /* FIX (pack 34): one-page-first. Cards up to ~1.43 pages tall
+           (up to about 16 subjects) are gently scaled to exactly one
+           A4 page and optically centred. Cards that fit already render
+           EXACTLY as before (scale 1, top aligned, full width). */
+        if (canvas.height <= pageHeightPx * 1.43) {
+            const s = Math.min(1, 0.98 * (pageHeightPx / canvas.height));
+            const wMm = 210 * s;
+            const hMm = ((canvas.height * 210) / canvas.width) * s;
+            pdf.addImage(
+                canvas.toDataURL("image/jpeg", quality || 0.95), "JPEG",
+                (210 - wMm) / 2,
+                s === 1 ? 0 : (297 - hMm) / 2,
+                wMm, hMm
+            );
+            return pdf;
+        }
+
         let done = 0;
         let pageIndex = 0;
 

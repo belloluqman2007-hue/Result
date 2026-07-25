@@ -4,6 +4,16 @@
 
 ---
 
+## Pack 34 — 2026-07-25
+
+**FIX (owner: "the zip download result is not proper — it is longer than one page"):**
+
+- Measured the real report cards: 8 subjects = 1.13 pages, 14 = 1.35 pages — so every class-zip PDF spilled a few rows onto an ugly second page.
+- `amsCanvasToA4Pdf` (js/report-card.js) is now **one-page-first**: any card up to ~1.43 pages tall (up to ~16 subjects) is uniformly scaled to fit exactly one A4 page (never below ~69% size, so text stays readable) and optically centred. Cards that already fit render **exactly as before** (scale 1, full width, top aligned).
+- Only truly huge cards (17+ subjects) still span pages — still snapped to table-row edges (pack 30), never mid-row, never a sliver page.
+- Verified: 3/8/14/16-subject cards → 1 clean page each; 20-subject card → 2 clean pages. On-screen report card unchanged.
+- `sw.js` cache bumped to `ameenullah-shell-v24`.
+
 ## Pack 33 — 2026-07-25
 
 **NEW (Debtors Board — see everyone owing, remind them with one tap):**
