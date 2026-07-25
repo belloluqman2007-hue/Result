@@ -401,7 +401,9 @@
 
         // Off-screen staging area with a fixed report width.
         var stage = document.createElement("div");
-        stage.className = "ams-staging";
+        // CHANGED (pack 34b): rcpzip = one-page compact skin (css/style.css)
+        // so real cards (tall Arabic rows + photo) fit ONE A4 page.
+        stage.className = "ams-staging rcpzip";
         stage.style.width = "900px";
         document.body.appendChild(stage);
 

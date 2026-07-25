@@ -237,20 +237,22 @@
        allowed edge above the ideal page end. Returns the jsPDF instance.
        FIX (pack 34 - owner: "zip result is not proper, it is longer than
        one page"): ONE clean page per result whenever the card only
-       overflows a little. If the card is at most ~1.43 pages tall, the
-       whole card is scaled down uniformly (never below ~69% size, so the
-       text stays readable) and centred on a single A4 page. Only truly
-       huge cards (17+ subjects) still split across pages, snapped to
-       row edges - never a stray sliver page. */
+       overflows a little. If the card is at most ~1.55 pages tall
+       (raised from 1.43 in pack 34b - real cards carry a photo + tall
+       Arabic rows), the whole card is scaled down uniformly and centred
+       on a single A4 page. Only truly huge cards still split across
+       pages, snapped to row edges - never a stray sliver page. */
     window.amsCanvasToA4Pdf = function (canvas, quality, cutGuide) {
         const pdf = new window.jspdf.jsPDF({ unit: "mm", format: "a4" });
         const pageHeightPx = Math.ceil((297 / 210) * canvas.width); // px per A4 page at canvas scale
 
-        /* FIX (pack 34): one-page-first. Cards up to ~1.43 pages tall
-           (up to about 16 subjects) are gently scaled to exactly one
-           A4 page and optically centred. Cards that fit already render
-           EXACTLY as before (scale 1, top aligned, full width). */
-        if (canvas.height <= pageHeightPx * 1.43) {
+        /* FIX (pack 34): one-page-first. Cards up to ~1.55 pages tall
+           are gently scaled to exactly one A4 page and optically
+           centred. Cards that fit already render EXACTLY as before
+           (scale 1, top aligned, full width). CHANGED (pack 34b):
+           threshold 1.43 -> 1.55; the rcpzip compact skin brings real
+           cards to ~1.1-1.3p so they print at ~75-90% - very readable. */
+        if (canvas.height <= pageHeightPx * 1.55) {
             const s = Math.min(1, 0.98 * (pageHeightPx / canvas.height));
             const wMm = 210 * s;
             const hMm = ((canvas.height * 210) / canvas.width) * s;

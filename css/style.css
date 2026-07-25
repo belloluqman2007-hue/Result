@@ -1080,3 +1080,28 @@ nav a{
   }
 }
 
+
+/* ================= NEW (pack 34b): ONE-PAGE compact skin =================
+   Owner: "zip result is not proper - it is longer than one page" and
+   pack-34 alone didn't cover the REAL cards (tall Arabic rows + photo
+   push them past the fit threshold). This compact skin is applied ONLY
+   to the offscreen staging wrapper (.rcpzip = report-capture zip) used
+   by the class-zip downloader. The on-screen report and every other
+   path keep the full design untouched - visuals only, zero data change. */
+.rcpzip .report-header{ padding:13px 20px; gap:10px; }
+.rcpzip .school-logo{ width:62px; height:62px; }
+.rcpzip .student-passport{ width:62px; height:76px; min-width:62px; }
+.rcpzip .school-details p{ margin:2px 0; }
+.rcpzip .report-container > h3:first-of-type{ margin-top:12px; }
+.rcpzip .report-container h3{ font-size:13.5px; margin-bottom:6px; margin-top:10px; }
+.rcpzip .student-info-table{ margin:10px 30px; }
+.rcpzip .student-info-table td{ padding:6px 10px; font-size:12.5px; }
+.rcpzip #resultTable{ margin-top:6px; }
+.rcpzip #resultTable th{ padding:6px 8px; font-size:11px; }
+.rcpzip #resultTable td{ padding:5px 8px; font-size:12.5px; line-height:1.35; }
+.rcpzip .bottom-section h3{ margin-top:12px; }
+.rcpzip .summary-table td{ padding:6px 10px; font-size:12.5px; }
+.rcpzip .signature-section{ margin:18px 30px 18px; padding-top:12px; gap:14px; }
+.rcpzip .signature-img{ max-height:40px; }
+.rcpzip .signature-box p{ margin:3px 0; }
+.rcpzip .signature-box strong{ font-size:12px; }

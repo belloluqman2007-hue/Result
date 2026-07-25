@@ -14,6 +14,12 @@
 - Verified: 3/8/14/16-subject cards → 1 clean page each; 20-subject card → 2 clean pages. On-screen report card unchanged.
 - `sw.js` cache bumped to `ameenullah-shell-v24`.
 
+**Pack 34b (same day — deeper real-world fix):** the owner sent a REAL zip PDF that still spanned 2 pages. Real cards carry a student photo and tall Arabic rows, so they sat just above the 1.43-page fit threshold. Solution, verified against the exact real card profile (13 Arabic subjects + photo, class الأوّل الثّانويّ):
+- NEW `.rcpzip` one-page compact skin (css/style.css) — tighter row padding, smaller photo/logo and signature margins — applied ONLY to the zip capture staging (`ams-staging rcpzip` in js/class-results.js). On-screen report cards and all other downloads keep the full design untouched.
+- Fit threshold in `amsCanvasToA4Pdf` raised to 1.55 pages.
+- Result: the real 13-subject card now fits at **0.90 page with zero scaling**; 16/18/20-subject Arabic cards → one page too. All earlier semantics (row-snap for giant cards) intact.
+- `sw.js` cache bumped to `ameenullah-shell-v25`.
+
 ## Pack 33 — 2026-07-25
 
 **NEW (Debtors Board — see everyone owing, remind them with one tap):**
