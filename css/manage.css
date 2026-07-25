@@ -722,3 +722,18 @@ table.broadsheet tr:nth-child(even) td{ background:#F4FAF7; }
   .fin-charge-row{ flex-wrap:wrap; }
   .fin-charge-row .nm{ flex:1 1 45%; }
 }
+
+/* ================= NEW (pack 33): Debtors board ================= */
+.deb-owed{ color:#B3261E; font-weight:800; white-space:nowrap; }
+.deb-credit{ color:#157347; font-size:11px; font-weight:600; white-space:normal; }
+.deb-chip{ display:inline-block; background:#f4f0e6; border:1px solid #e6dec6; color:#6b5d2f;
+  border-radius:999px; padding:1px 9px; margin:1px 2px; font-size:11.5px; font-weight:600; white-space:nowrap; }
+.deb-sid{ color:#7d8f84; }
+.deb-remind{ background:linear-gradient(135deg,#C9A227,#A3821E); color:#fff; border:none; border-radius:999px;
+  padding:6px 13px; font-size:12.5px; font-weight:700; cursor:pointer; transition:transform .12s, box-shadow .12s;
+  box-shadow:0 2px 8px rgba(163,130,30,.25); white-space:nowrap; }
+.deb-remind:hover{ transform:translateY(-1px); box-shadow:0 4px 12px rgba(163,130,30,.35); }
+.deb-remind:disabled{ opacity:.6; cursor:default; transform:none; }
+.deb-remind.deb-sent{ background:#157347; box-shadow:none; }
+.deb-late-row td{ background:#fdf3f2; }
+.deb-badge{ background:#D64541; color:#fff; border-radius:999px; padding:1px 8px; font-size:11px; font-weight:800; }

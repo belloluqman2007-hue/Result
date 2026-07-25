@@ -59,6 +59,8 @@
     <div class="mg-tabs">
       <button class="mg-tab active" type="button" onclick="finSwitchTab('fees', this)">&#128181; Fees Setup</button>
       <button class="mg-tab" type="button" onclick="finSwitchTab('pay', this)">&#128184; Payments</button>
+      <!-- NEW (pack 33): debtors board tab -->
+      <button class="mg-tab" type="button" onclick="finSwitchTab('deb', this)">&#9200; Debtors <span id="debBadge" class="deb-badge" style="display:none;"></span></button>
       <button class="mg-tab" type="button" onclick="finSwitchTab('subs', this)">&#128395;&#65039; Parent Payments <span id="subsBadge" style="display:none; background:#D64541; color:#fff; border-radius:999px; padding:1px 8px; font-size:11px;"></span></button>
       <button class="mg-tab" type="button" onclick="finSwitchTab('exp', this)">&#128177; Expenses</button>
       <button class="mg-tab" type="button" onclick="finSwitchTab('sum', this)">&#128202; Summary</button>
@@ -183,6 +185,43 @@
             </table>
           </div>
         </div>
+      </div>
+    </div>
+
+    <!-- NEW (pack 33): DEBTORS BOARD - everyone still owing for the
+         selected term & session, all fee types combined, biggest debt
+         first, with one-tap reminders (chat message + phone push). -->
+    <div class="mg-panel" id="finPanelDeb">
+      <div class="mg-toolbar" style="flex-wrap:wrap; align-items:flex-end;">
+        <div class="mg-field">
+          <label for="debCls">Class</label>
+          <select id="debCls" onchange="loadDebtors()"><option value="">All classes</option></select>
+        </div>
+        <div class="mg-field" style="flex:1; min-width:150px;">
+          <label for="debSearch">Search</label>
+          <input type="text" id="debSearch" placeholder="Type a name or student ID..." oninput="debRender()">
+        </div>
+        <button class="mg-btn-light" type="button" onclick="loadDebtors()">&#128260; Refresh</button>
+        <button class="mg-btn" type="button" id="debRemindAllBtn" style="display:none;" onclick="debRemindAll()">&#128276; Remind all</button>
+      </div>
+
+      <div class="mg-stat-chips" id="debChips" style="display:none; margin-top:10px;">
+        <div class="mg-stat-chip"><span>Total outstanding</span><b id="debTotal" style="color:#B3261E;">-</b></div>
+        <div class="mg-stat-chip"><span>Students owing</span><b id="debOwing">-</b></div>
+        <div class="mg-stat-chip"><span>Cleared</span><b id="debCleared" style="color:#157347;">-</b></div>
+        <div class="mg-stat-chip"><span>Status</span><b id="debLate">-</b></div>
+      </div>
+      <p class="mg-note" id="debNote" style="display:none;"></p>
+
+      <div id="debEmpty" class="fin-ov-empty" style="display:none;"></div>
+      <div class="mg-table-wrap" id="debWrap" style="display:none; margin-top:10px;">
+        <table class="mg-table" id="debTable">
+          <thead><tr>
+            <th>#</th><th>Student</th><th>Class</th><th>Breakdown</th>
+            <th>Owes (&#8358;)</th><th>Last payment</th><th>Remind</th>
+          </tr></thead>
+          <tbody id="debBody"></tbody>
+        </table>
       </div>
     </div>
 

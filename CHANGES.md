@@ -4,6 +4,15 @@
 
 ---
 
+## Pack 33 — 2026-07-25
+
+**NEW (Debtors Board — see everyone owing, remind them with one tap):**
+
+- NEW `/fee-debtors` (admin): every student still owing for the chosen term & session, summed across ALL fee types (School Fee, Exam Fee, etc.), biggest debt first. Runs the exact same joins as `/fee-balance-v2`, so the board always agrees with the Finance numbers — existing calculations untouched. Adds per-student last-payment date, per-fee-type breakdown, totals, cleared count, and the same due-day / "past due" logic as `/fee-alerts`.
+- NEW `/fee-debtors/remind` (admin): one-tap reminder per student or "remind all" (max 200). Balance is recomputed live so a parent who just paid is never reminded. Each reminder = polite portal **chat message** (office thread) + **phone push** (pack 32, tagged `debt-<id>` so repeats replace instead of stacking). Per-student result map: sent / cleared / not-owing / failed.
+- Finance page: new **"⏰ Debtors"** tab (auto-loads on open, class filter, live search, stat chips — total outstanding / owing / cleared / past-due status, red badge on the tab with the owing count). Empty state celebrates: "🎉 Nobody is owing!".
+- `sw.js` cache bumped to `ameenullah-shell-v23`.
+
 ## Pack 32 — 2026-07-25
 
 Owner chose from the ideas menu: "push notifications".

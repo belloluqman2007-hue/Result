@@ -58,6 +58,8 @@ function finSwitchTab(name, btn) {
   document.querySelectorAll(".mg-panel").forEach(function (p) { p.classList.remove("active"); });
   btn.classList.add("active");
   document.getElementById("finPanel" + name.charAt(0).toUpperCase() + name.slice(1)).classList.add("active");
+  // NEW (pack 33): warm the debtors board the moment the tab opens
+  if (name === "deb") debMaybeLoad();
 }
 
 function finReloadTab() {
@@ -65,6 +67,7 @@ function finReloadTab() {
   if (finTab === "fees") { loadFeeSetup(); loadFeesOverview(); }
   else if (finTab === "pay") loadPayStudents();
   else if (finTab === "exp") loadExpenses();
+  else if (finTab === "deb") loadDebtors(); // NEW (pack 33)
   else loadSummary();
 }
 
@@ -967,3 +970,155 @@ function reviewSub(row, approve) {
     })
     .catch(function () { finNotify("Network error.", false); });
 }
+
+// ==================== NEW (pack 33): DEBTORS BOARD ====================
+var debRows = [];        // last debtor list from the server
+var debMeta = null;      // totals & due-day info
+var debKey = "";         // term|session|class of the last load
+var debBusy = false;
+
+function debMaybeLoad() {
+  var ts = finTermSession();
+  var cls = (document.getElementById("debCls").value || "");
+  var key = ts.term + "|" + ts.session + "|" + cls;
+  if (key !== debKey && !debBusy) loadDebtors();
+}
+
+function loadDebtors() {
+  var ts = finTermSession();
+  if (!ts.session) { finNotify("Type the session first (e.g. 2026/2027)."); return; }
+  var clsSel = document.getElementById("debCls");
+  // fill the class filter once (same /classes list the other tabs use)
+  if (clsSel.options.length <= 1) {
+    fetch("/classes").then(function (r) { return r.json(); }).then(function (classes) {
+      (classes || []).forEach(function (c) {
+        var o = document.createElement("option");
+        o.value = c.class_name; o.textContent = c.class_name;
+        clsSel.appendChild(o);
+      });
+    }).catch(function () {});
+  }
+  var empty = document.getElementById("debEmpty");
+  var wrap = document.getElementById("debWrap");
+  empty.style.display = "block";
+  empty.textContent = "Loading debtors...";
+  wrap.style.display = "none";
+  document.getElementById("debChips").style.display = "none";
+  document.getElementById("debNote").style.display = "none";
+  debBusy = true;
+  fetch("/fee-debtors?term=" + encodeURIComponent(ts.term) + "&session=" + encodeURIComponent(ts.session) +
+        "&class_name=" + encodeURIComponent(clsSel.value || ""))
+    .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+    .then(function (res) {
+      debBusy = false;
+      if (!res.ok) { empty.textContent = res.j.message || "Could not load debtors."; return; }
+      debMeta = res.j;
+      debRows = res.j.debtors || [];
+      debKey = res.j.term + "|" + res.j.session + "|" + (clsSel.value || "");
+      // chips
+      document.getElementById("debTotal").textContent = naira(res.j.outstanding_total);
+      document.getElementById("debOwing").textContent = res.j.owing_count;
+      document.getElementById("debCleared").textContent = res.j.cleared_count;
+      var late = document.getElementById("debLate");
+      if (res.j.is_late) { late.textContent = "Past due (day " + res.j.due_day + ")"; late.style.color = "#B3261E"; }
+      else { late.textContent = "Not late yet (due day " + res.j.due_day + ")"; late.style.color = "#157347"; }
+      document.getElementById("debChips").style.display = "";
+      // badge on the tab so owing is visible from anywhere on the page
+      var badge = document.getElementById("debBadge");
+      if (res.j.owing_count > 0) { badge.textContent = res.j.owing_count; badge.style.display = ""; }
+      else badge.style.display = "none";
+      debRender();
+    })
+    .catch(function () { debBusy = false; empty.textContent = "Could not load debtors - check connection."; });
+}
+
+function debRender() {
+  var q = document.getElementById("debSearch").value.trim().toLowerCase();
+  var rows = debRows.filter(function (c) {
+    if (!q) return true;
+    return (c.full_name || "").toLowerCase().indexOf(q) !== -1 || (c.student_id || "").toLowerCase().indexOf(q) !== -1;
+  });
+  var empty = document.getElementById("debEmpty");
+  var wrap = document.getElementById("debWrap");
+  var body = document.getElementById("debBody");
+  var btnAll = document.getElementById("debRemindAllBtn");
+  if (!debRows.length) {
+    wrap.style.display = "none"; btnAll.style.display = "none"; empty.style.display = "block";
+    empty.innerHTML = "&#127881; Nobody is owing for this term &amp; session - every student has cleared!";
+    return;
+  }
+  if (!rows.length) {
+    wrap.style.display = "none"; btnAll.style.display = "none"; empty.style.display = "block";
+    empty.textContent = "No debtor matches that search.";
+    return;
+  }
+  empty.style.display = "none";
+  var html = "";
+  rows.forEach(function (c, i) {
+    var chips = (c.items || []).map(function (it) {
+      return '<span class="deb-chip">' + escHtml(it.fee_type) + " " + naira(it.balance) + "</span>";
+    }).join("");
+    var credit = c.credit > 0 ? '<div class="deb-credit">+' + naira(c.credit) + " overpaid on another fee</div>" : "";
+    var last = c.last_pay ? String(c.last_pay).slice(0, 10) : "-";
+    html += '<tr class="' + (debMeta && debMeta.is_late ? "deb-late-row" : "") + '">' +
+      "<td>" + (i + 1) + "</td>" +
+      '<td><b style="unicode-bidi:isolate;">' + escHtml(c.full_name) + '</b><br><small class="deb-sid">' + escHtml(c.student_id) + "</small></td>" +
+      '<td style="unicode-bidi:isolate;">' + escHtml(c.class_name) + "</td>" +
+      "<td>" + chips + "</td>" +
+      '<td class="deb-owed">' + naira(c.owed) + credit + "</td>" +
+      "<td>" + last + "</td>" +
+      '<td><button class="deb-remind" type="button" data-sid="' + escHtml(c.student_id) + '" onclick="debRemind(this)">&#128276; Remind</button></td>' +
+      "</tr>";
+  });
+  body.innerHTML = html;
+  wrap.style.display = "block";
+  btnAll.style.display = "";
+  btnAll.innerHTML = "&#128276; Remind all (" + debRows.length + ")";
+}
+
+function debPostRemind(ids, done) {
+  var ts = finTermSession();
+  fetch("/fee-debtors/remind", {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ term: ts.term, session: ts.session, student_ids: ids })
+  }).then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+    .then(function (res) { done(res.ok, res.j); })
+    .catch(function () { done(false, { message: "Network error - try again." }); });
+}
+
+function debRemind(btn) {
+  var sid = btn.getAttribute("data-sid");
+  btn.disabled = true; btn.textContent = "Sending...";
+  debPostRemind([sid], function (ok, j) {
+    btn.disabled = false;
+    if (ok && j.results && j.results[sid] === "sent") {
+      btn.textContent = "Sent \u2713"; btn.classList.add("deb-sent");
+      finNotify("\u{1F514} Reminder sent to the parent (chat + phone alert).", true);
+    } else if (ok && j.results && (j.results[sid] === "cleared" || j.results[sid] === "not-owing")) {
+      btn.textContent = "Cleared"; btn.classList.add("deb-sent");
+      finNotify("That student no longer owes - nothing sent.", true);
+      loadDebtors();
+    } else {
+      btn.innerHTML = "&#128276; Remind";
+      finNotify(j.message || "Could not send the reminder.");
+    }
+  });
+}
+
+function debRemindAll() {
+  var ids = debRows.map(function (c) { return c.student_id; });
+  if (!ids.length) return;
+  var btn = document.getElementById("debRemindAllBtn");
+  if (!confirm("Send a fee reminder to " + ids.length + " parent(s)?\nEach gets a portal chat message + a phone alert.")) return;
+  btn.disabled = true; btn.textContent = "Sending...";
+  debPostRemind(ids, function (ok, j) {
+    btn.disabled = false;
+    btn.innerHTML = "&#128276; Remind all (" + debRows.length + ")";
+    if (!ok) { finNotify(j.message || "Could not send reminders."); return; }
+    finNotify("\u{1F514} Done: " + j.sent + " reminder(s) sent" +
+      (j.skipped ? ", " + j.skipped + " skipped (already cleared)" : "") +
+      (j.failed ? ", " + j.failed + " failed" : "") + ".", !j.failed);
+    debMaybeLoad.__refresh = true; debKey = ""; loadDebtors();
+  });
+}
+

@@ -5241,6 +5241,159 @@ app.get("/fee-alerts", requireLogin, requireAdmin, (req, res) => {
     );
 });
 
+/* ================= NEW (pack 33): DEBTORS BOARD =================
+   One admin screen: every student still owing for a term & session,
+   summed across ALL fee types, biggest debt first, with one-tap
+   reminders (portal chat message + phone push). This is READ-ONLY
+   with respect to the existing fee logic: it runs the exact same
+   joins as /fee-balance-v2 and only aggregates the rows. */
+// NEW (pack 33): shared fee-rows helper - EXACT copy of /fee-balance-v2's
+// query so the debtors board always agrees with the Finance numbers.
+function amsFeeBalanceRows(term, session, className, studentIds, cb) {
+    let sql = `
+        SELECT s.student_id, s.full_name, s.class_name,
+               fs.fee_type, fs.amount AS fee,
+               COALESCE(p.paid, 0) AS paid,
+               (fs.amount - COALESCE(p.paid, 0)) AS balance
+        FROM students s
+        JOIN fee_structure2 fs
+          ON fs.class_name = s.class_name AND fs.term = ? AND fs.session = ?
+        LEFT JOIN (SELECT student_id, fee_type, SUM(amount) AS paid
+                     FROM fee_payments WHERE term = ? AND session = ?
+                    GROUP BY student_id, fee_type) p
+               ON p.student_id = s.student_id AND p.fee_type = fs.fee_type
+    `;
+    const params = [term, session, term, session];
+    const wh = [];
+    if (className) { wh.push("s.class_name = ?"); params.push(className); }
+    if (Array.isArray(studentIds) && studentIds.length) {
+        wh.push("s.student_id IN (" + studentIds.map(() => "?").join(",") + ")");
+        studentIds.forEach((sid) => params.push(sid));
+    }
+    if (wh.length) sql += " WHERE " + wh.join(" AND ");
+    sql += " ORDER BY s.class_name, s.full_name, fs.fee_type";
+    connection.query(sql, params, (err, rows) => cb(err, rows));
+}
+
+// NEW (pack 33): fold per-fee-type rows into per-student debt cards.
+// Overpaying one fee type never hides a debt on another (owed = sum of
+// positive per-type balances only); the overpaid part shows as credit.
+function amsDebtorsAggregate(rows) {
+    const byStudent = {};
+    (rows || []).forEach((r) => {
+        const sid = r.student_id;
+        if (!byStudent[sid]) byStudent[sid] = {
+            student_id: sid, full_name: r.full_name, class_name: r.class_name,
+            expected: 0, paid: 0, owed: 0, credit: 0, items: []
+        };
+        const card = byStudent[sid];
+        const fee = Number(r.fee) || 0;
+        const paid = Number(r.paid) || 0;
+        const bal = fee - paid;
+        card.expected += fee;
+        card.paid += paid;
+        if (bal > 0) { card.owed += bal; card.items.push({ fee_type: r.fee_type, balance: bal }); }
+        else if (bal < 0) { card.credit += -bal; }
+    });
+    const list = Object.keys(byStudent).map((k) => byStudent[k]);
+    list.sort((a, b) => (b.owed - a.owed) || (a.full_name < b.full_name ? -1 : 1)); // biggest debt first
+    return list;
+}
+
+// NEW (pack 33): the board - debtors (owed > 0) with totals & due-day flag.
+app.get("/fee-debtors", requireLogin, requireAdmin, (req, res) => {
+    const term = (req.query.term || "").trim();
+    const session = (req.query.session || "").trim();
+    const className = (req.query.class_name || "").trim();
+    if (!term || !session) return res.status(400).json({ message: "term and session are required." });
+    amsFeeBalanceRows(term, session, className, null, (err, rows) => {
+        if (err) { console.log(err); return res.status(500).json({ message: "Database error" }); }
+        connection.query(
+            "SELECT student_id, MAX(paid_at) AS last_pay FROM fee_payments WHERE term = ? AND session = ? GROUP BY student_id",
+            [term, session],
+            (e2, lp) => {
+                const lastPay = {};
+                if (!e2 && lp) lp.forEach((r) => { lastPay[r.student_id] = r.last_pay; });
+                const all = amsDebtorsAggregate(rows);
+                const debtors = all.filter((c) => c.owed > 0);
+                debtors.forEach((c) => { c.last_pay = lastPay[c.student_id] || null; });
+                connection.query("SELECT due_day FROM school_settings WHERE id = 1", (e3, srows) => {
+                    const dueDay = (!e3 && srows && srows.length && srows[0].due_day) ? Number(srows[0].due_day) : 10;
+                    const today = new Date().getDate();
+                    res.json({
+                        term, session,
+                        due_day: dueDay, today, is_late: today > dueDay,
+                        students_total: all.length,
+                        owing_count: debtors.length,
+                        cleared_count: all.length - debtors.length,
+                        expected_total: all.reduce((t, c) => t + c.expected, 0),
+                        paid_total: all.reduce((t, c) => t + c.paid, 0),
+                        outstanding_total: debtors.reduce((t, c) => t + c.owed, 0),
+                        debtors
+                    });
+                });
+            }
+        );
+    });
+});
+
+// NEW (pack 33): one-tap reminder - polite portal chat message + phone push.
+// Balance is recomputed live so we never remind a parent who just paid.
+app.post("/fee-debtors/remind", requireLogin, requireAdmin, (req, res) => {
+    const me = req.session.username;
+    const term = String(req.body.term || "").trim();
+    const session = String(req.body.session || "").trim();
+    let ids = req.body.student_ids;
+    if (!term || !session) return res.status(400).json({ message: "term and session are required." });
+    if (!Array.isArray(ids) || !ids.length) return res.status(400).json({ message: "Pick at least one student to remind." });
+    ids = Array.from(new Set(ids.map((s) => String(s || "").trim()).filter(Boolean))).slice(0, 200);
+    if (!ids.length) return res.status(400).json({ message: "Pick at least one student to remind." });
+    amsFeeBalanceRows(term, session, "", ids, (err, rows) => {
+        if (err) { console.log(err); return res.status(500).json({ message: "Database error" }); }
+        const owedBy = {};
+        amsDebtorsAggregate(rows).forEach((c) => { owedBy[c.student_id] = c; });
+        const results = {};
+        const targets = [];
+        ids.forEach((sid) => {
+            if (!owedBy[sid]) results[sid] = "not-owing";
+            else if (owedBy[sid].owed <= 0) results[sid] = "cleared";
+            else targets.push(sid);
+        });
+        if (!targets.length) return res.json({ sent: 0, skipped: ids.length, failed: 0, results });
+        let i = 0, failed = 0;
+        const fmtN = (n) => "\u20A6" + Number(n).toLocaleString(undefined, { maximumFractionDigits: 2 });
+        (function next() {
+            if (i >= targets.length) return res.json({ sent: targets.length - failed, skipped: ids.length - targets.length, failed, results });
+            const sid = targets[i++];
+            const c = owedBy[sid];
+            const parts = c.items.map((it) => it.fee_type + " " + fmtN(it.balance));
+            const body = ("Assalamu 'alaikum. Kind reminder: " + fmtN(c.owed) + " is still outstanding for " +
+                c.full_name + " (" + term + ", " + session + ")" +
+                (parts.length ? " - " + parts.join(", ") : "") +
+                ". Please pay to any of the school bank accounts shown on the portal, or send your receipt there. Jazakumullahu khairan.").slice(0, 2000);
+            connection.query(
+                `INSERT INTO messages (sender_type, sender_ref, sender_name, recipient_type, recipient_ref, recipient_class, body, thread)
+                 VALUES ('staff', ?, ?, 'parent', ?, '', ?, 'admin')`,
+                [me, me + " (" + req.session.role + ")", sid, body],
+                (iErr) => {
+                    if (iErr) { console.log(iErr); failed++; results[sid] = "failed"; }
+                    else {
+                        results[sid] = "sent";
+                        // the parent's phone rings (pack 32 push), tagged so
+                        // repeat reminders replace instead of stacking up
+                        amsPushSend("portal", [sid], {
+                            title: "\u{1F4B3} School fee reminder",
+                            body: fmtN(c.owed) + " outstanding for " + term + " - tap to see how to pay.",
+                            url: "/portal.html", tag: "debt-" + sid
+                        });
+                    }
+                    next();
+                }
+            );
+        })();
+    });
+});
+
 /* ---------- BANK ACCOUNTS (many; shown on parent portal) ------------- */
 app.get("/bank-accounts", (req, res) => {
     connection.query("SELECT id, bank_name, account_name, account_number FROM bank_accounts ORDER BY id", (err, rows) => {
