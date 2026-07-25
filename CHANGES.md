@@ -4,6 +4,17 @@
 
 ---
 
+## Pack 31c — 2026-07-25
+
+Search Console issued a NEW verification token (the previous one no
+longer matched - Verify kept failing):
+- NEW FILE googlea6892f129dcb5282.html (HTML-file method, exact content).
+- Homepage meta token updated to a6892f129dcb5282 (HTML-tag method).
+- Old verification file kept (harmless).
+- sw.js cache bump to ameenullah-shell-v21.
+
+---
+
 ## Pack 31b — 2026-07-25
 
 Google Search Console verification (owner pasted the token):
