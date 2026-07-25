@@ -2842,7 +2842,7 @@ app.get("/voice/:id", (req, res) => {
    values (Render dashboard -> Environment):
      AI_API_KEY  = the secret key (free one: aistudio.google.com -> Get API key)
      AI_BASE_URL = default https://generativelanguage.googleapis.com/v1beta/openai
-     AI_MODEL    = default gemini-2.0-flash
+     AI_MODEL    = default gemini-2.5-flash (Google retired 2.0-flash June 2026)
    With no key set, every AI endpoint answers a friendly "not switched on
    yet" message and the rest of the system is completely unaffected.
    Privacy: only the prompt text (e.g. a topic, or an average score) is
@@ -2855,7 +2855,7 @@ app.get("/voice/:id", (req, res) => {
 const AI_ENV = {
     key:  String(process.env.AI_API_KEY || "").trim(),
     base: String(process.env.AI_BASE_URL || "https://generativelanguage.googleapis.com/v1beta/openai").trim().replace(/\/+$/, ""),
-    model:String(process.env.AI_MODEL || "gemini-2.0-flash").trim()
+    model:String(process.env.AI_MODEL || "gemini-2.5-flash").trim()
 };
 let aiCfgCache = { at: 0, cfg: null };
 function aiConfig() {
@@ -2940,6 +2940,36 @@ function aiChat(messages, opts, cfg) {
     });
 }
 
+/* FIX (pack 30 - owner: "ai keeps saying The AI stumbled"): Google retired
+   gemini-2.0-flash, which was the old default, so every call failed. Now
+   the caller's model is tried first, then these current FREE models in
+   order - whichever answers becomes the working one. Only "model problem"
+   errors move on to the next model; real errors (bad key, quota, network)
+   are reported immediately. */
+const AI_FALLBACK_MODELS = ["gemini-2.5-flash", "gemini-2.5-flash-lite", "gemini-flash-latest"];
+function aiModelErr(e) {
+    const m = String(e && e.message || e || "");
+    return /model|retired|deprecated|not found|404|unsupported|invalid/i.test(m);
+}
+function aiChatSmart(messages, opts, cfg) {
+    const chain = [cfg.model].concat(AI_FALLBACK_MODELS).filter(function (v, i, a) {
+        return v && a.indexOf(v) === i;
+    });
+    let attempt = 0;
+    function tryNext() {
+        if (attempt >= chain.length) return Promise.reject(new Error("no usable AI model"));
+        const model = chain[attempt++];
+        const sub = Object.assign({}, cfg, { model: model });
+        return aiChat(messages, opts, sub).then(function (text) {
+            return { text: text, model: model };
+        }, function (err) {
+            if (attempt < chain.length && aiModelErr(err)) return tryNext();
+            throw err;
+        });
+    }
+    return tryNext();
+}
+
 /* Tolerant JSON extractor - AI models sometimes wrap JSON in code fences. */
 function aiParseJson(text) {
     let t = String(text || "").trim().replace(/^```(?:json)?/i, "").replace(/```\s*$/, "").trim();
@@ -2984,7 +3014,8 @@ app.post("/api/ai/exam-questions", requireLogin, async (req, res) => {
         " JSON shape: {\"questions\":[{\"question\":\"text\",\"options\":[\"A. ...\",\"B. ...\",\"C. ...\",\"D. ...\"] or null}]}";
 
     try {
-        const text = await aiChat([{ role: "system", content: sys }, { role: "user", content: usr }], { maxTokens: 2000, temperature: 0.65 }, cfg);
+        const got = await aiChatSmart([{ role: "system", content: sys }, { role: "user", content: usr }], { maxTokens: 2000, temperature: 0.65 }, cfg);
+        const text = got.text;
         const data = aiParseJson(text);
         const list = Array.isArray(data) ? data : (data && data.questions);
         if (!Array.isArray(list)) throw new Error("AI sent no questions");
@@ -3050,11 +3081,15 @@ app.post("/api/ai/chat", requireLogin, async (req, res) => {
         "point them to the right page in the menu. Never invent school fees, dates or policies.";
 
     try {
-        const text = await aiChat([{ role: "system", content: sys }].concat(hist), { maxTokens: 800, temperature: 0.7 }, cfg);
-        res.json({ reply: text.trim().slice(0, 4000) });
+        const got = await aiChatSmart([{ role: "system", content: sys }].concat(hist), { maxTokens: 800, temperature: 0.7 }, cfg);
+        res.json({ reply: got.text.trim().slice(0, 4000) });
     } catch (e) {
         console.log("AI chat error:", e && e.message);
-        res.status(502).json({ error: "The AI stumbled - please try again in a moment." });
+        const out = { error: "The AI stumbled - please try again in a moment." };
+        if (req.session && req.session.role === "admin") {
+            out.detail = String(e && e.message || "unknown").slice(0, 200); // FIX (pack 30): the office can see WHY
+        }
+        res.status(502).json(out);
     }
 });
 
@@ -3105,10 +3140,18 @@ app.post("/api/ai/config", requireAdmin, async (req, res) => {
         });
     };
     doSave(async function () {
-        try { /* one tiny test ping - the admin knows instantly it truly works */
+        try { /* one tiny test ping - the admin knows instantly it truly works.
+                 FIX (pack 30): roomier token budget (newer "thinking" models
+                 spend tokens on reasoning) and the fallback chain; when a
+                 backup model is the one that answers, we save ITS name so
+                 future chats don't waste time retrying the dead one. */
             const fresh = await aiConfig();
-            await aiChat([{ role: "user", content: "Reply with the single word: OK" }], { maxTokens: 8, temperature: 0 }, fresh);
-            res.json({ saved: true, cleared: false, verified: true });
+            const got = await aiChatSmart([{ role: "user", content: "Reply with the single word: OK" }], { maxTokens: 64, temperature: 0 }, fresh);
+            if (got.model !== fresh.model) {
+                connection.query("UPDATE ai_config SET model = ? WHERE id = 1", [got.model], function () {});
+                aiBustCache();
+            }
+            res.json({ saved: true, cleared: false, verified: true, model: got.model });
         } catch (e) {
             res.json({
                 saved: true, cleared: false, verified: false,
@@ -3166,12 +3209,12 @@ app.post("/api/ai/assistant", async (req, res) => {
             "and share the contact details if known. If a question is not about the school or this website, " +
             "politely say you only answer school questions. A short Islamic greeting is fine when greeted.";
         try {
-            const text = await aiChat(
+            const got = await aiChatSmart(
                 [{ role: "system", content: sys }].concat(history, [{ role: "user", content: message }]),
                 { maxTokens: 320, temperature: 0.6 },
                 cfg
             );
-            res.json({ reply: text.trim().slice(0, 1200) });
+            res.json({ reply: got.text.trim().slice(0, 1200) });
         } catch (e) {
             console.log("AI assistant error:", e && e.message);
             res.status(502).json({ error: "The assistant is taking a short break - please try again in a moment." });

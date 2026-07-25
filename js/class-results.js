@@ -363,6 +363,22 @@
 
     function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
+    /* FIX (pack 30 - owner: "the zip is not displaying well, let it display
+       as it is in check results"): collect the vertical positions where an
+       A4 page break is SAFE (bottoms of table rows/sections) so the PDF
+       slicer never chops a score row in half. Returned in CANVAS pixels. */
+    function crCutGuides(card, canvas) {
+        var cardRect = card.getBoundingClientRect();
+        if (!cardRect.width) return null;
+        var k = canvas.width / cardRect.width;
+        var out = [];
+        card.querySelectorAll("tr").forEach(function (el) {
+            var r = el.getBoundingClientRect();
+            if (r.height) out.push(Math.round((r.bottom - cardRect.top) * k));
+        });
+        return out;
+    }
+
     window.crDownloadAllZip = async function () {
         if (!lastSheet) {
             notify("Generate the broadsheet first.", "info");
@@ -439,7 +455,27 @@
                         useCORS: true
                     });
 
-                    var pdf = window.amsCanvasToA4Pdf(canvas, 0.95);
+                    /* FIX (pack 30): phones under memory pressure sometimes
+                       return an all-white capture. Detect it and retry the
+                       whole render ONCE at a lighter scale - exactly the
+                       same guard the exam downloader got earlier. */
+                    if (window.amsCanvasLooksBlank && window.amsCanvasLooksBlank(canvas)) {
+                        await sleep(300);
+                        stage.innerHTML = "";
+                        card = window.amsBuildReportCard(pack, lastSheet.term, lastSheet.session);
+                        stage.appendChild(card);
+                        await window.amsWaitForImages(card, 4000);
+                        canvas = await html2canvas(card, {
+                            scale: 1.6,
+                            backgroundColor: "#ffffff",
+                            useCORS: true
+                        });
+                    }
+
+                    /* FIX (pack 30): page cuts snap to row edges - see
+                       crCutGuides/amsCanvasToA4Pdf. Nothing is squeezed or
+                       chopped, so the PDF reads exactly like Check Result. */
+                    var pdf = window.amsCanvasToA4Pdf(canvas, 0.95, crCutGuides(card, canvas));
                     var blob = pdf.output("blob");
 
                     var safe = (stu.id + "-" + stu.name).replace(/[\\/:*?"<>|]+/g, "_");

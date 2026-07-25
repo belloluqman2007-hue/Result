@@ -704,3 +704,21 @@ table.broadsheet tr:nth-child(even) td{ background:#F4FAF7; }
 }
 .fin-ov-chip.main{ background:#FCF3D8; border-color:#EBD79A; color:#6d5311; }
 .fin-ov-total{ font-weight:800; color:#14532d; font-size:12.5px; white-space:nowrap; }
+
+/* ==========================================================================
+   FIX (pack 30 - owner: "the total is falling on others in fee structure"):
+   on phone-width screens the all-classes overview row used to cram the
+   class name, the charge chips and the Total into one line, so the Total
+   spilled over neighbouring content. Stack the row vertically instead and
+   give the Total its own dashed divider line. Charge rows wrap cleanly too.
+   ========================================================================== */
+@media (max-width: 640px){
+  .fin-ov-row{ flex-direction:column; align-items:stretch; gap:7px; }
+  .fin-ov-cls{ min-width:0; }
+  .fin-ov-total{
+    border-top:1px dashed #E1E9E3; padding-top:7px; width:100%;
+    white-space:normal; text-align:left;
+  }
+  .fin-charge-row{ flex-wrap:wrap; }
+  .fin-charge-row .nm{ flex:1 1 45%; }
+}

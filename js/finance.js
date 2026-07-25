@@ -230,7 +230,11 @@ function loadFeeSetup() {
   if (!cls) { card.style.display = "none"; return; }
   if (!ts.session) { finNotify("Type the session first (e.g. 2026/2027).", false); return; }
   card.style.display = "flex";
-  document.getElementById("finSetupTitle").textContent = "Charges for " + cls + "  -  " + ts.term + ", " + ts.session;
+  /* FIX (pack 30): the Arabic class name and the English label used to
+     mash together (bidi reordering made "Charges for الـ.. - 1st Term" look
+     garbled). bidi isolation keeps each piece in its place. */
+  document.getElementById("finSetupTitle").innerHTML =
+    "Charges for <b style=\"unicode-bidi:isolate;\">" + escHtml(cls) + "</b>  -  " + escHtml(ts.term) + ", " + escHtml(ts.session);
   var box = document.getElementById("finChargeRows");
   box.innerHTML = '<div class="fin-ov-empty">Loading charges...</div>';
   fetch("/fee-structure2?term=" + encodeURIComponent(ts.term) + "&session=" + encodeURIComponent(ts.session))

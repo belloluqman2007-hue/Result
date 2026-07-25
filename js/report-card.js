@@ -209,17 +209,50 @@
         return root;
     };
 
+    /* FIX (pack 30): true when a captured canvas is essentially white
+       (phones sometimes return blank captures under memory pressure -
+       same guard the exam downloader uses). */
+    window.amsCanvasLooksBlank = function (canvas) {
+        try {
+            const W = 40, H = 40;
+            const probe = document.createElement("canvas");
+            probe.width = W; probe.height = H;
+            const cx = probe.getContext("2d");
+            cx.drawImage(canvas, 0, 0, W, H);
+            const d = cx.getImageData(0, 0, W, H).data;
+            let ink = 0;
+            for (let i = 0; i < d.length; i += 4) {
+                if (d[i] < 245 || d[i + 1] < 245 || d[i + 2] < 245) ink++;
+            }
+            return ink < W * H * 0.004; // <0.4% ink = blank
+        } catch (e) { return false; }
+    };
+
     /* Turn one (possibly very long) canvas into a jsPDF A4 portrait doc,
        slicing tall content across pages so NOTHING is scaled down or cut
-       (print quality, request #7). Returns the jsPDF instance. */
-    window.amsCanvasToA4Pdf = function (canvas, quality) {
+       (print quality, request #7).
+       CHANGED (pack 30): optional 3rd arg `cutGuide` = list of allowed
+       vertical cut positions in canvas pixels (row bottoms). A page then
+       NEVER splits a table row in half - the cut snaps to the nearest
+       allowed edge above the ideal page end. Returns the jsPDF instance. */
+    window.amsCanvasToA4Pdf = function (canvas, quality, cutGuide) {
         const pdf = new window.jspdf.jsPDF({ unit: "mm", format: "a4" });
         const pageHeightPx = Math.ceil((297 / 210) * canvas.width); // px per A4 page at canvas scale
         let done = 0;
         let pageIndex = 0;
 
         while (done < canvas.height) {
-            const sliceHeight = Math.min(pageHeightPx, canvas.height - done);
+            let end = Math.min(done + pageHeightPx, canvas.height);
+            if (cutGuide && cutGuide.length && end < canvas.height) {
+                // snap the cut to the last allowed row edge above the page end
+                let best = -1;
+                for (let gi = 0; gi < cutGuide.length; gi++) {
+                    const g = cutGuide[gi];
+                    if (g > done + pageHeightPx * 0.45 && g <= end) best = Math.max(best, g);
+                }
+                if (best > done) end = best;
+            }
+            const sliceHeight = end - done;
             const slice = document.createElement("canvas");
             slice.width = canvas.width;
             slice.height = sliceHeight;
@@ -229,7 +262,7 @@
             const hMm = (sliceHeight * 210) / canvas.width;
             if (pageIndex > 0) pdf.addPage();
             pdf.addImage(slice.toDataURL("image/jpeg", quality || 0.95), "JPEG", 0, 0, 210, hMm);
-            done += sliceHeight;
+            done = end;
             pageIndex++;
         }
         return pdf;

@@ -4,6 +4,37 @@
 
 ---
 
+## Pack 30 — 2026-07-25
+
+Owner reports after switching the AI on:
+1. "AI keeps saying: The AI stumbled - please try again in a moment."
+   ROOT CAUSE: Google shut down gemini-2.0-flash (the old default model)
+   on 2026-06-01, so every call failed. FIX: new default gemini-2.5-flash
+   with an automatic fallback chain (2.5-flash -> 2.5-flash-lite ->
+   gemini-flash-latest) shared by ALL AI features; the switch-on test ping
+   now uses a roomier token budget (newer "thinking" models) and saves
+   whichever model actually answered; admins see the real error detail.
+2. "If I copy in ai the icon display very big." The copy button used a
+   text glyph some phones draw as a huge emoji -> replaced with a tiny
+   inline SVG copy icon (12px everywhere).
+3. "Download all students results zip is not displaying well - let it
+   display as it is displaying in check results." Class-zip per-student
+   PDFs: page cuts now SNAP to table-row edges (never slices a score row
+   in half), and a blank-canvas guard re-renders a student's page once if
+   the phone's memory made the capture white. Nothing squeezed, same
+   Check-Result look.
+4. "Class fee total is falling on others in fee structure." All-classes
+   overview rows now stack vertically on phones with the Total on its own
+   dashed line; portal total strip wraps instead of overlapping.
+5. "Chat height too long - blank space under the chat." Added the missing
+   min-height:0 + overflow rules to the AI chat and the staff chat so the
+   window fits the screen exactly - no blank tail.
+6. Bonus: Finance setup heading no longer garbles Arabic class + English
+   text (bidi isolation).
+- sw.js cache bump to ameenullah-shell-v18.
+
+---
+
 ## Pack 29 — 2026-07-24
 
 Owner requests:

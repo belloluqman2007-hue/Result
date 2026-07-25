@@ -640,8 +640,8 @@ table.mg-table tr:last-child td{ border-bottom:none; }
 .ptfee-bar{ height:7px; border-radius:4px; background:#EDF1EE; margin-top:8px; overflow:hidden; }
 .ptfee-fill{ height:100%; border-radius:4px; background:linear-gradient(90deg,#1C8A55,#2FA46E); transition:width .4s ease; }
 .ptfee-total{
-  display:flex; align-items:center; justify-content:space-between; gap:10px; margin-top:12px; padding:12px 14px;
-  border-radius:12px; font-weight:800; font-size:14px;
+  display:flex; align-items:center; justify-content:space-between; gap:6px 10px; margin-top:12px; padding:12px 14px;
+  border-radius:12px; font-weight:800; font-size:14px; flex-wrap:wrap; /* FIX (pack 30): wrap instead of overlapping on narrow phones */
 }
 .ptfee-total.owing{ background:#FFF6E9; border:1px solid #F2DDB4; color:#8a5b12; }
 .ptfee-total.clear{ background:#E9F7EF; border:1px solid #C4E8D2; color:#0e7a40; }
