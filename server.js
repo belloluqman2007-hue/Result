@@ -1038,6 +1038,57 @@ function pack29Retry(attempt, err) {
 }
 runPack29Migrations(1);
 
+/* ==================================================================
+   NEW (pack 32 - owner picked "push notifications" from the ideas
+   menu): WEB PUSH. phones ring even when the app is fully closed.
+   Two tables:
+     push_keys          - the school's VAPID identity is created BY THE
+                          APP on first boot and kept here forever (no
+                          Render env vars needed - set them if you prefer).
+     push_subscriptions - one row per phone that tapped "Enable alerts".
+================================================================== */
+function runPack32Migrations(attempt) {
+    const conn = addonConnection();
+    conn.connect((err) => {
+        if (err) { conn.destroy(); return pack32Retry(attempt, err); }
+        const creates = [
+            "CREATE TABLE IF NOT EXISTS push_keys (" +
+            "id TINYINT PRIMARY KEY DEFAULT 1, " +
+            "public_key VARCHAR(128) NOT NULL, " +
+            "private_key VARCHAR(128) NOT NULL, " +
+            "created_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP)",
+            "CREATE TABLE IF NOT EXISTS push_subscriptions (" +
+            "id INT AUTO_INCREMENT PRIMARY KEY, " +
+            "endpoint TEXT NOT NULL, " +
+            "user_type VARCHAR(8) NOT NULL, " +
+            "user_ref VARCHAR(64) NOT NULL, " +
+            "keys_p256dh VARCHAR(128) NOT NULL, " +
+            "keys_auth VARCHAR(64) NOT NULL, " +
+            "created_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP, " +
+            "last_seen_at TIMESTAMP NULL, " +
+            "UNIQUE KEY uq_push_endpoint (endpoint(180)))"
+        ];
+        let i = 0;
+        (function nextC() {
+            if (i >= creates.length) {
+                conn.end();
+                console.log("Pack 32 setup ready (web push).");
+                pushInit(1); // identity comes after tables exist
+                return;
+            }
+            conn.query(creates[i++], (qErr) => {
+                if (qErr) console.log("Pack 32 migration notice:", qErr.code || qErr.message);
+                nextC();
+            });
+        })();
+    });
+}
+function pack32Retry(attempt, err) {
+    if (attempt >= 6) { console.log("Pack 32 setup warning:", err.code || err.message || err); return; }
+    setTimeout(() => runPack32Migrations(attempt + 1), 4000);
+}
+runPack32Migrations(1);
+
 /* ------------------------------------------------------------------
    NEW (pack 22 - owner requests): announcement AUDIENCES
    (teacher/student/parent/general) + announcement-or-EVENT kind +
@@ -1590,6 +1641,24 @@ app.post("/api/announcements", requireLogin, (req, res) => {
                     [title, eventDate, body || "Announcement event"],
                     () => {}
                 );
+            }
+            /* NEW (pack 32): alert the audience's phones straight away.
+               parent/student/general -> portal users; teacher/general ->
+               staff. The bell already showed it inside the app; now the
+               phone itself rings. */
+            if (["parent", "student", "general"].indexOf(audience) !== -1) {
+                amsPushAll("portal", {
+                    title: "\u{1F4E2} " + title.slice(0, 60),
+                    body: (body || title).slice(0, 100),
+                    url: "/portal.html", tag: "ann-" + result.insertId
+                });
+            }
+            if (["teacher", "general"].indexOf(audience) !== -1) {
+                amsPushAll("staff", {
+                    title: "\u{1F4E2} " + title.slice(0, 60),
+                    body: (body || title).slice(0, 100),
+                    url: "/teacher-dashboard.html", tag: "ann-" + result.insertId
+                });
             }
             res.json({ message: kind === "event" ? "Event announced - it also appears in Upcoming Events." : "Announcement posted.", id: result.insertId });
         }
@@ -2579,6 +2648,23 @@ app.post("/portal/messages", (req, res) => {
             [sid, (student.full_name || sid) + " (parent)", to, to === "teacher" ? (student.class_name || "") : "", body, to],
             (iErr) => {
                 if (iErr) return res.status(500).json({ message: "Database error" });
+                /* NEW (pack 32): ping the right staff phones. office mail
+                   rings the admins; class-teacher mail rings the teachers
+                   mapped to that class (confidentiality rules kept). */
+                const payload = {
+                    title: "\u{1F4AC} New message from " + (student.full_name || "a parent") + "'s parent",
+                    body: body.slice(0, 90),
+                    url: "/chat.html", tag: "chat-" + sid + "-" + to
+                };
+                if (to === "admin") {
+                    connection.query("SELECT username FROM users WHERE role = 'admin'", [], (aErr, adm) => {
+                        if (!aErr && adm) amsPushSend("staff", adm.map(r => r.username), payload);
+                    });
+                } else if (student.class_name) {
+                    connection.query("SELECT username FROM teacher_classes WHERE class_name = ?", [student.class_name], (tErr, tch) => {
+                        if (!tErr && tch) amsPushSend("staff", tch.map(r => r.username), payload);
+                    });
+                }
                 res.json({ message: "Message sent to the " + (to === "teacher" ? "class teacher" : "school office") + "." });
             }
         );
@@ -2681,6 +2767,12 @@ app.post("/api/messages", requireLogin, (req, res) => {
             [me, me + " (" + req.session.role + ")", studentId, body, thread],
             (iErr) => {
                 if (iErr) return res.status(500).json({ message: "Database error" });
+                // NEW (pack 32): the parent's phone rings like WhatsApp
+                amsPushSend("portal", [studentId], {
+                    title: "\u{1F4AC} New message from " + (thread === "teacher" ? "your class teacher" : "the school office"),
+                    body: body.slice(0, 90),
+                    url: "/portal.html", tag: "chat-" + studentId + "-" + thread
+                });
                 res.json({ message: "Reply sent to the parent." });
             }
         );
@@ -3246,6 +3338,124 @@ app.post("/api/ai/assistant", async (req, res) => {
             res.status(502).json({ error: "The assistant is taking a short break - please try again in a moment." });
         }
     });
+});
+
+/* ==========================================================================
+   NEW (pack 32): WEB PUSH - subscribe, unsubscribe, stats and the sender
+   used by the four "golden triggers" below (results published, fee
+   received, announcement posted, chat reply). Everything degrades
+   silently: if a phone's subscription dies, it is pruned; if push is not
+   ready yet, the rest of the system never notices.
+   ========================================================================== */
+const webpush = require("web-push");
+let PUSH_VAPID = null;
+function pushReady() { return !!PUSH_VAPID; }
+function pushUseKeys(pub, priv, from) {
+    try {
+        webpush.setVapidDetails("mailto:madrasatuameenillah22@gmail.com", pub, priv);
+        PUSH_VAPID = { publicKey: pub, privateKey: priv };
+        console.log("Web push ready (" + from + ").");
+    } catch (e) { console.log("Web push key problem:", e && e.message); }
+}
+function pushInit(attempt) {
+    const ep = String(process.env.VAPID_PUBLIC_KEY || "").trim();
+    const es = String(process.env.VAPID_PRIVATE_KEY || "").trim();
+    if (ep && es) return pushUseKeys(ep, es, "environment");
+    connection.query("SELECT * FROM push_keys WHERE id = 1", (err, rows) => {
+        if (err) {
+            if (attempt < 6) return setTimeout(() => pushInit(attempt + 1), 4000); // table still migrating
+            return console.log("Web push key warning:", err.code || err.message);
+        }
+        if (rows && rows.length) return pushUseKeys(rows[0].public_key, rows[0].private_key, "saved keys");
+        try {
+            const k = webpush.generateVAPIDKeys(); // first ever boot - create + keep our own identity
+            connection.query("INSERT INTO push_keys (id, public_key, private_key) VALUES (1, ?, ?)", [k.publicKey, k.privateKey], (iErr) => {
+                if (iErr) console.log("Web push key save warning:", iErr.code || iErr.message);
+            });
+            pushUseKeys(k.publicKey, k.privateKey, "new keys generated");
+        } catch (e) { console.log("Web push key warning:", e && e.message); }
+    });
+}
+
+/* fire-and-forget send to specific users; dead phones prune themselves */
+function amsPushSend(userType, userRefs, payload) {
+    if (!pushReady() || !Array.isArray(userRefs) || !userRefs.length) return;
+    const uniq = Array.from(new Set(userRefs.filter(Boolean)));
+    if (!uniq.length) return;
+    connection.query(
+        "SELECT * FROM push_subscriptions WHERE user_type = ? AND user_ref IN (" + uniq.map(() => "?").join(",") + ")",
+        [userType].concat(uniq),
+        (err, subs) => {
+            if (err || !subs || !subs.length) return;
+            const data = JSON.stringify(payload);
+            subs.forEach((sub) => {
+                webpush.sendNotification(
+                    { endpoint: sub.endpoint, keys: { p256dh: sub.keys_p256dh, auth: sub.keys_auth } },
+                    data, { TTL: 86400 }
+                ).catch((e) => {
+                    if (e && (e.statusCode === 404 || e.statusCode === 410)) {
+                        connection.query("DELETE FROM push_subscriptions WHERE id = ?", [sub.id], () => {});
+                    } else if (e) {
+                        console.log("push send notice:", e.statusCode || "", String(e.body || e.message || "").slice(0, 100));
+                    }
+                });
+            });
+        }
+    );
+}
+function amsPushAll(userType, payload) {
+    if (!pushReady()) return;
+    connection.query("SELECT DISTINCT user_ref FROM push_subscriptions WHERE user_type = ?", [userType], (err, rows) => {
+        if (err || !rows || !rows.length) return;
+        amsPushSend(userType, rows.map(r => r.user_ref), payload);
+    });
+}
+
+app.get("/api/push/public-key", (req, res) => {
+    if (!pushReady()) return res.status(503).json({ error: "Alerts are warming up - try again in a moment." });
+    res.json({ key: PUSH_VAPID.publicKey });
+});
+
+function pushSubscribe(req, res, userType, userRef) {
+    const sub = req.body && req.body.subscription;
+    const endpoint = sub && String(sub.endpoint || "").slice(0, 500);
+    const p256dh = sub && sub.keys && String(sub.keys.p256dh || "").slice(0, 128);
+    const auth   = sub && sub.keys && String(sub.keys.auth || "").slice(0, 64);
+    if (!endpoint || !p256dh || !auth) return res.status(400).json({ message: "That subscription looks broken - close the app and try again." });
+    connection.query(
+        "INSERT INTO push_subscriptions (endpoint, user_type, user_ref, keys_p256dh, keys_auth, last_seen_at) VALUES (?,?,?,?,?, NOW()) " +
+        "ON DUPLICATE KEY UPDATE user_type = VALUES(user_type), user_ref = VALUES(user_ref), " +
+        "keys_p256dh = VALUES(keys_p256dh), keys_auth = VALUES(keys_auth), last_seen_at = NOW()",
+        [endpoint, userType, userRef, p256dh, auth],
+        (err) => {
+            if (err) { console.log("push subscribe notice:", err.code || err.message); return res.status(500).json({ message: "Could not save the alert subscription." }); }
+            res.json({ message: "Alerts on." });
+        }
+    );
+}
+app.post("/api/push-subscribe", requireLogin, (req, res) => pushSubscribe(req, res, "staff", req.session.username));
+app.post("/portal/push-subscribe", (req, res) => {
+    const sid = req.session && req.session.portalStudentId;
+    if (!sid) return res.status(401).json({ message: "Not logged in" });
+    pushSubscribe(req, res, "portal", sid);
+});
+app.post("/api/push-unsubscribe", requireLogin, (req, res) => {
+    const endpoint = String((req.body || {}).endpoint || "").slice(0, 500);
+    connection.query("DELETE FROM push_subscriptions WHERE endpoint = ?", [endpoint], () => res.json({ message: "Alerts off." }));
+});
+app.post("/portal/push-unsubscribe", (req, res) => {
+    const endpoint = String((req.body || {}).endpoint || "").slice(0, 500);
+    connection.query("DELETE FROM push_subscriptions WHERE endpoint = ?", [endpoint], () => res.json({ message: "Alerts off." }));
+});
+app.get("/api/push/stats", requireAdmin, (req, res) => {
+    connection.query(
+        "SELECT user_type, COUNT(DISTINCT user_ref) users, COUNT(*) devices FROM push_subscriptions GROUP BY user_type",
+        (err, rows) => {
+            if (err) return res.status(500).json({ message: "Database error" });
+            const out = { ready: pushReady(), portal: { users: 0, devices: 0 }, staff: { users: 0, devices: 0 } };
+            (rows || []).forEach(r => { if (out[r.user_type]) out[r.user_type] = { users: r.users, devices: r.devices }; });
+            res.json(out);
+        });
 });
 
 /* NEW (pack 23): STAFF SETTINGS - change own password (teachers too). */
@@ -4282,6 +4492,23 @@ app.post("/result-publish", requireLogin, requireAdmin, (req, res) => {
         [className, term, session, published],
         (err) => {
             if (err) { console.log(err); return res.status(500).json({ message: "Database error" }); }
+            /* NEW (pack 32): the moment results go live, every subscribed
+               parent's phone rings - "results are out!" (fire-and-forget;
+               the save answer itself never waits). */
+            if (published) {
+                const qs = className
+                    ? ["SELECT student_id FROM students WHERE class_name = ?", [className]]
+                    : ["SELECT student_id FROM students", []];
+                connection.query(qs[0], qs[1], (sErr, studs) => {
+                    if (sErr || !studs || !studs.length) return;
+                    amsPushSend("portal", studs.map(r => r.student_id), {
+                        title: "\u{1F4CA} Results are out!",
+                        body: (className ? className + " \u2022 " : "") + term + ", " + session + " - open your portal to see the scores.",
+                        url: "/portal.html",
+                        tag: "result-" + term + "-" + session
+                    });
+                });
+            }
             res.json({ message: "Saved", class_name: className, term, session, published });
         }
     );
@@ -4530,11 +4757,23 @@ app.post("/fee-payment", requireLogin, requireAdmin, (req, res) => {
                     [studentId, term, session, amount, method, note, req.session.username || null],
                     (err2) => {
                         if (err2) { console.log(err2); return res.status(500).json({ message: "Database error" }); }
+                        amsPushSend("portal", [studentId], { // NEW (pack 32)
+                            title: "\u2705 Payment received",
+                            body: "\u20A6" + amount.toLocaleString("en-US") + " (" + feeType + ") for " + term + " has been recorded. Thank you!",
+                            url: "/portal.html", tag: "fee-" + studentId
+                        });
                         res.json({ message: "Payment recorded", amount });
                     }
                 );
             }
             if (err) { console.log(err); return res.status(500).json({ message: "Database error" }); }
+            /* NEW (pack 32): parent's phone confirms instantly - no more
+               "did the school see my money?" */
+            amsPushSend("portal", [studentId], {
+                title: "\u2705 Payment received",
+                body: "\u20A6" + amount.toLocaleString("en-US") + " (" + feeType + ") for " + term + ", " + session + " has been recorded. Thank you!",
+                url: "/portal.html", tag: "fee-" + studentId
+            });
             res.json({ message: "Payment recorded", amount, fee_type: feeType });
         }
     );

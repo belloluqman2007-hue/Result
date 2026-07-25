@@ -1790,3 +1790,17 @@ html[data-theme="dark"] .report-container p{ color:inherit; }
 }
 .ams-note-edit:hover{ color:#2F9E6E; }
 .ams-note-edit svg{ width:17px; height:17px; }
+
+/* ==========================================================================
+   NEW (pack 32): staff phone-alerts banner on the teacher dashboard.
+   ========================================================================== */
+.td-alertbar{ display:flex; align-items:center; gap:10px; background:linear-gradient(120deg,#123f2b,#166534 60%,#1d7a44);
+  color:#fff; border-radius:14px; padding:11px 14px; margin:12px 16px 0; box-shadow:0 3px 10px rgba(20,61,42,.25); }
+.td-alertbar-ic{ width:32px; height:32px; border-radius:10px; flex:0 0 32px; background:linear-gradient(135deg,#f3c94e,#d9a419);
+  display:flex; align-items:center; justify-content:center; font-size:16px; }
+.td-alertbar-tx{ flex:1; min-width:0; font-size:13.5px; }
+.td-alertbar-tx small{ opacity:.92; font-size:12px; }
+.td-alertbar-btn{ border:none; cursor:pointer; border-radius:999px; padding:8px 14px; font-weight:800; font-size:12.5px;
+  background:#fff; color:#14532d; flex:0 0 auto; }
+.td-alertbar-btn.on{ background:rgba(255,255,255,.16); color:#fff; border:1px solid rgba(255,255,255,.5); }
+.td-alertbar-btn:disabled{ opacity:.6; cursor:default; }

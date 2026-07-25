@@ -4,6 +4,32 @@
 
 ---
 
+## Pack 32 — 2026-07-25
+
+Owner chose from the ideas menu: "push notifications".
+
+- NEW Web Push, zero setup: the app creates its own VAPID identity on
+  first boot and keeps it in push_keys (env vars optional). Phones ring
+  even when the app is fully closed. (web-push package added.)
+- Opt-in UIs: gold-green card in the Parent Portal overview ("Turn on
+  phone alerts") and a banner on the staff dashboard. Toggle on/off
+  anytime; blocked-permission state shows a how-to-fix hint.
+- GOLDEN TRIGGERS (all fire-and-forget; main flows never wait):
+  1. Admin publishes results -> every subscribed parent in that class
+     (or all students for a whole-term publish) gets "Results are out!".
+  2. Admin records a fee payment -> that parent gets "Payment received"
+     with the amount and fee type.
+  3. Announcement posted -> portal users (parent/student/general) and/or
+     staff (teacher/general) get the title + first line.
+  4. Chat: parent messages -> admins (office thread) or that class's
+     teachers (teacher thread, confidentiality kept); staff replies ->
+     the parent's phone rings.
+- Service worker: push + notificationclick handlers; dead subscriptions
+  (404/410) prune themselves. Admin mini-stats at /api/push/stats.
+- sw.js cache bump to ameenullah-shell-v22.
+
+---
+
 ## Pack 31c — 2026-07-25
 
 Search Console issued a NEW verification token (the previous one no

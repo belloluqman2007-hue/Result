@@ -16,7 +16,7 @@
        route, query, or calculation. It is 100% additive.
    ==================================================================== */
 
-const CACHE_NAME = "ameenullah-shell-v21"; // CHANGED (pack 31c): fresh Google verification token (file googlea6892f129dcb5282.html + updated meta) // NEW (pack 31b): Google Search Console ownership verification (meta tag + verification file) // NEW (pack 31): Google SEO (meta/canonical/OG/JSON-LD + robots.txt + sitemap.xml) + AI no longer cuts answers short (bigger budgets + auto-continue on finish_reason=length) + quota-aware model fallback for heavy use // FIX (pack 30): AI model retirement fallback chain (gemini 2.0-flash shutdown), tiny svg copy icon, class-zip PDF row-snapped pages + blank retry, fee totals no longer overlap on phones, chat blank gap gone, finance title bidi fix // NEW (pack 29): AI Remarks -> fluent staff AI Chat + in-app AI key switch-on (powers every AI feature); AI remark route removed // NEW (pack 28): chat new-chat picker + voice notes + admin/teacher threads + student info panel + smaller ticks + guided finance fee setup + organized portal fees + exam page-4 image/blank guards + PDF progress counter // NEW (pack 27): WhatsApp-style chat (staff + portal) + Quran SVG icon + exam page-4 download memory fix + AI features (exam question generator, remarks writer, website assistant) // NEW (pack 26): portal result PDF/print fix + exam typing-stress fix + dashboard sections moved to sidebar pages (scores/notices) + wipe moved to School Settings + full website redesign // NEW (pack 25): exam PDF/page-writing fix + confidentiality + staff Notifications/Settings/Timetables pages + DB pool & MySQL sessions + portal timetables // FIX (pack 24): JS/CSS network-first (kills stale "exam shows only cover" code) + portal sidebar redesign + staff Chat page // NEW (pack 23): result font/one-page fix + messaging + notifications + settings + exam-PDF hardening + receipt viewer // NEW (pack 22): clearer Arabic result font + portal notices/exam timetable + website board + announcement audiences/edit // FIX (pack 21): search-as-you-type card + statement fix + clean numbers/font // FIX (pack 20): DB-backed uploads + optional class in bulk // FIX (pack 19): multi-body merge for saved multi-exam booklets // FIX (pack 18): refresh for dashboard calendar removal + exam print/font/step-chooser fixes // FIX (pack 17): refresh for exam engine/calendar/receipts // FIX (pack 16): refresh for the staff calendar viewer // FIX (pack 15): refresh for portal/calendar/finance v2 // FIX (pack 13): force refresh of old cached assets // NEW (pack 25): exam PDF/page-writing fix + confidentiality + staff Notifications/Settings/Timetables pages + DB pool & MySQL sessions + portal timetables // FIX (pack 24): JS/CSS network-first (kills stale "exam shows only cover" code) + portal sidebar redesign + staff Chat page // NEW (pack 23): result font/one-page fix + messaging + notifications + settings + exam-PDF hardening + receipt viewer // NEW (pack 22): clearer Arabic result font + portal notices/exam timetable + website board + announcement audiences/edit // FIX (pack 21): search-as-you-type card + statement fix + clean numbers/font // FIX (pack 20): DB-backed uploads + optional class in bulk // FIX (pack 19): multi-body merge for saved multi-exam booklets // FIX (pack 18): refresh for dashboard calendar removal + exam print/font/step-chooser fixes // FIX (pack 17): refresh for exam engine/calendar/receipts // FIX (pack 16): refresh for the staff calendar viewer // FIX (pack 15): refresh for portal/calendar/finance v2 // FIX (pack 13): force refresh of old cached assets
+const CACHE_NAME = "ameenullah-shell-v22"; // NEW (pack 32): web push - phones ring for results/fees/announcements/chat even when app is closed // CHANGED (pack 31c): fresh Google verification token (file googlea6892f129dcb5282.html + updated meta) // NEW (pack 31b): Google Search Console ownership verification (meta tag + verification file) // NEW (pack 31): Google SEO (meta/canonical/OG/JSON-LD + robots.txt + sitemap.xml) + AI no longer cuts answers short (bigger budgets + auto-continue on finish_reason=length) + quota-aware model fallback for heavy use // FIX (pack 30): AI model retirement fallback chain (gemini 2.0-flash shutdown), tiny svg copy icon, class-zip PDF row-snapped pages + blank retry, fee totals no longer overlap on phones, chat blank gap gone, finance title bidi fix // NEW (pack 29): AI Remarks -> fluent staff AI Chat + in-app AI key switch-on (powers every AI feature); AI remark route removed // NEW (pack 28): chat new-chat picker + voice notes + admin/teacher threads + student info panel + smaller ticks + guided finance fee setup + organized portal fees + exam page-4 image/blank guards + PDF progress counter // NEW (pack 27): WhatsApp-style chat (staff + portal) + Quran SVG icon + exam page-4 download memory fix + AI features (exam question generator, remarks writer, website assistant) // NEW (pack 26): portal result PDF/print fix + exam typing-stress fix + dashboard sections moved to sidebar pages (scores/notices) + wipe moved to School Settings + full website redesign // NEW (pack 25): exam PDF/page-writing fix + confidentiality + staff Notifications/Settings/Timetables pages + DB pool & MySQL sessions + portal timetables // FIX (pack 24): JS/CSS network-first (kills stale "exam shows only cover" code) + portal sidebar redesign + staff Chat page // NEW (pack 23): result font/one-page fix + messaging + notifications + settings + exam-PDF hardening + receipt viewer // NEW (pack 22): clearer Arabic result font + portal notices/exam timetable + website board + announcement audiences/edit // FIX (pack 21): search-as-you-type card + statement fix + clean numbers/font // FIX (pack 20): DB-backed uploads + optional class in bulk // FIX (pack 19): multi-body merge for saved multi-exam booklets // FIX (pack 18): refresh for dashboard calendar removal + exam print/font/step-chooser fixes // FIX (pack 17): refresh for exam engine/calendar/receipts // FIX (pack 16): refresh for the staff calendar viewer // FIX (pack 15): refresh for portal/calendar/finance v2 // FIX (pack 13): force refresh of old cached assets // NEW (pack 25): exam PDF/page-writing fix + confidentiality + staff Notifications/Settings/Timetables pages + DB pool & MySQL sessions + portal timetables // FIX (pack 24): JS/CSS network-first (kills stale "exam shows only cover" code) + portal sidebar redesign + staff Chat page // NEW (pack 23): result font/one-page fix + messaging + notifications + settings + exam-PDF hardening + receipt viewer // NEW (pack 22): clearer Arabic result font + portal notices/exam timetable + website board + announcement audiences/edit // FIX (pack 21): search-as-you-type card + statement fix + clean numbers/font // FIX (pack 20): DB-backed uploads + optional class in bulk // FIX (pack 19): multi-body merge for saved multi-exam booklets // FIX (pack 18): refresh for dashboard calendar removal + exam print/font/step-chooser fixes // FIX (pack 17): refresh for exam engine/calendar/receipts // FIX (pack 16): refresh for the staff calendar viewer // FIX (pack 15): refresh for portal/calendar/finance v2 // FIX (pack 13): force refresh of old cached assets
 
 // Files made available immediately (used by the offline page).
 const PRECACHE = ["offline.html", "images/LOGO.JPG", "icons/icon-192.png"];
@@ -113,3 +113,39 @@ async function staleWhileRevalidate(req) {
     .catch(() => cached); // offline? fall back to the cached copy
   return cached || freshFetch;
 }
+
+/* ==========================================================================
+   NEW (pack 32): WEB PUSH handlers. The server sends one JSON payload per
+   alert; we ring with the school logo and open the right page on tap.
+   Cached app-shell behaviour above is completely untouched by these.
+   ========================================================================== */
+self.addEventListener("push", function (event) {
+    let d = {};
+    try { d = event.data ? event.data.json() : {}; } catch (e) { /* empty payload */ }
+    const opts = {
+        body: d.body || "",
+        icon: "icons/icon-192.png",
+        badge: "icons/icon-192.png",
+        tag: d.tag || ("ams-" + Date.now()),
+        renotify: true,
+        vibrate: [90, 40, 90],
+        data: { url: d.url || "/" }
+    };
+    event.waitUntil(self.registration.showNotification(d.title || "Ameenullah School", opts));
+});
+
+self.addEventListener("notificationclick", function (event) {
+    event.notification.close();
+    const target = (event.notification.data && event.notification.data.url) || "/";
+    event.waitUntil(
+        clients.matchAll({ type: "window", includeUncontrolled: true }).then(function (wins) {
+            for (const w of wins) {
+                if (w.url.indexOf(target.replace(/^\//, "")) !== -1 && "focus" in w) {
+                    if (w.navigate) w.navigate(target);
+                    return w.focus();
+                }
+            }
+            return clients.openWindow(target);
+        })
+    );
+});

@@ -69,6 +69,24 @@
 
     .pt-mainnew{ flex:1; padding:20px 18px 70px; max-width:900px; margin:0 auto; width:100%; }
 
+    /* NEW (pack 32): phone-alerts opt-in card */
+    .pt-alertcard{ margin-top:12px; background:linear-gradient(120deg,#123f2b,#166534 60%,#1d7a44) !important; border:none !important; }
+    .pt-alertcard-in{ display:flex; align-items:center; gap:11px; }
+    .pt-alertcard-ic{
+      width:38px; height:38px; border-radius:12px; flex:0 0 38px; font-size:18px;
+      background:linear-gradient(135deg,#f3c94e,#d9a419); display:flex; align-items:center; justify-content:center;
+      box-shadow:0 3px 9px rgba(0,0,0,.25);
+    }
+    .pt-alertcard-tx{ flex:1; min-width:0; color:#fff; }
+    .pt-alertcard-tx b{ font-size:14px; display:block; }
+    .pt-alertcard-tx small{ display:block; font-size:11.5px; opacity:.9; line-height:1.45; margin-top:2px; }
+    .pt-alertcard-btn{
+      border:none; cursor:pointer; border-radius:999px; padding:9px 16px; font-weight:800; font-size:13px;
+      background:#fff; color:#14532d; flex:0 0 auto; box-shadow:0 2px 6px rgba(0,0,0,.2);
+    }
+    .pt-alertcard-btn.on{ background:rgba(255,255,255,.16); color:#fff; border:1px solid rgba(255,255,255,.5); }
+    .pt-alertcard-btn:disabled{ opacity:.6; cursor:default; }
+
     .pt-view{ display:none; }
     .pt-view.pt-view-on{ display:block; }
     .pt-view-title{ font-size:20px; color:#14532d; margin:2px 0 12px; font-weight:800; }
@@ -203,6 +221,20 @@
             <button type="button" data-jump="fees">&#128184; My Fees</button>
             <button type="button" data-jump="chat">&#128172; Chat with School</button>
             <button type="button" data-jump="exams">&#128394; Exam Timetable</button>
+          </div>
+        </section>
+
+        <!-- NEW (pack 32): one-tap phone alerts - results/fees/chat ring
+             even when the app is closed. Hidden until js/portal.js says
+             this phone supports push. -->
+        <section class="pt-card pt-alertcard" id="ptAlertCard" style="display:none;">
+          <div class="pt-alertcard-in">
+            <span class="pt-alertcard-ic" id="ptAlertIc">&#128276;</span>
+            <div class="pt-alertcard-tx">
+              <b id="ptAlertTitle">Turn on phone alerts</b>
+              <small id="ptAlertSub">Your phone rings the moment results are out, a payment is received, or the school replies.</small>
+            </div>
+            <button class="pt-alertcard-btn" id="ptAlertBtn" type="button">Enable</button>
           </div>
         </section>
       </div>
@@ -462,6 +494,7 @@
   <!-- EXISTING frozen report-card builder (unchanged file, reused) -->
   <script src="js/report-card.js"></script>
   <!-- NEW (pack 13): portal logic -->
+  <script src="js/ams-push.js"></script>
   <script src="js/portal.js"></script>
   <!-- PWA (unchanged) -->
   <script src="js/pwa.js" defer></script>

@@ -58,6 +58,7 @@
       // marks read) exactly when the parent opens the Chat view.
       ptPrefillSettings(student); // NEW (pack 23): Settings card prefill
       loadCalendar();    // NEW (pack 15)
+      ptInitAlerts();    // NEW (pack 32): phone-alerts opt-in card
     })
     .catch(goLogin);
 
@@ -1016,3 +1017,62 @@ function loadPortalNotifications() {
   // parent is on another view (the "notifications" the owner asked for).
   setInterval(ptRefreshUnread, 60000);
 })();
+
+/* ==========================================================================
+   NEW (pack 32 - owner picked "push notifications"): parent phone alerts.
+   The overview shows a gold-green card when this phone supports push:
+   Enable -> permission + subscription saved on the server; the parent's
+   phone then rings for results/fees/replies even with the app closed.
+   ========================================================================== */
+function ptInitAlerts() {
+  if (!window.amsPush) return;
+  var card = document.getElementById("ptAlertCard");
+  var btn = document.getElementById("ptAlertBtn");
+  var title = document.getElementById("ptAlertTitle");
+  var sub = document.getElementById("ptAlertSub");
+  var ic = document.getElementById("ptAlertIc");
+  if (!card || !btn) return;
+
+  function paint(st) {
+    if (st === "on") {
+      btn.className = "pt-alertcard-btn on";
+      btn.textContent = "On \u2713";
+      title.textContent = "Phone alerts are ON";
+      sub.textContent = "This phone rings for results, payments and school replies. Tap the button to turn off.";
+      ic.innerHTML = "&#128276;";
+    } else if (st === "denied") {
+      btn.className = "pt-alertcard-btn";
+      btn.textContent = "Blocked";
+      btn.disabled = true;
+      title.textContent = "Notifications are blocked";
+      sub.textContent = "Allow them in your phone: browser settings \u2192 Site settings \u2192 Notifications.";
+    } else {
+      btn.className = "pt-alertcard-btn";
+      btn.textContent = "Enable";
+      title.textContent = "Turn on phone alerts";
+      sub.textContent = "Your phone rings the moment results are out, a payment is received, or the school replies.";
+      ic.innerHTML = "&#128276;";
+    }
+  }
+
+  window.amsPush.status().then(function (st) {
+    if (st === "unsupported") return; // old phone/browser - keep the card hidden
+    card.style.display = "block";
+    paint(st);
+    btn.addEventListener("click", function () {
+      btn.disabled = true;
+      var turnOn = btn.textContent !== "On \u2713";
+      var p = turnOn ? window.amsPush.subscribe("portal") : window.amsPush.unsubscribe("portal");
+      p.then(function (st) {
+        paint(st);
+        if (window.amsToast) window.amsToast(st === "on" ? "Alerts ON - this phone will ring for school news \u{1F514}" : "Alerts off.", st === "on" ? "success" : "info", 4000);
+      }).catch(function (e) {
+        var why = e && e.amsWhy;
+        if (why === "denied") paint("denied");
+        else { paint("off"); if (window.amsToast) window.amsToast("Could not switch alerts - check your connection and try again.", "error", 4000); }
+      }).finally(function () {
+        if (btn.textContent !== "Blocked") btn.disabled = false;
+      });
+    });
+  }).catch(function () { /* stay hidden */ });
+}

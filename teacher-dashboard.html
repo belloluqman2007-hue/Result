@@ -163,6 +163,14 @@
 
     <!-- Main column -->
     <main class="ams-main">
+      <!-- NEW (pack 32): staff phone alerts - "a parent messaged you"
+           rings even when the app is closed. Purely cosmetic JS shows it
+           only where push works. -->
+      <div class="td-alertbar" id="tdAlertBar" style="display:none;">
+        <span class="td-alertbar-ic">&#128276;</span>
+        <span class="td-alertbar-tx"><b id="tdAlertTitle">Turn on staff alerts</b> <small id="tdAlertSub">- know instantly when a parent messages you.</small></span>
+        <button class="td-alertbar-btn" id="tdAlertBtn" type="button">Enable</button>
+      </div>
       <header class="ams-topbar">
         <button class="ams-icon-btn ams-hamburger" id="amsMenuToggle" aria-label="Menu">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
@@ -468,6 +476,7 @@
        those libraries. -->
 
   <!-- NEW (PWA conversion): registers the service worker + install button. Additive only. -->
+  <script src="js/ams-push.js"></script>
   <script src="js/pwa.js" defer></script>
   <!-- NEW (pack 15): admin mo-money alerts - late school fees (past the
        due day set in School Settings) + parent payment proofs pending. -->
@@ -542,5 +551,42 @@
     }
   }).catch(function () {});
   </script>
+<script>
+/* NEW (pack 32): staff phone-alerts toggle on the dashboard banner. */
+(function () {
+  if (!window.amsPush) return;
+  document.addEventListener("DOMContentLoaded", function () {
+    var bar = document.getElementById("tdAlertBar");
+    var btn = document.getElementById("tdAlertBtn");
+    var t = document.getElementById("tdAlertTitle");
+    var st2 = document.getElementById("tdAlertSub");
+    if (!bar || !btn) return;
+    function paint(s) {
+      if (s === "on") { btn.className = "td-alertbar-btn on"; btn.textContent = "On \u2713"; t.textContent = "Staff alerts are ON"; st2.textContent = "- this phone rings when a parent messages you. Tap to turn off."; }
+      else if (s === "denied") { btn.textContent = "Blocked"; btn.disabled = true; t.textContent = "Notifications blocked"; st2.textContent = "- allow them in browser site settings."; }
+      else { btn.className = "td-alertbar-btn"; btn.textContent = "Enable"; t.textContent = "Turn on staff alerts"; st2.textContent = "- know instantly when a parent messages you."; }
+    }
+    window.amsPush.status().then(function (s) {
+      if (s === "unsupported") return;
+      bar.style.display = "flex";
+      paint(s);
+      btn.addEventListener("click", function () {
+        btn.disabled = true;
+        var turnOn = btn.textContent !== "On \u2713";
+        var p = turnOn ? window.amsPush.subscribe("staff") : window.amsPush.unsubscribe("staff");
+        p.then(function (s2) {
+          paint(s2);
+          if (window.amsToast) window.amsToast(s2 === "on" ? "Alerts ON \u{1F514}" : "Alerts off.", s2 === "on" ? "success" : "info", 3500);
+        }).catch(function (e) {
+          if (e && e.amsWhy === "denied") paint("denied");
+          else { paint("off"); if (window.amsToast) window.amsToast("Could not switch alerts - try again.", "error", 3500); }
+        }).finally(function () {
+          if (btn.textContent !== "Blocked") btn.disabled = false;
+        });
+      });
+    }).catch(function () {});
+  });
+})();
+</script>
 </body>
 </html>
