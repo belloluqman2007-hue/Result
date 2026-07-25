@@ -4,6 +4,34 @@
 
 ---
 
+## Pack 31 — 2026-07-25
+
+Owner asks:
+1. "How can I make it that if the school name is searched in Google it
+   will bring this website."
+   - NEW: meta description + keywords + robots + canonical URL, Open
+     Graph/Twitter cards, and Schema.org "School" structured data
+     (name, alias, address, phone, email, geo) in index.html.
+   - NEW FILES: robots.txt (welcomes Google, points at the sitemap) and
+     sitemap.xml (the public front page). Both serve from the site root.
+   - Note: Google still needs the site SUBMITTED once in Search Console
+     (steps in the delivery note); indexing then takes a few days.
+2. "The AI is giving incomplete message - why?" The newer Gemini models
+   are "thinking" models: they spend part of the token budget on
+   reasoning, so the old budgets starved the visible answer. FIX: much
+   roomier budgets (chat 2048, website assistant 1200, exam writer 4000),
+   and when the AI itself reports it stopped because it ran out of room
+   (finish_reason "length"), the server asks it ONCE to continue exactly
+   where it stopped and stitches the two halves into one full answer.
+3. "Can it handle much task?" The fallback model chain now ALSO treats
+   free-tier quota/rate errors as "move to the next model" - and each
+   Gemini model has its own daily free quota, so the school's effective
+   daily AI capacity is multiplied. Staff chat keeps its polite 40/hour
+   per-person limit; the website assistant keeps 20/hour per visitor.
+- sw.js cache bump to ameenullah-shell-v19.
+
+---
+
 ## Pack 30 — 2026-07-25
 
 Owner reports after switching the AI on:

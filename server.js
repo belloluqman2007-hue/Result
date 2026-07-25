@@ -2927,10 +2927,14 @@ function aiChat(messages, opts, cfg) {
                     const m = data && data.error && data.error.message ? data.error.message : ("AI service error " + aiRes.statusCode);
                     return reject(new Error(m));
                 }
-                const text = data && data.choices && data.choices[0] && data.choices[0].message
-                    ? (data.choices[0].message.content || "") : "";
+                const choice = data && data.choices && data.choices[0];
+                const text = choice && choice.message ? (choice.message.content || "") : "";
                 if (!text.trim()) return reject(new Error("AI sent an empty reply"));
-                resolve(text);
+                /* CHANGED (pack 31 - owner: "the ai is giving incomplete
+                   message"): also surface finish_reason so the caller can
+                   see when the model ran out of room and ask it to
+                   continue instead of showing a half answer. */
+                resolve({ text: text, finishReason: (choice.finish_reason || "") });
             });
         });
         req.setTimeout(30000, function () { req.destroy(new Error("The AI took too long - please try again")); });
@@ -2949,25 +2953,47 @@ function aiChat(messages, opts, cfg) {
 const AI_FALLBACK_MODELS = ["gemini-2.5-flash", "gemini-2.5-flash-lite", "gemini-flash-latest"];
 function aiModelErr(e) {
     const m = String(e && e.message || e || "");
-    return /model|retired|deprecated|not found|404|unsupported|invalid/i.test(m);
+    /* CHANGED (pack 31 - owner: "can it handle much task"): free-tier
+       quota/rate errors now also move on to the next model - each Gemini
+       model has its OWN free quota, so the fallback chain multiplies how
+       many chats a day the school can do before anyone is told 'slow down'. */
+    return /model|retired|deprecated|not found|404|unsupported|invalid|quota|rate.?limit|429|resource.?exhausted|too many/i.test(m);
 }
 function aiChatSmart(messages, opts, cfg) {
+    opts = opts || {};
     const chain = [cfg.model].concat(AI_FALLBACK_MODELS).filter(function (v, i, a) {
         return v && a.indexOf(v) === i;
     });
     let attempt = 0;
-    function tryNext() {
-        if (attempt >= chain.length) return Promise.reject(new Error("no usable AI model"));
+    function tryNext(msgs) {
+        if (attempt >= chain.length) return Promise.reject(new Error("no usable AI model - or today's free quota is finished (it resets daily)"));
         const model = chain[attempt++];
         const sub = Object.assign({}, cfg, { model: model });
-        return aiChat(messages, opts, sub).then(function (text) {
-            return { text: text, model: model };
+        return aiChat(msgs, opts, sub).then(function (got) {
+            /* FIX (pack 31 - owner: "the ai is giving incomplete message"):
+               when the model says it stopped because it ran out of room
+               (finish_reason 'length'), ask it ONCE to continue exactly
+               where it stopped and stitch the two halves together - the
+               teacher sees one complete answer. */
+            if (got.finishReason === "length" && !opts._continued) {
+                const cont = msgs.concat([
+                    { role: "assistant", content: got.text },
+                    { role: "user", content: "Continue exactly where you stopped. Do not repeat anything you already wrote - just carry on." }
+                ]);
+                const opts2 = Object.assign({}, opts, { _continued: true });
+                return aiChat(cont, opts2, sub).then(function (more) {
+                    return { text: got.text.replace(/\s+$/, "") + " " + more.text.replace(/^\s+/, ""), model: model, finishReason: more.finishReason };
+                }, function () {
+                    return { text: got.text, model: model, finishReason: got.finishReason }; // second half failed - still better than an error
+                });
+            }
+            return { text: got.text, model: model, finishReason: got.finishReason };
         }, function (err) {
-            if (attempt < chain.length && aiModelErr(err)) return tryNext();
+            if (attempt < chain.length && aiModelErr(err)) return tryNext(msgs);
             throw err;
         });
     }
-    return tryNext();
+    return tryNext(messages);
 }
 
 /* Tolerant JSON extractor - AI models sometimes wrap JSON in code fences. */
@@ -3014,7 +3040,7 @@ app.post("/api/ai/exam-questions", requireLogin, async (req, res) => {
         " JSON shape: {\"questions\":[{\"question\":\"text\",\"options\":[\"A. ...\",\"B. ...\",\"C. ...\",\"D. ...\"] or null}]}";
 
     try {
-        const got = await aiChatSmart([{ role: "system", content: sys }, { role: "user", content: usr }], { maxTokens: 2000, temperature: 0.65 }, cfg);
+        const got = await aiChatSmart([{ role: "system", content: sys }, { role: "user", content: usr }], { maxTokens: 4000, temperature: 0.65 }, cfg); // CHANGED (pack 31): room for full question sets
         const text = got.text;
         const data = aiParseJson(text);
         const list = Array.isArray(data) ? data : (data && data.questions);
@@ -3081,7 +3107,7 @@ app.post("/api/ai/chat", requireLogin, async (req, res) => {
         "point them to the right page in the menu. Never invent school fees, dates or policies.";
 
     try {
-        const got = await aiChatSmart([{ role: "system", content: sys }].concat(hist), { maxTokens: 800, temperature: 0.7 }, cfg);
+        const got = await aiChatSmart([{ role: "system", content: sys }].concat(hist), { maxTokens: 2048, temperature: 0.7 }, cfg); // CHANGED (pack 31): thinking models spend tokens on reasoning - 800 starved the visible answer
         res.json({ reply: got.text.trim().slice(0, 4000) });
     } catch (e) {
         console.log("AI chat error:", e && e.message);
@@ -3211,7 +3237,7 @@ app.post("/api/ai/assistant", async (req, res) => {
         try {
             const got = await aiChatSmart(
                 [{ role: "system", content: sys }].concat(history, [{ role: "user", content: message }]),
-                { maxTokens: 320, temperature: 0.6 },
+                { maxTokens: 1200, temperature: 0.6 }, // CHANGED (pack 31): was 320 - short answers got visibly cut
                 cfg
             );
             res.json({ reply: got.text.trim().slice(0, 1200) });
