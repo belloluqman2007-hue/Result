@@ -38,13 +38,14 @@
     <div class="mg-card cert-step">
       <h3>1&#65039;&#8419; Choose the certificate type</h3>
       <div class="cert-types" id="certTypes">
-        <button type="button" class="cert-type active" data-type="excellence" onclick="certSetType('excellence')">
+        <!-- CHANGED (pack 36): the level certificate mirrors the school's real paper certificate -->
+        <button type="button" class="cert-type active" data-type="level" onclick="certSetType('level')">
+          <span class="ct-emoji">&#128220;</span><b>Level Certificate</b>
+          <small>The official paper design (auto level by class)</small>
+        </button>
+        <button type="button" class="cert-type" data-type="excellence" onclick="certSetType('excellence')">
           <span class="ct-emoji">&#129351;</span><b>Academic Excellence</b>
           <small>Top performance for a term</small>
-        </button>
-        <button type="button" class="cert-type" data-type="completion" onclick="certSetType('completion')">
-          <span class="ct-emoji">&#127942;</span><b>Completion</b>
-          <small>Finished a class for the session</small>
         </button>
         <button type="button" class="cert-type" data-type="tahfeedh" onclick="certSetType('tahfeedh')">
           <span class="ct-emoji">&#128213;</span><b>Tahfeedh</b>

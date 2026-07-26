@@ -248,18 +248,23 @@
 
         /* FIX (pack 34): one-page-first. Cards up to ~1.55 pages tall
            are gently scaled to exactly one A4 page and optically
-           centred. Cards that fit already render EXACTLY as before
-           (scale 1, top aligned, full width). CHANGED (pack 34b):
-           threshold 1.43 -> 1.55; the rcpzip compact skin brings real
-           cards to ~1.1-1.3p so they print at ~75-90% - very readable. */
+           centred. CHANGED (pack 36 - owner: "not displaying well at
+           all / display as it is displaying in the check result"):
+           a one-page card now sits in a PRINT-SAFE frame like the
+           browser's own print of Check Result - max content width
+           202mm (4mm side margins, printers can't print to the paper
+           edge) and the card is optically centred top & bottom
+           (never glued to the top edge with a big white band below). */
         if (canvas.height <= pageHeightPx * 1.55) {
-            const s = Math.min(1, 0.98 * (pageHeightPx / canvas.height));
-            const wMm = 210 * s;
-            const hMm = ((canvas.height * 210) / canvas.width) * s;
+            const naturalWmm = 210;
+            const naturalHmm = (canvas.height * naturalWmm) / canvas.width;
+            const s = Math.min(202 / naturalWmm, 0.98 * (297 / naturalHmm));
+            const wMm = naturalWmm * s;
+            const hMm = naturalHmm * s;
             pdf.addImage(
                 canvas.toDataURL("image/jpeg", quality || 0.95), "JPEG",
                 (210 - wMm) / 2,
-                s === 1 ? 0 : (297 - hMm) / 2,
+                Math.max(6, (297 - hMm) / 2),
                 wMm, hMm
             );
             return pdf;

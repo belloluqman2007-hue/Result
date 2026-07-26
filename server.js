@@ -3319,7 +3319,8 @@ app.post("/api/ai/assistant", async (req, res) => {
             (st.address ? "Address: " + st.address + ". " : "") +
             (st.phone ? "Phone: " + st.phone + ". " : "") +
             (st.email ? "Email: " + st.email + ". " : "") +
-            "Programs: Foundation (Ibtida'i), Middle (I'dadi), Advanced (Thanawi) Arabic/Islamic classes, " +
+            // CHANGED (pack 36 - owner: "ai did not know that tahdiri is in our program"): added the Preparatory (Tahdiri) stage.
+            "Programs: Preparatory (Tahdiri), Foundation (Ibtida'i), Middle (I'dadi), Advanced (Thanawi) Arabic/Islamic classes, " +
             "and Tahfeedhul-Qur'an evening memorisation (Thursday-Saturday, 4PM till sunset). " +
             "Website features: parents check results in the Parent Portal (student ID + surname as password), " +
             "chat with the school, see notices, timetables and calendars, upload payment evidence, and apply " +

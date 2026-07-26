@@ -7,7 +7,7 @@
    ========================================================================== */
 "use strict";
 
-var certType = "excellence";
+var certType = "level"; // CHANGED (pack 36)
 var certStudents = [];     // students of the chosen class
 var certChecked = {};      // student_id -> true/false
 var certIndex = 0;         // which selected student is in the preview
@@ -23,35 +23,65 @@ var certSchool = {
 };
 var certBusy = false;
 
+// CHANGED (pack 36): types now mirror the school's real paper
+// certificates. "level" is the flagship - the exact paper wording with
+// auto-filled name / DoB / admission number, level & theme detected
+// automatically from the student's class.
+function certLevelOf(cls) {
+  var n = String(cls || "").replace(/[\u064B-\u0652\u0670\u0640]/g, "").replace(/[إأآٱ]/g, "ا").replace(/\s+/g, "");
+  if (n.indexOf("\u062A\u062D\u0636\u064A\u0631\u064A") !== -1) return { key: "tahdiri", theme: "cert-theme-tahdiri", en: "Preliminary", ar: "التَّحْضِيرِيَّة", study: "preliminary" };
+  if (n.indexOf("\u0627\u0628\u062A\u062F\u0627\u0626\u064A") !== -1) return { key: "ibtidai", theme: "", en: "Primary", ar: "الابْتِدَائِيَّة", study: "primary" };
+  if (n.indexOf("\u0627\u0639\u062F\u0627\u062F\u064A") !== -1) return { key: "idadi", theme: "cert-theme-idadi", en: "Junior Secondary", ar: "الإِعْدَادِيَّة", study: "junior secondary" };
+  if (n.indexOf("\u062B\u0627\u0646\u0648\u064A") !== -1) return { key: "thanawi", theme: "cert-theme-thanawi", en: "Qur'anic", ar: "الثَّانَوِيَّة", study: "Qur'anic" };
+  return { key: "gen", theme: "", en: "School", ar: "الشَّهَادَة", study: "school" };
+}
+
 var CERT_TYPES = {
-  excellence: {
-    code: "EXC", title: "OF ACADEMIC EXCELLENCE",
-    body: function (o) {
-      return "for outstanding academic performance in <b>" + certEsc(o.term) + ", " + certEsc(o.session) + "</b>" +
-        (o.cls ? " in <b>" + certEsc(o.cls) + "</b>" : "") +
-        (o.pos ? ", finishing <b>" + certEsc(o.pos) + "</b>" : "") + ".";
+  level: {
+    code: "CERT",
+    levelTitle: true,
+    pills: function (lv) { return lv.en + " <small>" + lv.ar + "</small>"; },
+    bodyEn: function (o, f) {
+      return "The Administration of the above mentioned institution hereby certifies that the student " +
+        f.name + " born in " + f.blank60 + " in " + f.blank90 + " state, on the " + f.dobDay + " of " + f.dobMonth + ", " + f.dobYear +
+        ", and whose admission number is " + f.adm + " has completed his/her studies at the <b>" + certEsc(o.lv.study) + " level</b>, " +
+        "passed all the prescribed subjects at the end of the academic year " + f.ah + " A.H. " + f.ad + " A.D and got the final grade " + f.blank90 + ". " +
+        "May Almighty Allah grant him/her more blessings and success. (Aameen).";
+    },
+    bodyAr: function (o, f) {
+      return "تشهد إدارة المدرسة المذكورة أعلاه أنّ الطالب/ة " + f.nameAr + " المولود/ة في ولاية ــــــــ دولة ــــــــ يوم ــــــ شهر ــــــ سنة " + f.ahAr + " هـ / " + f.adAr + " م، " +
+        "والمسجَّل برقم " + f.admAr + "، أنهى/ت دراسته/ا بالمرحلة " + o.lv.ar + " في نهاية العام الدراسي " + f.sessionAr + "م " +
+        "ونجح/ت في الموادّ الدراسيّة المقرّرة. ونسأل الله العظيم له/ها مزيد البركة والتوفيق. (آمين)";
     }
   },
-  completion: {
-    code: "CMP", title: "OF COMPLETION",
-    body: function (o) {
-      return "for the successful completion of <b>" + certEsc(o.cls) + "</b> in the <b>" + certEsc(o.session) + "</b> academic session. Barakallahu feeha.";
-    }
+  excellence: {
+    code: "EXC",
+    pills: function () { return "Academic Excellence <small>التَّفَوُّق الدِّرَاسِيّ</small>"; },
+    bodyEn: function (o, f) {
+      return "This is to certify that " + f.name + " of " + f.cls + " distinguished himself/herself with <b>outstanding academic performance</b> in " +
+        certEsc(o.term) + ", " + certEsc(o.session) + (o.pos ? ", finishing <b>" + certEsc(o.pos) + "</b>" : "") + ". " +
+        "We pray for continued excellence, ameen.";
+    },
+    bodyAr: function () { return "نشهد أنّ الطالب/ة المذكور/ة أعلاه قد تفوّق/ت دراسيًّا هذا العام، فنسأل الله له/ها دوام التوفيق والنجاح. (آمين)"; }
   },
   tahfeedh: {
-    code: "THF", title: "OF TAHFEEDH ACHIEVEMENT",
-    body: function (o) {
+    code: "THF",
+    pills: function () { return "Tahfeedh Achievement <small>مَرْتَقَى الْحِفْظ</small>"; },
+    bodyEn: function (o, f) {
       var j = Math.max(1, Math.min(30, Number(o.juz) || 1));
-      return "for the memorisation of <b>" + j + " Juz" + (j === 1 ? "" : "") + "</b> of the glorious Qur'an" +
-        (j >= 30 ? " — completing the entire Book, ma sha Allah." : " — may Allah grant completion.") + ".";
-    }
+      return "This is to certify that " + f.name + " has by Allah's grace memorised <b>" + j + " Juz</b> of the glorious Qur'an" +
+        (j >= 30 ? ", completing the entire Book — ma sha Allah!" : " — may Allah bless him/her to completion, ameen") + ".";
+    },
+    bodyAr: function () { return "نسأل الله أن يجعل القرآن ربيع قلبه/قلبها ونور دربه/دربها. (آمين)"; }
   },
   custom: {
-    code: "MRT", title: "OF MERIT",
-    body: function (o) {
+    code: "MRT",
+    pills: function () { return "Merit <small>تَّمَيُّز</small>"; },
+    bodyEn: function (o, f) {
       var c = (o.custom || "").trim();
-      return c ? certEsc(c.replace(/\.+$/, "")) + "." : "for commendable conduct and dedication.";
-    }
+      return "This is to certify that " + f.name + " is hereby honoured for " + certEsc(c ? c.replace(/\.+$/, "") : "commendable conduct and dedication") + ".";
+    },
+    bodyAr: function () { return "جزاه الله خيرًا وزاده من فضله. (آمين)"; }
   }
 };
 
@@ -141,7 +171,8 @@ function certSetType(type) {
   });
   document.getElementById("certJuzField").style.display = type === "tahfeedh" ? "" : "none";
   document.getElementById("certCustomWrap").style.display = type === "custom" ? "" : "none";
-  document.getElementById("certTermField").style.display = (type === "completion" || type === "tahfeedh") ? "none" : "";
+  // CHANGED (pack 36): term only matters for academic excellence
+  document.getElementById("certTermField").style.display = type === "excellence" ? "" : "none";
   certRefresh(true);
 }
 
@@ -203,39 +234,75 @@ function certToggleAll() {
 function certBuildHtml(stu, posText) {
   var o = certOpts();
   var t = CERT_TYPES[certType];
+  var lv = certLevelOf(o.cls);
   var dt = new Date();
   var months = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
-  var dateStr = dt.getDate() + " " + months[dt.getMonth()] + " " + dt.getFullYear();
   var yearBit = (o.session || String(dt.getFullYear())).split("/")[0].replace(/[^0-9]/g, "") || String(dt.getFullYear());
+  var y = Number(yearBit) || dt.getFullYear();
+  // pack 36b: standard civil approx - AH(2026)=1447, AH(2030)=1451
+  var ah = y - 622 + Math.floor((y - 622) / 32);
   var serial = "AMS/" + yearBit + "/" + t.code + "/" + (stu.student_id || "XXX");
-  var sigT = certSigs.classTeacher ? '<img class="cert-sig-img" src="' + certEsc(certSigs.classTeacher) + '" alt="">' : "";
-  var sigP = certSigs.principal ? '<img class="cert-sig-img" src="' + certEsc(certSigs.principal) + '" alt="">' : "";
+  // date of birth -> day / month / year chips
+  var dob = { d: "", m: "", y: "" };
+  if (stu.date_of_birth) {
+    var m2 = String(stu.date_of_birth).match(/(\d{4})-(\d{2})-(\d{2})/);
+    if (m2) { dob.y = m2[1]; dob.m = months[Number(m2[2]) - 1] || m2[2]; dob.d = m2[3]; }
+  }
+  var blanks = function (cls) { return '<span class="cert-fill ' + cls + '">&nbsp;</span>'; };
+  var f = {
+    name: '<span class="cert-fill name">' + certEsc(stu.full_name || "-") + "</span>",
+    nameAr: '<span style="border-bottom:1.2px dotted #555; padding:0 8px; font-weight:700; unicode-bidi:isolate;">' + certEsc(stu.full_name || "-") + "</span>",
+    blank60: blanks("w60"), blank90: blanks("w90"),
+    dobDay: dob.d ? '<span class="cert-fill w60">' + dob.d + "</span>" : blanks("w60"),
+    dobMonth: dob.m ? '<span class="cert-fill w90">' + dob.m + "</span>" : blanks("w90"),
+    dobYear: dob.y ? '<span class="cert-fill w90">' + dob.y + "</span>" : blanks("w90"),
+    adm: '<span class="cert-fill w90">' + certEsc(stu.student_id || "-") + "</span>",
+    admAr: '<span style="border-bottom:1.2px dotted #555; padding:0 6px; font-weight:700;">' + certEsc(stu.student_id || "-") + "</span>",
+    ah: '<span class="cert-fill w60">' + ah + "</span>",
+    ad: '<span class="cert-fill w90">' + certEsc(o.session || "-") + "</span>",
+    ahAr: String(ah), adAr: certEsc(o.session || ""), sessionAr: certEsc(o.session || ""),
+    cls: '<span class="cert-fill w180">' + certEsc(o.cls || "-") + "</span>"
+  };
+  var sigT = certSigs.classTeacher ? '<img class="cert-sign-img" src="' + certEsc(certSigs.classTeacher) + '" alt="">' : "";
+  var sigP = certSigs.principal ? '<img class="cert-sign-img" src="' + certEsc(certSigs.principal) + '" alt="">' : "";
+  var photo = stu.photo_path
+    ? '<img src="' + certEsc(stu.photo_path) + '" alt="Passport">'
+    : '<span>PASSPORT</span>';
+  var dateStr = dt.getDate() + " " + months[dt.getMonth()] + " " + dt.getFullYear();
 
   return '' +
-  '<div class="cert-frame">' +
-    '<div class="cert-corner tl"><i></i></div><div class="cert-corner tr"><i></i></div>' +
-    '<div class="cert-corner bl"><i></i></div><div class="cert-corner br"><i></i></div>' +
+  '<div class="cert-frame ' + lv.theme + '">' +
+    '<div class="cert-tri tl"></div><div class="cert-tri tl2"></div>' +
+    '<div class="cert-tri br"></div><div class="cert-tri br2"></div>' +
     '<div class="cert-watermark"><img src="images/LOGO.JPG" alt=""></div>' +
-    '<div class="cert-inner">' +
-      '<img class="cert-logo" src="images/LOGO.JPG" alt="School crest">' +
-      '<div class="cert-school-ar" lang="ar">' + certEsc(certSchool.nameAr) + "</div>" +
-      '<div class="cert-school">' + certEsc(certSchool.name) + "</div>" +
-      '<div class="cert-addr">' + certEsc(certSchool.addr) + "</div>" +
-      '<div class="cert-rule"></div>' +
-      '<div class="cert-kicker">CERTIFICATE</div>' +
-      '<div class="cert-title">' + certEsc(t.title) + "</div>" +
-      '<div class="cert-givento">This is proudly presented to</div>' +
-      '<div class="cert-name">' + certEsc(stu.full_name || "-") + "</div>" +
-      '<div class="cert-name-line"></div>' +
-      '<div class="cert-body">' + t.body({ term: o.term, session: o.session, cls: o.cls, juz: o.juz, custom: o.custom, pos: posText }) + "</div>" +
-      '<div class="cert-foot">' +
-        '<div class="cert-date"><b>' + certEsc(dateStr) + '</b><div class="ln"></div><span>IJEBU-ODE · DATE</span></div>' +
-        '<div class="cert-sig">' + sigT + '<div class="ln"></div><small>CLASS TEACHER</small></div>' +
-        '<div class="cert-seal"><span class="st">★</span><span>AMSAIS</span><span>OFFICIAL SEAL</span></div>' +
-        '<div class="cert-sig">' + sigP + '<div class="ln"></div><small>PRINCIPAL</small></div>' +
+    '<div class="cert-h">' +
+      '<div class="cert-h-crest"><img src="images/LOGO.JPG" alt="School crest"></div>' +
+      '<div class="cert-h-mid">' +
+        '<div class="cert-bismillah" lang="ar">بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ</div>' +
+        '<div class="cert-h-ar" lang="ar">مَدْرَسَةُ أَمِيْنِ اللّهِ لِلْعُلُومِ الْعَرَبِيَّةِ الْإِسْلَامِيَّةِ</div>' +
+        '<div class="cert-h-en">AMEENULLAH SCHOOL OF ARABIC AND ISLAMIC STUDIES</div>' +
+        '<div class="cert-h-addr">' + certEsc(certSchool.addr) + '<br>Email: madrasatuameenillah22@gmail.com</div>' +
+        '<div class="cert-motto-pill">MOTTO: KNOWLEDGE AND WORSHIP &nbsp;·&nbsp; <span lang="ar">الشِّعَار: الْعِلْمُ وَالْعِبَادَة</span></div>' +
       "</div>" +
-      '<div class="cert-serial">Certificate No: ' + certEsc(serial) + "</div>" +
-      '<div class="cert-ar-seal" lang="ar">' + certEsc(certSchool.mottoAr) + "</div>" +
+      '<div class="cert-h-right">' +
+        '<div class="cert-no"><span>Cert. No.:</span><b>' + certEsc(serial) + '</b></div>' +
+        '<div class="cert-no"><span>Batch:</span><b>' + certEsc(o.session || "-") + '</b></div>' +
+        '<div class="cert-passport">' + photo + "</div>" +
+      "</div>" +
+    "</div>" +
+    '<div class="cert-trow">' +
+      '<div class="cert-level">' + t.pills(lv) + "</div>" +
+      '<div class="cert-word">CERTIFICATE</div>' +
+    "</div>" +
+    '<div class="cert-b">' +
+      '<div class="cert-b-ar" lang="ar">' + t.bodyAr(Object.assign({}, o, { lv: lv }), f) + "</div>" +
+      '<div class="cert-b-en">' + t.bodyEn(Object.assign({}, o, { lv: lv, pos: posText }), f) + "</div>" +
+    "</div>" +
+    '<div class="cert-f">' +
+      '<div class="cert-sign"><div style="font-size:11px; font-weight:700; margin-bottom:14px;">' + ah + ' هـ &nbsp;/&nbsp; ' + certEsc(dateStr) + ' م</div><div class="ln"></div><small>DATE · التَّارِيخ</small></div>' +
+      '<div class="cert-sign">' + sigT + '<div class="ln"></div><small>THE CLASS TEACHER · الْمُعَلِّم</small></div>' +
+      '<div class="cert-rosette"></div>' +
+      '<div class="cert-sign">' + sigP + '<div class="ln"></div><small>THE PRINCIPAL · الْعَمِيد</small></div>' +
     "</div>" +
   "</div>";
 }
@@ -255,13 +322,15 @@ function certRefresh(forceIndex) {
 
 function certPaintPreview(stu) {
   var wrap = document.getElementById("certPreviewWrap");
+  // FIX (pack 36): reveal the card BEFORE measuring, or the first-ever
+  // preview measures 0 width and paints the frame at scale 0 (invisible).
+  document.getElementById("certPreviewCard").style.display = "";
   var mount = function (posText) {
     wrap.innerHTML = certBuildHtml(stu, posText);
     var frame = wrap.firstChild;
-    var scale = Math.min(1, wrap.clientWidth / 1140);
+    var scale = Math.max(0.25, Math.min(1, wrap.clientWidth / 1140));
     frame.style.transform = "scale(" + scale + ")";
     wrap.style.height = Math.round(793 * scale + 24) + "px";
-    document.getElementById("certPreviewCard").style.display = "";
     document.getElementById("certAllBtn").innerHTML = "&#128230; Download " + certSelected().length + " selected (PDF)";
   };
   mount("");

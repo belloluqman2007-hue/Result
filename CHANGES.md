@@ -4,6 +4,16 @@
 
 ---
 
+## Pack 36 — 2026-07-26
+
+**FIX (owner, with evidence photos/PDFs attached):**
+
+1. **"The pdf and zip are not displaying well at all — let the result zip display as it displays in the check result."** The one-page card was glued to the paper's top edge, full-bleed (printers clip 3–5mm on every side). `amsCanvasToA4Pdf` now mounts a fitted card in a **print-safe frame**: max content 202mm wide (4mm side margins) and optically centred top/bottom — exactly like the browser's own print of Check Result. Giant 17+-subject cards still split cleanly at row edges. Same remarks/grades/calculations — data untouched.
+2. **"Use the images to create certificate."** Certificate Generator REBUILT to mirror the school's real paper certificates (from the owner's 4 photos): level auto-detected from the Arabic class name → Preliminary (Tahdiri), Primary (green band), Junior Secondary (blue), Qur'anic/Secondary (maroon). Bismillah header, big Arabic school name, **PASSPORT photo box auto-filled with the student's profile photo**, Cert No + Batch fields, ruled bilingual (Arabic + English) body auto-filled with name / date of birth / admission number / approximate AH year — blanks stay dotted for handwriting, exactly like the paper. Red rosette seal, Class Teacher + Principal signature lines (saved signature images auto-placed), level-coloured corner triangles. ACADEMIC EXCELLENCE / TAHFEEDH / MERIT types kept on the same elegant frame. Also fixed: first-live-preview invisible bug + AH year formula.
+3. **"AI did not know that Tahdiri is in our program."** The website assistant's facts now list the Preparatory (Tahdiri) stage first, matching the public Programs section.
+
+`sw.js` cache bumped to `ameenullah-shell-v27`.
+
 ## Pack 35 — 2026-07-26
 
 **NEW (Certificate Generator — owner: "let do certificate generator"):** new staff page `certificates.html` (sidebar: Teaching Tools → Certificates).

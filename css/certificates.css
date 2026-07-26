@@ -1,8 +1,15 @@
 /* ==========================================================================
    NEW (pack 35): CERTIFICATE GENERATOR
-   Page UI + the fixed-size landscape-A4 certificate design.
-   The certificate stage is exactly 1122 x 793 CSS px (A4 landscape at
-   96dpi), so the html2canvas -> jsPDF capture is always one exact page.
+   CHANGED (pack 36 - owner: "use the images to create certificate"):
+   the design now MIRRORS THE SCHOOL'S REAL PAPER CERTIFICATES (photos
+   from the owner): coloured themed band by level (green Primary, blue
+   Junior Secondary, maroon Qur'anic/Secondary, dark Preliminary),
+   Bismillah + Arabic school name header, PASSPORT photo box (auto-filled
+   with the student's profile photo), Cert No / Batch fields, ruled
+   Arabic + English body lines, Date / Proprietor / Principal lines and
+   the red rosette seal.
+   Stage is exactly 1122 x 793 CSS px (A4 landscape at 96dpi), so the
+   html2canvas -> jsPDF capture is always one exact page.
    ========================================================================== */
 
 @import url('https://fonts.googleapis.com/css2?family=Great+Vibes&display=swap');
@@ -42,70 +49,94 @@
 }
 .cert-preview-wrap > .cert-frame{ transform-origin:top center; }
 
-/* ---------------- THE CERTIFICATE (1122 x 793 = landscape A4) ---------------- */
+/* ------------- THE CERTIFICATE (1122x793, paper-style) ------------- */
+/* theme vars default = green (level auto-map can override per render) */
 .cert-frame{
+  --ct: #0F5C36;      /* theme dark */
+  --ct2: #1C8A50;     /* theme mid */
+  --ctpale: #EAF6EE;  /* theme pale */
+  --ctsoft: #C9E8D4;
   width:1122px; height:793px; flex-shrink:0;
-  position:relative; overflow:hidden;
+  position:relative; overflow:hidden; background:#fdfefb;
+  border:7px solid var(--ct);
+  outline:1.5px solid var(--ct2); outline-offset:-14px;
+  font-family:'Cairo', sans-serif; color:#12261A;
+  display:flex; flex-direction:column;
+}
+/* corner triangles (paper design) */
+.cert-tri{ position:absolute; width:0; height:0; z-index:1; }
+.cert-tri.tl{ top:-7px; left:-7px; border-top:64px solid var(--ct2); border-right:64px solid transparent; }
+.cert-tri.tl2{ top:-7px; left:26px; border-top:40px solid #E9C53D; border-right:40px solid transparent; }
+.cert-tri.br{ bottom:-7px; right:-7px; border-bottom:64px solid var(--ct2); border-left:64px solid transparent; }
+.cert-tri.br2{ bottom:-7px; right:26px; border-bottom:40px solid #E9C53D; border-left:40px solid transparent; }
+
+/* header */
+.cert-h{ position:relative; z-index:2; display:flex; align-items:center; gap:14px; padding:20px 30px 10px; }
+.cert-h-crest{
+  width:88px; height:96px; background:#fff; border:3px solid var(--ct); border-radius:10px;
+  box-shadow:0 0 0 3px #fff, 0 0 0 5px var(--ct2);
+  display:flex; align-items:center; justify-content:center; flex-shrink:0;
+}
+.cert-h-crest img{ width:74px; height:74px; object-fit:contain; border-radius:6px; }
+.cert-h-mid{ flex:1; text-align:center; }
+.cert-bismillah{ font-family:'Amiri', serif; font-size:26px; font-weight:700; color:#8c2f39; line-height:1.1; }
+.cert-h-ar{ font-family:'Amiri', serif; font-size:30px; font-weight:700; color:var(--ct); line-height:1.15;
+  text-shadow:0 1px 0 rgba(0,0,0,.08); }
+.cert-h-en{ font-size:19px; font-weight:800; letter-spacing:1.4px; color:var(--ct); margin-top:2px; }
+.cert-h-addr{ font-size:10px; color:#4c5b52; line-height:1.5; margin-top:2px; }
+.cert-motto-pill{
+  display:inline-block; margin-top:6px; padding:2px 14px; border-radius:999px;
+  background:var(--ct); color:#fff; font-size:10.5px; font-weight:700; letter-spacing:1px;
+}
+.cert-h-right{ width:150px; flex-shrink:0; text-align:center; }
+.cert-no{ font-size:10.5px; color:#333; text-align:left; margin-bottom:6px; display:flex; justify-content:space-between; gap:6px; } .cert-no span{ white-space:nowrap; }
+.cert-no b{ font-weight:700; border-bottom:1px dotted #555; flex:1; unicode-bidi:isolate; }
+.cert-passport{
+  width:118px; height:138px; margin:0 auto; background:#fff;
+  border:2px solid var(--ct); display:flex; align-items:center; justify-content:center;
+  color:var(--ct); font-size:11px; font-weight:800; letter-spacing:1.5px; overflow:hidden;
+}
+.cert-passport img{ width:100%; height:100%; object-fit:cover; }
+
+/* title row */
+.cert-trow{ position:relative; z-index:2; text-align:center; margin-top:2px; }
+.cert-level{ display:inline-block; font-size:34px; font-weight:800; letter-spacing:2px; color:var(--ct);
+  background:var(--ctpale); border:1px solid var(--ctsoft); border-radius:10px; padding:0 18px; }
+.cert-level small{ font-family:'Amiri', serif; font-weight:700; margin-left:14px; letter-spacing:0; }
+.cert-word{ font-size:17px; font-weight:800; letter-spacing:8px; color:#8c2f39; margin-top:3px; }
+
+/* body: ruled lines like the paper certificate */
+.cert-b{ position:relative; z-index:2; padding:6px 46px 0; font-size:13.8px; line-height:2.05;
+  background:linear-gradient(180deg,var(--ctpale),#fdfefb 70%); }
+.cert-b-ar{ font-family:'Amiri', serif; direction:rtl; text-align:right; font-size:16.5px; color:#222; line-height:2.1; }
+.cert-b-en{ text-align:justify; }
+.cert-fill{ display:inline-block; min-width:120px; border-bottom:1.2px dotted #555; text-align:center;
+  font-weight:700; color:#0F3D2E; padding:0 8px; unicode-bidi:isolate; }
+.cert-fill.name{ min-width:340px; font-size:16px; }
+.cert-fill.w60{ min-width:60px; } .cert-fill.w90{ min-width:90px; }
+.cert-fill.w180{ min-width:180px; } .cert-fill.w230{ min-width:230px; }
+
+/* footer: date / proprietor / rosette / principal */
+.cert-f{ position:relative; z-index:2; margin-top:auto; display:flex; align-items:flex-end;
+  justify-content:space-between; padding:0 52px 26px; }
+.cert-sign{ width:230px; text-align:center; }
+.cert-sign-img{ max-height:40px; max-width:160px; display:block; margin:0 auto -8px; }
+.cert-sign .ln{ border-top:1.4px solid #12261A; margin:0 14px 4px; }
+.cert-sign small{ font-size:11px; font-weight:700; letter-spacing:.5px; }
+.cert-ar-lbl{ font-family:'Amiri', serif; font-size:12px; color:#333; }
+.cert-rosette{
+  width:86px; height:86px; border-radius:50%; position:relative;
   background:
-    radial-gradient(ellipse at 50% 38%, #FFFEF9 0%, #FCF7E8 55%, #F6EED8 100%);
-  border:6px solid #C9A227;
-  outline:2px solid #C9A227; outline-offset:-14px;
-  font-family:'Cairo', sans-serif; color:#123B2A;
-  display:flex; align-items:stretch; justify-content:stretch;
+    radial-gradient(circle, #d64541 0 56%, transparent 57%),
+    conic-gradient(#b33733 0 10deg, #f2c14e 10deg 20deg, #b33733 20deg 30deg, #f2c14e 30deg 40deg, #b33733 40deg 50deg, #f2c14e 50deg 60deg, #b33733 60deg 70deg, #f2c14e 70deg 80deg, #b33733 80deg 90deg, #f2c14e 90deg 100deg, #b33733 100deg 110deg, #f2c14e 110deg 120deg, #b33733 120deg 130deg, #f2c14e 130deg 140deg, #b33733 140deg 150deg, #f2c14e 150deg 160deg, #b33733 160deg 170deg, #f2c14e 170deg 180deg, #b33733 180deg 190deg, #f2c14e 190deg 200deg, #b33733 200deg 210deg, #f2c14e 210deg 220deg, #b33733 220deg 230deg, #f2c14e 230deg 240deg, #b33733 240deg 250deg, #f2c14e 250deg 260deg, #b33733 260deg 270deg, #f2c14e 270deg 280deg, #b33733 280deg 290deg, #f2c14e 290deg 300deg, #b33733 300deg 310deg, #f2c14e 310deg 320deg, #b33733 320deg 330deg, #f2c14e 330deg 340deg, #b33733 340deg 350deg, #f2c14e 350deg 360deg);
+  box-shadow:0 2px 8px rgba(0,0,0,.18);
 }
-/* ornate corner flourishes */
-.cert-corner{ position:absolute; width:118px; height:118px; pointer-events:none; opacity:.9; }
-.cert-corner i, .cert-corner i::before{ position:absolute; content:""; display:block; }
-.cert-corner i{ inset:0; border:3px solid #C9A227; border-radius:26px 0 0 0; }
-.cert-corner i::before{ inset:12px; border:2px solid #E7CE7E; border-radius:20px 0 0 0; }
-.cert-corner.tl{ top:10px; left:10px; }
-.cert-corner.tr{ top:10px; right:10px; transform:scaleX(-1); }
-.cert-corner.bl{ bottom:10px; left:10px; transform:scaleY(-1); }
-.cert-corner.br{ bottom:10px; right:10px; transform:scale(-1); }
-/* faint crest watermark */
-.cert-watermark{ position:absolute; inset:0; display:flex; align-items:center; justify-content:center; pointer-events:none; }
-.cert-watermark img{ width:430px; height:430px; object-fit:contain; opacity:.05; border-radius:50%; }
+.cert-rosette::after{ content:""; position:absolute; inset:16px; border-radius:50%; background:#d64541;
+  background-image:radial-gradient(circle at 34% 30%, #f0716d, #c23a36); }
+.cert-watermark{ position:absolute; inset:0; display:flex; align-items:center; justify-content:center; pointer-events:none; z-index:1; }
+.cert-watermark img{ width:400px; height:400px; object-fit:contain; opacity:.045; border-radius:50%; }
 
-.cert-inner{
-  position:relative; z-index:2; flex:1;
-  display:flex; flex-direction:column; align-items:center;
-  padding:34px 78px 26px; text-align:center;
-}
-.cert-logo{ width:74px; height:74px; border-radius:50%; border:3px solid #C9A227; padding:3px; background:#fff; box-shadow:0 0 0 4px rgba(201,162,39,.25); }
-.cert-school-ar{ font-family:'Amiri', serif; font-size:21px; color:#0F3D2E; margin-top:7px; }
-.cert-school{ font-size:19px; font-weight:800; letter-spacing:2.5px; color:#0F3D2E; margin-top:2px; }
-.cert-addr{ font-size:10.5px; color:#5B6B62; margin-top:3px; letter-spacing:.4px; }
-.cert-rule{ width:340px; height:2px; margin:10px auto 0; background:linear-gradient(90deg,transparent,#C9A227 25%,#C9A227 75%,transparent); position:relative; }
-.cert-rule::after{ content:"\2756"; position:absolute; left:50%; top:-10px; transform:translateX(-50%); color:#C9A227; font-size:14px; background:transparent; }
-
-.cert-kicker{ font-size:40px; font-weight:800; letter-spacing:14px; color:#0F3D2E; margin-top:14px; text-indent:14px; }
-.cert-title{ font-size:16.5px; font-weight:700; letter-spacing:6px; color:#B8912B; margin-top:2px; }
-.cert-givento{ font-size:12px; color:#5B6B62; letter-spacing:1.5px; text-transform:uppercase; margin-top:14px; }
-.cert-name{
-  font-family:'Great Vibes','Amiri',cursive; font-weight:400;
-  font-size:52px; line-height:1.15; color:#123B2A; margin-top:2px;
-  max-width:900px; unicode-bidi:isolate;
-}
-.cert-name-line{ width:min(620px,80%); height:1.5px; background:linear-gradient(90deg,transparent,#C9A227,transparent); margin-top:-6px; }
-.cert-body{ font-size:14.5px; color:#333; max-width:860px; line-height:1.65; margin-top:12px; }
-.cert-body b{ unicode-bidi:isolate; }
-
-.cert-foot{ width:100%; margin-top:auto; display:flex; align-items:flex-end; justify-content:space-between; padding:0 10px; gap:10px; }
-.cert-sig{ width:220px; text-align:center; position:relative; }
-.cert-sig-img{ max-height:44px; max-width:170px; display:block; margin:0 auto -12px; position:relative; top:10px; }
-.cert-sig .ln, .cert-date .ln{ border-top:1.6px solid #123B2A; margin:0 18px 5px; }
-.cert-sig small{ font-size:11.5px; color:#123B2A; letter-spacing:.6px; font-weight:700; }
-.cert-date{ width:220px; font-size:11px; color:#5B6B62; text-align:center; letter-spacing:.6px; }
-.cert-date b{ display:block; font-size:13px; color:#123B2A; margin-bottom:8px; }
-/* gold seal */
-.cert-seal{
-  width:104px; height:104px; border-radius:50%;
-  border:3px double #C9A227; outline:2px solid #C9A227; outline-offset:3px;
-  background:radial-gradient(circle at 34% 30%, #FFF6D9, #F0D98B 62%, #DDBB55);
-  color:#7A5B12; display:flex; flex-direction:column; align-items:center; justify-content:center;
-  font-size:9px; letter-spacing:1.4px; font-weight:800; line-height:1.5;
-  box-shadow:0 3px 10px rgba(201,162,39,.35); transform:rotate(-9deg);
-}
-.cert-seal .st{ font-size:19px; color:#B8912B; }
-.cert-serial{ position:absolute; left:34px; bottom:10px; font-size:9px; color:#A08A4A; letter-spacing:.6px; }
-.cert-ar-seal{ position:absolute; right:34px; bottom:10px; font-size:11px; color:#A08A4A; font-family:'Amiri', serif; }
+/* level themes (auto from class): ibtidai=green, idadi=blue, thanawi=maroon, tahdiri=dark */
+.cert-theme-idadi{ --ct:#14507E; --ct2:#2E86C9; --ctpale:#EAF3FB; --ctsoft:#C7DFEF; }
+.cert-theme-thanawi{ --ct:#7E2434; --ct2:#B0404F; --ctpale:#FBEEEF; --ctsoft:#EECDD2; }
+.cert-theme-tahdiri{ --ct:#1B2A1E; --ct2:#C9A227; --ctpale:#F2F4EC; --ctsoft:#DDE3C6; }
