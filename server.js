@@ -278,6 +278,10 @@ app.get("/settings.html", requireLogin, (req, res) => {
 app.get("/timetable.html", requireLogin, (req, res) => {
     res.sendFile(path.join(__dirname, "timetable.html"));
 });
+// NEW (pack 35): certificate generator page (staff only, all client-side)
+app.get("/certificates.html", requireLogin, (req, res) => {
+    res.sendFile(path.join(__dirname, "certificates.html"));
+});
 
 // NEW (pack 26): the sections the owner moved OUT of the dashboard now
 // live on their own pages - same guard as the dashboard (admin + teachers).

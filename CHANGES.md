@@ -4,6 +4,20 @@
 
 ---
 
+## Pack 35 — 2026-07-26
+
+**NEW (Certificate Generator — owner: "let do certificate generator"):** new staff page `certificates.html` (sidebar: Teaching Tools → Certificates).
+
+- 4 elegant types: 🥇 Academic Excellence (auto term/session + student's position `3rd of 24`), 🏆 Completion, 📖 Tahfeedh (Juz 1–30, auto "may Allah grant completion"), ⭐ Merit (custom wording).
+- Luxury landscape-A4 design: double gold frame + corner flourishes, crest + faint watermark, Arabic school name, Great Vibes script name, gold official seal, class-teacher & principal signatures pulled from the saved signature images, date line, and unique certificate number `AMS/year/TYPE/studentId`.
+- Live preview with prev/next, class student picker with search + select-all/none, ONE student PDF or the WHOLE class in one multi-page landscape PDF — always exactly one page each.
+- 100% client-side: only READS existing endpoints (`/classes`, `/sessions`, `/students`, `/signatures`, `/class-signatures`, `/school-settings`, `/student-position`). Zero DB writes, zero calculation changes.
+- Additive server route `/certificates.html` (requireLogin), nothing else touched.
+
+**NEW (Public website updates — owner):** Tahdiri (Preparatory) stage added to the Programs grid (5 cards now: Tahdiri → Ibtida'i → I'dadi → Thanawi → Tahfeedh, grid adapts beautifully); school name shown in CAPITAL LETTERS (navbar, hero, kicker, footer); admission example + search description updated to include Tahdiri.
+
+`sw.js` cache bumped to `ameenullah-shell-v26`.
+
 ## Pack 34 — 2026-07-25
 
 **FIX (owner: "the zip download result is not proper — it is longer than one page"):**

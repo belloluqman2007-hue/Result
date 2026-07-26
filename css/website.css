@@ -232,7 +232,7 @@ body.wb2-body{
 @media (max-width:540px){ .wb2-why-grid{ grid-template-columns:1fr; } }
 
 /* ========================= PROGRAMS ========================= */
-.wb2-prog-grid{ display:grid; grid-template-columns:repeat(4,1fr); gap:18px; }
+.wb2-prog-grid{ display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:18px; } /* CHANGED (pack 35): adapts to 5 program cards incl. Tahdiri */
 .wb2-prog{
   position:relative; border-radius:var(--wb-r-xl); padding:26px 20px; text-align:left;
   color:#fff; overflow:hidden; min-height:210px; display:flex; flex-direction:column; justify-content:flex-end;

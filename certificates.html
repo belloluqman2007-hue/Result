@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Certificates | Ameenullah School of Arabic and Islamic Studies</title>
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/modern-ui.css">
+  <link rel="stylesheet" href="css/manage.css">
+  <link rel="stylesheet" href="css/school.css">
+  <!-- NEW (pack 35): Certificate Generator -->
+  <link rel="stylesheet" href="css/certificates.css">
+  <link rel="manifest" href="manifest.webmanifest">
+  <meta name="theme-color" content="#2f5021">
+  <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+</head>
+<body onload="checkAuth(); certInit();">
+  <!-- NEW (pack 35 - owner: "let do certificate generator"):
+       design elegant certificates (excellence / completion / tahfeedh /
+       merit), preview live, download one or a whole class as landscape
+       A4 PDF. 100% client-side - reads the same public/admin endpoints
+       the other pages use; nothing is written to the server. -->
+  <div class="mng-page">
+
+    <div class="mng-head">
+      <a class="mng-back" href="teacher-dashboard.html">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5"/><path d="m12 19-7-7 7-7"/></svg>
+        Dashboard
+      </a>
+      <div class="mng-head-text">
+        <h1>&#127891; Certificate Generator</h1>
+        <p>Elegant printable certificates with the school crest, colours and saved signatures.</p>
+      </div>
+    </div>
+
+    <!-- STEP 1: certificate type -->
+    <div class="mg-card cert-step">
+      <h3>1&#65039;&#8419; Choose the certificate type</h3>
+      <div class="cert-types" id="certTypes">
+        <button type="button" class="cert-type active" data-type="excellence" onclick="certSetType('excellence')">
+          <span class="ct-emoji">&#129351;</span><b>Academic Excellence</b>
+          <small>Top performance for a term</small>
+        </button>
+        <button type="button" class="cert-type" data-type="completion" onclick="certSetType('completion')">
+          <span class="ct-emoji">&#127942;</span><b>Completion</b>
+          <small>Finished a class for the session</small>
+        </button>
+        <button type="button" class="cert-type" data-type="tahfeedh" onclick="certSetType('tahfeedh')">
+          <span class="ct-emoji">&#128213;</span><b>Tahfeedh</b>
+          <small>Qur'an memorisation milestone</small>
+        </button>
+        <button type="button" class="cert-type" data-type="custom" onclick="certSetType('custom')">
+          <span class="ct-emoji">&#11088;</span><b>Merit (Custom)</b>
+          <small>Your own reason wording</small>
+        </button>
+      </div>
+    </div>
+
+    <!-- STEP 2: details + recipients -->
+    <div class="mg-card cert-step">
+      <h3>2&#65039;&#8419; Term, session &amp; recipients</h3>
+      <div class="mg-toolbar" style="flex-wrap:wrap;">
+        <div class="mg-field" id="certTermField">
+          <label for="certTerm">Term</label>
+          <select id="certTerm" onchange="certRefresh(true)">
+            <option>1st Term</option><option>2nd Term</option><option>3rd Term</option>
+          </select>
+        </div>
+        <div class="mg-field">
+          <label for="certSession">Session</label>
+          <input type="text" id="certSession" list="certSessionList" value="2026/2027" placeholder="e.g. 2026/2027" oninput="certRefresh(true)">
+          <datalist id="certSessionList"></datalist>
+        </div>
+        <div class="mg-field" id="certJuzField" style="display:none;">
+          <label for="certJuz">Juz (1 - 30)</label>
+          <input type="number" id="certJuz" min="1" max="30" value="30" oninput="certRefresh(true)">
+        </div>
+        <div class="mg-field" style="min-width:180px;">
+          <label for="certClass">Class</label>
+          <select id="certClass" onchange="certLoadStudents()"><option value="">Loading...</option></select>
+        </div>
+        <div class="mg-field" id="certCustomWrap" style="display:none; flex:1; min-width:220px;">
+          <label for="certCustom">Reason on the certificate</label>
+          <input type="text" id="certCustom" maxlength="180" placeholder="e.g. exceptional conduct and helpfulness throughout the session" oninput="certRefresh(true)">
+        </div>
+      </div>
+      <div class="cert-stu-bar">
+        <label class="cert-check-all"><input type="checkbox" id="certAll" checked onchange="certToggleAll()"> <b>All</b></label>
+        <input type="text" id="certSearch" placeholder="Search student..." oninput="certRenderStudents()">
+        <span id="certCount" class="mg-note"></span>
+      </div>
+      <div id="certStudents" class="cert-students"><div class="fin-ov-empty">Choose a class to see its students.</div></div>
+    </div>
+
+    <!-- STEP 3: preview + download -->
+    <div class="mg-card cert-step" id="certPreviewCard" style="display:none;">
+      <h3>3&#65039;&#8419; Preview &amp; download</h3>
+      <div class="cert-prev-bar">
+        <button class="mg-btn-light" type="button" onclick="certNav(-1)">&#8592; Prev</button>
+        <b id="certPrevName"></b>
+        <button class="mg-btn-light" type="button" onclick="certNav(1)">Next &#8594;</button>
+      </div>
+      <div class="cert-preview-wrap" id="certPreviewWrap"><!-- live certificate renders here --></div>
+      <div class="mg-toolbar" style="margin-top:14px;">
+        <button class="mg-btn-light" type="button" onclick="certDownloadOne()">&#11015; This student (PDF)</button>
+        <button class="mg-btn" type="button" id="certAllBtn" onclick="certDownloadAll()">&#128230; All selected (PDF)</button>
+      </div>
+      <p class="mg-note">Each certificate is one landscape A4 page - print-ready at any cafe or press.</p>
+    </div>
+
+    <div class="mg-msg" id="certMsg"></div>
+  </div>
+
+  <script src="js/ui.js"></script>
+  <script src="js/app.js"></script>
+  <script src="js/vendor/jspdf.umd.min.js"></script>
+  <script src="js/vendor/html2canvas.min.js"></script>
+  <!-- NEW (pack 35) -->
+  <script src="js/certificates.js"></script>
+  <script src="js/pwa.js" defer></script>
+</body>
+</html>
