@@ -120,7 +120,8 @@ function admRenderTable() {
     }
 
     tr.appendChild(td(fmtWhen(row.created_at)));
-    var nameCell = td("");
+    // FIX (pack 38): td("") used to leave a stray "-" before the bold name.
+    var nameCell = document.createElement("td");
     var b = document.createElement("b");
     b.textContent = row.child_name || "-";
     nameCell.appendChild(b);
@@ -132,7 +133,7 @@ function admRenderTable() {
     }
     tr.appendChild(nameCell);
     tr.appendChild(td(row.parent_name));
-    var phoneCell = td("");
+    var phoneCell = document.createElement("td"); // FIX (pack 38): same stray "-" before the number
     var link = document.createElement("a");
     link.href = "tel:" + (row.phone || "");
     link.textContent = row.phone || "-";
@@ -366,7 +367,9 @@ function admOpenLetter(row) {
       '<div class="adml-foot">AMEENULLAH SCHOOL OF ARABIC AND ISLAMIC STUDIES &nbsp;\u2014&nbsp; KNOWLEDGE AND WORSHIP</div>' +
     '</div>';
 
-  document.getElementById("admLetterWrap").style.display = "block";
+  var wrap = document.getElementById("admLetterWrap");
+  wrap.style.display = "block";
+  wrap.classList.add("adm-letter-open"); /* FIX (pack 38): tells the print CSS the letter is on top */
   document.body.style.overflow = "hidden";
 
   /* Stamp the principal's saved signature, if one exists (same source the
@@ -381,6 +384,27 @@ function admOpenLetter(row) {
 }
 
 function admCloseLetter() {
-  document.getElementById("admLetterWrap").style.display = "none";
+  var wrap = document.getElementById("admLetterWrap");
+  wrap.style.display = "none";
+  wrap.classList.remove("adm-letter-open"); /* FIX (pack 38) */
   document.body.style.overflow = "";
 }
+
+/* FIX (pack 38, belt & braces): browsers without :has() support get the
+   same one-page letter - hide the enquiry board inline (!important wins
+   over every stylesheet) just for the print, then restore it after. */
+window.addEventListener("beforeprint", function () {
+  var wrap = document.getElementById("admLetterWrap");
+  var page = document.querySelector(".mng-page");
+  if (wrap && page && wrap.classList.contains("adm-letter-open")) {
+    page.setAttribute("data-adm-print-hidden", "1");
+    page.style.setProperty("display", "none", "important");
+  }
+});
+window.addEventListener("afterprint", function () {
+  var page = document.querySelector('.mng-page[data-adm-print-hidden="1"]');
+  if (page) {
+    page.style.removeProperty("display");
+    page.removeAttribute("data-adm-print-hidden");
+  }
+});

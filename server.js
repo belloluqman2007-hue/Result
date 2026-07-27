@@ -4571,7 +4571,11 @@ app.post("/admission-enquiry", (req, res) => {
 
 app.get("/admission-enquiries", requireLogin, requireAdmin, (req, res) => {
     connection.query(
-        "SELECT id, child_name, parent_name, phone, class_applied, message, status, created_at FROM admission_enquiries ORDER BY created_at DESC LIMIT 500",
+        // CHANGED (pack 38 - owner: "some of the student information is not
+        // displaying" on the admission letter): also return the pack-37
+        // pipeline columns so the board + letter can show Admission No,
+        // gender and date of birth (additive - old clients ignore extras).
+        "SELECT id, child_name, parent_name, phone, class_applied, message, status, created_at, gender, date_of_birth, admitted_student_id, admitted_at FROM admission_enquiries ORDER BY created_at DESC LIMIT 500",
         (err, rows) => {
             if (err) { console.log(err); return res.status(500).json({ message: "Database error" }); }
             res.json(rows);

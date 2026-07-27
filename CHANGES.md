@@ -4,6 +4,16 @@
 
 ---
 
+## Pack 38 — 2026-07-27
+
+**FIX (owner: "the admission enquire page is displaying in the pdf also at the top which is causing 2 pages"):** printing the Provisional Admission Letter dragged the whole enquiry board into the PDF's top. Root cause: `css/school.css`'s *calendar* print rule force-shows `.mng-page` at print (`display:block !important`, loaded after `style.css`, so it outranked the global print guard). Page-local fix in `manage-admissions.html` — when the letter overlay is open (`adm-letter-open`, toggled by `js/admissions.js`), the board is hidden for print with higher-specificity `:has()` CSS, plus a `beforeprint`/`afterprint` inline-style fallback for engines without `:has()`. `school.css` itself untouched — calendar printing keeps working. Verified with a real print-pipeline run: exactly **1 page**, letter only.
+
+**FIX (owner: "some of the student information is not displaying"):** `GET /admission-enquiries` was still selecting only the pack-13 columns, so the letter (and the board's `🎓 AM/xx/xxx` tag) couldn't see `admitted_student_id`, `gender`, `date_of_birth`, `admitted_at`. The SELECT now returns them (additive — old clients ignore the extras). Also removed a stray "-" that sat before child names and phone numbers on the board.
+
+**CHANGED (owner: "the zip is on one page now — put the student photo shrink"):** the student passport inside zip-captured report cards shrank from 62×76px to 46×58px (`.rcpzip` capture skin only — the on-screen Check Result design is untouched). Cards stay exactly one page.
+
+`sw.js` cache bumped to `ameenullah-shell-v29`.
+
 ## Pack 37 — 2026-07-27
 
 **FIX (owner: "the zip is longer than one page — the school logo and student pic and the signature is standing on each straight; do like in check result"):** the zip was being built **on a phone**, and the mobile media query watches the *phone's viewport* — not the 900px capture area — so the report header (logo / school details / passport) and the two signature boxes were stacking vertically, one per line, blowing the card past one page. The `.rcpzip` capture skin now pins the desktop row layout with higher specificity than every mobile rule, and the two `html2canvas` captures render at a 1400px virtual window (`windowWidth`) so mobile media queries can never fire during a zip build. Proven at a 393px phone viewport: header row ✓, signatures side-by-side ✓, 13-subject real-profile card = 276mm → exactly ONE page, reads exactly like Check Result. Data/calculations untouched — capture CSS only.

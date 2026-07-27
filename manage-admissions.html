@@ -10,6 +10,21 @@
   <!-- NEW (pack 13): shared manager styles -->
   <link rel="stylesheet" href="css/school.css">
 
+  <!-- FIX (pack 38 - owner: "the admission enquire page is displaying in the
+       pdf also at the top which is causing 2 pages"): css/school.css's
+       calendar-print rule force-shows .mng-page at print (display:block
+       !important, loaded after style.css so it wins ties) - so printing the
+       admission letter dragged the whole enquiry board into the PDF. When
+       the letter overlay is open (class .adm-letter-open toggled by
+       js/admissions.js), hide the board for print RIGHT HERE - page-local
+       only, :has() + id gives it higher specificity than school.css, and the
+       calendar page keeps its own behaviour untouched. -->
+  <style id="admPrintFix">
+@media print{
+  body:has(> #admLetterWrap.adm-letter-open) > .mng-page{ display:none !important; }
+}
+  </style>
+
   <link rel="manifest" href="manifest.webmanifest">
   <meta name="theme-color" content="#2f5021">
   <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">

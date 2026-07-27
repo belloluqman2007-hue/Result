@@ -1090,7 +1090,7 @@ nav a{
    path keep the full design untouched - visuals only, zero data change. */
 .rcpzip .report-header{ padding:13px 20px; gap:10px; }
 .rcpzip .school-logo{ width:62px; height:62px; }
-.rcpzip .student-passport{ width:62px; height:76px; min-width:62px; }
+.rcpzip .student-passport{ width:46px; height:58px; min-width:46px; min-height:58px; } /* CHANGED (pack 38 - owner: "put the student photo shrink") */
 .rcpzip .school-details p{ margin:2px 0; }
 .rcpzip .report-container > h3:first-of-type{ margin-top:12px; }
 .rcpzip .report-container h3{ font-size:13.5px; margin-bottom:6px; margin-top:10px; }
