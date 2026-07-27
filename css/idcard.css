@@ -397,3 +397,133 @@
 .card.ams-pdf-flat .card-back{
   margin-top:12px;
 }
+
+/* ==========================================================================
+   NEW (pack 39 - owner: "likewise the id card also" - portrait &
+   landscape versions):
+     1) brand-mirror beauty: crest with gold ring + STUDENT IDENTITY
+        CARD gold ribbon (same family as certificates/report cards) and a
+        clean GRID front layout (no more floating/overlapping parts).
+     2) PORTRAIT version (.card--portrait): 214x340 badge layout.
+     3) FIX: style.csss legacy .card{flex:1} used to stretch the card to
+        340x415 - the exact card size is now pinned, so screen, print and
+        PDF always show the true proportions.
+========================================================================== */
+.card{ flex:none; display:block; padding:0; } /* FIX (pack 39) - see header note 3;
+  display:block stops dashboard .card flex-row shrinking the card; padding:0 removes
+  the dashboard panel padding that squeezed .card-inner to 296px and pushed the
+  portrait Issued footer off the card bottom (polish 2). */
+
+.orient-toggle{
+  display:inline-flex; border:2px solid var(--gold,#C9A227); border-radius:999px;
+  overflow:hidden; margin:6px 0 10px; background:#fff;
+}
+.orient-toggle button{
+  border:none; background:#fff; color:#8a6d1d; font:inherit; font-weight:800;
+  font-size:12.5px; padding:8px 16px; cursor:pointer;
+}
+.orient-toggle button.active{ background:linear-gradient(135deg,#8a6d1d,#C9A227); color:#fff; }
+
+/* ---------- FRONT as a clean grid: [crest | brand | ribbon] / [details | photo] / [footer] ---------- */
+.card-front{
+  display:grid;
+  /* FIX (pack 39 polish): fixed side tracks - auto tracks were fed by the
+     spanning name cell and grew to eat the whole card (vertical name). */
+  grid-template-columns:44px minmax(0,1fr) 80px;
+  grid-template-rows:auto 1fr auto;
+  gap:4px 12px;
+  padding:14px 16px 12px;
+}
+.card-crest{
+  grid-area:1/1; width:36px; height:36px; align-self:center;
+  border-radius:50%; object-fit:cover; background:#fff; padding:2px;
+  border:2px solid var(--gold,#C9A227); box-shadow:0 0 0 2px rgba(255,255,255,.85), 0 3px 8px rgba(0,0,0,.25);
+}
+.card-ribbon{
+  /* FIX (pack 39 polish): ABSOLUTE - as a grid item its width crushed the
+     name column to one letter per line. Floating top-right instead. */
+  position:absolute; top:11px; right:13px; white-space:nowrap; z-index:2;
+  /* FIX (pack 39 polish 2): pill was ~170px wide and its left edge reached
+     back over the school name, hiding the end of line 1 ("CHOOL"). Slimmer
+     font/spacing keeps it clear of the brand text. */
+  font-family:'Cairo', sans-serif; font-size:6.9px; font-weight:900; letter-spacing:1.1px;
+  color:#123B2A; background:linear-gradient(90deg,var(--gold,#C9A227),#E9C53D);
+  padding:3px 9px; border-radius:999px; box-shadow:0 2px 6px rgba(0,0,0,.25);
+}
+.card-front .brand{
+  grid-area:1/2; padding:0 48px 0 0; margin:auto 0; font-size:9.5px;
+  /* FIX (pack 39 polish 2): 48px of right padding makes line 1 wrap
+     before the floating gold ribbon zone, so "SCHOOL" is never covered. */
+}
+.card-front .photo{
+  grid-area:2/3; position:static !important; justify-self:end; align-self:start;
+  width:78px !important; height:98px !important; border-radius:8px !important;
+  overflow:hidden; margin:0 !important; top:auto !important; right:auto !important;
+}
+.card-front .photo img{ border-radius:6px !important; width:100%; height:100%; object-fit:cover; }
+.card-front .details{
+  /* FIX (pack 39 polish 2): the old "2/1 / span 2" spanned ROWS in the 44px
+     crest column (and the legacy padding-right:92px crushed it further) -
+     that is why the name printed one letter per line. Now: row 2, across
+     the crest+brand columns, full width. */
+  grid-area:2/1/3/3; align-self:center; min-width:0; padding-right:0; margin-top:0;
+}
+.card-front .details h2{
+  margin:0 0 5px; font-size:16px; line-height:1.22; text-shadow:0 2px 6px rgba(0,0,0,.28);
+  /* FIX (pack 39 polish): wrap at WORDS only - "anywhere" tore names apart */
+}
+.card-front .meta{ font-size:11px; margin:3px 0; opacity:.96; }
+.card-front .footer{
+  /* FIX (pack 39 polish 2): same malformed shorthand - it spanned implicit
+     extra rows in the 44px column. Now the whole bottom row, all 3 columns. */
+  grid-area:3/1/4/4; display:flex; justify-content:space-between; align-items:flex-end;
+  margin:0 0 1px;
+}
+.card-back{ position:relative; }
+.card-back::before{
+  content:""; position:absolute; right:-40px; bottom:-40px; width:170px; height:170px;
+  border-radius:50%; background:radial-gradient(circle, rgba(15,92,54,.06), transparent 70%);
+  pointer-events:none;
+}
+
+/* ---------------- PORTRAIT version (.card--portrait) ---------------- */
+.card.card--portrait{ width:214px; height:340px; }
+.card--portrait .card-front{
+  /* FIX (pack 39 polish 2): pin the face to the cards 340px - the legacy
+     "position:relative" face grew past the card and pushed the Issued
+     footer below the rounded edge. With a fixed height the 1fr details
+     row absorbs slack and the footer stays pinned inside. */
+  height:100%;
+  grid-template-columns:1fr;
+  grid-template-rows:auto auto auto auto 1fr auto;
+  text-align:center; gap:2px 0; padding:12px 14px 12px;
+}
+.card--portrait .card-front .card-crest{ grid-area:1/1; justify-self:center; width:46px; height:46px; padding:3px; }
+.card--portrait .card-front .card-ribbon{
+  /* FIX (pack 39 polish 2): STATIC in its own grid row - the absolute
+     66px guess overlapped the school name. Single-column grid cannot
+     crush anything, so in-flow is safe here. */
+  position:static; grid-area:2/1; justify-self:center; margin:7px 0 2px; font-size:7.8px;
+}
+.card--portrait .card-front .brand{ grid-area:3/1; padding:9px 0 0; font-size:9px; }
+.card--portrait .card-front .photo{ grid-area:4/1; justify-self:center; align-self:start; margin-top:9px !important; }
+.card--portrait .card-front .details{ grid-area:5/1; justify-self:stretch; text-align:center; padding-right:0; margin-top:0; } /* polish 2: drop the legacy 92px photo-column padding that narrowed the name */
+.card--portrait .card-front .details h2{ font-size:15px; }
+.card--portrait .card-front .footer{ grid-area:6/1; width:100%; display:flex; justify-content:space-between; align-items:flex-end; }
+.card--portrait .card-back{ justify-content:flex-start; padding-top:26px; text-align:center; }
+.card--portrait .card-back h3{ border-left:none; border-bottom:3px solid var(--gold,#C9A227); padding:0 0 6px; }
+
+/* print: portrait prints at its own real card size */
+@media print{
+  .card.card--portrait{ width:53.98mm; height:auto; }
+  /* FIX (pack 39 polish 2): portrait faces print at the real CR80 height too
+     (base print rule only set the landscape height). */
+  .card.card--portrait .card-front,
+  .card.card--portrait .card-back{ height:85.6mm; }
+}
+/* FIX (pack 39 polish 2): while html2canvas flattens the card for the PDF
+   button, the portrait face must keep its full 340px height - the shared
+   flat rules 214px would clip the portrait layout. */
+.card.ams-pdf-flat.card--portrait .card-front,
+.card.ams-pdf-flat.card--portrait .card-back{ height:340px; }
+/* ===================== end NEW (pack 39) ===================== */

@@ -7,6 +7,10 @@
   <!-- Legacy stylesheet (unchanged) + new modern layer loaded after it -->
   <link rel="stylesheet" href="css/style.css">
   <link rel="stylesheet" href="css/modern-ui.css">
+  <!-- NEW (pack 39 - owner: "let the dashboard fine like the public
+       website"): page-scoped beauty layer - website-style emerald hero,
+       lifted cards, glowing sidebar. Only this page loads it. -->
+  <link rel="stylesheet" href="css/dashboard-beauty.css">
 
   <!-- NEW (PWA conversion): makes the site installable as a phone/desktop
        app with its own icon. Purely additive - no styling or behaviour
@@ -205,9 +209,14 @@
 
       <div class="ams-page-pad">
 
-        <!-- Greeting: welcomeMessage id is UNCHANGED - app.js fills it -->
+        <!-- CHANGED (pack 39): greeting bar is now a website-style emerald
+             hero (crest + gold badge + star lattice, styled in
+             css/dashboard-beauty.css). welcomeMessage id is UNCHANGED -
+             app.js still fills it exactly as before. -->
         <div class="ams-greeting">
-          <div>
+          <img class="ams-hero-crest" src="images/LOGO.JPG" alt="School crest">
+          <div class="ams-hero-text">
+            <div class="ams-hero-badge">&#11088; Knowledge &amp; Worship &#11088;</div>
             <h1>School Overview</h1>
             <p><span id="welcomeMessage">Welcome</span> &nbsp;&middot;&nbsp; here's what's happening today.</p>
           </div>
@@ -321,6 +330,26 @@
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
               Check Result
             </a>
+          </div>
+        </div>
+
+        <!-- ======================================================
+             NEW (pack 39 - owner chose "One-tap backup" as the new
+             beneficial feature): one tap downloads the WHOLE school
+             database (students, results, fees, admissions - 30+
+             tables) as one dated JSON file. data-admin-only hides it
+             for teachers; the server route itself is admin-guarded
+             as well (teachers get 403, guests 401). Passport photos
+             stay on the server to keep the file phone-friendly.
+        ====================================================== -->
+        <div class="ams-panel ams-backup-panel" data-admin-only>
+          <div class="ams-backup-in">
+            <div class="ams-backup-ico">&#128190;</div>
+            <div>
+              <h3 class="ams-panel-title">One-tap Backup &#128190;</h3>
+              <p>Download every school record - students, results, fees, admissions - as one safe JSON file. Save a copy on your phone or laptop every week, so the school's data is never at risk.</p>
+            </div>
+            <a class="ams-backup-btn" href="/backup.json" download>&#11015; Download Backup</a>
           </div>
         </div>
 

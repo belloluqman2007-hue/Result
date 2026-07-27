@@ -45,6 +45,13 @@
           <input type="checkbox" id="flipPhoto"> Flip photo horizontally
         </label>
 
+        <!-- NEW (pack 39 - owner: "likewise the id card also" portrait &
+             landscape versions): orientation toggle for the card. -->
+        <div class="orient-toggle" id="orientToggle">
+          <button type="button" class="active" data-o="landscape">&#128444; Landscape</button>
+          <button type="button" data-o="portrait">&#128195; Portrait</button>
+        </div>
+
         <div class="buttons">
           <button type="button" id="apply">Apply to Card</button>
           <button type="button" id="print">Print Card</button>
@@ -61,7 +68,11 @@
         <div class="card-inner">
 
           <div class="card-front">
+            <!-- NEW (pack 39): school crest + gold ribbon - matches the
+                 certificates and report cards (same brand family). -->
+            <img class="card-crest" src="images/LOGO.JPG" alt="School crest">
             <div class="brand"><span id="schoolName">AMEENULLAH SCHOOL OF ARABIC AND ISLAMIC STUDIES</span></div>
+            <div class="card-ribbon">STUDENT IDENTITY CARD</div>
 
             <div class="photo" id="photoPreview"><img id="photoImg" alt="Student photo"></div>
 

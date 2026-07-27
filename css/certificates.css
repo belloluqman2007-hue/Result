@@ -1,15 +1,20 @@
 /* ==========================================================================
    NEW (pack 35): CERTIFICATE GENERATOR
    CHANGED (pack 36 - owner: "use the images to create certificate"):
-   the design now MIRRORS THE SCHOOL'S REAL PAPER CERTIFICATES (photos
-   from the owner): coloured themed band by level (green Primary, blue
-   Junior Secondary, maroon Qur'anic/Secondary, dark Preliminary),
-   Bismillah + Arabic school name header, PASSPORT photo box (auto-filled
-   with the student's profile photo), Cert No / Batch fields, ruled
-   Arabic + English body lines, Date / Proprietor / Principal lines and
-   the red rosette seal.
-   Stage is exactly 1122 x 793 CSS px (A4 landscape at 96dpi), so the
-   html2canvas -> jsPDF capture is always one exact page.
+   the design mirrors the school's real paper certificates.
+   CHANGED (pack 39 - owner: "the certificate be like the one i upload ...
+   student level should have different color and design ... words fill the
+   whole space ... two version portrait and landscape"):
+     - EVERY level now has its own colour AND design:
+         Primary          = green frame + gold corner triangles (default)
+         Junior Secondary = blue, rounded corners + ring-circles band
+         Qur'anic         = maroon, woven ribbons down the LEFT+RIGHT edges
+         Preliminary      = BLACK frame + yellow/black chevron ribbons on
+                            all FOUR edges over a pale-gold field
+     - space-filling body (bigger lines, tashahhud line, blue school stamp),
+       footer mirrors the paper: DATE . THE PROPRIETOR . rosette . PRINCIPAL
+     - PORTRAIT (.cert-pt 793x1122) and LANDSCAPE (.cert-ls 1122x793)
+       versions - both capture to exactly ONE A4 page each.
    ========================================================================== */
 
 @import url('https://fonts.googleapis.com/css2?family=Great+Vibes&display=swap');
@@ -41,29 +46,46 @@
 .cert-stu small{ color:#7d8f84; display:block; }
 .cert-stu input{ accent-color:#157347; }
 
-.cert-prev-bar{ display:flex; align-items:center; justify-content:center; gap:18px; margin-bottom:10px; }
+.cert-prev-bar{ display:flex; align-items:center; justify-content:center; gap:18px; margin-bottom:10px; flex-wrap:wrap; }
 .cert-prev-bar b{ min-width:200px; text-align:center; unicode-bidi:isolate; }
+/* NEW (pack 39): portrait/landscape pill toggle (same family as the ID card one) */
+.cert-orient{
+  display:inline-flex; border:2px solid #C9A227; border-radius:999px;
+  overflow:hidden; background:#fff; margin-left:auto;
+}
+.cert-orient button{
+  border:none; background:#fff; color:#8a6d1d; font:inherit; font-weight:800;
+  font-size:12.5px; padding:8px 16px; cursor:pointer;
+}
+.cert-orient button.active{ background:linear-gradient(135deg,#8a6d1d,#C9A227); color:#fff; }
+
 .cert-preview-wrap{
   border:1px dashed #C9A227; border-radius:14px; padding:12px; background:#F6F2E6;
   overflow:hidden; display:flex; justify-content:center;
 }
 .cert-preview-wrap > .cert-frame{ transform-origin:top center; }
 
-/* ------------- THE CERTIFICATE (1122x793, paper-style) ------------- */
-/* theme vars default = green (level auto-map can override per render) */
+/* ------------- THE CERTIFICATE ------------- */
+/* Theme vars: default = green Primary. --ctframe is the frame/edge colour
+   (usually = --ct; Preliminary overrides it to black while its text stays
+   maroon, mirroring the real paper design from the owner's photos). */
 .cert-frame{
-  --ct: #0F5C36;      /* theme dark */
-  --ct2: #1C8A50;     /* theme mid */
+  --ct: #0F5C36;      /* theme dark (text/accents) */
+  --ct2: #1C8A50;     /* theme mid  */
   --ctpale: #EAF6EE;  /* theme pale */
   --ctsoft: #C9E8D4;
-  width:1122px; height:793px; flex-shrink:0;
-  position:relative; overflow:hidden; background:#fdfefb;
-  border:7px solid var(--ct);
+  --ctframe: var(--ct);
+  position:relative; overflow:hidden; background:#fdfefb; flex-shrink:0;
+  border:7px solid var(--ctframe);
   outline:1.5px solid var(--ct2); outline-offset:-14px;
   font-family:'Cairo', sans-serif; color:#12261A;
   display:flex; flex-direction:column;
 }
-/* corner triangles (paper design) */
+/* NEW (pack 39): the two versions */
+.cert-ls{ width:1122px; height:793px; }
+.cert-pt{ width:793px; height:1122px; }
+
+/* corner triangles (paper design - Primary, hidden where edge ribbons exist) */
 .cert-tri{ position:absolute; width:0; height:0; z-index:1; }
 .cert-tri.tl{ top:-7px; left:-7px; border-top:64px solid var(--ct2); border-right:64px solid transparent; }
 .cert-tri.tl2{ top:-7px; left:26px; border-top:40px solid #E9C53D; border-right:40px solid transparent; }
@@ -73,7 +95,7 @@
 /* header */
 .cert-h{ position:relative; z-index:2; display:flex; align-items:center; gap:14px; padding:20px 30px 10px; }
 .cert-h-crest{
-  width:88px; height:96px; background:#fff; border:3px solid var(--ct); border-radius:10px;
+  width:88px; height:96px; background:#fff; border:3px solid var(--ctframe); border-radius:10px;
   box-shadow:0 0 0 3px #fff, 0 0 0 5px var(--ct2);
   display:flex; align-items:center; justify-content:center; flex-shrink:0;
 }
@@ -86,29 +108,50 @@
 .cert-h-addr{ font-size:10px; color:#4c5b52; line-height:1.5; margin-top:2px; }
 .cert-motto-pill{
   display:inline-block; margin-top:6px; padding:2px 14px; border-radius:999px;
-  background:var(--ct); color:#fff; font-size:10.5px; font-weight:700; letter-spacing:1px;
+  background:var(--ctframe); color:#fff; font-size:10.5px; font-weight:700; letter-spacing:1px;
 }
 .cert-h-right{ width:150px; flex-shrink:0; text-align:center; }
-.cert-no{ font-size:10.5px; color:#333; text-align:left; margin-bottom:6px; display:flex; justify-content:space-between; gap:6px; } .cert-no span{ white-space:nowrap; }
+.cert-no{ font-size:10.5px; color:#333; text-align:left; margin-bottom:6px; display:flex; justify-content:space-between; gap:6px; }
+.cert-no span{ white-space:nowrap; }
 .cert-no b{ font-weight:700; border-bottom:1px dotted #555; flex:1; unicode-bidi:isolate; }
+/* FIX (pack 39): the full serial AMS/2026/CERT/AM/22/074 stays on ONE line */
+.cert-no.serial{ flex-direction:column; align-items:flex-start; gap:1px; }
+.cert-no.serial b{ font-size:9.5px; white-space:nowrap; width:100%; text-align:left; }
 .cert-passport{
   width:118px; height:138px; margin:0 auto; background:#fff;
-  border:2px solid var(--ct); display:flex; align-items:center; justify-content:center;
-  color:var(--ct); font-size:11px; font-weight:800; letter-spacing:1.5px; overflow:hidden;
+  border:2px solid var(--ctframe); display:flex; align-items:center; justify-content:center;
+  color:var(--ctframe); font-size:11px; font-weight:800; letter-spacing:1.5px; overflow:hidden;
 }
 .cert-passport img{ width:100%; height:100%; object-fit:cover; }
 
-/* title row */
-.cert-trow{ position:relative; z-index:2; text-align:center; margin-top:2px; }
-.cert-level{ display:inline-block; font-size:34px; font-weight:800; letter-spacing:2px; color:var(--ct);
-  background:var(--ctpale); border:1px solid var(--ctsoft); border-radius:10px; padding:0 18px; }
-.cert-level small{ font-family:'Amiri', serif; font-weight:700; margin-left:14px; letter-spacing:0; }
-.cert-word{ font-size:17px; font-weight:800; letter-spacing:8px; color:#8c2f39; margin-top:3px; }
+/* title row - CHANGED (pack 39): big level wording on the left, the
+   "CERTIFICATE" colour band on the right, like the paper certificates */
+.cert-trow{
+  position:relative; z-index:2; display:flex; align-items:center; gap:18px;
+  padding:0 40px; margin-top:2px;
+}
+.cert-level{
+  font-size:38px; font-weight:800; letter-spacing:1.5px; color:var(--ct);
+  line-height:1.05; white-space:nowrap;
+}
+.cert-level small{ font-family:'Amiri', serif; font-weight:700; margin-left:12px; letter-spacing:0; font-size:.62em; }
+.cert-word{
+  flex:1; text-align:center; padding:7px 10px; border-radius:8px;
+  background:var(--ctframe); color:#fff;
+  font-size:16px; font-weight:800; letter-spacing:8px;
+}
+/* NEW (pack 39): tashahhud line under the band, right-aligned (paper design) */
+.cert-tash{ position:relative; z-index:2; text-align:right; padding:3px 46px 0;
+  font-family:'Amiri', serif; font-size:15px; color:#333; }
 
-/* body: ruled lines like the paper certificate */
-.cert-b{ position:relative; z-index:2; padding:6px 46px 0; font-size:13.8px; line-height:2.05;
-  background:linear-gradient(180deg,var(--ctpale),#fdfefb 70%); }
-.cert-b-ar{ font-family:'Amiri', serif; direction:rtl; text-align:right; font-size:16.5px; color:#222; line-height:2.1; }
+/* body: CHANGED (pack 39) - bigger, space-filling ruled lines */
+.cert-b{
+  position:relative; z-index:2; flex:1; display:flex; flex-direction:column;
+  justify-content:space-evenly; padding:2px 46px 0;
+  font-size:15px; line-height:2.15;
+  background:linear-gradient(180deg,var(--ctpale),#fdfefb 70%);
+}
+.cert-b-ar{ font-family:'Amiri', serif; direction:rtl; text-align:right; font-size:17.5px; color:#222; line-height:2.15; } /* justify scattered short words between the dotted fills */
 .cert-b-en{ text-align:justify; }
 .cert-fill{ display:inline-block; min-width:120px; border-bottom:1.2px dotted #555; text-align:center;
   font-weight:700; color:#0F3D2E; padding:0 8px; unicode-bidi:isolate; }
@@ -116,7 +159,20 @@
 .cert-fill.w60{ min-width:60px; } .cert-fill.w90{ min-width:90px; }
 .cert-fill.w180{ min-width:180px; } .cert-fill.w230{ min-width:230px; }
 
-/* footer: date / proprietor / rosette / principal */
+/* NEW (pack 39): blue school ink-stamp (z-index above the body gradient) */
+.cert-stamp{
+  position:absolute; right:76px; bottom:118px; z-index:5;
+  width:150px; height:108px; border-radius:50%;
+  border:2.5px solid rgba(46,91,168,.75); outline:1.5px solid rgba(46,91,168,.55); outline-offset:3px;
+  background:rgba(255,255,255,.55); transform:rotate(-8deg);
+  display:flex; align-items:center; justify-content:center; text-align:center;
+}
+.cert-stamp span{
+  font-size:8.5px; font-weight:800; letter-spacing:1.4px; line-height:1.7;
+  color:rgba(46,91,168,.9); text-transform:uppercase;
+}
+
+/* footer: date / proprietor / rosette / principal (pack 39 mirrors paper) */
 .cert-f{ position:relative; z-index:2; margin-top:auto; display:flex; align-items:flex-end;
   justify-content:space-between; padding:0 52px 26px; }
 .cert-sign{ width:230px; text-align:center; }
@@ -124,8 +180,11 @@
 .cert-sign .ln{ border-top:1.4px solid #12261A; margin:0 14px 4px; }
 .cert-sign small{ font-size:11px; font-weight:700; letter-spacing:.5px; }
 .cert-ar-lbl{ font-family:'Amiri', serif; font-size:12px; color:#333; }
+/* NEW (pack 39): dotted tails running out of the rosette like on the paper */
+.cert-rosette-wrap{ display:flex; align-items:center; gap:8px; }
+.cert-rosette-ln{ width:58px; border-top:1.6px dotted #8a7a52; }
 .cert-rosette{
-  width:86px; height:86px; border-radius:50%; position:relative;
+  width:86px; height:86px; border-radius:50%; position:relative; flex-shrink:0;
   background:
     radial-gradient(circle, #d64541 0 56%, transparent 57%),
     conic-gradient(#b33733 0 10deg, #f2c14e 10deg 20deg, #b33733 20deg 30deg, #f2c14e 30deg 40deg, #b33733 40deg 50deg, #f2c14e 50deg 60deg, #b33733 60deg 70deg, #f2c14e 70deg 80deg, #b33733 80deg 90deg, #f2c14e 90deg 100deg, #b33733 100deg 110deg, #f2c14e 110deg 120deg, #b33733 120deg 130deg, #f2c14e 130deg 140deg, #b33733 140deg 150deg, #f2c14e 150deg 160deg, #b33733 160deg 170deg, #f2c14e 170deg 180deg, #b33733 180deg 190deg, #f2c14e 190deg 200deg, #b33733 200deg 210deg, #f2c14e 210deg 220deg, #b33733 220deg 230deg, #f2c14e 230deg 240deg, #b33733 240deg 250deg, #f2c14e 250deg 260deg, #b33733 260deg 270deg, #f2c14e 270deg 280deg, #b33733 280deg 290deg, #f2c14e 290deg 300deg, #b33733 300deg 310deg, #f2c14e 310deg 320deg, #b33733 320deg 330deg, #f2c14e 330deg 340deg, #b33733 340deg 350deg, #f2c14e 350deg 360deg);
@@ -136,7 +195,82 @@
 .cert-watermark{ position:absolute; inset:0; display:flex; align-items:center; justify-content:center; pointer-events:none; z-index:1; }
 .cert-watermark img{ width:400px; height:400px; object-fit:contain; opacity:.045; border-radius:50%; }
 
-/* level themes (auto from class): ibtidai=green, idadi=blue, thanawi=maroon, tahdiri=dark */
-.cert-theme-idadi{ --ct:#14507E; --ct2:#2E86C9; --ctpale:#EAF3FB; --ctsoft:#C7DFEF; }
+/* ================= LEVEL THEMES (auto from class) ================= */
+/* Junior Secondary: BLUE + rounded corners + the ring-circles band
+   (mirrors the owner's blue paper certificate) */
+.cert-theme-idadi{
+  --ct:#14507E; --ct2:#2E86C9; --ctpale:#EAF3FB; --ctsoft:#C7DFEF;
+  border-radius:18px;
+}
+.cert-theme-idadi .cert-h-crest{ border-radius:16px; }
+.cert-theme-idadi .cert-passport{ border-radius:10px; }
+.cert-theme-idadi .cert-trow{
+  background:repeating-radial-gradient(circle at 50% 50%, transparent 0 13px, rgba(46,134,201,.16) 13px 15px);
+  border-radius:12px; padding-top:4px; padding-bottom:4px;
+}
+
+/* Qur'anic: MAROON + woven ribbons down the left and right edges
+   (mirrors the owner's maroon paper certificate) */
 .cert-theme-thanawi{ --ct:#7E2434; --ct2:#B0404F; --ctpale:#FBEEEF; --ctsoft:#EECDD2; }
-.cert-theme-tahdiri{ --ct:#1B2A1E; --ct2:#C9A227; --ctpale:#F2F4EC; --ctsoft:#DDE3C6; }
+.cert-theme-thanawi .cert-tri{ display:none; }
+.cert-theme-thanawi .cert-art.edge-l,
+.cert-theme-thanawi .cert-art.edge-r{
+  position:absolute; top:-7px; bottom:-7px; width:34px; z-index:1;
+  background:repeating-linear-gradient(135deg,
+     #7E2434 0 7px, #F6ECEC 7px 9px, #B0404F 9px 16px, #F6ECEC 16px 18px);
+}
+.cert-theme-thanawi .cert-art.edge-l{ left:-7px; border-right:2.5px solid #C9A227; }
+.cert-theme-thanawi .cert-art.edge-r{ right:-7px; border-left:2.5px solid #C9A227; }
+
+/* Preliminary: BLACK frame + yellow/black chevron ribbons on ALL FOUR
+   edges over a pale-gold field (mirrors the owner's paper certificate) */
+.cert-theme-tahdiri{
+  --ct:#7E2434; --ct2:#C9A227; --ctpale:#F6EFC9; --ctsoft:#E4D89A;
+  --ctframe:#141414; background:#FDF6DC;
+}
+.cert-theme-tahdiri .cert-tri{ display:none; }
+.cert-theme-tahdiri .cert-art{ position:absolute; z-index:1;
+  background:repeating-linear-gradient(45deg, #141414 0 10px, #E9C53D 10px 20px); }
+.cert-theme-tahdiri .cert-art.edge-t{ top:-7px; left:-7px; right:-7px; height:20px; }
+.cert-theme-tahdiri .cert-art.edge-b{ bottom:-7px; left:-7px; right:-7px; height:20px; }
+.cert-theme-tahdiri .cert-art.edge-l{ top:-7px; bottom:-7px; left:-7px; width:20px;
+  background:repeating-linear-gradient(135deg, #141414 0 10px, #E9C53D 10px 20px); }
+.cert-theme-tahdiri .cert-art.edge-r{ top:-7px; bottom:-7px; right:-7px; width:20px;
+  background:repeating-linear-gradient(135deg, #141414 0 10px, #E9C53D 10px 20px); }
+.cert-theme-tahdiri .cert-motto-pill{ color:#F3D77A; }
+.cert-theme-tahdiri .cert-word{ color:#F3D77A; }
+.cert-theme-tahdiri .cert-b{ background:linear-gradient(180deg,rgba(246,239,201,.55),rgba(253,246,220,0) 70%); }
+
+/* ================= PORTRAIT version (.cert-pt 793x1122) ================= */
+.cert-pt .cert-h{ padding:18px 20px 8px; gap:10px; }
+.cert-pt .cert-h-crest{ width:70px; height:78px; border-radius:12px; }
+.cert-pt .cert-h-crest img{ width:56px; height:56px; }
+.cert-pt .cert-bismillah{ font-size:20px; }
+.cert-pt .cert-h-ar{ font-size:24px; }
+.cert-pt .cert-h-en{ font-size:14.5px; letter-spacing:1px; }
+.cert-pt .cert-h-addr{ font-size:9px; }
+.cert-pt .cert-motto-pill{ font-size:9px; letter-spacing:.6px; }
+.cert-pt .cert-h-right{ width:132px; }
+.cert-pt .cert-no{ font-size:9.5px; }
+.cert-pt .cert-no.serial b{ font-size:8.5px; }
+.cert-pt .cert-passport{ width:96px; height:112px; }
+.cert-pt .cert-trow{ padding:0 26px; gap:12px; margin-top:8px; }
+.cert-pt .cert-level{ font-size:30px; }
+.cert-pt .cert-word{ font-size:12px; letter-spacing:5px; padding:5px 8px; }
+.cert-pt .cert-tash{ padding:2px 32px 0; font-size:13.5px; }
+.cert-pt .cert-b{ padding:2px 34px 0; font-size:13.5px; line-height:2.1; }
+.cert-pt .cert-b-ar{ font-size:15.5px; line-height:2.2; }
+.cert-pt .cert-fill.name{ min-width:260px; font-size:15px; }
+/* portrait footer: DATE + PROPRIETOR stacked left, rosette above the
+   PRINCIPAL line on the right, stamp overlapping the rosette (like paper) */
+.cert-pt .cert-f{
+  display:grid; grid-template-columns:1fr auto; column-gap:18px;
+  padding:0 40px 30px; align-items:end;
+}
+.cert-pt .cert-f .cert-sign:nth-child(1){ grid-area:1/1; width:250px; }
+.cert-pt .cert-f .cert-rosette-wrap{ grid-area:1/2; justify-self:center; margin-bottom:-6px; }
+.cert-pt .cert-f .cert-sign:nth-child(2){ grid-area:2/1; width:250px; }
+.cert-pt .cert-f .cert-sign:nth-child(4){ grid-area:2/2; width:230px; }
+.cert-pt .cert-rosette-ln{ display:none; }
+.cert-pt .cert-stamp{ right:52px; bottom:170px; }
+/* ===================== end pack 39 ===================== */

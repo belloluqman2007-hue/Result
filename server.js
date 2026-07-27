@@ -3835,6 +3835,14 @@ SELECT
             date_of_birth
         } = req.body;
 
+        // FIX (pack 39 - owner: "if i add student like ten to the website it
+        // will say error"): a BLANK Date of Birth went in as '' and MySQL
+        // strict mode refuses '' for a DATE column, so those saves always
+        // failed with "Error saving student". Blank now becomes NULL - the
+        // exact same treatment the bulk uploader, the admission pipeline and
+        // the profile editor already use. Real dates pass through unchanged.
+        const dobValue = (date_of_birth || "").trim() || null;
+
         const photoPath = req.file
             ? `images/students/${req.file.filename}`
             : null;
@@ -3854,7 +3862,7 @@ SELECT
                  (student_id, full_name, gender, class_name, date_of_birth, photo_path,
                   parent_name, parent_phone, address)
                  VALUES (?,?,?,?,?,?,?,?,?)`,
-                [student_id, full_name, gender, class_name, date_of_birth, photoPath,
+                [student_id, full_name, gender, class_name, dobValue, photoPath, // FIX (pack 39): dobValue
                  parentName || null, parentPhone || null, address || null],
                 (err) => {
                     if (err) {
@@ -3890,7 +3898,7 @@ SELECT
                     full_name,
                     gender,
                     class_name,
-                    date_of_birth,
+                    dobValue, // FIX (pack 39): blank date of birth -> NULL (strict-mode save error)
                     photoPath
                 ],
                 (err, result) => {
@@ -5965,6 +5973,48 @@ app.delete("/calendar/:id", requireLogin, requireAdmin, (req, res) => {
     connection.query("DELETE FROM calendars WHERE id = ?", [req.params.id], (err) => {
         if (err) { console.log(err); return res.status(500).json({ message: "Database error" }); }
         res.json({ message: "Calendar deleted" });
+    });
+});
+
+// ==========================================================================
+// NEW (pack 39 - owner chose "One-tap backup" as the new beneficial
+// feature): ADMIN-ONLY full JSON backup of the whole school database.
+// One tap on the teacher dashboard downloads ameenullah-backup-YYYY-MM-DD.json.
+// Student passport photo blobs are replaced with a short note so the file
+// stays small enough for a phone to handle; everything else is complete.
+// Additive route - nothing else was touched.
+// ==========================================================================
+app.get("/backup.json", requireLogin, requireAdmin, (req, res) => {
+    connection.query("SHOW TABLES", (err, tables) => {
+        if (err) { console.log(err); return res.status(500).json({ message: "Database error" }); }
+        const key = Object.keys(tables[0] || {})[0];
+        const names = tables.map(r => r[key]);
+        const out = {
+            app: "Ameenullah School Result System",
+            kind: "full-backup",
+            version: 1,
+            created_at: new Date().toISOString(),
+            tables: {}
+        };
+        let i = 0;
+        const nextTable = () => {
+            if (i >= names.length) {
+                const stamp = new Date().toISOString().slice(0, 10);
+                res.setHeader("Content-Type", "application/json");
+                res.setHeader("Content-Disposition", 'attachment; filename="ameenullah-backup-' + stamp + '.json"');
+                return res.send(JSON.stringify(out));
+            }
+            const t = names[i++];
+            connection.query("SELECT * FROM `" + t + "`", (e2, rows) => {
+                if (e2) { console.log(e2); out.tables[t] = { error: "could not read table" }; return nextTable(); }
+                if (t === "students") {
+                    rows.forEach(r => { if (r.photo_data) r.photo_data = "[passport photo stored on server - not included in backup]"; });
+                }
+                out.tables[t] = rows;
+                nextTable();
+            });
+        };
+        nextTable();
     });
 });
 

@@ -100,10 +100,15 @@ document.getElementById("downloadPdf").addEventListener("click", function () {
             btn.disabled = false;
 
             var pdf = new window.jspdf.jsPDF({ unit: "mm", format: "a4" });
+            // CHANGED (pack 39 - owner: "likewise the id card also"): the PDF
+            // places the card at its real size for the CHOSEN version -
+            // landscape 85.6x53.98mm, portrait 53.98x85.6mm.
+            var isPort = amsCardOrient === "portrait";
             canvases.forEach(function (cv, i) {
-                var w = 85.6;                                     // real ID-card width
-                var h = Math.min((cv.height * w) / cv.width, 53.98); // keep proportion, cap at card height
-                var y = 20 + i * (53.98 + 10);                    // front, then back below it
+                var w = isPort ? 53.98 : 85.6;                          // real card width for this version
+                var capH = isPort ? 85.6 : 53.98;                       // ...and its real height
+                var h = Math.min((cv.height * w) / cv.width, capH);     // keep proportion, cap at card height
+                var y = 20 + i * (capH + 10);                           // front, then back below it
                 pdf.addImage(cv.toDataURL("image/png"), "PNG", (210 - w) / 2, y, w, h);
             });
 
@@ -118,3 +123,23 @@ document.getElementById("downloadPdf").addEventListener("click", function () {
             if (window.amsToast) window.amsToast("Could not create the PDF - please try again.", "error");
         });
 });
+
+/* ====================================================================
+   NEW (pack 39 - owner: "likewise the id card also" - two versions):
+   portrait / landscape toggle. amsCardOrient drives the preview class
+   (.card--portrait on #card) and the PDF placement math above.
+   ==================================================================== */
+var amsCardOrient = "landscape";
+(function () {
+    var toggle = document.getElementById("orientToggle");
+    if (!toggle) return;
+    toggle.addEventListener("click", function (ev) {
+        var b = ev.target.closest("button[data-o]");
+        if (!b) return;
+        amsCardOrient = b.getAttribute("data-o") === "portrait" ? "portrait" : "landscape";
+        document.getElementById("card").classList.toggle("card--portrait", amsCardOrient === "portrait");
+        toggle.querySelectorAll("button").forEach(function (x) {
+            x.classList.toggle("active", x === b);
+        });
+    });
+})();

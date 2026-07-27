@@ -4,6 +4,87 @@
 
 ---
 
+## Pack 39 — 2026-07-27
+
+Owner's requests:
+> "the certificate be like the one i upload to you - student level should
+> have different color and design of the certificate and the words on the
+> certificate should fill the whole space and have two version portrait and
+> landscape, likewise the id card also"
+> "add new beneficial feature" (owner chose 💾 One-tap backup)
+> "let the dashboard fine like the public website"
+> "if i add student like ten to the website it will say error, fix that"
+
+### NEW — One-tap Backup 💾 (the new beneficial feature)
+- `server.js`: new admin-only route `GET /backup.json` — serially reads
+  ALL 33 tables and downloads `ameenullah-backup-YYYY-MM-DD.json`.
+  requireLogin + requireAdmin (guests 401, teachers 403). Student passport
+  photo blobs are swapped for a short note so the file stays phone-sized;
+  every other record is complete.
+- `teacher-dashboard.html`: new emerald "One-tap Backup" band with a gold
+  Download button, hidden for teachers via the existing `data-admin-only`
+  mechanism.
+
+### CHANGED — Certificates now mirror the uploaded paper ones
+- `js/certificates.js`: rebuilt on the pack-36 base. NEW `certOrient`
+  ("ls"/"pt") + `certSetOrient()`; stage, preview scale and jsPDF all
+  follow the orientation (`certNewPdf`, `pdf.addPage("a4","portrait")`,
+  210x297 / 297x210 placements). Footer mirrors paper (DATE . THE
+  PROPRIETOR . rosette with dotted tails . THE PRINCIPAL), tashahhud line,
+  blue school stamp, fuller paper-verbatim Arabic body. All pack-35/36
+  APIs + selectors kept (certInit/certSetType/certLoadStudents/
+  certRenderStudents/certToggleAll/certRefresh/certNav/certPosition/
+  certSelected/certBuildHtml/certStageFor/certCapture/certDownloadOne/
+  certDownloadAll; .cert-b-en/.cert-fill.name/.cert-word/.cert-level).
+- `css/certificates.css`: EVERY level now has its own colour AND design —
+  Primary green + gold corner triangles (default), Junior Secondary blue +
+  rounded corners + ring-circles band, Qur'anic maroon + woven ribbons on
+  the left/right edges, Preliminary BLACK frame + yellow/black chevrons on
+  all four edges over a pale-gold field. Bigger space-filling body
+  (.cert-b flex:1, larger line-height), .cert-ls (1122x793) + .cert-pt
+  (793x1122) with portrait-tuned header/footer/stamp positions.
+  Serial stays on one dotted line.
+- `certificates.html`: Landscape/Portrait pill toggle in the preview bar.
+- FIX: level auto-detect regex uses \u escapes (a mangled literal
+  diacritic range silently matched nothing and every certificate fell
+  back to the generic design).
+
+### NEW — ID card: two versions
+- `id-card.html`: Landscape/Portrait toggle + crest + gold ribbon markup.
+- `js/idcard.js`: `amsCardOrient` state, toggle handler
+  (.card--portrait), PDF placement math per version (85.6x53.98 /
+  53.98x85.6mm, capped heights).
+- `css/idcard.css`: consolidated pack-39 block — clean grid front
+  (44px / minmax(0,1fr) / 80px), absolute gold ribbon (slimmed so it
+  never covers the school name), portrait 214x340 badge layout with the
+  Issued footer pinned inside (height:100% face + no dashboard-panel
+  padding/flex interference), print + PDF-flat rules for both versions.
+
+### CHANGED — Dashboard beautified like the public website
+- NEW `css/dashboard-beauty.css` (loaded ONLY by teacher-dashboard.html):
+  website-style emerald hero with the crest, gold "Knowledge & Worship"
+  badge, star lattice + gold glow bar (same family as the homepage hero),
+  lifted stat cards with emerald→gold light bars, glowing quick-action
+  tiles, deep-emerald sidebar with gold active indicator, backup band.
+- `teacher-dashboard.html`: hero markup (the `#welcomeMessage` id app.js
+  fills is UNCHANGED).
+
+### FIX — "add student like ten ... it will say error"
+- Root cause: a BLANK Date of Birth was sent as `''`, and MySQL strict
+  mode refuses `''` for a DATE column, so every such save failed with
+  "Error saving student" (ER_TRUNCATED_WRONG_VALUE 1292).
+- `server.js` `/save-student`: `dobValue = (date_of_birth||"").trim() ||
+  null` used by BOTH insert paths — same treatment the bulk uploader, the
+  admission pipeline and the profile editor already had. Verified: 13
+  consecutive saves succeed, blank DoB → NULL, real dates unchanged.
+
+### Files touched
+- server.js, sw.js (v30), CHANGES.md, teacher-dashboard.html,
+  css/dashboard-beauty.css (new), certificates.html, js/certificates.js,
+  css/certificates.css, id-card.html, js/idcard.js, css/idcard.css
+
+---
+
 ## Pack 38 — 2026-07-27
 
 **FIX (owner: "the admission enquire page is displaying in the pdf also at the top which is causing 2 pages"):** printing the Provisional Admission Letter dragged the whole enquiry board into the PDF's top. Root cause: `css/school.css`'s *calendar* print rule force-shows `.mng-page` at print (`display:block !important`, loaded after `style.css`, so it outranked the global print guard). Page-local fix in `manage-admissions.html` — when the letter overlay is open (`adm-letter-open`, toggled by `js/admissions.js`), the board is hidden for print with higher-specificity `:has()` CSS, plus a `beforeprint`/`afterprint` inline-style fallback for engines without `:has()`. `school.css` itself untouched — calendar printing keeps working. Verified with a real print-pipeline run: exactly **1 page**, letter only.

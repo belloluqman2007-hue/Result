@@ -101,13 +101,18 @@
         <button class="mg-btn-light" type="button" onclick="certNav(-1)">&#8592; Prev</button>
         <b id="certPrevName"></b>
         <button class="mg-btn-light" type="button" onclick="certNav(1)">Next &#8594;</button>
+        <!-- NEW (pack 39 - owner: "two version portrait and landscape") -->
+        <span class="cert-orient" id="certOrient">
+          <button type="button" class="active" data-o="ls" onclick="certSetOrient('ls')">&#128444; Landscape</button>
+          <button type="button" data-o="pt" onclick="certSetOrient('pt')">&#128195; Portrait</button>
+        </span>
       </div>
       <div class="cert-preview-wrap" id="certPreviewWrap"><!-- live certificate renders here --></div>
       <div class="mg-toolbar" style="margin-top:14px;">
         <button class="mg-btn-light" type="button" onclick="certDownloadOne()">&#11015; This student (PDF)</button>
         <button class="mg-btn" type="button" id="certAllBtn" onclick="certDownloadAll()">&#128230; All selected (PDF)</button>
       </div>
-      <p class="mg-note">Each certificate is one landscape A4 page - print-ready at any cafe or press.</p>
+      <p class="mg-note">Each certificate is one exact A4 page - <b>landscape or portrait</b> (pick above), print-ready at any cafe or press.</p> <!-- CHANGED (pack 39): both orientations -->
     </div>
 
     <div class="mg-msg" id="certMsg"></div>
