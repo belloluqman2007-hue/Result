@@ -4,6 +4,20 @@
 
 ---
 
+## Pack 37 — 2026-07-27
+
+**FIX (owner: "the zip is longer than one page — the school logo and student pic and the signature is standing on each straight; do like in check result"):** the zip was being built **on a phone**, and the mobile media query watches the *phone's viewport* — not the 900px capture area — so the report header (logo / school details / passport) and the two signature boxes were stacking vertically, one per line, blowing the card past one page. The `.rcpzip` capture skin now pins the desktop row layout with higher specificity than every mobile rule, and the two `html2canvas` captures render at a 1400px virtual window (`windowWidth`) so mobile media queries can never fire during a zip build. Proven at a 393px phone viewport: header row ✓, signatures side-by-side ✓, 13-subject real-profile card = 276mm → exactly ONE page, reads exactly like Check Result. Data/calculations untouched — capture CSS only.
+
+**NEW (Admission Pipeline — owner: "let add the admission"):** the pack-13 enquiry viewer becomes a full little pipeline on the same page (Dashboard → Admission Enquiries):
+
+- **🎓 One-tap Admit** on any enquiry: a clean modal prefilled with the child's name, parent, phone, the class they asked for (auto-matched to the real class list), and an auto-suggested Student ID (`AM/26/151` style = biggest serial + 1, editable). Confirming creates the **real student record** with parent fields — so the Student/Parent portal login starts working immediately (password = child's surname, until they change it) — then stamps the enquiry admitted with the new ID. Double-admit and duplicate IDs are safely refused (409).
+- **📄 Printable Provisional Admission Letter**: elegant letterhead matching the report cards (emerald header, crest, Bismillah, gold ribbon, Arabic title «خطاب قبول مؤقت»), Ref `AMS/ADM/year/####`, details table, principal's saved signature auto-stamped, print/PDF via the browser print dialog.
+- **Pipeline statuses + counters**: New / Contacted / Admitted / **Declined** chips (click to filter) plus a filter dropdown; 🗑 delete spam enquiries.
+- **New endpoints**: `GET /admission-next-id`, `POST /admission-enquiry/:id/admit`, `DELETE /admission-enquiry/:id` (all admin-only); the status PUT now also accepts `declined`; boot migration adds `gender`, `date_of_birth`, `admitted_student_id`, `admitted_at` columns and widens the status enum — idempotent + additive, existing enquiries untouched.
+- **FIX (readability):** manage-table headers across the app were dark-on-dark (modern-ui gradient × school.css text colour) — headers are now the intended emerald gradient + pale-gold lettering.
+
+`sw.js` cache bumped to `ameenullah-shell-v28`.
+
 ## Pack 36 — 2026-07-26
 
 **FIX (owner, with evidence photos/PDFs attached):**

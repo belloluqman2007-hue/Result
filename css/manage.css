@@ -737,3 +737,259 @@ table.broadsheet tr:nth-child(even) td{ background:#F4FAF7; }
 .deb-remind.deb-sent{ background:#157347; box-shadow:none; }
 .deb-late-row td{ background:#fdf3f2; }
 .deb-badge{ background:#D64541; color:#fff; border-radius:999px; padding:1px 8px; font-size:11px; font-weight:800; }
+
+/* ==========================================================================
+   NEW (pack 37 - admission pipeline)
+   Enquiry board upgrades: clickable status counter chips, the one-tap
+   ADMIT modal, and the printable provisional admission letter.
+   Everything is prefixed adm- / admd- / adml- so no other page or
+   existing rule can be touched by this block.
+========================================================================== */
+
+.adm-filter{
+  padding:7px 10px;
+  border:1.6px solid #cfd8d1;
+  border-radius:10px;
+  font:inherit;
+  background:#fff;
+  color:#33413a;
+}
+
+.adm-chips{
+  display:flex;
+  flex-wrap:wrap;
+  gap:8px;
+  margin:10px 0 14px;
+}
+.adm-chip{
+  border:1.6px solid #d7e0da;
+  background:#f5f8f6;
+  border-radius:999px;
+  padding:7px 14px;
+  font-weight:800;
+  font-size:13px;
+  color:#41514a;
+  cursor:pointer;
+  transition:transform .15s, box-shadow .15s, background .15s;
+}
+.adm-chip:hover{ transform:translateY(-1px); box-shadow:0 6px 16px rgba(20,60,40,.12); }
+.adm-chip.adm-active{ background:linear-gradient(135deg,#1d5c3f,#2f7a52); color:#F3E7C3; border-color:#1d5c3f; }
+.adm-chip b{ margin-left:6px; }
+
+.adm-act{
+  display:inline-flex;
+  align-items:center;
+  gap:4px;
+  border:none;
+  border-radius:9px;
+  padding:6px 11px;
+  font:inherit;
+  font-weight:800;
+  font-size:12.5px;
+  cursor:pointer;
+  margin:2px 3px 2px 0;
+  transition:transform .15s, box-shadow .15s;
+}
+.adm-act:hover{ transform:translateY(-1px); box-shadow:0 5px 14px rgba(20,50,35,.16); }
+.adm-act.adm-admit{ background:linear-gradient(135deg,#1d5c3f,#2f7a52); color:#F3E7C3; }
+.adm-act.adm-letter{ background:linear-gradient(135deg,#8a6d1d,#c9a227); color:#fff; }
+.adm-act.adm-del{ background:#f4e7e5; color:#8f2b22; border:1px solid #e3c7c2; }
+
+/* ------------------- one-tap ADMIT modal (admd-) --------------------- */
+.admd-wrap{
+  position:fixed;
+  inset:0;
+  background:rgba(10,26,18,.55);
+  display:flex;
+  align-items:flex-start;
+  justify-content:center;
+  padding:26px 14px;
+  overflow-y:auto;
+  z-index:9999;
+}
+.admd-card{
+  background:#fff;
+  border-radius:18px;
+  width:100%;
+  max-width:560px;
+  padding:20px 22px 18px;
+  box-shadow:0 24px 60px rgba(0,0,0,.3);
+  border-top:5px solid #C9A227;
+}
+.admd-head{ display:flex; align-items:center; justify-content:space-between; }
+.admd-head h2{ margin:0; font-size:19px; color:#1d5c3f; }
+.admd-x{
+  border:none; background:#f0ece1; color:#5b6350; font-size:18px; line-height:1;
+  width:34px; height:34px; border-radius:10px; cursor:pointer; font-weight:900;
+}
+.admd-sub{ color:#5B6B62; font-size:13px; margin:8px 0 14px; }
+.admd-grid{ display:grid; grid-template-columns:1fr 1fr; gap:10px 12px; }
+.admd-grid label{ display:flex; flex-direction:column; font-weight:700; font-size:12.5px; color:#33413a; gap:4px; }
+.admd-grid .admd-wide{ grid-column:1 / -1; }
+.admd-grid input, .admd-grid select{
+  padding:9px 10px; border:1.6px solid #cfd8d1; border-radius:10px; font:inherit; background:#fff;
+}
+.admd-grid input:focus, .admd-grid select:focus{ outline:none; border-color:#2f7a52; box-shadow:0 0 0 3px rgba(47,122,82,.14); }
+.admd-hint{ font-weight:600; color:#8a947e; font-size:11px; }
+.admd-actions{ display:flex; justify-content:flex-end; gap:10px; margin-top:16px; }
+.admd-go{
+  border:none; border-radius:11px; padding:10px 18px; font:inherit; font-weight:900; font-size:14px;
+  background:linear-gradient(135deg,#1d5c3f,#2f7a52); color:#F3E7C3; cursor:pointer;
+  box-shadow:0 8px 20px rgba(29,92,63,.3);
+}
+.admd-go:disabled{ opacity:.55; cursor:wait; }
+.admd-msg{ min-height:20px; margin-top:10px; font-weight:700; font-size:13px; }
+.admd-msg.ok{ color:#1d5c3f; }
+.admd-msg.err{ color:#B3261E; }
+@media(max-width:560px){ .admd-grid{ grid-template-columns:1fr; } }
+
+/* ------------- printable PROVISIONAL ADMISSION LETTER (adml-) ------------- */
+.adml-wrap{
+  position:fixed;
+  inset:0;
+  background:rgba(10,26,18,.6);
+  overflow-y:auto;
+  z-index:9998;
+  padding:20px 12px 40px;
+}
+.adml-toolbar{
+  position:sticky;
+  top:0;
+  display:flex;
+  gap:10px;
+  justify-content:center;
+  padding:8px 0 14px;
+}
+.adml-sheet{
+  width:190mm;                       /* A4 width minus the 10mm print margins */
+  max-width:100%;
+  margin:0 auto;
+  background:#fff;
+  border-radius:6px;
+  box-shadow:0 18px 55px rgba(0,0,0,.35);
+  font-family:'Cairo', serif;
+  color:#22332a;
+  overflow:hidden;
+}
+.adml-head{
+  background:linear-gradient(135deg,#123B2A,#1D5C3F 55%,#2F7A52);
+  color:#fff;
+  padding:22px 26px 16px;
+  display:grid;
+  grid-template-columns:78px 1fr;
+  gap:14px;
+  align-items:center;
+  position:relative;
+}
+.adml-head::after{
+  content:"";
+  position:absolute; left:0; right:0; bottom:0; height:5px;
+  background:linear-gradient(90deg,#C9A227,#E9C53D,#C9A227);
+}
+.adml-logo{
+  width:78px; height:78px; object-fit:cover; border-radius:50%;
+  background:#fff; padding:4px; border:2px solid #E9C53D;
+  box-shadow:0 0 0 3px rgba(255,255,255,.9);
+}
+.adml-head-txt{ text-align:center; }
+.adml-ar{ font-family:'Amiri', serif; font-size:21px; font-weight:700; }
+.adml-en{ font-size:16px; font-weight:900; letter-spacing:.6px; color:#F3E7C3; }
+.adml-addr, .adml-motto{ font-size:11px; opacity:.92; margin-top:2px; }
+.adml-bismi{
+  grid-column:1 / -1;
+  text-align:center;
+  font-family:'Amiri', serif;
+  font-size:15px;
+  color:#E9C53D;
+  border-top:1px solid rgba(255,255,255,.35);
+  padding-top:8px;
+  margin-top:6px;
+}
+.adml-refrow{
+  display:flex; justify-content:space-between;
+  padding:16px 30px 0; font-size:12.5px; color:#41514a;
+}
+.adml-title{
+  margin:14px 30px 6px;
+  text-align:center;
+  background:linear-gradient(135deg,#8a6d1d,#C9A227);
+  color:#fff;
+  font-weight:900;
+  letter-spacing:1.5px;
+  font-size:15px;
+  padding:9px 10px;
+  border-radius:8px;
+}
+.adml-title span[lang="ar"]{
+  display:block; font-family:'Amiri', serif; font-size:14px; letter-spacing:0; font-weight:700; opacity:.95;
+}
+.adml-dear{ margin:14px 30px 0; font-size:14px; }
+.adml-child{
+  margin:2px 30px 0;
+  font-size:21px;
+  font-weight:900;
+  color:#1d5c3f;
+  letter-spacing:.5px;
+}
+.adml-body{ margin:12px 30px 0; font-size:13.5px; line-height:1.65; text-align:justify; }
+.adml-details{
+  width:calc(100% - 60px);
+  margin:12px 30px 0;
+  border-collapse:collapse;
+  font-size:13px;
+}
+.adml-details td{ border:1px solid #d7e0da; padding:7px 11px; }
+.adml-details td:first-child{
+  font-weight:800; color:#1d5c3f; width:38%; background:#f2f7f4;
+}
+.adml-signrow{
+  display:flex; justify-content:space-between; align-items:flex-end;
+  margin:34px 40px 0; padding:0 6px 4px;
+}
+.adml-sign, .adml-date{ text-align:center; font-size:12.5px; }
+.adml-sigimg{ max-height:52px; max-width:150px; margin-bottom:-10px; position:relative; top:8px; }
+.adml-sign p, .adml-date p{ color:#999; letter-spacing:1px; margin:0 0 4px; }
+.adml-sign b, .adml-date b{ color:#1d5c3f; }
+.adml-foot{
+  margin-top:26px;
+  background:#123B2A;
+  color:#F3E7C3;
+  text-align:center;
+  font-size:10.5px;
+  letter-spacing:1.2px;
+  padding:9px 10px;
+}
+
+/* Printing the letter: the global print guard in css/style.css already
+   hides every body child except .no-result-print (this overlay) - here
+   we just flatten the overlay and drop its toolbar + shadows. */
+@media print{
+  .adml-wrap{
+    position:static !important;
+    background:none !important;
+    padding:0 !important;
+    overflow:visible !important;
+    display:block !important;
+  }
+  .adml-toolbar{ display:none !important; }
+  .adml-sheet{
+    width:100% !important;
+    max-width:100% !important;
+    box-shadow:none !important;
+    border-radius:0 !important;
+  }
+}
+/* ======================== end NEW (pack 37) ======================== */
+
+/* FIX (pack 37 - readability): modern-ui.css paints every plain table
+   header (including .mg-table) with its dark emerald gradient, while
+   school.css still colours .mg-table header text dark green - so every
+   manage table header was nearly invisible dark-on-dark. Restore the
+   intended pairing here: dark emerald gradient + pale-gold lettering,
+   exactly like the rest of the app's dark headers. */
+table.mg-table th{
+  color:#F3E7C3 !important;
+  background:linear-gradient(135deg,#123B2A,#1D5C3F 60%,#2F7A52) !important;
+  border-bottom:2px solid #C9A227 !important;
+}
+/* ==================== end FIX (pack 37) ==================== */

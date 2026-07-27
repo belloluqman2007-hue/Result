@@ -34,23 +34,77 @@
 
     <div class="mg-toolbar">
       <button class="mg-btn-light" type="button" onclick="loadAdmissions()">&#128260; Refresh</button>
-      <span class="mg-note" style="margin:0;">Tip: after admission, use <b>Add Student</b> to create the child's record - the Student/Parent login starts working immediately.</span>
+      <select id="admFilter" class="adm-filter" onchange="admSetFilter(this.value)" title="Filter by status"> <!-- NEW (pack 37) -->
+        <option value="">All statuses</option>
+        <option value="new">New</option>
+        <option value="contacted">Contacted</option>
+        <option value="admitted">Admitted</option>
+        <option value="declined">Declined</option>
+      </select>
+      <span class="mg-note" style="margin:0;">Tip: press <b>&#127891; Admit</b> on an enquiry - the child's record is created instantly and the Student/Parent login starts working immediately.</span> <!-- CHANGED (pack 37): one-tap admit replaces the manual Add Student step -->
     </div>
+
+    <!-- NEW (pack 37): live pipeline counters (click a chip to filter) -->
+    <div class="adm-chips" id="admChips"></div>
 
     <div class="mg-table-wrap">
       <table class="mg-table" id="admTable">
         <thead>
           <tr>
             <th>Date</th><th>Child's Name</th><th>Parent</th><th>Phone</th>
-            <th>Class Applied</th><th>Message</th><th>Status</th>
+            <th>Class Applied</th><th>Message</th><th>Status</th><th>Actions</th> <!-- NEW (pack 37): one-tap admit / letter / delete -->
           </tr>
         </thead>
-        <tbody><tr><td colspan="7" style="text-align:center; color:#5B6B62;">Loading...</td></tr></tbody>
+        <tbody><tr><td colspan="8" style="text-align:center; color:#5B6B62;">Loading...</td></tr></tbody>
       </table>
     </div>
 
     <div class="mg-msg" id="admMsg"></div>
   </div>
+
+  <!-- ==================== NEW (pack 37 - admission pipeline) ==================== -->
+  <!-- One-tap ADMIT modal: creates the real student record so the
+       Student/Parent portal login works immediately (surname password). -->
+  <div class="admd-wrap" id="admModal" style="display:none;" onclick="if(event.target===this)admCloseModal()">
+    <div class="admd-card" role="dialog" aria-modal="true">
+      <div class="admd-head">
+        <h2>&#127891; Admit Student</h2>
+        <button type="button" class="admd-x" onclick="admCloseModal()" aria-label="Close">&times;</button>
+      </div>
+      <p class="admd-sub">This creates the child's real record instantly - the Student/Parent
+         portal login starts working immediately (password = child's surname, until they change it).</p>
+      <div class="admd-grid">
+        <label class="admd-wide">Full Name<input id="admdName" type="text" autocomplete="off"></label>
+        <label>Gender
+          <select id="admdGender"><option value="">- pick -</option><option>Male</option><option>Female</option></select>
+        </label>
+        <label>Class<span class="admd-hint" id="admdClassHint"></span>
+          <select id="admdClass"><option value="">Loading classes...</option></select>
+        </label>
+        <label>Date of Birth<input id="admdDob" type="date"></label>
+        <label>Student ID <span class="admd-hint">(auto - editable)</span><input id="admdSid" type="text" autocomplete="off"></label>
+        <label>Parent Name<input id="admdParent" type="text" autocomplete="off"></label>
+        <label>Parent Phone<input id="admdPhone" type="tel" autocomplete="off"></label>
+      </div>
+      <div class="admd-actions">
+        <button type="button" class="mg-btn-light" onclick="admCloseModal()">Cancel</button>
+        <button type="button" class="admd-go" id="admdGo" onclick="admDoAdmit()">&#9989; Admit Now</button>
+      </div>
+      <div class="admd-msg" id="admdMsg"></div>
+    </div>
+  </div>
+
+  <!-- Printable PROVISIONAL ADMISSION LETTER (print/save as PDF).
+       Class no-result-print shields it from the global report-print
+       guard in css/style.css; .adml-toolbar is hidden when printing. -->
+  <div class="adml-wrap no-result-print" id="admLetterWrap" style="display:none;">
+    <div class="adml-toolbar">
+      <button type="button" class="admd-go" onclick="window.print()">&#128424; Print / Save PDF</button>
+      <button type="button" class="mg-btn-light" onclick="admCloseLetter()">&#10005; Close</button>
+    </div>
+    <div id="admLetterPrint"><div id="admLetterBody"></div></div>
+  </div>
+  <!-- ================== end NEW (pack 37) ================== -->
 
   <script src="js/ui.js"></script>
   <script src="js/app.js"></script>

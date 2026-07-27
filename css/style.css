@@ -1105,3 +1105,23 @@ nav a{
 .rcpzip .signature-img{ max-height:40px; }
 .rcpzip .signature-box p{ margin:3px 0; }
 .rcpzip .signature-box strong{ font-size:12px; }
+
+/* FIX (pack 37 - owner: "the zip is longer than one page - the school
+   logo, student pic and the signature are standing on each straight; do
+   like in check result"): the zip is usually captured ON A PHONE, and
+   the mobile media query above (max-width:768px) watches the PHONE
+   VIEWPORT - not this 900px staging area - so it was stacking the
+   report header (logo / details / passport) and the two signature
+   boxes vertically, one per line, blowing the card past one page.
+   A zip PDF must read EXACTLY like the desktop Check Result printout,
+   so this skin now pins the ROW layout with higher specificity than
+   every mobile rule. Capture-only CSS - zero data change. */
+.rcpzip .report-header{ flex-direction:row; align-items:center; text-align:left; }
+.rcpzip .school-details{ text-align:center; }
+.rcpzip .report-container > h3,
+.rcpzip .report-container > .student-info-table,
+.rcpzip .report-container > #resultTable,
+.rcpzip .report-container > .bottom-section{ margin-left:30px; margin-right:30px; }
+.rcpzip .student-info-table, .rcpzip #resultTable{ width:calc(100% - 60px); }
+.rcpzip .signature-section{ flex-direction:row; gap:14px; }
+.rcpzip .signature-box{ width:45%; }

@@ -1183,6 +1183,36 @@ function runPack23Migrations() {
 runPack23Migrations();
 
 /* ------------------------------------------------------------------
+   NEW (pack 37 - admission pipeline): enquiries can now carry gender /
+   date of birth (collected at the one-tap ADMIT step), record WHICH
+   student id the child became, and a 'declined' status. All guarded +
+   idempotent + additive - existing enquiries keep working exactly as
+   they did on pack 13.
+------------------------------------------------------------------ */
+function runPack37Migrations() {
+    const conn = addonConnection();
+    conn.connect((err) => {
+        if (err) { conn.destroy(); return setTimeout(runPack37Migrations, 4000); }
+        const steps = [
+            "ALTER TABLE admission_enquiries ADD COLUMN gender VARCHAR(10) NULL",
+            "ALTER TABLE admission_enquiries ADD COLUMN date_of_birth DATE NULL",
+            "ALTER TABLE admission_enquiries ADD COLUMN admitted_student_id VARCHAR(64) NULL",
+            "ALTER TABLE admission_enquiries ADD COLUMN admitted_at TIMESTAMP NULL DEFAULT NULL",
+            "ALTER TABLE admission_enquiries MODIFY status ENUM('new','contacted','admitted','declined') NOT NULL DEFAULT 'new'"
+        ];
+        let i = 0;
+        (function next() {
+            if (i >= steps.length) { conn.end(); console.log("Pack 37 setup ready (admission pipeline)."); return; }
+            conn.query(steps[i++], (qErr) => {
+                if (qErr && qErr.code !== "ER_DUP_FIELDNAME") console.log("Pack 37 migration notice:", qErr.code || qErr.message);
+                next();
+            });
+        })();
+    });
+}
+runPack37Migrations();
+
+/* ------------------------------------------------------------------
    NEW (pack 25 - owner: "Add exam and class timetable for admin and
    teachers, and it will display for students after been published").
    Two tables + publish gate: staff build freely, students/parents only
@@ -4551,12 +4581,167 @@ app.get("/admission-enquiries", requireLogin, requireAdmin, (req, res) => {
 
 app.put("/admission-enquiry/:id", requireLogin, requireAdmin, (req, res) => {
     const status = (req.body.status || "").trim();
-    if (!["new", "contacted", "admitted"].includes(status)) {
+    // CHANGED (pack 37): 'declined' added - the enquiry board is now a
+    // full little pipeline (new -> contacted -> admitted / declined).
+    if (!["new", "contacted", "admitted", "declined"].includes(status)) {
         return res.status(400).json({ message: "Invalid status." });
     }
     connection.query("UPDATE admission_enquiries SET status = ? WHERE id = ?", [status, req.params.id], (err) => {
         if (err) { console.log(err); return res.status(500).json({ message: "Database error" }); }
         res.json({ message: "Updated" });
+    });
+});
+
+/* NEW (pack 37 - admission pipeline): suggested next Student ID.
+   Real IDs look like AM/26/143 (AM / admission year / running serial)
+   - this takes the biggest serial on record and adds one. */
+function amsNextStudentId(cb) {
+    connection.query("SELECT student_id FROM students WHERE student_id LIKE 'AM/%/%'", (err, rows) => {
+        if (err) return cb(err);
+        let max = 0;
+        (rows || []).forEach((r) => {
+            const m = /^AM\/\d{2}\/(\d+)$/.exec(r.student_id || "");
+            if (m) max = Math.max(max, parseInt(m[1], 10));
+        });
+        const yy = String(new Date().getFullYear()).slice(-2);
+        cb(null, "AM/" + yy + "/" + String(max + 1).padStart(3, "0"));
+    });
+}
+
+app.get("/admission-next-id", requireLogin, requireAdmin, (req, res) => {
+    amsNextStudentId((err, sid) => {
+        if (err) { console.log(err); return res.status(500).json({ message: "Database error" }); }
+        res.json({ student_id: sid });
+    });
+});
+
+/* NEW (pack 37 - admission pipeline): one-tap ADMIT straight from an
+   enquiry. Creates the REAL student record (same columns as Add
+   Student, photo left blank - it can be added later from Students) so
+   the Student/Parent portal login starts working immediately (surname
+   = password, until the family changes it), then marks the enquiry
+   admitted and stamps the new ID onto it. Never admits twice. */
+app.post("/admission-enquiry/:id/admit", requireLogin, requireAdmin, (req, res) => {
+    const id = parseInt(req.params.id, 10);
+    if (!id) return res.status(400).json({ message: "Invalid enquiry id." });
+
+    const fullName    = (req.body.full_name || "").trim();
+    const gender      = (req.body.gender || "").trim();
+    const className   = (req.body.class_name || "").trim();
+    let   dob         = (req.body.date_of_birth || "").trim();
+    const parentName  = (req.body.parent_name || "").trim();
+    const parentPhone = (req.body.parent_phone || "").trim();
+    let   studentId   = (req.body.student_id || "").trim();
+
+    if (!fullName) return res.status(400).json({ message: "Child's full name is required." });
+    if (gender !== "Male" && gender !== "Female") {
+        return res.status(400).json({ message: 'Gender must be exactly "Male" or "Female".' }); // same rule as the uploader
+    }
+    if (!className) return res.status(400).json({ message: "Class is required for admission." });
+    if (dob && !/^\d{4}-\d{2}-\d{2}$/.test(dob)) {
+        return res.status(400).json({ message: "Date of birth must be YYYY-MM-DD." });
+    }
+
+    connection.query("SELECT * FROM admission_enquiries WHERE id = ?", [id], (err, rows) => {
+        if (err) { console.log(err); return res.status(500).json({ message: "Database error" }); }
+        if (!rows.length) return res.status(404).json({ message: "Enquiry not found." });
+        const enq = rows[0];
+        if (enq.status === "admitted" && enq.admitted_student_id) {
+            return res.status(409).json({
+                message: "Already admitted as " + enq.admitted_student_id + ".",
+                student_id: enq.admitted_student_id
+            });
+        }
+
+        connection.query("SELECT class_name FROM classes", (cErr, cls) => {
+            if (cErr) { console.log(cErr); return res.status(500).json({ message: "Database error" }); }
+            if (!(cls || []).some((c) => c.class_name === className)) {
+                return res.status(400).json({ message: '"' + className + '" is not a recognized class.' }); // same rule as the uploader
+            }
+
+            const insertAndMark = (sid) => {
+                const finish = () => {
+                    // Stamp the pipeline fields back onto the enquiry. If a
+                    // column is somehow missing yet (fresh boot race), the
+                    // student is still admitted - we just log the notice.
+                    connection.query(
+                        `UPDATE admission_enquiries
+                         SET status = 'admitted',
+                             admitted_student_id = ?,
+                             admitted_at = COALESCE(admitted_at, NOW()),
+                             parent_name = COALESCE(NULLIF(?, ''), parent_name),
+                             phone = COALESCE(NULLIF(?, ''), phone),
+                             gender = COALESCE(NULLIF(?, ''), gender),
+                             class_applied = ?,
+                             date_of_birth = COALESCE(?, date_of_birth)
+                         WHERE id = ?`,
+                        [sid, parentName, parentPhone, gender, className, dob || null, id],
+                        (uErr) => { if (uErr) console.log("Pack 37 admit-stamp notice:", uErr.code || uErr.message); }
+                    );
+                    res.json({
+                        message: fullName + " admitted into " + className +
+                                 ". Student/Parent portal login is now ACTIVE (password = child's surname).",
+                        student_id: sid
+                    });
+                };
+                const onInsert = (iErr) => {
+                    if (iErr && iErr.code === "ER_DUP_ENTRY") {
+                        return res.status(409).json({ message: 'Student ID "' + sid + '" already exists.' });
+                    }
+                    if (iErr) { console.log(iErr); return res.status(500).json({ message: "Error saving student" }); }
+                    finish();
+                };
+                // Same shape as /save-student: parent columns when the
+                // profile columns exist, otherwise the ORIGINAL insert -
+                // backward compatible, no photo (added later if wanted).
+                if (studentProfileColsReady) {
+                    connection.query(
+                        `INSERT INTO students
+                         (student_id, full_name, gender, class_name, date_of_birth, photo_path,
+                          parent_name, parent_phone, address)
+                         VALUES (?,?,?,?,?,NULL,?,?,NULL)`,
+                        [sid, fullName, gender, className, dob || null, parentName || null, parentPhone || null],
+                        (iErr) => {
+                            if (iErr && iErr.code === "ER_BAD_FIELD_ERROR") return insertOriginal();
+                            onInsert(iErr);
+                        }
+                    );
+                } else {
+                    insertOriginal();
+                }
+                function insertOriginal() {
+                    connection.query(
+                        "INSERT INTO students (student_id, full_name, gender, class_name, date_of_birth, photo_path) VALUES (?,?,?,?,?,NULL)",
+                        [sid, fullName, gender, className, dob || null],
+                        onInsert
+                    );
+                }
+            };
+
+            const go = (sid) => {
+                connection.query("SELECT 1 FROM students WHERE student_id = ? LIMIT 1", [sid], (dErr, dup) => {
+                    if (dErr) { console.log(dErr); return res.status(500).json({ message: "Database error" }); }
+                    if ((dup || []).length) {
+                        return res.status(409).json({ message: 'Student ID "' + sid + '" already exists.' });
+                    }
+                    insertAndMark(sid);
+                });
+            };
+
+            if (studentId) return go(studentId);
+            amsNextStudentId((nErr, sid) => {
+                if (nErr) { console.log(nErr); return res.status(500).json({ message: "Database error" }); }
+                go(sid);
+            });
+        });
+    });
+});
+
+/* NEW (pack 37): remove spam / mistakenly-sent enquiries (admin only). */
+app.delete("/admission-enquiry/:id", requireLogin, requireAdmin, (req, res) => {
+    connection.query("DELETE FROM admission_enquiries WHERE id = ?", [req.params.id], (err) => {
+        if (err) { console.log(err); return res.status(500).json({ message: "Database error" }); }
+        res.json({ message: "Deleted" });
     });
 });
 

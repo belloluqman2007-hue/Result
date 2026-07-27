@@ -451,10 +451,16 @@
 
                     await window.amsWaitForImages(card, 4000);
 
+                    /* FIX (pack 37): the zip is built on phones - tell
+                       html2canvas to lay the card out as if the window
+                       were 1400px wide, so mobile media queries can
+                       never stack the header/signatures (the .rcpzip
+                       CSS pins the row layout too - belt and braces). */
                     var canvas = await html2canvas(card, {
                         scale: 2,
                         backgroundColor: "#ffffff",
-                        useCORS: true
+                        useCORS: true,
+                        windowWidth: 1400
                     });
 
                     /* FIX (pack 30): phones under memory pressure sometimes
@@ -470,7 +476,8 @@
                         canvas = await html2canvas(card, {
                             scale: 1.6,
                             backgroundColor: "#ffffff",
-                            useCORS: true
+                            useCORS: true,
+                            windowWidth: 1400 /* FIX (pack 37): same phone fix on the retry capture */
                         });
                     }
 
