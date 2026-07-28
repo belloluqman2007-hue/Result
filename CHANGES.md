@@ -4,6 +4,56 @@
 
 ---
 
+## Packs 41–44 — 2026-07-28
+
+Owner's requests:
+> "the logo in dashboard is too big"
+> "design the one tap back up very well"
+> "the id is just saying loading classes ..."
+> (+ an explanation of Google Search Console's "Indexing request
+>  rejected" — answered in chat; no code change needed.)
+
+### FIX (Pack 41) — Dashboard logo size
+- Root cause found: the pack-40 zip accidentally shipped a TRIMMED
+  css/dashboard-beauty.css that dropped all pack-39 hero/backup styles,
+  so the live dashboard's crest rendered at the raw image size (huge).
+- Restored the full pack-39 beauty block AND merged the pack-40 block
+  into the same file so they can never be separated again.
+- The hero crest is now deliberately smaller than before: 52px desktop /
+  42px phone (was 74/56), softer ring/shadow, tighter hero padding.
+
+### CHANGED (Pack 43) — One-tap Backup panel, full redesign
+- Deep-emerald vault band: Islamic star lattice (same as the website
+  hero), twin emerald/gold radial glows, thin gold top light bar,
+  gradient gold border + deep lifted shadow.
+- Gold vault medallion with a gentle "breathing" pulse ring and a small
+  emerald SAFE tick badge.
+- NEW glass fact chips ("30+ tables", "dated file", "photos stay on
+  server") + a gold weekly-reminder tip line.
+- Download button upgraded: triple-stop gold gradient, shine sweep on
+  hover, animated nudging download arrow; full-width on phones.
+- teacher-dashboard.html markup enriched (chips/tip/safe badge). The
+  download link itself is unchanged (GET /backup.json + download attr;
+  admin-guard server route untouched).
+
+### FIX (Pack 44) — Bulk ID-card class list frozen on "Loading classes..."
+- js/idcard.js: the loader died silently whenever /classes did not come
+  back as a clean JSON array (expired session -> 401 JSON object, waking
+  server -> 500 text, flaky data on the phone's connection).
+- Now: non-OK responses throw explicitly, payload shape is guarded
+  (array OR {classes:[...]} OR strings), empty state says "No classes
+  yet - add classes first", and ANY failure shows "⚠ Could not load -
+  tap to retry" (mousedown/touchstart/focus all trigger a reload) plus
+  one quiet automatic retry after 4 seconds.
+- fetch sends credentials explicitly (same-origin), so a logged-in
+  session is always attached.
+
+### Etc
+- sw.js cache name bumped v31 -> v32 so every phone picks up the fresh
+  JS/CSS on next open.
+
+---
+
 ## Pack 40 — 2026-07-28
 
 Owner's requests:

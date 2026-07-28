@@ -100,15 +100,10 @@ document.getElementById("downloadPdf").addEventListener("click", function () {
             btn.disabled = false;
 
             var pdf = new window.jspdf.jsPDF({ unit: "mm", format: "a4" });
-            // CHANGED (pack 39 - owner: "likewise the id card also"): the PDF
-            // places the card at its real size for the CHOSEN version -
-            // landscape 85.6x53.98mm, portrait 53.98x85.6mm.
-            var isPort = amsCardOrient === "portrait";
             canvases.forEach(function (cv, i) {
-                var w = isPort ? 53.98 : 85.6;                          // real card width for this version
-                var capH = isPort ? 85.6 : 53.98;                       // ...and its real height
-                var h = Math.min((cv.height * w) / cv.width, capH);     // keep proportion, cap at card height
-                var y = 20 + i * (capH + 10);                           // front, then back below it
+                var w = 85.6;                                     // real ID-card width
+                var h = Math.min((cv.height * w) / cv.width, 53.98); // keep proportion, cap at card height
+                var y = 20 + i * (53.98 + 10);                    // front, then back below it
                 pdf.addImage(cv.toDataURL("image/png"), "PNG", (210 - w) / 2, y, w, h);
             });
 
@@ -125,9 +120,155 @@ document.getElementById("downloadPdf").addEventListener("click", function () {
 });
 
 /* ====================================================================
+   NEW (pack 40 - owner picked "Bulk ID cards"): build every card of a
+   WHOLE CLASS into one PDF, at the real card size, several per A4 page.
+   The current orientation toggle is respected (landscape 8/page,
+   portrait 9/page). Front sides only; photos come from the student
+   profiles (photo_path), falling back to the school crest.
+   ==================================================================== */
+(function () {
+    var clsSel = document.getElementById("bulkClass");
+    var btn = document.getElementById("bulkPdf");
+    var prog = document.getElementById("bulkProg");
+    if (!clsSel || !btn) return;
+
+    /* FIX (pack 44 - owner: "the id is just saying loading classes ..."):
+       the old loader died SILENTLY whenever /classes did not come back as
+       a clean JSON array (session expired -> 401 JSON object, server
+       waking up -> 500 text, flaky data, etc.), leaving the box frozen on
+       "Loading classes..." forever. Now: non-OK responses throw, the
+       payload shape is guarded, and any failure shows a friendly
+       "tap to retry" message (plus one quiet auto-retry after 4s). */
+    var loadTries = 0;
+    function fillClasses(rows) {
+        var arr = Array.isArray(rows) ? rows : ((rows && rows.classes) || []);
+        var names = arr.map(function (c) {
+            return (typeof c === "string") ? c : (c.class_name || c.name || "");
+        }).filter(Boolean);
+        if (!names.length) {
+            clsSel.innerHTML = '<option value="">No classes yet - add classes first</option>';
+            return;
+        }
+        clsSel.innerHTML = '<option value="">Pick a class…</option>';
+        names.forEach(function (name) {
+            var o = document.createElement("option");
+            o.value = name; o.textContent = name;
+            clsSel.appendChild(o);
+        });
+    }
+    function loadClasses() {
+        loadTries++;
+        clsSel.innerHTML = '<option value="">Loading classes...</option>';
+        fetch("/classes", { credentials: "same-origin" })
+            .then(function (r) { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); })
+            .then(fillClasses)
+            .catch(function () {
+                clsSel.innerHTML = '<option value="">&#9888; Could not load - tap to retry</option>';
+                if (loadTries < 2) setTimeout(loadClasses, 4000); // one quiet auto-retry
+            });
+    }
+    // TAP TO RETRY: if the failure message is showing, tapping the select reloads
+    ["mousedown", "touchstart", "focus"].forEach(function (ev) {
+        clsSel.addEventListener(ev, function () {
+            if (clsSel.options.length === 1 && /retry/i.test(clsSel.options[0].textContent)) loadClasses();
+        });
+    });
+    loadClasses();
+
+    function say(t) { prog.style.display = t ? "" : "none"; prog.textContent = t || ""; }
+
+    /* Clone the live card front (keeping ALL its styling), fill it with a
+       profile, wrap it so orientation CSS applies, and park it off-screen. */
+    function stageFor(stu, school, issueText) {
+        var isPort = amsCardOrient === "portrait";
+        var wrap = document.createElement("div");
+        wrap.style.cssText = "position:fixed; left:-13000px; top:0; background:#fff; z-index:-1;";
+        var holder = document.createElement("div");
+        // FIX (pack 40): ams-pdf-flat pins the cloned front to the exact
+        // card height (same flattening the single-card PDF relies on).
+        holder.className = "card ams-pdf-flat" + (isPort ? " card--portrait" : "");
+        var front = document.querySelector("#card .card-front").cloneNode(true);
+        front.querySelector("#schoolName").textContent = school;
+        front.querySelector("#studentName").textContent = stu.full_name || "-";
+        front.querySelector("#regNo").textContent = stu.student_id || "-";
+        front.querySelector("#class").textContent = stu.class_name || "-";
+        front.querySelector("#issueDate").textContent = issueText;
+        var img = front.querySelector("#photoImg");
+        img.src = stu.photo_path || "images/LOGO.JPG";
+        img.style.transform = "";
+        holder.appendChild(front);
+        wrap.appendChild(holder);
+        document.body.appendChild(wrap);
+        return wrap;
+    }
+
+    btn.addEventListener("click", function () {
+        var cls = clsSel.value;
+        if (!cls) { if (window.amsToast) amsToast("Pick a class first.", "info"); return; }
+        if (!window.jspdf || !window.html2canvas) { if (window.amsToast) amsToast("PDF generator is still loading - try again in a moment.", "info"); return; }
+        btn.disabled = true;
+        say("Loading students…");
+
+        fetch("/students").then(function (r) { return r.json(); }).then(function (rows) {
+            var list = (rows || []).filter(function (s) { return s.class_name === cls; })
+                .sort(function (a, b) { return String(a.full_name).localeCompare(String(b.full_name)); });
+            if (!list.length) { btn.disabled = false; say(""); window.amsToast && amsToast("No students in that class.", "error"); return; }
+
+            var school = (document.getElementById("school").value || "").trim() || "AMEENULLAH SCHOOL OF ARABIC AND ISLAMIC STUDIES";
+            var issueText = new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
+            var isPort = amsCardOrient === "portrait";
+            var cw = isPort ? 53.98 : 85.6, ch = isPort ? 85.6 : 53.98;   // real card mm
+            var cols = isPort ? 3 : 2, rows = isPort ? 3 : 4, perPage = cols * rows;
+            var gapX = 8, gapY = 8, top = 12;
+            var offX = (210 - cols * cw - (cols - 1) * gapX) / 2;
+            var pdf = new window.jspdf.jsPDF({ unit: "mm", format: "a4" });
+            var page = pdf.internal.pageSize;
+            void page;
+
+            var i = 0;
+            (function next() {
+                if (i >= list.length) {
+                    var safe = cls.replace(/[\\/:*?"<>|]+/g, "_");
+                    pdf.save("ID-Cards-" + safe + ".pdf");
+                    btn.disabled = false; say("");
+                    window.amsToast && amsToast("Class PDF downloaded ✓ " + list.length + " cards", "success", 6000);
+                    return;
+                }
+                var stu = list[i];
+                say("Building " + (i + 1) + "/" + list.length + " - " + (stu.full_name || "").split(" ")[0] + "…");
+                var stage = stageFor(stu, school, issueText);
+                // give the photo a beat to load
+                setTimeout(function () {
+                    html2canvas(stage.querySelector(".card-front"), { scale: 3, backgroundColor: "#ffffff", useCORS: true })
+                        .then(function (cv) {
+                            document.body.removeChild(stage);
+                            var slot = i % perPage;
+                            if (i > 0 && slot === 0) pdf.addPage("a4", "portrait");
+                            var col = slot % cols, row = Math.floor(slot / cols);
+                            var x = offX + col * (cw + gapX);
+                            var y = top + row * (ch + gapY);
+                            var h = Math.min((cv.height * cw) / cv.width, ch);
+                            pdf.addImage(cv.toDataURL("image/png"), "PNG", x, y, cw, h);
+                            i++; next();
+                        })
+                        .catch(function () {
+                            document.body.removeChild(stage);
+                            i++; next();   // skip a broken photo/render, keep going
+                        });
+                }, 60);
+            })();
+        }).catch(function () {
+            btn.disabled = false; say("");
+            window.amsToast && amsToast("Could not load students - try again.", "error");
+        });
+    });
+})();
+
+/* ====================================================================
    NEW (pack 39 - owner: "likewise the id card also" - two versions):
    portrait / landscape toggle. amsCardOrient drives the preview class
    (.card--portrait on #card) and the PDF placement math above.
+   (Re-appended: a mid-session file restore swallowed the first copy.)
    ==================================================================== */
 var amsCardOrient = "landscape";
 (function () {

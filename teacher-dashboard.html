@@ -348,13 +348,24 @@
              stay on the server to keep the file phone-friendly.
         ====================================================== -->
         <div class="ams-panel ams-backup-panel" data-admin-only>
+          <!-- CHANGED (pack 43): richer inner layout - "safe" tick badge on
+               the gold vault medallion, glass fact chips and a weekly
+               reminder line. The download link itself is UNCHANGED (still
+               GET /backup.json with the download attribute). Styles live
+               in css/dashboard-beauty.css (pack 43 block). -->
           <div class="ams-backup-in">
-            <div class="ams-backup-ico">&#128190;</div>
-            <div>
+            <div class="ams-backup-ico">&#128190;<span class="ams-backup-safe">&#10003;</span></div>
+            <div class="ams-backup-txt">
               <h3 class="ams-panel-title">One-tap Backup &#128190;</h3>
               <p>Download every school record - students, results, fees, admissions - as one safe JSON file. Save a copy on your phone or laptop every week, so the school's data is never at risk.</p>
+              <div class="ams-backup-chips">
+                <span class="ams-backup-chip">&#128438; 30+ tables</span>
+                <span class="ams-backup-chip">&#128197; dated file</span>
+                <span class="ams-backup-chip">&#128247; photos stay on server</span>
+              </div>
+              <div class="ams-backup-tip">&#127769; Tip: keep a fresh copy every week - one tap is all it takes.</div>
             </div>
-            <a class="ams-backup-btn" href="/backup.json" download>&#11015; Download Backup</a>
+            <a class="ams-backup-btn" href="/backup.json" download><span class="ams-backup-btn-ico">&#11015;</span> Download Backup</a>
           </div>
         </div>
 
