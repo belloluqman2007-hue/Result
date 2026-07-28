@@ -60,6 +60,20 @@
           <button type="button" id="downloadPdf">&#11015; Download PDF</button>
         </div>
       </form>
+
+      <!-- NEW (pack 40 - owner picked "Bulk ID cards"): build the WHOLE
+           class at once - every student profile photo included, cards laid
+           out at their real size inside one PDF (the chosen landscape /
+           portrait version above is respected). -->
+      <div class="bulk-id">
+        <h3>&#129686; Bulk: whole class</h3>
+        <div class="bulk-row">
+          <select id="bulkClass"><option value="">Loading classes...</option></select>
+          <button type="button" id="bulkPdf">&#128230; Class PDF</button>
+        </div>
+        <p class="hint">Front side of every student's card, real card size, several per A4 page - ready to print and cut.</p>
+        <div class="bulk-prog" id="bulkProg" style="display:none;"></div>
+      </div>
       <p class="hint">Fill in the details, upload a photo, then click <strong>Apply to Card</strong>. Click the card itself to flip it and preview the back.</p>
     </section>
 

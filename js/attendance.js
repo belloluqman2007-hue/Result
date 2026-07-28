@@ -159,6 +159,7 @@ function saveRegister() {
     .then(function (res) {
       attNotify(res.ok ? "\u2705 " + (res.d.message || "Attendance saved") + " - " + date : (res.d.message || "Could not save."), res.ok);
       if (res.ok) loadTakenSummary(className, date); // NEW (pack 14): keep the banner accurate after saving
+      if (res.ok) attBuildAbsenceAlerts(className, date); // NEW (pack 40)
     })
     .catch(function () { attNotify("Network error - NOT saved.", false); });
 }
@@ -373,4 +374,56 @@ function downloadStudentHistoryPDF() {
     })
   });
   d.save("attendance-history-" + attStuMeta.id + ".pdf");
+}
+
+/* ==========================================================================
+   NEW (pack 40 - owner picked "Absence alert to parents"): after the
+   register is saved, this lists every ABSENT pupil whose profile has a
+   parent phone, each with a one-tap WhatsApp button (message pre-filled).
+   Purely client-side: phones come from GET /students (already used by
+   other pages); no server changes.
+========================================================================== */
+function attWaNumber(phone) {
+  var d = String(phone || "").replace(/\D+/g, "");
+  if (d.indexOf("234") === 0) return d;          // already international
+  if (d.indexOf("0") === 0) return "234" + d.slice(1); // Nigerian local
+  return d.length >= 10 ? d : "";
+}
+
+function attBuildAbsenceAlerts(className, date) {
+  var panel = document.getElementById("attAbsPanel");
+  if (!panel) return;
+  panel.style.display = "none";
+  var absentIds = Object.keys(attState).filter(function (sid) { return attState[sid] === "absent"; });
+  if (!absentIds.length) return;
+
+  fetch("/students")
+    .then(function (r) { return r.json(); })
+    .then(function (rows) {
+      var list = (rows || []).filter(function (s) { return absentIds.indexOf(s.student_id) !== -1; });
+      var withPhone = list.filter(function (s) { return attWaNumber(s.parent_phone); });
+      var nice = date.split("-").reverse().join("/");
+      var msgOf = function (name) {
+        return "Assalamu alaikum. This is Ameenullah School of Arabic and Islamic Studies. " +
+          name + " was marked ABSENT from school today (" + nice + "). " +
+          "Kindly let the school know the reason. Jazakumullahu khairan. \u{1F64F}";
+      };
+      var html = '<div class="abs-head">\u{1F4E3} Absence alerts - ' + absentIds.length + ' absent</div>';
+      if (!withPhone.length) {
+        html += '<div class="abs-note">No parent phone numbers on record for the absent pupil(s). Add parent phones on the Students page to use this.</div>';
+      } else {
+        withPhone.forEach(function (s) {
+          var num = attWaNumber(s.parent_phone);
+          var url = "https://wa.me/" + num + "?text=" + encodeURIComponent(msgOf(s.full_name));
+          html += '<div class="abs-row"><div class="abs-who"><b>' + (s.full_name || "-") + "</b>" +
+                  "<small>" + (s.parent_name ? s.parent_name + " \u00b7 " : "") + s.parent_phone + "</small></div>" +
+                  '<a class="abs-wa" target="_blank" rel="noopener" href="' + url + '">\u{1F4AC} WhatsApp parent</a></div>';
+        });
+        var noPhone = list.length - withPhone.length;
+        if (noPhone > 0) html += '<div class="abs-note">' + noPhone + " absent pupil(s) have no parent phone saved.</div>";
+      }
+      panel.innerHTML = html;
+      panel.style.display = "";
+    })
+    .catch(function () { /* silent: attendance itself already saved */ });
 }

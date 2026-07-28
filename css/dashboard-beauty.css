@@ -1,193 +1,78 @@
+
 /* ==========================================================================
-   NEW (pack 39 - owner: "let the dashboard fine like the public website")
-   DASHBOARD BEAUTY LAYER - loaded ONLY by teacher-dashboard.html, so all
-   overrides are page-scoped and nothing else in the app changes.
-
-   Everything here is a VISUAL layer over the existing modern-ui styles:
-     - the greeting bar becomes a website-style emerald hero (same star
-       lattice + gold glow bar + deep emerald gradient family as the public
-       site hero), with the school crest;
-     - stat cards / panels / quick-action tiles get the lifted, glowing
-       website treatment;
-     - sidebar and topbar get the deep-emerald + gold polish;
-     - the NEW One-tap Backup panel (admin only) is styled like a website
-       call-to-action band.
-
-   No ids, no layout structure, no JS hooks are touched.
+   NEW (pack 40): tappable stat cards + the drill-down modal
+   (powered by js/dashboard-drill.js).
 ========================================================================== */
+.ams-stat.dd-clickable{ cursor:pointer; }
+.ams-stat.dd-clickable::after{
+  content:"tap to view"; position:absolute; top:9px; right:10px;
+  font-size:8.5px; font-weight:800; letter-spacing:1px; text-transform:uppercase;
+  color:#2F9E6E; background:#EAF6EE; padding:2px 8px; border-radius:999px;
+  opacity:0; transform:translateY(-3px); transition:opacity .2s, transform .2s;
+}
+.ams-stat.dd-clickable:hover::after,
+.ams-stat.dd-clickable:focus-visible::after{ opacity:1; transform:none; }
+.ams-stat.dd-clickable:focus-visible{ outline:3px solid #C9A227; outline-offset:2px; }
 
-/* ------------------------- HERO (greeting bar) ------------------------- */
-/* Mirrors the public website's .wb2-hero so the dashboard opens with the
-   same "look again" beauty the homepage has. */
-.ams-greeting{
-  position:relative; overflow:hidden;
-  background:
-    radial-gradient(700px 300px at 92% -20%, rgba(63,179,126,.28), transparent 60%),
-    radial-gradient(560px 300px at 4% 120%, rgba(201,162,39,.20), transparent 55%),
-    linear-gradient(155deg,#07271C 0%, #0F3D2E 45%, #1C5A42 100%);
-  border-radius:22px;
-  padding:30px 34px 34px;
-  margin-bottom:24px;
-  box-shadow:0 22px 55px rgba(15,61,46,.35), 0 4px 14px rgba(0,0,0,.12);
-  align-items:center;
-  justify-content:center; gap:28px; /* polish: centered pair, like the website hero */
+.dd-scrim{
+  position:fixed; inset:0; z-index:1200; background:rgba(7,39,28,.55);
+  backdrop-filter:blur(3px); display:flex; align-items:center; justify-content:center;
+  padding:18px;
 }
-/* subtle Islamic star lattice - identical asset to the public site hero */
-.ams-greeting::before{
-  content:""; position:absolute; inset:0; opacity:.08; pointer-events:none;
-  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='72' height='72' viewBox='0 0 72 72'%3E%3Cpath d='M36 4l7 25 25 7-25 7-7 25-7-25-25-7 25-7z' fill='none' stroke='%23E7C55B' stroke-width='1'/%3E%3Ccircle cx='36' cy='36' r='4' fill='%23E7C55B'/%3E%3C/svg%3E");
-  background-size:72px 72px;
+.dd-modal{
+  width:660px; max-width:100%; max-height:82vh; display:flex; flex-direction:column;
+  background:#F8FCFA; border-radius:20px; overflow:hidden;
+  box-shadow:0 30px 70px rgba(7,39,28,.45);
+  animation:ddUp .25s cubic-bezier(.2,.8,.3,1);
 }
-/* gold base glow bar - identical idea to the public site hero */
-.ams-greeting::after{
-  content:""; position:absolute; left:0; right:0; bottom:0; height:5px;
-  background:linear-gradient(90deg,transparent,#C9A227 30%,#E9C53D 50%,#C9A227 70%,transparent);
+@keyframes ddUp{ from{ transform:translateY(18px); opacity:0; } }
+.dd-head{
+  display:flex; align-items:center; gap:10px; padding:16px 20px;
+  background:linear-gradient(135deg,#0F3D2E,#1C5A42); color:#fff;
 }
-.ams-greeting h1{
-  color:#fff !important;
-  text-shadow:0 2px 10px rgba(0,0,0,.35);
-  letter-spacing:.4px;
+.dd-head h3{ margin:0; font-family:'Cairo',sans-serif; font-size:17px; flex:1; color:#fff !important; } /* FIX (pack 40): a global h3 colour made the title invisible on the emerald header */
+.dd-close{
+  border:none; background:rgba(255,255,255,.14); color:#fff; font-size:20px; line-height:1;
+  width:32px; height:32px; border-radius:50%; cursor:pointer;
 }
-.ams-greeting p{ color:rgba(255,255,255,.9) !important; }
-.ams-greeting p span#welcomeMessage{ color:#F3D77A; font-weight:800; }
+.dd-close:hover{ background:#C9A227; color:#123B2A; }
+.dd-body{ padding:16px 20px; overflow:auto; }
+.dd-loading{ text-align:center; padding:30px 0; color:#5c7166; font-weight:700; }
+.dd-empty{ text-align:center; padding:26px 12px; color:#5c7166; }
+.dd-empty-sm{ color:#9db3a8; font-size:12.5px; }
+.dd-count{ font-size:12.5px; font-weight:800; color:#1C5A42; margin:2px 0 10px; }
+.dd-sub{ font-size:12px; font-weight:800; letter-spacing:1px; text-transform:uppercase; color:#8a6d1d; margin:14px 0 8px; }
+.dd-search{
+  width:100%; box-sizing:border-box; margin:2px 0 12px; padding:10px 14px;
+  border:1.6px solid #C7DED2; border-radius:12px; font:inherit; background:#fff;
+}
+.dd-search:focus{ outline:none; border-color:#2F9E6E; box-shadow:0 0 0 3px rgba(47,158,110,.16); }
+.dd-table{ width:100%; border-collapse:collapse; font-size:13.5px; background:#fff; border-radius:12px; overflow:hidden; }
+.dd-table th{ text-align:left; font-size:11px; letter-spacing:1px; text-transform:uppercase; color:#5c7166;
+  background:#EDF5F1; padding:9px 12px; }
+.dd-table td{ padding:9px 12px; border-top:1px solid #EDF3F0; vertical-align:top; }
+.dd-table tr:hover td{ background:#F4FAF7; }
+.dd-chips{ display:flex; flex-wrap:wrap; gap:6px; margin-bottom:12px; }
+.dd-chip{
+  font-size:11px; font-weight:700; color:#13523A; background:#E3F2EA;
+  border:1px solid #C9E8D4; padding:3px 10px; border-radius:999px;
+}
+.dd-group{ background:#fff; border:1px solid #E3EFE9; border-radius:12px; padding:10px 14px; margin-bottom:9px; }
+.dd-group-head{ font-weight:800; color:#123B2A; font-size:14px; display:flex; justify-content:space-between; align-items:center; gap:8px; }
+.dd-tags{ display:flex; flex-wrap:wrap; gap:6px; margin-top:8px; }
+.dd-tag{ font-size:12px; background:#F1F8F4; border:1px solid #DCEDE3; color:#245C44; padding:3px 10px; border-radius:8px; }
+.dd-gbar{ display:flex; align-items:center; gap:10px; margin-bottom:7px; font-size:13px; }
+.dd-glbl{ width:38px; font-weight:800; color:#123B2A; }
+.dd-gtrack{ flex:1; height:9px; border-radius:99px; background:#E4EFE9; overflow:hidden; }
+.dd-gfill{ display:block; height:100%; border-radius:99px; background:linear-gradient(90deg,#1C5A42,#2F9E6E); }
+.dd-list{ margin:6px 0 0; padding-left:18px; font-size:13px; color:#33463c; }
+.dd-list li{ margin-bottom:5px; }
+.dd-role{ font-size:11px; font-weight:800; padding:2px 10px; border-radius:999px; background:#EEF3F0; color:#456; }
+.dd-role-admin{ background:#F3E8C8; color:#8a6d1d; }
 
-/* crest with the same white+gold double ring as the certificates/ID card */
-.ams-hero-crest{
-  width:74px; height:74px; border-radius:50%; object-fit:cover;
-  background:#fff; padding:4px; flex:none;
-  border:2.5px solid #C9A227;
-  box-shadow:0 0 0 3px rgba(255,255,255,.9), 0 10px 24px rgba(0,0,0,.35);
-  position:relative; z-index:1;
-}
-.ams-hero-text{ position:relative; z-index:1; }
-/* little gold badge line, like the public site's hero badge */
-.ams-hero-badge{
-  display:inline-block; font-family:'Cairo',sans-serif; font-size:11px;
-  font-weight:800; letter-spacing:2.4px; text-transform:uppercase;
-  color:#F3D77A; margin-bottom:6px;
-  text-shadow:0 1px 3px rgba(0,0,0,.4);
-}
-
-/* ------------------------- STAT CARDS ------------------------- */
-.ams-stat{
-  border-radius:18px !important;
-  box-shadow:0 10px 26px rgba(15,61,46,.10) !important;
-  border:1px solid rgba(15,61,46,.06) !important;
-  position:relative; overflow:hidden;
-  transition:transform .22s ease, box-shadow .22s ease;
-}
-/* thin emerald->gold light bar along the top of each card */
-.ams-stat::before{
-  content:""; position:absolute; top:0; left:0; right:0; height:3px;
-  background:linear-gradient(90deg,#1C5A42,#2F9E6E 55%,#C9A227);
-  opacity:.9;
-}
-.ams-stat:hover{
-  transform:translateY(-4px);
-  box-shadow:0 20px 44px rgba(15,61,46,.18) !important;
-}
-.ams-stat-icon{ box-shadow:0 8px 18px rgba(15,61,46,.18); }
-.ams-stat-value{ letter-spacing:.3px; }
-
-/* ------------------------- PANELS ------------------------- */
-.ams-panel{
-  border-radius:18px !important;
-  box-shadow:0 12px 30px rgba(15,61,46,.09) !important;
-  border:1px solid rgba(15,61,46,.06) !important;
-}
-.ams-panel-title{
-  letter-spacing:.2px;
-}
-
-/* ------------------------- QUICK ACTION TILES ------------------------- */
-.ams-qa{
-  border-radius:14px !important;
-  position:relative; overflow:hidden;
-  transition:transform .2s ease, box-shadow .2s ease, background .2s ease;
-}
-/* soft light sweep on hover - the "website button" feel */
-.ams-qa::after{
-  content:""; position:absolute; top:0; bottom:0; left:-70%; width:45%;
-  background:linear-gradient(105deg,transparent,rgba(255,255,255,.35),transparent);
-  transform:skewX(-18deg); transition:left .45s ease; pointer-events:none;
-}
-.ams-qa:hover{ transform:translateY(-3px); box-shadow:0 14px 28px rgba(15,61,46,.20); }
-.ams-qa:hover::after{ left:120%; }
-
-/* ------------------------- SIDEBAR ------------------------- */
-.ams-sidebar{
-  background:linear-gradient(180deg,#07271C 0%, #0F3D2E 55%, #123B2A 100%) !important;
-  box-shadow:4px 0 24px rgba(7,39,28,.35);
-}
-.ams-side-brand{
-  border-bottom:1px solid rgba(201,162,39,.28) !important;
-  padding-bottom:16px !important;
-}
-.ams-school-sub{ color:rgba(243,215,122,.85) !important; }
-.ams-nav-label{ color:rgba(243,215,122,.55) !important; letter-spacing:2px; }
-.ams-side-nav a{
-  border-radius:12px;
-  transition:background .18s ease, transform .18s ease;
-}
-.ams-side-nav a:hover{
-  background:rgba(63,179,126,.16);
-  transform:translateX(3px);
-}
-.ams-side-nav a.ams-active,
-.ams-side-nav a[aria-current]{
-  background:linear-gradient(90deg,rgba(201,162,39,.22),rgba(201,162,39,.08)) !important;
-  box-shadow:inset 3px 0 0 #C9A227;
-  color:#F3D77A !important;
-}
-
-/* ------------------------- TOPBAR ------------------------- */
-.ams-topbar{
-  box-shadow:0 6px 20px rgba(15,61,46,.08);
-  border-bottom:1px solid rgba(15,61,46,.07);
-}
-
-/* ------------------------- ONE-TAP BACKUP PANEL -------------------------
-   (NEW feature itself - server route GET /backup.json; this is its tile) */
-.ams-backup-panel{
-  background:
-    radial-gradient(500px 200px at 95% -30%, rgba(63,179,126,.30), transparent 60%),
-    linear-gradient(135deg,#0F3D2E,#1C5A42) !important;
-  border:none !important;
-  color:#fff;
-  margin-bottom:22px;
-}
-.ams-backup-in{
-  display:flex; align-items:center; gap:18px; flex-wrap:wrap;
-  padding:6px 4px;
-}
-.ams-backup-ico{
-  width:56px; height:56px; flex:none; border-radius:16px;
-  display:flex; align-items:center; justify-content:center;
-  font-size:26px;
-  background:linear-gradient(135deg,#C9A227,#E9C53D);
-  box-shadow:0 10px 22px rgba(0,0,0,.3);
-}
-.ams-backup-in h3{ color:#fff !important; margin:0 0 4px; }
-.ams-backup-in p{
-  color:rgba(255,255,255,.82) !important; margin:0; font-size:13.5px;
-  max-width:52ch;
-}
-.ams-backup-btn{
-  margin-left:auto;
-  display:inline-block; white-space:nowrap;
-  background:linear-gradient(135deg,#C9A227,#E9C53D); color:#123B2A !important;
-  font-weight:800; font-size:14px; text-decoration:none;
-  padding:12px 22px; border-radius:999px;
-  box-shadow:0 10px 22px rgba(0,0,0,.28);
-  transition:transform .18s ease, box-shadow .18s ease;
-}
-.ams-backup-btn:hover{ transform:translateY(-2px); box-shadow:0 16px 30px rgba(0,0,0,.34); }
-
-/* ------------------------- PHONE TUNING ------------------------- */
+/* phone: bottom sheet */
 @media (max-width:768px){
-  .ams-greeting{ padding:22px 20px 26px; border-radius:18px; }
-  .ams-hero-crest{ width:56px; height:56px; }
-  .ams-backup-btn{ margin-left:0; width:100%; text-align:center; }
-  .ams-backup-in{ gap:14px; }
+  .dd-scrim{ align-items:flex-end; padding:0; }
+  .dd-modal{ width:100%; max-height:86vh; border-radius:20px 20px 0 0; }
 }
-/* ===================== end NEW (pack 39) ===================== */
+/* ===================== end NEW (pack 40 modal) ===================== */

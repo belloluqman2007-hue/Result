@@ -247,3 +247,45 @@
       : "Hello! Ask about the school (full AI answers coming soon).";
   }).catch(function () {});
 })();
+
+/* ==========================================================================
+   NEW (pack 40): public Honour Roll - top 3 per class from /honour-roll
+   (read-only; the server only exposes name + average, nothing else).
+   ========================================================================== */
+(function () {
+  var sec = document.getElementById("honour");
+  var box = document.getElementById("wbHonour");
+  if (!sec || !box) return;
+
+  fetch("/honour-roll")
+    .then(function (r) { return r.ok ? r.json() : null; })
+    .then(function (d) {
+      if (!d || !d.classes || !d.classes.length) return;   // stay hidden
+      var esc = function (v) {
+        return String(v == null ? "" : v)
+          .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+      };
+      var medals = ["\u{1F947}", "\u{1F948}", "\u{1F949}"];
+      var sub = document.getElementById("wbHonourSub");
+      if (sub && d.term && d.session) sub.textContent = "Best averages - " + d.term + ", " + d.session + ". Ma sha Allah!";
+
+      box.innerHTML = d.classes.map(function (c) {
+        var cards = c.students.map(function (st, i) {
+          var initials = String(st.full_name || "?").trim().split(/\s+/).slice(0, 2).map(function (w) { return w[0] || ""; }).join("").toUpperCase();
+          return '<div class="wb-hon-card wb-hon-r' + (i + 1) + '">' +
+            '<span class="wb-hon-medal">' + medals[i] + "</span>" +
+            '<span class="wb-hon-ava">' + esc(initials) + "</span>" +
+            '<b class="wb-hon-name">' + esc(String(st.full_name || "").trim()) + "</b>" +
+            '<span class="wb-hon-avg">' + st.avg_total + "% average</span>" +
+          "</div>";
+        }).join("");
+        return '<div class="wb-hon-class">' +
+          '<div class="wb-hon-cname">' + esc(c.class_name) + "</div>" +
+          '<div class="wb-hon-row">' + cards + "</div>" +
+        "</div>";
+      }).join("");
+
+      sec.style.display = "";
+    })
+    .catch(function () { /* stay hidden - public site must look perfect even offline */ });
+})();

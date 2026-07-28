@@ -1,34 +1,17 @@
 /* ==========================================================================
    NEW (pack 35): CERTIFICATE GENERATOR (js/certificates.js)
-   CHANGED (pack 39 - owner: "let the certificate be like the one i upload
-   ... two version portrait and landscape"): rebuilt on the pack-36
-   paper-mirror base with
-     - PORTRAIT (.cert-pt 793x1122) + LANDSCAPE (.cert-ls 1122x793) versions
-       - orientation toggle (certSetOrient), stage and jsPDF follow suit
-     - a per-level THEME for every level: green Primary (default),
-       blue Junior Secondary (.cert-theme-idadi), maroon Qur'anic with the
-       woven edge ribbons (.cert-theme-thanawi), black+yellow chevrons on
-       pale gold for Preliminary (.cert-theme-tahdiri)
-     - richer paper-verbatim Arabic body, tashahhud line (.cert-tash),
-       blue school stamp (.cert-stamp), footer mirrors the paper
-       (DATE . THE PROPRIETOR . rosette with dotted tails . THE PRINCIPAL)
-   All pack-35/36 hooks kept: certInit/certSetType/certLoadStudents/
-   certRenderStudents/certToggleAll/certRefresh/certNav/certPosition/
-   certSelected/certOpts/certBuildHtml/certStageFor/certCapture/certNewPdf/
-   certDownloadOne/certDownloadAll and selectors .cert-b-en/.cert-fill.name/
-   .cert-word/.cert-level present on every render.
    100% client-side. Reads the same endpoints other pages already use:
    /classes, /sessions, /students, /signatures, /class-signatures,
    /school-settings, /student-position. Writes NOTHING to the server.
+   Each certificate = one exact landscape A4 page (stage is 1122x793).
    ========================================================================== */
 "use strict";
 
-var certType = "level"; // CHANGED (pack 36): default mirrors the paper certificate
-var certOrient = "ls";    // NEW (pack 39): "ls" landscape | "pt" portrait
-var certStudents = [];    // students of the chosen class
-var certChecked = {};     // student_id -> true/false
-var certIndex = 0;        // which selected student is in the preview
-var certPosCache = {};    // student_id -> "3rd of 24" (excellence)
+var certType = "level"; // CHANGED (pack 36)
+var certStudents = [];     // students of the chosen class
+var certChecked = {};      // student_id -> true/false
+var certIndex = 0;         // which selected student is in the preview
+var certPosCache = {};     // student_id -> "3rd of 24" (excellence)
 var certSigs = { classTeacher: null, principal: null };
 var certSchool = {
   // fallback; live values from /school-settings win when available
@@ -40,17 +23,16 @@ var certSchool = {
 };
 var certBusy = false;
 
-// Level auto-map from the class name (Arabic, diacritics stripped).
-// CHANGED (pack 39): EVERY level now carries its own theme class -
-// Primary is the default green look, the rest get their own colour/design.
+// CHANGED (pack 36): types now mirror the school's real paper
+// certificates. "level" is the flagship - the exact paper wording with
+// auto-filled name / DoB / admission number, level & theme detected
+// automatically from the student's class.
 function certLevelOf(cls) {
-  /* pack 39 note: matching kept as \u escapes - a literal diacritic range
-     once mojibake'd itself into stripping half the Arabic alphabet. */
-  var n = String(cls || "").replace(/[\u064B-\u0652\u0670\u0640]/g, "").replace(/[\u0625\u0623\u0622\u0671]/g, "\u0627").replace(/\s+/g, "");
-  if (n.indexOf("\u062A\u062D\u0636\u064A\u0631\u064A") !== -1) return { key: "tahdiri", theme: "cert-theme-tahdiri", en: "Preliminary", ar: "\u0627\u0644\u062A\u0651\u064E\u062D\u0652\u0636\u0650\u064A\u0631\u0650\u064A\u0651\u064E\u0629", study: "preliminary" };
-  if (n.indexOf("\u0627\u0628\u062A\u062F\u0627\u0626\u064A") !== -1) return { key: "ibtidai", theme: "", en: "Primary", ar: "\u0627\u0644\u0627\u0628\u0652\u062A\u0650\u062F\u064E\u0627\u0626\u0650\u064A\u0651\u064E\u0629", study: "primary" };
-  if (n.indexOf("\u0627\u0639\u062F\u0627\u062F\u064A") !== -1) return { key: "idadi", theme: "cert-theme-idadi", en: "Junior Secondary", ar: "\u0627\u0644\u0625\u0650\u0639\u0652\u062F\u064E\u0627\u062F\u0650\u064A\u0651\u064E\u0629", study: "junior secondary" };
-  if (n.indexOf("\u062B\u0627\u0646\u0648\u064A") !== -1) return { key: "thanawi", theme: "cert-theme-thanawi", en: "Qur'anic", ar: "\u0627\u0644\u062B\u0651\u064E\u0627\u0646\u064E\u0648\u0650\u064A\u0651\u064E\u0629", study: "Qur'anic" };
+  var n = String(cls || "").replace(/[\u064B-\u0652\u0670\u0640]/g, "").replace(/[إأآٱ]/g, "ا").replace(/\s+/g, "");
+  if (n.indexOf("\u062A\u062D\u0636\u064A\u0631\u064A") !== -1) return { key: "tahdiri", theme: "cert-theme-tahdiri", en: "Preliminary", ar: "التَّحْضِيرِيَّة", study: "preliminary" };
+  if (n.indexOf("\u0627\u0628\u062A\u062F\u0627\u0626\u064A") !== -1) return { key: "ibtidai", theme: "", en: "Primary", ar: "الابْتِدَائِيَّة", study: "primary" };
+  if (n.indexOf("\u0627\u0639\u062F\u0627\u062F\u064A") !== -1) return { key: "idadi", theme: "cert-theme-idadi", en: "Junior Secondary", ar: "الإِعْدَادِيَّة", study: "junior secondary" };
+  if (n.indexOf("\u062B\u0627\u0646\u0648\u064A") !== -1) return { key: "thanawi", theme: "cert-theme-thanawi", en: "Qur'anic", ar: "الثَّانَوِيَّة", study: "Qur'anic" };
   return { key: "gen", theme: "", en: "School", ar: "الشَّهَادَة", study: "school" };
 }
 
@@ -66,13 +48,10 @@ var CERT_TYPES = {
         "passed all the prescribed subjects at the end of the academic year " + f.ah + " A.H. " + f.ad + " A.D and got the final grade " + f.blank90 + ". " +
         "May Almighty Allah grant him/her more blessings and success. (Aameen).";
     },
-    // CHANGED (pack 39): fuller paper-verbatim Arabic body (beaded blanks,
-    // the same wording flow as the school's printed certificates).
     bodyAr: function (o, f) {
-      return "الْمَوْلُود/ةُ فِي بِلَدِ " + f.blankAr + " وِلَايَةَ " + f.blankAr + " دَوْلَةَ " + f.blankAr + " الأَهْلِيَّةِ " + f.ahAr + " هـ / " + f.adAr + " م، " +
-        "وَالْمُسَجَّل/ةُ رَقْمَ " + f.admAr + "، أَتَمَّ/تْ دِرَاسَتَهُ/ا بِالْمَرْحَلَةِ " + o.lv.ar + "، وَاجْتَازَ/تِ امْتِحَانَاتِ الْمَوَادِّ الدِّرَاسِيَّةِ الْمُقَرَّرَةِ " +
-        "فِي نِهَايَةِ الْعَامِ الدِّرَاسِيِّ " + f.sessionAr + "م، وَحَصَلَ/تْ عَلَى التَّقْدِيرِ النِّهَائِيِّ " + f.blankAr + " " +
-        "وَنَسْأَلُ اللَّهَ الْعَظِيمَ لَهُ/لَهَا مَزِيدَ الْبَرَكَةِ وَالتَّوْفِيقِ. (آمِين)";
+      return "تشهد إدارة المدرسة المذكورة أعلاه أنّ الطالب/ة " + f.nameAr + " المولود/ة في ولاية ــــــــ دولة ــــــــ يوم ــــــ شهر ــــــ سنة " + f.ahAr + " هـ / " + f.adAr + " م، " +
+        "والمسجَّل برقم " + f.admAr + "، أنهى/ت دراسته/ا بالمرحلة " + o.lv.ar + " في نهاية العام الدراسي " + f.sessionAr + "م " +
+        "ونجح/ت في الموادّ الدراسيّة المقرّرة. ونسأل الله العظيم له/ها مزيد البركة والتوفيق. (آمين)";
     }
   },
   excellence: {
@@ -184,7 +163,7 @@ function certInit() {
   }).catch(function () {});
 }
 
-/* ---------------- type + orientation switching ---------------- */
+/* ---------------- type switching ---------------- */
 function certSetType(type) {
   certType = type;
   document.querySelectorAll(".cert-type").forEach(function (b) {
@@ -195,15 +174,6 @@ function certSetType(type) {
   // CHANGED (pack 36): term only matters for academic excellence
   document.getElementById("certTermField").style.display = type === "excellence" ? "" : "none";
   certRefresh(true);
-}
-
-/* NEW (pack 39): portrait <-> landscape. Repaints preview, stage and PDFs. */
-function certSetOrient(o) {
-  certOrient = o === "pt" ? "pt" : "ls";
-  document.querySelectorAll("#certOrient button").forEach(function (b) {
-    b.classList.toggle("active", b.getAttribute("data-o") === certOrient);
-  });
-  certRefresh(false);
 }
 
 /* ---------------- students ---------------- */
@@ -221,77 +191,68 @@ function certLoadStudents() {
     certRenderStudents();
     certRefresh(true);
   }).catch(function () {
-    box.innerHTML = '<div class="fin-ov-empty">Could not load students - try again.</div>';
+    box.innerHTML = '<div class="fin-ov-empty">Could not load students - check connection.</div>';
   });
 }
 
 function certRenderStudents() {
+  var q = document.getElementById("certSearch").value.trim().toLowerCase();
   var box = document.getElementById("certStudents");
-  var q = (document.getElementById("certSearch").value || "").trim().toLowerCase();
-  if (!certStudents.length) {
-    box.innerHTML = '<div class="fin-ov-empty">No students in this class yet.</div>';
-    document.getElementById("certCount").textContent = "";
-    return;
-  }
-  var shown = 0;
-  box.innerHTML = "";
+  if (!certStudents.length) { box.innerHTML = '<div class="fin-ov-empty">No students in this class.</div>'; return; }
+  var html = "";
   certStudents.forEach(function (s) {
-    if (q && String(s.full_name || "").toLowerCase().indexOf(q) === -1 && String(s.student_id || "").toLowerCase().indexOf(q) === -1) return;
-    shown++;
-    var lab = document.createElement("label");
-    lab.className = "cert-stu" + (certChecked[s.student_id] ? "" : " off");
-    lab.innerHTML = '<input type="checkbox" ' + (certChecked[s.student_id] ? "checked" : "") + '> <span><b>' + certEsc(s.full_name) + "</b><small>" + certEsc(s.student_id) + "</small></span>";
-    lab.querySelector("input").addEventListener("change", function (ev) {
-      certChecked[s.student_id] = ev.target.checked;
-      lab.classList.toggle("off", !ev.target.checked);
-      certUpdateCount();
-      certRefresh(true);
-    });
-    box.appendChild(lab);
+    if (q && (s.full_name || "").toLowerCase().indexOf(q) === -1 && (s.student_id || "").toLowerCase().indexOf(q) === -1) return;
+    var on = !!certChecked[s.student_id];
+    html += '<label class="cert-stu ' + (on ? "" : "off") + '">' +
+      '<input type="checkbox" data-sid="' + certEsc(s.student_id) + '" ' + (on ? "checked" : "") + ' onchange="certToggle(this)">' +
+      '<span><b>' + certEsc(s.full_name) + "</b><small>" + certEsc(s.student_id) + "</small></span></label>";
   });
-  if (!shown) box.innerHTML = '<div class="fin-ov-empty">No student matches that search.</div>';
+  box.innerHTML = html || '<div class="fin-ov-empty">No student matches that search.</div>';
   certUpdateCount();
 }
 
 function certUpdateCount() {
   var n = certSelected().length;
   document.getElementById("certCount").textContent = n + " of " + certStudents.length + " selected";
-  var all = document.getElementById("certAll");
-  if (all) all.checked = n === certStudents.length && certStudents.length > 0;
+}
+
+function certToggle(input) {
+  certChecked[input.getAttribute("data-sid")] = input.checked;
+  input.closest(".cert-stu").classList.toggle("off", !input.checked);
+  certUpdateCount();
+  certRefresh(false);
 }
 
 function certToggleAll() {
   var on = document.getElementById("certAll").checked;
   certStudents.forEach(function (s) { certChecked[s.student_id] = on; });
   certRenderStudents();
-  certRefresh(true);
+  certRefresh(false);
 }
 
-/* ---------------- the certificate HTML ---------------- */
+/* ---------------- the certificate markup ---------------- */
 function certBuildHtml(stu, posText) {
-  var o = Object.assign({}, certOpts());
-  var lv = certLevelOf(o.cls || stu.class_name);
+  var o = certOpts();
   var t = CERT_TYPES[certType];
+  var lv = certLevelOf(o.cls);
   var dt = new Date();
   var months = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
-  var ah = "1447";
-  try {
-    var p = new Intl.DateTimeFormat("en-u-ca-islamic", { year: "numeric" }).formatToParts(dt);
-    var y = p.find(function (x) { return x.type === "year"; });
-    if (y) ah = y.value;
-  } catch (e) {}
+  var yearBit = (o.session || String(dt.getFullYear())).split("/")[0].replace(/[^0-9]/g, "") || String(dt.getFullYear());
+  var y = Number(yearBit) || dt.getFullYear();
+  // pack 36b: standard civil approx - AH(2026)=1447, AH(2030)=1451
+  var ah = y - 622 + Math.floor((y - 622) / 32);
+  var serial = "AMS/" + yearBit + "/" + t.code + "/" + (stu.student_id || "XXX");
+  // date of birth -> day / month / year chips
   var dob = { d: "", m: "", y: "" };
   if (stu.date_of_birth) {
-    var m = /^(\d{4})-(\d{2})-(\d{2})/.exec(stu.date_of_birth);
-    if (m) { dob.y = m[1]; dob.m = months[+m[2] - 1]; dob.d = String(+m[3]); }
+    var m2 = String(stu.date_of_birth).match(/(\d{4})-(\d{2})-(\d{2})/);
+    if (m2) { dob.y = m2[1]; dob.m = months[Number(m2[2]) - 1] || m2[2]; dob.d = m2[3]; }
   }
   var blanks = function (cls) { return '<span class="cert-fill ' + cls + '">&nbsp;</span>'; };
-  var serial = "AMS/" + dt.getFullYear() + "/CERT/" + (stu.student_id || "-");
   var f = {
-    name: '<span class="cert-fill name" style="font-family:\'Amiri\', serif; font-weight:700; unicode-bidi:isolate;">' + certEsc(stu.full_name || "-") + "</span>",
-    nameAr: '<span style="border-bottom:1.2px dotted #555; padding:0 6px; font-weight:700;">' + certEsc(stu.full_name || "-") + "</span>",
+    name: '<span class="cert-fill name">' + certEsc(stu.full_name || "-") + "</span>",
+    nameAr: '<span style="border-bottom:1.2px dotted #555; padding:0 8px; font-weight:700; unicode-bidi:isolate;">' + certEsc(stu.full_name || "-") + "</span>",
     blank60: blanks("w60"), blank90: blanks("w90"),
-    blankAr: '<span style="border-bottom:1.2px dotted #555; padding:0 14px;">&nbsp;&nbsp;&nbsp;&nbsp;</span>',
     dobDay: dob.d ? '<span class="cert-fill w60">' + dob.d + "</span>" : blanks("w60"),
     dobMonth: dob.m ? '<span class="cert-fill w90">' + dob.m + "</span>" : blanks("w90"),
     dobYear: dob.y ? '<span class="cert-fill w90">' + dob.y + "</span>" : blanks("w90"),
@@ -302,21 +263,15 @@ function certBuildHtml(stu, posText) {
     ahAr: String(ah), adAr: certEsc(o.session || ""), sessionAr: certEsc(o.session || ""),
     cls: '<span class="cert-fill w180">' + certEsc(o.cls || "-") + "</span>"
   };
+  var sigT = certSigs.classTeacher ? '<img class="cert-sign-img" src="' + certEsc(certSigs.classTeacher) + '" alt="">' : "";
   var sigP = certSigs.principal ? '<img class="cert-sign-img" src="' + certEsc(certSigs.principal) + '" alt="">' : "";
   var photo = stu.photo_path
     ? '<img src="' + certEsc(stu.photo_path) + '" alt="Passport">'
-    : "<span>PASSPORT</span>";
+    : '<span>PASSPORT</span>';
   var dateStr = dt.getDate() + " " + months[dt.getMonth()] + " " + dt.getFullYear();
 
-  // NEW (pack 39): woven edge ribbons for the Qur'anic (maroon) theme and
-  // chevron ribbons on all four edges for the Preliminary (black/gold) theme.
-  var art = "";
-  if (lv.key === "thanawi") art = '<div class="cert-art edge-l"></div><div class="cert-art edge-r"></div>';
-  if (lv.key === "tahdiri") art = '<div class="cert-art edge-t"></div><div class="cert-art edge-b"></div><div class="cert-art edge-l"></div><div class="cert-art edge-r"></div>';
-
-  return "" +
-  '<div class="cert-frame cert-' + certOrient + (lv.theme ? " " + lv.theme : "") + '">' +
-    art +
+  return '' +
+  '<div class="cert-frame ' + lv.theme + '">' +
     '<div class="cert-tri tl"></div><div class="cert-tri tl2"></div>' +
     '<div class="cert-tri br"></div><div class="cert-tri br2"></div>' +
     '<div class="cert-watermark"><img src="images/LOGO.JPG" alt=""></div>' +
@@ -330,8 +285,8 @@ function certBuildHtml(stu, posText) {
         '<div class="cert-motto-pill">MOTTO: KNOWLEDGE AND WORSHIP &nbsp;·&nbsp; <span lang="ar">الشِّعَار: الْعِلْمُ وَالْعِبَادَة</span></div>' +
       "</div>" +
       '<div class="cert-h-right">' +
-        '<div class="cert-no serial"><span>Cert. No.:</span><b>' + certEsc(serial) + "</b></div>" +
-        '<div class="cert-no"><span>Batch:</span><b>' + certEsc(o.session || "-") + "</b></div>" +
+        '<div class="cert-no"><span>Cert. No.:</span><b>' + certEsc(serial) + '</b></div>' +
+        '<div class="cert-no"><span>Batch:</span><b>' + certEsc(o.session || "-") + '</b></div>' +
         '<div class="cert-passport">' + photo + "</div>" +
       "</div>" +
     "</div>" +
@@ -339,20 +294,14 @@ function certBuildHtml(stu, posText) {
       '<div class="cert-level">' + t.pills(lv) + "</div>" +
       '<div class="cert-word">CERTIFICATE</div>' +
     "</div>" +
-    // NEW (pack 39): tashahhud line, like the school's printed certificates
-    '<div class="cert-tash" lang="ar">عَقَّهَا إِدَارَةُ الْمَدْرَسَةِ الْمَذْكُورَةِ أَعْلَاهُ أَنَّ الطَّالِبَ/ةَ</div>' +
     '<div class="cert-b">' +
       '<div class="cert-b-ar" lang="ar">' + t.bodyAr(Object.assign({}, o, { lv: lv }), f) + "</div>" +
       '<div class="cert-b-en">' + t.bodyEn(Object.assign({}, o, { lv: lv, pos: posText }), f) + "</div>" +
     "</div>" +
-    // NEW (pack 39): blue school stamp, like the ink stamp on the paper ones
-    '<div class="cert-stamp"><span>AMEENULLAH SCHOOL<br>OF ARABIC &amp; ISLAMIC STUDIES<br>★</span></div>' +
-    // CHANGED (pack 39): footer mirrors the paper exactly - DATE, THE
-    // PROPRIETOR, the red rosette with dotted tails, THE PRINCIPAL.
     '<div class="cert-f">' +
-      '<div class="cert-sign"><div style="font-size:11px; font-weight:700; margin-bottom:14px;">' + ah + " " + dt.getDate() + " هـ &nbsp;/&nbsp; " + certEsc(dateStr) + ' م</div><div class="ln"></div><small>DATE · التَّارِيخ</small></div>' +
-      '<div class="cert-sign"><div style="margin-bottom:14px;">&nbsp;</div><div class="ln"></div><small>THE PROPRIETOR · الْمَالِك</small></div>' +
-      '<div class="cert-rosette-wrap"><span class="cert-rosette-ln"></span><div class="cert-rosette"></div><span class="cert-rosette-ln"></span></div>' +
+      '<div class="cert-sign"><div style="font-size:11px; font-weight:700; margin-bottom:14px;">' + ah + ' هـ &nbsp;/&nbsp; ' + certEsc(dateStr) + ' م</div><div class="ln"></div><small>DATE · التَّارِيخ</small></div>' +
+      '<div class="cert-sign">' + sigT + '<div class="ln"></div><small>THE CLASS TEACHER · الْمُعَلِّم</small></div>' +
+      '<div class="cert-rosette"></div>' +
       '<div class="cert-sign">' + sigP + '<div class="ln"></div><small>THE PRINCIPAL · الْعَمِيد</small></div>' +
     "</div>" +
   "</div>";
@@ -379,12 +328,9 @@ function certPaintPreview(stu) {
   var mount = function (posText) {
     wrap.innerHTML = certBuildHtml(stu, posText);
     var frame = wrap.firstChild;
-    // CHANGED (pack 39): portrait previews are fitted by their own width.
-    var w = certOrient === "pt" ? 830 : 1140;
-    var h = certOrient === "pt" ? 1122 : 793;
-    var scale = Math.max(0.25, Math.min(1, wrap.clientWidth / w));
+    var scale = Math.max(0.25, Math.min(1, wrap.clientWidth / 1140));
     frame.style.transform = "scale(" + scale + ")";
-    wrap.style.height = Math.round(h * scale + 24) + "px";
+    wrap.style.height = Math.round(793 * scale + 24) + "px";
     document.getElementById("certAllBtn").innerHTML = "&#128230; Download " + certSelected().length + " selected (PDF)";
   };
   mount("");
@@ -429,9 +375,7 @@ function certWaitAll(node) {
 
 function certStageFor(stu, posText) {
   var stage = document.createElement("div");
-  // CHANGED (pack 39): the off-screen stage matches the chosen orientation
-  var w = certOrient === "pt" ? 793 : 1122, h = certOrient === "pt" ? 1122 : 793;
-  stage.style.cssText = "position:fixed; left:-13000px; top:0; width:" + w + "px; height:" + h + "px; background:#fff; z-index:-1;";
+  stage.style.cssText = "position:fixed; left:-13000px; top:0; width:1122px; height:793px; background:#fff; z-index:-1;";
   stage.innerHTML = certBuildHtml(stu, posText);
   document.body.appendChild(stage);
   return stage;
@@ -455,8 +399,7 @@ function certCapture(stage) {
 }
 
 function certNewPdf() {
-  // CHANGED (pack 39): the PDF page itself follows the chosen orientation
-  return new window.jspdf.jsPDF({ orientation: certOrient === "pt" ? "portrait" : "landscape", unit: "mm", format: "a4" });
+  return new window.jspdf.jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
 }
 
 function certDownloadOne() {
@@ -469,8 +412,7 @@ function certDownloadOne() {
   }).then(function (url) {
     if (!url) { certNotify("Capture came back blank - try again."); return; }
     var pdf = certNewPdf();
-    var pt = certOrient === "pt";
-    pdf.addImage(url, "JPEG", 0, 0, pt ? 210 : 297, pt ? 297 : 210);
+    pdf.addImage(url, "JPEG", 0, 0, 297, 210);
     var safe = (stu.student_id + "-" + stu.full_name).replace(/[\\/:*?"<>|]+/g, "_");
     pdf.save("certificate-" + certType + "-" + safe + ".pdf");
     certNotify("Certificate downloaded ✓", true);
@@ -502,9 +444,8 @@ function certDownloadAll() {
       .then(function (url) {
         done++;
         if (url) {
-          var pt = certOrient === "pt";
-          if (!pdf) pdf = certNewPdf(); else pdf.addPage("a4", pt ? "portrait" : "landscape");
-          pdf.addImage(url, "JPEG", 0, 0, pt ? 210 : 297, pt ? 297 : 210);
+          if (!pdf) pdf = certNewPdf(); else pdf.addPage("a4", "landscape");
+          pdf.addImage(url, "JPEG", 0, 0, 297, 210);
           built++;
         }
       })

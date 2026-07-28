@@ -6018,6 +6018,110 @@ app.get("/backup.json", requireLogin, requireAdmin, (req, res) => {
     });
 });
 
+/* ==========================================================================
+   NEW (pack 40a - owner chose "all" the suggested features):
+
+   1) TAHFEEDH TRACKER: store each student's Qur'an memorisation progress
+      (0-30 juz). Table is created here at boot (additive, IF NOT EXISTS).
+      GET  /tahfeedh?class_name=...  -> class roster LEFT JOIN progress
+      POST /tahfeedh {student_id, juz} -> save (upsert). Login required.
+
+   2) HONOUR ROLL: PUBLIC read-only endpoint for the website - top 3
+      students per class by average total in the LATEST term+session on
+      record. Nothing is written; only name/avg/photo are exposed.
+========================================================================== */
+connection.query(
+    `CREATE TABLE IF NOT EXISTS tahfeedh (
+        student_id VARCHAR(50) NOT NULL PRIMARY KEY,
+        juz TINYINT UNSIGNED NOT NULL DEFAULT 0,
+        note VARCHAR(200) NULL,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        updated_by VARCHAR(64) NULL
+    )`,
+    (e) => { if (e) console.log("Pack 40 tahfeedh table notice:", e.code || e.message); else console.log("Pack 40 setup ready (tahfeedh)."); }
+);
+// FIX (pack 40): a tahfeedh table may already exist WITHOUT updated_by -
+// add it in that case (guarded; never alters anything else).
+connection.query("ALTER TABLE tahfeedh ADD COLUMN updated_by VARCHAR(64) NULL", (e2) => {
+    if (e2 && e2.code !== "ER_DUP_FIELDNAME") console.log("Pack 40 tahfeedh upgrade notice:", e2.code || e2.message);
+});
+
+app.get("/tahfeedh", requireLogin, (req, res) => {
+    const className = (req.query.class_name || "").trim();
+    if (!className) return res.status(400).json({ message: "class_name is required." });
+    connection.query(
+        `SELECT s.student_id, s.full_name, s.gender, s.photo_path,
+                COALESCE(t.juz, 0) AS juz, t.note, t.updated_at
+         FROM students s
+         LEFT JOIN tahfeedh t ON t.student_id = s.student_id
+         WHERE s.class_name = ?
+         ORDER BY s.full_name`,
+        [className],
+        (err, rows) => {
+            if (err) { console.log(err); return res.status(500).json({ message: "Database error" }); }
+            res.json(rows);
+        }
+    );
+});
+
+app.post("/tahfeedh", requireLogin, (req, res) => {
+    const sid = String(req.body.student_id || "").trim();
+    const juz = Math.max(0, Math.min(30, parseInt(req.body.juz, 10) || 0));
+    const note = String(req.body.note || "").trim().slice(0, 200) || null;
+    if (!sid) return res.status(400).json({ message: "student_id is required." });
+    connection.query(
+        `INSERT INTO tahfeedh (student_id, juz, note, updated_by)
+         VALUES (?,?,?,?)
+         ON DUPLICATE KEY UPDATE juz = VALUES(juz), note = VALUES(note), updated_by = VALUES(updated_by)`,
+        [sid, juz, note, req.session.username || null],
+        (err) => {
+            if (err) { console.log(err); return res.status(500).json({ message: "Database error" }); }
+            res.json({ message: "Saved", student_id: sid, juz: juz });
+        }
+    );
+});
+
+/* NEW (pack 40b): PUBLIC honour roll for the website. Read-only, tiny
+   in-memory cache (60s) so the busy homepage never hammers the DB. */
+let amsHonourCache = { at: 0, data: null };
+app.get("/honour-roll", (req, res) => {
+    if (amsHonourCache.data && Date.now() - amsHonourCache.at < 60000) {
+        return res.json(amsHonourCache.data);
+    }
+    connection.query(
+        `SELECT session, term FROM results
+         ORDER BY session DESC, FIELD(term,'3rd Term','2nd Term','1st Term') LIMIT 1`,
+        (e0, latest) => {
+            if (e0) { console.log(e0); return res.status(500).json({ message: "Database error" }); }
+            if (!latest || !latest.length) return res.json({ session: null, term: null, classes: [] });
+            const session = latest[0].session, term = latest[0].term;
+            connection.query(
+                `SELECT r.class_name, r.student_id, MAX(r.student_name) AS full_name,
+                        ROUND(AVG(r.total), 1) AS avg_total, COUNT(*) AS subjects
+                 FROM results r
+                 WHERE r.session = ? AND r.term = ?
+                 GROUP BY r.class_name, r.student_id
+                 ORDER BY r.class_name, avg_total DESC`,
+                [session, term],
+                (err, rows) => {
+                    if (err) { console.log(err); return res.status(500).json({ message: "Database error" }); }
+                    const byClass = {};
+                    (rows || []).forEach((r) => {
+                        (byClass[r.class_name] = byClass[r.class_name] || []).push(r);
+                    });
+                    const classes = Object.keys(byClass).map((c) => ({
+                        class_name: c,
+                        students: byClass[c].slice(0, 3)
+                    }));
+                    const data = { session, term, classes };
+                    amsHonourCache = { at: Date.now(), data };
+                    res.json(data);
+                }
+            );
+        }
+    );
+});
+
 app.get("/test", (req, res) => {
     res.send("Server is working");
 });

@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tahfeedh Tracker | Ameenullah School of Arabic and Islamic Studies</title>
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/modern-ui.css">
+  <link rel="stylesheet" href="css/manage.css">
+  <!-- NEW (pack 40): shared manager styles -->
+  <link rel="stylesheet" href="css/school.css">
+
+  <link rel="manifest" href="manifest.webmanifest">
+  <meta name="theme-color" content="#2f5021">
+  <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+</head>
+<body onload="checkAuth(); tahInit();">
+  <!-- NEW (pack 40 - owner picked the Tahfeedh tracker):
+       per-student Qur'an memorisation progress (0-30 juz) per class,
+       with instant saving and a class average. -->
+  <div class="mng-page">
+
+    <div class="mng-head">
+      <a class="mng-back" href="teacher-dashboard.html">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5"/><path d="m12 19-7-7 7-7"/></svg>
+        Dashboard
+      </a>
+      <div class="mng-head-text">
+        <h1>&#128214; Tahfeedh Tracker</h1>
+        <p>Track each student's Qur'an memorisation - tap + when a new juz is completed. Every change saves instantly.</p>
+      </div>
+    </div>
+
+    <div class="mg-panel active">
+      <div class="mg-toolbar" style="align-items:flex-end;">
+        <div class="mg-field" style="min-width:220px;">
+          <label for="tahClass">Class</label>
+          <select id="tahClass"><option value="">Loading classes...</option></select>
+        </div>
+        <div class="tah-avg" id="tahAvg" style="display:none;"></div>
+      </div>
+
+      <div id="tahList" class="tah-list">
+        <div class="fin-ov-empty">Choose a class to see its students.</div>
+      </div>
+    </div>
+
+    <div class="mg-msg" id="tahMsg"></div>
+  </div>
+
+  <script src="js/ui.js"></script>
+  <script src="js/app.js"></script>
+  <!-- NEW (pack 40) -->
+  <script src="js/tahfeedh.js"></script>
+  <script src="js/pwa.js" defer></script>
+</body>
+</html>

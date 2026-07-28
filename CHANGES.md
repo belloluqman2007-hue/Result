@@ -4,6 +4,59 @@
 
 ---
 
+## Pack 40 — 2026-07-28
+
+Owner's requests:
+> "in the dashboard let it display all students if i press total student
+> and display each class with their subject if i press subject and others too"
+> "let add new feature" (owner answered: ALL)
+
+### NEW — Tappable dashboard stats (js/dashboard-drill.js)
+- All six stat cards on the teacher dashboard now open a detail modal:
+  Total Students (every pupil, searchable), Subjects (each class with its
+  subject list), Results Recorded (grade distribution + latest saves),
+  Classes (pupils per class), Staff Accounts (admin list),
+  Saved Exams (exam bank). Reads existing endpoints only; keyboard/ESC
+  accessible; bottom-sheet on phones. Styles in css/dashboard-beauty.css.
+  FIX: modal title colour forced white (a global h3 rule hid it).
+
+### NEW — Tahfeedh Tracker (owner feature pick 2)
+- server.js: `tahfeedh` progress table (boot CREATE IF NOT EXISTS +
+  guarded updated_by upgrade), GET /tahfeedh (class roster LEFT JOIN),
+  POST /tahfeedh (clamped 0-30 upsert). Login required.
+- tahfeedh.html + js/tahfeedh.js: per-class juz steppers (-5/-1/+1/+5),
+  instant save, progress bars that turn gold at 30/30, class-average chip.
+  Sidebar link added (Teaching Tools). Styles in css/manage.css.
+
+### NEW — Absence alerts to parents (owner feature pick 1)
+- js/attendance.js: after the register saves, absent pupils with a parent
+  phone appear in a new panel with one-tap WhatsApp buttons (pre-filled
+  absence message, Nigerian numbers normalised to wa.me/234...).
+  attendance.html container + css/manage.css styles. Client-side only.
+
+### NEW — Bulk class ID cards (owner feature pick 3)
+- id-card.html bulk panel (class picker + Class PDF button), js/idcard.js
+  builder: clones the live card front per student (respecting the current
+  Landscape/Portrait toggle), real card size, grid-fitted on A4
+  (8 landscape / 9 portrait per page). css/idcard.css panel styles.
+  FIX: clones render with the ams-pdf-flat flattening for exact heights.
+
+### NEW — Public Honour Roll (owner feature pick 4)
+- server.js: GET /honour-roll (public, read-only, 60s cache) — top 3
+  students per class by average total for the latest term/session.
+- index.html + js/website.js + css/website.css: medal-card section on the
+  homepage (hidden automatically when no results exist).
+
+### Files touched
+- server.js, sw.js (v31), CHANGES.md, teacher-dashboard.html,
+  js/dashboard-drill.js (new), css/dashboard-beauty.css,
+  tahfeedh.html (new), js/tahfeedh.js (new),
+  attendance.html, js/attendance.js, css/manage.css,
+  id-card.html, js/idcard.js, css/idcard.css,
+  index.html, js/website.js, css/website.css
+
+---
+
 ## Pack 39 — 2026-07-27
 
 Owner's requests:

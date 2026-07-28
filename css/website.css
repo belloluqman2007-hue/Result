@@ -468,3 +468,50 @@ body.wb2-body{
   .wb2-ai-panel{ right:8px; left:8px; bottom:80px; width:auto; height:min(66vh,540px); }
   .wb2-ai-fab{ right:14px; bottom:14px; }
 }
+
+/* ==========================================================================
+   NEW (pack 40): Honour Roll section (pairs with /honour-roll)
+========================================================================== */
+.wb2-honour{
+  position:relative; overflow:hidden; color:#fff;
+  background:
+    radial-gradient(800px 320px at 90% 0%, rgba(63,179,126,.20), transparent 60%),
+    radial-gradient(600px 300px at 5% 100%, rgba(201,162,39,.18), transparent 55%),
+    linear-gradient(160deg,#07271C 0%, #0F3D2E 60%, #123B2A 100%);
+}
+.wb2-honour::before{
+  content:""; position:absolute; inset:0; opacity:.07; pointer-events:none;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='72' height='72' viewBox='0 0 72 72'%3E%3Cpath d='M36 4l7 25 25 7-25 7-7 25-7-25-25-7 25-7z' fill='none' stroke='%23E7C55B' stroke-width='1'/%3E%3Ccircle cx='36' cy='36' r='4' fill='%23E7C55B'/%3E%3C/svg%3E");
+  background-size:72px 72px;
+}
+.wb2-honour .wb2-title{ color:#fff; }
+.wb2-honour .wb2-sub{ color:rgba(255,255,255,.82); }
+.wb-honour{ display:grid; gap:26px; position:relative; }
+.wb-hon-cname{
+  display:inline-block; font-family:'Cairo',sans-serif; font-weight:800; font-size:15px;
+  color:#F3D77A; border:1.6px solid rgba(201,162,39,.5); background:rgba(201,162,39,.10);
+  padding:5px 18px; border-radius:999px; margin-bottom:14px;
+}
+.wb-hon-row{ display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:14px; }
+.wb-hon-card{
+  position:relative; text-align:center; padding:20px 14px 16px;
+  background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.14);
+  border-radius:18px; backdrop-filter:blur(3px);
+  transition:transform .2s ease, box-shadow .2s ease;
+}
+.wb-hon-card:hover{ transform:translateY(-4px); box-shadow:0 18px 34px rgba(0,0,0,.3); }
+.wb-hon-r1{ border-color:rgba(201,162,39,.65); box-shadow:0 0 0 1px rgba(201,162,39,.25), 0 14px 30px rgba(0,0,0,.28); }
+.wb-hon-medal{ position:absolute; top:-14px; left:50%; transform:translateX(-50%); font-size:26px; filter:drop-shadow(0 3px 4px rgba(0,0,0,.35)); }
+.wb-hon-ava{
+  display:inline-flex; align-items:center; justify-content:center;
+  width:60px; height:60px; border-radius:50%; margin:8px 0 10px;
+  font-weight:800; font-size:19px; color:#123B2A;
+  background:linear-gradient(135deg,#F3D77A,#C9A227);
+  box-shadow:0 0 0 3px rgba(255,255,255,.85), 0 6px 14px rgba(0,0,0,.25);
+}
+.wb-hon-name{ display:block; font-size:14px; color:#fff; margin-bottom:6px; }
+.wb-hon-avg{
+  display:inline-block; font-size:11.5px; font-weight:800; color:#0F3D2E;
+  background:#D8EEE2; padding:3px 12px; border-radius:999px;
+}
+/* ===================== end NEW (pack 40 honour) ===================== */
