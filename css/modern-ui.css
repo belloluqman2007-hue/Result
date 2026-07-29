@@ -1804,3 +1804,94 @@ html[data-theme="dark"] .report-container p{ color:inherit; }
   background:#fff; color:#14532d; flex:0 0 auto; }
 .td-alertbar-btn.on{ background:rgba(255,255,255,.16); color:#fff; border:1px solid rgba(255,255,255,.5); }
 .td-alertbar-btn:disabled{ opacity:.6; cursor:default; }
+
+/* ==========================================================================
+   NEW (Pack 45): Score Completeness Banner & Subject Champions on Class Results
+   ========================================================================== */
+.cr-complete-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px 16px;
+  border-radius: 12px;
+  font-size: 13.5px;
+  line-height: 1.45;
+}
+.cr-complete-success {
+  background: #EBF8F2;
+  border: 1px solid #C3EBD8;
+  color: #0F3D2E;
+}
+.cr-complete-warning {
+  background: #FEF7EA;
+  border: 1px solid #FAD189;
+  color: #7A4A12;
+}
+.cr-badge-icon {
+  font-size: 20px;
+  flex: 0 0 auto;
+}
+.cr-missing-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+.cr-missing-chip {
+  background: #FCEFD2;
+  border: 1px solid #EBC67A;
+  color: #6C4009;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+}
+.cr-champions-title {
+  font-weight: 800;
+  font-size: 13.5px;
+  color: #0F3D2E;
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.cr-champions-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.cr-champion-pill {
+  display: flex;
+  align-items: center;
+  background: linear-gradient(135deg, #1C5A42, #144431);
+  color: #fff;
+  border: 1px solid rgba(255,215,0,0.35);
+  border-radius: 999px;
+  padding: 4px 12px;
+  font-size: 12.5px;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+}
+.cr-champ-sub {
+  font-weight: 800;
+  color: #F7D87C;
+  margin-right: 6px;
+}
+.cr-champ-name {
+  font-weight: 600;
+}
+.bs-del-btn {
+  color: #B91C1C !important;
+  border-color: #FCA5A5 !important;
+  background: #FEF2F2 !important;
+  font-weight: 700 !important;
+  padding: 4px 8px !important;
+}
+.bs-del-btn:hover {
+  background: #FEE2E2 !important;
+}
+@media print {
+  .bs-action-col {
+    display: none !important;
+  }
+}
+

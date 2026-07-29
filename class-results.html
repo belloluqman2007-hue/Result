@@ -154,6 +154,15 @@
             <button type="button" class="mng-btn mng-btn-ghost" id="crPrintBtn" onclick="window.print()" disabled>
               Print
             </button>
+            <!-- NEW (Pack 45): Purge Ghost Scores & Clear Class Scores buttons -->
+            <button type="button" class="mng-btn mng-btn-ghost" id="crCleanOrphanBtn" onclick="crCleanOrphans()" title="Remove ghost scores of deleted/non-existent students">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
+              Purge Ghost Scores
+            </button>
+            <button type="button" class="mng-btn mng-btn-ghost" id="crClearClassBtn" onclick="crClearClassScores()" title="Wipe all scores for this class in selected term" disabled>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+              Clear Class Scores
+            </button>
           </div>
           <div class="mng-count-line" id="crStatusLine" style="margin-top:14px;"></div>
 
@@ -167,6 +176,12 @@
               <button type="button" class="mng-btn mng-btn-sm mng-btn-ghost" onclick="crZipCancel()">Cancel</button>
             </div>
           </div>
+        </div>
+
+        <!-- NEW (Pack 45 Benefit): Score Completeness Detector & Subject Champions (Honour Roll) -->
+        <div class="mng-card" id="crAnalyticsCard" style="display:none; margin-bottom: 20px;">
+          <div id="crCompletenessBanner"></div>
+          <div id="crChampionsWrap" style="margin-top: 16px;"></div>
         </div>
 
         <!-- On-screen broadsheet preview -->

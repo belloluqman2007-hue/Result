@@ -3789,10 +3789,11 @@ app.get("/class-results", requireLogin, (req, res) => {
     }
 
     connection.query(
-        `SELECT student_id, student_name, class_name, subject, total, grade
-         FROM results
-         WHERE class_name = ? AND term = ? AND session = ?
-         ORDER BY student_name, subject`,
+        `SELECT r.student_id, COALESCE(s.full_name, r.student_name) AS student_name, r.class_name, r.subject, r.total, r.grade
+         FROM results r
+         INNER JOIN students s ON r.student_id = s.student_id
+         WHERE r.class_name = ? AND r.term = ? AND r.session = ?
+         ORDER BY s.full_name, r.subject`,
         [className, term, session],
         (err, rows) => {
             if (err) {
@@ -4389,8 +4390,78 @@ app.delete("/delete-student/:studentId", requireLogin, requireAdmin, (req, res) 
                 console.log(err);
                 return res.status(500).send("Database Error");
             }
+            // Cascade delete any orphan scores, attendance, or tahfeedh records for this student
+            connection.query("DELETE FROM results WHERE student_id = ?", [studentId], () => {});
+            connection.query("DELETE FROM attendance WHERE student_id = ?", [studentId], () => {});
+            connection.query("DELETE FROM tahfeedh WHERE student_id = ?", [studentId], () => {});
+
             res.json({
                 message: "Student deleted successfully",
+            });
+        }
+    );
+});
+
+// NEW (Pack 45): automatic orphan cleanup - removes any ghost scores in results
+// where the student_id no longer exists in the students database table.
+app.delete("/api/clean-orphan-results", requireLogin, (req, res) => {
+    const sql = `
+        DELETE r FROM results r
+        LEFT JOIN students s ON r.student_id = s.student_id
+        WHERE s.student_id IS NULL
+    `;
+    connection.query(sql, (err, result) => {
+        if (err) {
+            console.log(err);
+            return res.status(500).json({ message: "Database Error while cleaning orphan results" });
+        }
+        res.json({
+            message: `Purged ${result.affectedRows} ghost/orphan score(s) from database.`,
+            removed: result.affectedRows
+        });
+    });
+});
+
+// NEW (Pack 45): one-click score deletion for a specific student in a term+session
+// directly from the Class Results broadsheet page.
+app.delete("/api/delete-student-term-results", requireLogin, (req, res) => {
+    const { student_id, term, session } = req.body;
+    if (!student_id || !term || !session) {
+        return res.status(400).json({ message: "Student ID, Term and Session are required." });
+    }
+    connection.query(
+        "DELETE FROM results WHERE student_id = ? AND term = ? AND session = ?",
+        [student_id, term, session],
+        (err, result) => {
+            if (err) {
+                console.log(err);
+                return res.status(500).json({ message: "Database Error" });
+            }
+            res.json({
+                message: `Deleted ${result.affectedRows} result row(s) for student.`,
+                count: result.affectedRows
+            });
+        }
+    );
+});
+
+// NEW (Pack 45): clear all results for an entire class in a specific term+session.
+app.delete("/api/clear-class-term-results", requireLogin, (req, res) => {
+    const { class_name, term, session } = req.body;
+    if (!class_name || !term || !session) {
+        return res.status(400).json({ message: "Class, Term and Session are required." });
+    }
+    connection.query(
+        "DELETE FROM results WHERE class_name = ? AND term = ? AND session = ?",
+        [class_name, term, session],
+        (err, result) => {
+            if (err) {
+                console.log(err);
+                return res.status(500).json({ message: "Database Error" });
+            }
+            res.json({
+                message: `Cleared ${result.affectedRows} score row(s) for ${class_name}.`,
+                count: result.affectedRows
             });
         }
     );

@@ -114,13 +114,17 @@
     }
 
     /* ---------- render the table (used on screen AND in the PDF) ---------- */
-    function buildTableHTML(sheet, fromIdx, toIdx) {
+    function buildTableHTML(sheet, fromIdx, toIdx, showActions) {
         var html = '<table class="broadsheet"><thead><tr>' +
             '<th>S/N</th><th>Adm No</th><th style="text-align:left;">Student Name</th>';
         sheet.subjects.forEach(function (sub) {
             html += '<th lang="ar">' + escapeHTML(sub) + "</th>";
         });
-        html += "<th>Total</th><th>Average</th><th>Position</th></tr></thead><tbody>";
+        html += "<th>Total</th><th>Average</th><th>Position</th>";
+        if (showActions) {
+            html += '<th class="bs-action-col">Action</th>';
+        }
+        html += "</tr></thead><tbody>";
 
         for (var i = fromIdx; i < toIdx; i++) {
             var s = sheet.students[i];
@@ -131,7 +135,12 @@
                 html += "<td>" + ((typeof v === "number" && !isNaN(v)) ? fmtScore(v) : "-") + "</td>";
             });
             html += "<td><b>" + fmtScore(s.total) + "</b></td><td>" + fmtScore(s.average) + "</td>" +
-                "<td>" + ordinal(s.position) + "</td></tr>";
+                "<td>" + ordinal(s.position) + "</td>";
+            if (showActions) {
+                var escName = escapeHTML(s.name).replace(/'/g, "\\'");
+                html += '<td class="bs-action-col"><button type="button" class="mng-btn-sm mng-btn-ghost bs-del-btn" onclick="crDeleteStudentScores(\'' + escapeHTML(s.id) + '\', \'' + escName + '\')">🗑️ Delete</button></td>';
+            }
+            html += "</tr>";
         }
         html += "</tbody></table>";
         return html;
@@ -207,6 +216,8 @@
                     lastSheet = null;
                     statusLine.textContent = "No results found for " + className + " (" + term + ", " + session + ") yet.";
                     document.getElementById("crSheetCard").style.display = "none";
+                    var ac = document.getElementById("crAnalyticsCard"); if (ac) ac.style.display = "none";
+                    var clBtn = document.getElementById("crClearClassBtn"); if (clBtn) clBtn.disabled = true;
                     document.getElementById("crPdfBtn").disabled = true;
                     document.getElementById("crPrintBtn").disabled = true;
                     notify("No results found for that combination yet.", "info");
@@ -214,10 +225,11 @@
                 }
 
                 lastSheet = buildSheet(rows, className, term, session);
+                renderAnalytics(lastSheet);
 
                 document.getElementById("crSheetWrap").innerHTML =
                     pdfHeaderHTML(lastSheet, "") +
-                    buildTableHTML(lastSheet, 0, lastSheet.students.length);
+                    buildTableHTML(lastSheet, 0, lastSheet.students.length, true);
                 document.getElementById("crSheetCard").style.display = "block";
 
                 statusLine.textContent = lastSheet.students.length + " student(s) \u2022 " +
@@ -226,6 +238,7 @@
                 document.getElementById("crPdfBtn").disabled = false;
                 document.getElementById("crPrintBtn").disabled = false;
                 document.getElementById("crZipBtn").disabled = false; /* NEW (request #5) */
+                var clBtn2 = document.getElementById("crClearClassBtn"); if (clBtn2) clBtn2.disabled = false;
             })
             .catch(function () {
                 document.getElementById("crGenerateBtn").disabled = false;
@@ -275,7 +288,7 @@
             stage.innerHTML =
                 '<div style="background:#fff; padding:26px 26px 18px; box-sizing:border-box;">' +
                 pdfHeaderHTML(lastSheet, pageLabel) +
-                buildTableHTML(lastSheet, range[0], range[1]) +
+                buildTableHTML(lastSheet, range[0], range[1], false) +
                 // CHANGED (request #6): signatures close the final page.
                 (isLast ? pdfSignaturesHTML() : "") +
                 '<div style="text-align:center; font-size:11px; color:#555; margin-top:14px; font-family:Cairo,sans-serif;">' +
@@ -538,6 +551,156 @@
             crZipHideProgress();
         }
     };
+
+    /* ---------- NEW (Pack 45): Purge Ghost Scores ---------- */
+    window.crCleanOrphans = function () {
+        if (!confirm("Scan the database and purge any ghost scores belonging to deleted or non-existent students?")) return;
+        var btn = document.getElementById("crCleanOrphanBtn");
+        if (btn) btn.disabled = true;
+        fetch("/api/clean-orphan-results", { method: "DELETE" })
+            .then(function (r) { return r.json(); })
+            .then(function (data) {
+                if (btn) btn.disabled = false;
+                notify(data.message || "Ghost score cleanup complete.", "success");
+                if (lastSheet && typeof window.crGenerate === "function") {
+                    window.crGenerate();
+                }
+            })
+            .catch(function () {
+                if (btn) btn.disabled = false;
+                notify("Error while cleaning ghost scores.", "error");
+            });
+    };
+
+    /* ---------- NEW (Pack 45): Clear All Scores for Current Class/Term ---------- */
+    window.crClearClassScores = function () {
+        var className = document.getElementById("crClass").value;
+        var term = document.getElementById("crTerm").value;
+        var session = document.getElementById("crSession").value;
+        if (!className || !term || !session) {
+            notify("Please select Class, Session and Term first.", "error");
+            return;
+        }
+        if (!confirm("WARNING: Are you sure you want to delete ALL saved results for " + className + " (" + term + ", " + session + ")? This cannot be undone!")) return;
+        var btn = document.getElementById("crClearClassBtn");
+        if (btn) btn.disabled = true;
+        fetch("/api/clear-class-term-results", {
+            method: "DELETE",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ class_name: className, term: term, session: session })
+        })
+            .then(function (r) { return r.json(); })
+            .then(function (data) {
+                if (btn) btn.disabled = false;
+                notify(data.message || "Class scores cleared.", "success");
+                window.crGenerate();
+            })
+            .catch(function () {
+                if (btn) btn.disabled = false;
+                notify("Error clearing class scores.", "error");
+            });
+    };
+
+    /* ---------- NEW (Pack 45): One-Click Delete Student Scores from Broadsheet ---------- */
+    window.crDeleteStudentScores = function (studentId, studentName) {
+        var term = document.getElementById("crTerm").value;
+        var session = document.getElementById("crSession").value;
+        if (!confirm("Delete all saved scores for " + studentName + " (" + studentId + ") in " + term + " (" + session + ")?")) return;
+        fetch("/api/delete-student-term-results", {
+            method: "DELETE",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ student_id: studentId, term: term, session: session })
+        })
+            .then(function (r) { return r.json(); })
+            .then(function (data) {
+                notify("Deleted scores for " + studentName + ".", "success");
+                window.crGenerate();
+            })
+            .catch(function () {
+                notify("Could not delete scores.", "error");
+            });
+    };
+
+    /* ---------- NEW (Pack 45 Benefit): Render Analytics (Completeness & Champions) ---------- */
+    function renderAnalytics(sheet) {
+        var card = document.getElementById("crAnalyticsCard");
+        var banner = document.getElementById("crCompletenessBanner");
+        var champs = document.getElementById("crChampionsWrap");
+        if (!card || !banner || !champs) return;
+
+        // 1. Score completeness
+        var totalSubs = sheet.subjects.length;
+        var missingStudents = [];
+        sheet.students.forEach(function (s) {
+            if (s.subjectCount < totalSubs) {
+                var missing = [];
+                sheet.subjects.forEach(function (sub) {
+                    if (typeof s.scores[sub] !== "number" || isNaN(s.scores[sub])) {
+                        missing.push(sub);
+                    }
+                });
+                missingStudents.push({ name: s.name, missing: missing });
+            }
+        });
+
+        if (missingStudents.length === 0) {
+            banner.innerHTML =
+                '<div class="cr-complete-banner cr-complete-success">' +
+                '<span class="cr-badge-icon">✨</span>' +
+                '<div>' +
+                '<strong>100% Score Completeness</strong>' +
+                '<div>All ' + sheet.students.length + ' student(s) have scores recorded across all ' + totalSubs + ' subject(s).</div>' +
+                '</div></div>';
+        } else {
+            var chipsHTML = "";
+            missingStudents.forEach(function (ms) {
+                chipsHTML += '<span class="cr-missing-chip">' + escapeHTML(ms.name) + ': Missing ' + escapeHTML(ms.missing.join(", ")) + '</span>';
+            });
+            banner.innerHTML =
+                '<div class="cr-complete-banner cr-complete-warning">' +
+                '<span class="cr-badge-icon">⚠️</span>' +
+                '<div>' +
+                '<strong>Incomplete Subject Scores Detected</strong>' +
+                '<div>' + missingStudents.length + ' of ' + sheet.students.length + ' student(s) have missing subject scores:</div>' +
+                '<div class="cr-missing-list">' + chipsHTML + '</div>' +
+                '</div></div>';
+        }
+
+        // 2. Subject Champions
+        var champListHTML = "";
+        sheet.subjects.forEach(function (sub) {
+            var topScore = -1;
+            var topNames = [];
+            sheet.students.forEach(function (s) {
+                var v = s.scores[sub];
+                if (typeof v === "number" && !isNaN(v)) {
+                    if (v > topScore) {
+                        topScore = v;
+                        topNames = [s.name];
+                    } else if (v === topScore) {
+                        topNames.push(s.name);
+                    }
+                }
+            });
+            if (topScore >= 0) {
+                champListHTML +=
+                    '<div class="cr-champion-pill">' +
+                    '<span class="cr-champ-sub">' + escapeHTML(sub) + ':</span>' +
+                    '<span class="cr-champ-name">' + escapeHTML(topNames.join(", ")) + ' (' + fmtScore(topScore) + ')</span>' +
+                    '</div>';
+            }
+        });
+
+        if (champListHTML) {
+            champs.innerHTML =
+                '<div class="cr-champions-title">🏆 Subject Champions (Honour Roll)</div>' +
+                '<div class="cr-champions-list">' + champListHTML + '</div>';
+        } else {
+            champs.innerHTML = "";
+        }
+
+        card.style.display = "block";
+    }
 
     document.addEventListener("DOMContentLoaded", function () {
         loadClasses();
