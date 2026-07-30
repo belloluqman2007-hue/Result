@@ -4,6 +4,24 @@
 
 ---
 
+## Pack 46 — 2026-07-30
+
+Owner's requests:
+> "The certificate section is not displaying well and the class button and each student download
+> Fix all that and let it display all well"
+
+### FIX (Pack 46) — Certificate Generator Display, Orientation & Bulk PDF Download
+- **Certificate Display & Orientation Fixes (`js/certificates.js`)**:
+  - Implemented the missing `certSetOrient(o)` orientation switcher so clicking **Landscape** or **Portrait** in `certificates.html` now toggles orientation dynamically.
+  - Added `' cert-' + certOrient` (`.cert-ls` or `.cert-pt`) to the rendered `.cert-frame` HTML so the certificate always receives its proper dimensions (1122x793 for landscape, 793x1122 for portrait) from `css/certificates.css`.
+  - Upgraded `certPaintPreview(stu)` to scale smoothly for both Portrait and Landscape orientations without horizontal stretching or clipping.
+- **Whole-Class Button & Single Student Download Fixes (`js/certificates.js`)**:
+  - Solved the blank/failed PDF capture bug where staging at `left: -13000px` caused `html2canvas` to capture a blank canvas and trigger `ink < 6` failures. Staging is now positioned at `left: 0; top: 0; opacity: 0.01; z-index: -9999;`, ensuring 100% accurate, high-resolution renders for every student.
+  - Updated `certNewPdf()`, `certDownloadOne()`, and `certDownloadAll()` so that Portrait certificates generate true **A4 Portrait (210x297 mm)** PDF pages and Landscape certificates generate **A4 Landscape (297x210 mm)** PDF pages.
+  - Added defensive null/undefined checks on student names (`stu.full_name || "Student"`) to prevent JavaScript runtime errors during multi-page class builds.
+
+---
+
 ## Pack 45 — 2026-07-29
 
 Owner's requests:

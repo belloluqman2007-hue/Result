@@ -22,6 +22,7 @@ var certSchool = {
   mottoAr: "شعارنا: العلم والعبادة"
 };
 var certBusy = false;
+var certOrient = "ls"; // default landscape ('ls' or 'pt')
 
 // CHANGED (pack 36): types now mirror the school's real paper
 // certificates. "level" is the flagship - the exact paper wording with
@@ -176,6 +177,23 @@ function certSetType(type) {
   certRefresh(true);
 }
 
+function certSetOrient(o) {
+  if (o !== "pt" && o !== "ls") o = "ls";
+  certOrient = o;
+  var wrap = document.getElementById("certOrient");
+  if (wrap) {
+    var btns = wrap.querySelectorAll("button");
+    btns.forEach(function (btn) {
+      if (btn.getAttribute("data-o") === o) {
+        btn.classList.add("active");
+      } else {
+        btn.classList.remove("active");
+      }
+    });
+  }
+  certRefresh(false);
+}
+
 /* ---------------- students ---------------- */
 function certLoadStudents() {
   var cls = document.getElementById("certClass").value;
@@ -271,7 +289,7 @@ function certBuildHtml(stu, posText) {
   var dateStr = dt.getDate() + " " + months[dt.getMonth()] + " " + dt.getFullYear();
 
   return '' +
-  '<div class="cert-frame ' + lv.theme + '">' +
+  '<div class="cert-frame ' + lv.theme + ' cert-' + certOrient + '">' +
     '<div class="cert-tri tl"></div><div class="cert-tri tl2"></div>' +
     '<div class="cert-tri br"></div><div class="cert-tri br2"></div>' +
     '<div class="cert-watermark"><img src="images/LOGO.JPG" alt=""></div>' +
@@ -322,15 +340,17 @@ function certRefresh(forceIndex) {
 
 function certPaintPreview(stu) {
   var wrap = document.getElementById("certPreviewWrap");
-  // FIX (pack 36): reveal the card BEFORE measuring, or the first-ever
-  // preview measures 0 width and paints the frame at scale 0 (invisible).
   document.getElementById("certPreviewCard").style.display = "";
   var mount = function (posText) {
     wrap.innerHTML = certBuildHtml(stu, posText);
     var frame = wrap.firstChild;
-    var scale = Math.max(0.25, Math.min(1, wrap.clientWidth / 1140));
+    var isPt = certOrient === "pt";
+    var baseW = isPt ? 793 : 1122;
+    var baseH = isPt ? 1122 : 793;
+    var scale = Math.max(0.25, Math.min(1, (wrap.clientWidth - 20) / baseW));
     frame.style.transform = "scale(" + scale + ")";
-    wrap.style.height = Math.round(793 * scale + 24) + "px";
+    frame.style.transformOrigin = "top center";
+    wrap.style.height = Math.round(baseH * scale + 24) + "px";
     document.getElementById("certAllBtn").innerHTML = "&#128230; Download " + certSelected().length + " selected (PDF)";
   };
   mount("");
@@ -374,8 +394,11 @@ function certWaitAll(node) {
 }
 
 function certStageFor(stu, posText) {
+  var isPt = certOrient === "pt";
+  var w = isPt ? 793 : 1122;
+  var h = isPt ? 1122 : 793;
   var stage = document.createElement("div");
-  stage.style.cssText = "position:fixed; left:-13000px; top:0; width:1122px; height:793px; background:#fff; z-index:-1;";
+  stage.style.cssText = "position:fixed; left:0; top:0; width:" + w + "px; height:" + h + "px; background:#fff; z-index:-9999; pointer-events:none; opacity:0.01;";
   stage.innerHTML = certBuildHtml(stu, posText);
   document.body.appendChild(stage);
   return stage;
@@ -399,38 +422,59 @@ function certCapture(stage) {
 }
 
 function certNewPdf() {
-  return new window.jspdf.jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
+  var isPt = certOrient === "pt";
+  return new window.jspdf.jsPDF({ orientation: isPt ? "portrait" : "landscape", unit: "mm", format: "a4" });
 }
 
 function certDownloadOne() {
   var sel = certSelected();
   if (!sel.length || certBusy) return;
+  if (!window.jspdf || !window.html2canvas) {
+    certNotify("PDF generator is loading - try again in a moment.", false);
+    return;
+  }
   var stu = sel[certIndex] || sel[0];
-  certNotify("Building " + stu.full_name + "'s certificate...", true);
+  certNotify("Building " + (stu.full_name || "Student") + "'s certificate...", true);
+  var isPt = certOrient === "pt";
+  var wMm = isPt ? 210 : 297;
+  var hMm = isPt ? 297 : 210;
   certPosition(stu).then(function (pos) {
     return certCapture(certStageFor(stu, pos));
   }).then(function (url) {
     if (!url) { certNotify("Capture came back blank - try again."); return; }
     var pdf = certNewPdf();
-    pdf.addImage(url, "JPEG", 0, 0, 297, 210);
-    var safe = (stu.student_id + "-" + stu.full_name).replace(/[\\/:*?"<>|]+/g, "_");
+    pdf.addImage(url, "JPEG", 0, 0, wMm, hMm);
+    var safe = (stu.student_id + "-" + (stu.full_name || "")).replace(/[\\/:*?"<>|]+/g, "_");
     pdf.save("certificate-" + certType + "-" + safe + ".pdf");
     certNotify("Certificate downloaded ✓", true);
-  }).catch(function () { certNotify("Could not build the PDF - try again."); });
+  }).catch(function (e) {
+    console.log("certDownloadOne error:", e);
+    certNotify("Could not build the PDF - try again.");
+  });
 }
 
 function certDownloadAll() {
   var sel = certSelected();
   if (!sel.length || certBusy) return;
+  if (!window.jspdf || !window.html2canvas) {
+    certNotify("PDF generator is loading - try again in a moment.", false);
+    return;
+  }
   certBusy = true;
   var btn = document.getElementById("certAllBtn");
-  btn.disabled = true;
+  if (btn) btn.disabled = true;
   var pdf = null, done = 0, built = 0;
   var o = certOpts();
+  var isPt = certOrient === "pt";
+  var wMm = isPt ? 210 : 297;
+  var hMm = isPt ? 297 : 210;
   (function next(i) {
     if (i >= sel.length) {
-      btn.disabled = false; certBusy = false;
-      btn.innerHTML = "&#128230; Download " + sel.length + " selected (PDF)";
+      if (btn) {
+        btn.disabled = false;
+        btn.innerHTML = "&#128230; Download " + sel.length + " selected (PDF)";
+      }
+      certBusy = false;
       if (!built) { certNotify("No certificate could be built."); return; }
       var safe = (o.cls || "class").replace(/[\\/:*?"<>|]+/g, "_");
       pdf.save("certificates-" + certType + "-" + safe + "-" + (o.session || "").replace(/[\\/:*?"<>|]+/g, "_") + ".pdf");
@@ -438,18 +482,19 @@ function certDownloadAll() {
       return;
     }
     var stu = sel[i];
-    btn.innerHTML = "Building " + (i + 1) + "/" + sel.length + " - " + certEsc(stu.full_name.split(" ")[0]) + "...";
+    var shortName = (stu.full_name || "Student").split(" ")[0];
+    if (btn) btn.innerHTML = "Building " + (i + 1) + "/" + sel.length + " - " + certEsc(shortName) + "...";
     certPosition(stu)
       .then(function (pos) { return certCapture(certStageFor(stu, pos)); })
       .then(function (url) {
         done++;
         if (url) {
-          if (!pdf) pdf = certNewPdf(); else pdf.addPage("a4", "landscape");
-          pdf.addImage(url, "JPEG", 0, 0, 297, 210);
+          if (!pdf) pdf = certNewPdf(); else pdf.addPage("a4", isPt ? "portrait" : "landscape");
+          pdf.addImage(url, "JPEG", 0, 0, wMm, hMm);
           built++;
         }
       })
-      .catch(function () {})
+      .catch(function (e) { console.log("certDownloadAll error:", e); })
       .then(function () { setTimeout(function () { next(i + 1); }, 60); });
   })(0);
 }
