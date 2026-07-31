@@ -6265,16 +6265,55 @@ app.get("/honour-roll", (req, res) => {
 });
 
 /* =====================================================================
-   NEW (Pack 47): SCHOOL FILE STORE / DIGITAL VAULT ENDPOINTS
+   NEW (Pack 47/49): SCHOOL FILE STORE / DIGITAL VAULT ENDPOINTS
    Allows teachers/admins to create folders, upload any files, preview, and download.
 ===================================================================== */
 const storeDir = path.join(__dirname, "uploads", "store");
 try { fs.mkdirSync(storeDir, { recursive: true }); } catch (e) { /* exists */ }
 
+function fixUtf8(str) {
+    if (!str) return str;
+    try {
+        const buf = Buffer.from(str, "latin1");
+        if (buf.toString("utf8").length < str.length || /[\u0600-\u06FF]/.test(buf.toString("utf8"))) {
+            return buf.toString("utf8");
+        }
+    } catch (e) {}
+    return str;
+}
+
+function syncExamsToVault(cb) {
+    connection.query(
+        "SELECT id FROM school_file_store WHERE folder_path = '/' AND file_name = 'Saved Exams' AND is_folder = 1",
+        (err, rows) => {
+            if (!rows || !rows.length) {
+                connection.query("INSERT INTO school_file_store (folder_path, file_name, original_name, is_folder) VALUES ('/', 'Saved Exams', 'Saved Exams', 1)", () => {});
+            }
+            connection.query("SELECT * FROM exams", (err2, exams) => {
+                if (err2 || !exams || !exams.length) { if (cb) cb(); return; }
+                exams.forEach((ex) => {
+                    const wordOriginalName = `${ex.class_name} - ${ex.subject} - ${ex.title}.doc`;
+                    connection.query(
+                        "SELECT id FROM school_file_store WHERE folder_path = '/Saved Exams' AND original_name = ?",
+                        [wordOriginalName],
+                        (err3, exist) => {
+                            if (!exist || !exist.length) {
+                                autoStoreExamToVault(ex.title, ex.class_name, ex.subject, ex.term, ex.session, ex.duration, ex.instructions, ex.body_html);
+                            }
+                        }
+                    );
+                });
+                if (cb) cb();
+            });
+        }
+    );
+}
+
 const storeStorage = multer.diskStorage({
     destination: (req, file, cb) => cb(null, storeDir),
     filename: (req, file, cb) => {
-        const safe = (file.originalname || "file").replace(/[^a-zA-Z0-9.\-_]/g, "_");
+        const cleanName = fixUtf8(file.originalname || "file");
+        const safe = cleanName.replace(/[^a-zA-Z0-9.\-_؀-ۿ]/g, "_");
         cb(null, "store_" + Date.now() + "_" + safe);
     }
 });
@@ -6285,17 +6324,24 @@ const uploadStore = multer({
 
 app.get("/api/store/list", requireLogin, (req, res) => {
     const folder = req.query.folder || "/";
-    connection.query(
-        "SELECT * FROM school_file_store WHERE folder_path = ? ORDER BY is_folder DESC, file_name ASC",
-        [folder],
-        (err, rows) => {
-            if (err) {
-                console.log(err);
-                return res.status(500).json({ message: "Database Error" });
+    syncExamsToVault(() => {
+        connection.query(
+            "SELECT * FROM school_file_store WHERE folder_path = ? ORDER BY is_folder DESC, file_name ASC",
+            [folder],
+            (err, rows) => {
+                if (err) {
+                    console.log(err);
+                    return res.status(500).json({ message: "Database Error" });
+                }
+                const cleaned = (rows || []).map((r) => ({
+                    ...r,
+                    file_name: fixUtf8(r.file_name),
+                    original_name: fixUtf8(r.original_name)
+                }));
+                res.json(cleaned);
             }
-            res.json(rows || []);
-        }
-    );
+        );
+    });
 });
 
 app.post("/api/store/create-folder", requireLogin, (req, res) => {
@@ -6326,12 +6372,13 @@ app.post("/api/store/upload", requireLogin, uploadStore.array("files", 20), (req
     const folder = req.body.folder_path || "/";
     let saved = 0;
     files.forEach((file) => {
+        const cleanOriginalName = fixUtf8(file.originalname || "file");
         connection.query(
             "INSERT INTO school_file_store (folder_path, file_name, original_name, file_size, file_type, file_path, is_folder) VALUES (?, ?, ?, ?, ?, ?, 0)",
             [
                 folder,
-                file.originalname,
-                file.originalname,
+                cleanOriginalName,
+                cleanOriginalName,
                 file.size,
                 file.mimetype || "application/octet-stream",
                 file.filename
@@ -6353,13 +6400,25 @@ app.delete("/api/store/delete/:id", requireLogin, (req, res) => {
         connection.query("DELETE FROM school_file_store WHERE id = ?", [id], (err2) => {
             if (err2) return res.status(500).json({ message: "Database Error" });
             if (item.is_folder === 0 && item.file_path) {
-                const fp = path.join(storeDir, item.file_path);
-                try { if (fs.existsSync(fp)) fs.unlinkSync(fp); } catch (e) {}
+                const fp1 = path.join(storeDir, path.basename(item.file_path));
+                const fp2 = path.join(__dirname, item.file_path);
+                try { if (fs.existsSync(fp1)) fs.unlinkSync(fp1); else if (fs.existsSync(fp2)) fs.unlinkSync(fp2); } catch (e) {}
             }
             res.json({ message: "Deleted successfully." });
         });
     });
 });
+
+function resolveStoreFilePath(filePath) {
+    if (!filePath) return null;
+    const fp1 = path.join(storeDir, path.basename(filePath));
+    if (fs.existsSync(fp1)) return fp1;
+    const fp2 = path.join(__dirname, filePath);
+    if (fs.existsSync(fp2)) return fp2;
+    const fp3 = path.join(storeDir, filePath);
+    if (fs.existsSync(fp3)) return fp3;
+    return null;
+}
 
 app.get("/api/store/download/:id", requireLogin, (req, res) => {
     const id = req.params.id;
@@ -6368,11 +6427,12 @@ app.get("/api/store/download/:id", requireLogin, (req, res) => {
             return res.status(404).send("File not found.");
         }
         const item = rows[0];
-        const fp = path.join(storeDir, item.file_path);
-        if (!fs.existsSync(fp)) {
+        const fp = resolveStoreFilePath(item.file_path);
+        if (!fp) {
             return res.status(404).send("File missing on server storage.");
         }
-        res.setHeader("Content-Disposition", `attachment; filename*=UTF-8''${encodeURIComponent(item.original_name)}`);
+        const cleanName = fixUtf8(item.original_name || item.file_name || "download");
+        res.setHeader("Content-Disposition", `attachment; filename*=UTF-8''${encodeURIComponent(cleanName)}`);
         res.setHeader("Content-Type", item.file_type || "application/octet-stream");
         res.sendFile(fp);
     });
@@ -6385,11 +6445,12 @@ app.get("/api/store/view/:id", requireLogin, (req, res) => {
             return res.status(404).send("File not found.");
         }
         const item = rows[0];
-        const fp = path.join(storeDir, item.file_path);
-        if (!fs.existsSync(fp)) {
+        const fp = resolveStoreFilePath(item.file_path);
+        if (!fp) {
             return res.status(404).send("File missing on server storage.");
         }
-        res.setHeader("Content-Disposition", `inline; filename*=UTF-8''${encodeURIComponent(item.original_name)}`);
+        const cleanName = fixUtf8(item.original_name || item.file_name || "view");
+        res.setHeader("Content-Disposition", `inline; filename*=UTF-8''${encodeURIComponent(cleanName)}`);
         res.setHeader("Content-Type", item.file_type || "application/octet-stream");
         res.sendFile(fp);
     });

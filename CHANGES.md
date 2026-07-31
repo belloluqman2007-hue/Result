@@ -4,6 +4,23 @@
 
 ---
 
+## Pack 49 — 2026-07-31
+
+Owner's requests:
+> "If I press to preview the file it is saying file missing in server fix that
+> The files in Arabic name that is not displaying Arabic is still there
+> The saved exam is not displaying in file store"
+
+### FIX & UPGRADE (Pack 49) — Complete File Vault Resolution, Legacy Arabic Name Recovery & Exam Sync
+- **File Store Preview & Download Path Resolution Fix (`server.js`)**:
+  - Solved the `"File missing on server storage"` error on inline preview and download by adding `resolveStoreFilePath(filePath)`. It intelligently inspects `uploads/store/filename`, `uploads/store/subfolder/filename`, and `__dirname/filePath` so files from any migration or upload source are located and served reliably.
+- **Legacy Arabic Filename Recovery (`server.js`)**:
+  - Added `fixUtf8(str)` to `/api/store/list` and `/api/store/upload` to automatically detect and restore UTF-8 Arabic characters from ISO-8859-1 / Latin-1 byte strings. Even files uploaded prior to the UTF-8 upgrade now display their true Arabic filenames (`امتحان.pdf`) in the vault table.
+- **Automatic Exam Sync to File Store (`server.js`)**:
+  - Added `syncExamsToVault(...)` to `/api/store/list`. Whenever you open the School File Store, the backend automatically scans your entire `exams` database table and generates any missing **Word Document (`.doc`)** and **Printable Exam Sheet (`.html`)** copies in the **`/Saved Exams`** vault folder. All past and future exams appear automatically without manual re-saving.
+
+---
+
 ## Pack 48 — 2026-07-31
 
 Owner's requests:
