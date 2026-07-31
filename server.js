@@ -2455,16 +2455,75 @@ app.delete("/class-signature/:className", requireLogin, (req, res) => {
     );
 });
 
+function autoStoreExamToVault(title, class_name, subject, term, session, duration, instructions, body_html) {
+    const vaultDir = path.join(__dirname, "uploads", "store");
+    try { fs.mkdirSync(vaultDir, { recursive: true }); } catch (e) {}
+
+    connection.query(
+        "SELECT id FROM school_file_store WHERE folder_path = '/' AND file_name = 'Saved Exams' AND is_folder = 1",
+        (err, rows) => {
+            if (err) return;
+            if (!rows || !rows.length) {
+                connection.query("INSERT INTO school_file_store (folder_path, file_name, original_name, is_folder) VALUES ('/', 'Saved Exams', 'Saved Exams', 1)", () => {});
+            }
+        }
+    );
+
+    const safeName = `${class_name}_${subject}_${title}`.replace(/[^a-zA-Z0-9\-_]/g, "_");
+    const timestamp = Date.now();
+
+    const wordContent = `<!DOCTYPE html>
+<html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>
+<head><meta charset="utf-8"><title>${title}</title>
+<style>body { font-family: 'Arial', sans-serif; }</style>
+</head>
+<body>
+<h2 style="text-align:center;">AMEENULLAH SCHOOL OF ARABIC AND ISLAMIC STUDIES</h2>
+<h3 style="text-align:center;">${title} (${class_name} - ${subject} - ${term} ${session})</h3>
+${duration ? `<p><b>Duration:</b> ${duration}</p>` : ""}
+${instructions ? `<p><b>Instructions:</b> ${instructions}</p>` : ""}
+<hr/>
+${body_html}
+</body></html>`;
+
+    const wordFilename = `store_exam_${timestamp}_${safeName}.doc`;
+    const wordPath = path.join(vaultDir, wordFilename);
+    const wordOriginalName = `${class_name} - ${subject} - ${title}.doc`;
+
+    fs.writeFile(wordPath, wordContent, "utf8", (err) => {
+        if (!err) {
+            connection.query(
+                "INSERT INTO school_file_store (folder_path, file_name, original_name, file_size, file_type, file_path, is_folder) VALUES (?, ?, ?, ?, ?, ?, 0)",
+                ["/Saved Exams", wordOriginalName, wordOriginalName, Buffer.byteLength(wordContent, "utf8"), "application/msword", wordFilename],
+                () => {}
+            );
+        }
+    });
+
+    const printFilename = `store_exam_${timestamp}_${safeName}_sheet.html`;
+    const printPath = path.join(vaultDir, printFilename);
+    const printOriginalName = `${class_name} - ${subject} - ${title} (Printable Sheet).html`;
+
+    fs.writeFile(printPath, wordContent, "utf8", (err) => {
+        if (!err) {
+            connection.query(
+                "INSERT INTO school_file_store (folder_path, file_name, original_name, file_size, file_type, file_path, is_folder) VALUES (?, ?, ?, ?, ?, ?, 0)",
+                ["/Saved Exams", printOriginalName, printOriginalName, Buffer.byteLength(wordContent, "utf8"), "text/html", printFilename],
+                () => {}
+            );
+        }
+    });
+}
+
 app.post("/save-exam", requireLogin, (req, res) => {
     const { id, title, class_name, subject, term, session, duration, instructions, body_html } = req.body;
-    // NEW (pack 22): optional exam date feeds the exam timetable. When the
-    // column is absent (pre-pack-22 DB or migration still warming up) the
-    // legacy statements run unchanged below.
     const examDate = /^\d{4}-\d{2}-\d{2}$/.test(req.body.exam_date || "") ? req.body.exam_date : null;
 
     if (!title || !class_name || !subject || !term || !session || !body_html) {
         return res.status(400).json({ message: "Title, class, subject, term, session, and content are all required." });
     }
+
+    autoStoreExamToVault(title, class_name, subject, term, session, duration, instructions, body_html);
 
     if (id) {
         // Update an existing exam
@@ -6258,29 +6317,30 @@ app.post("/api/store/create-folder", requireLogin, (req, res) => {
     );
 });
 
-app.post("/api/store/upload", requireLogin, uploadStore.single("file"), (req, res) => {
-    if (!req.file) {
-        return res.status(400).json({ message: "No file uploaded." });
+app.post("/api/store/upload", requireLogin, uploadStore.array("files", 20), (req, res) => {
+    let files = req.files || [];
+    if (!files.length && req.file) files = [req.file];
+    if (!files.length) {
+        return res.status(400).json({ message: "No file(s) uploaded." });
     }
     const folder = req.body.folder_path || "/";
-    connection.query(
-        "INSERT INTO school_file_store (folder_path, file_name, original_name, file_size, file_type, file_path, is_folder) VALUES (?, ?, ?, ?, ?, ?, 0)",
-        [
-            folder,
-            req.file.originalname,
-            req.file.originalname,
-            req.file.size,
-            req.file.mimetype || "application/octet-stream",
-            req.file.filename
-        ],
-        (err, result) => {
-            if (err) {
-                console.log(err);
-                return res.status(500).json({ message: "Database Error while saving file info" });
-            }
-            res.json({ message: "File uploaded successfully.", id: result.insertId });
-        }
-    );
+    let saved = 0;
+    files.forEach((file) => {
+        connection.query(
+            "INSERT INTO school_file_store (folder_path, file_name, original_name, file_size, file_type, file_path, is_folder) VALUES (?, ?, ?, ?, ?, ?, 0)",
+            [
+                folder,
+                file.originalname,
+                file.originalname,
+                file.size,
+                file.mimetype || "application/octet-stream",
+                file.filename
+            ],
+            () => {}
+        );
+        saved++;
+    });
+    res.json({ message: `Uploaded ${saved} file(s) successfully.`, count: saved });
 });
 
 app.delete("/api/store/delete/:id", requireLogin, (req, res) => {
@@ -6312,7 +6372,9 @@ app.get("/api/store/download/:id", requireLogin, (req, res) => {
         if (!fs.existsSync(fp)) {
             return res.status(404).send("File missing on server storage.");
         }
-        res.download(fp, item.original_name);
+        res.setHeader("Content-Disposition", `attachment; filename*=UTF-8''${encodeURIComponent(item.original_name)}`);
+        res.setHeader("Content-Type", item.file_type || "application/octet-stream");
+        res.sendFile(fp);
     });
 });
 
@@ -6327,6 +6389,7 @@ app.get("/api/store/view/:id", requireLogin, (req, res) => {
         if (!fs.existsSync(fp)) {
             return res.status(404).send("File missing on server storage.");
         }
+        res.setHeader("Content-Disposition", `inline; filename*=UTF-8''${encodeURIComponent(item.original_name)}`);
         res.setHeader("Content-Type", item.file_type || "application/octet-stream");
         res.sendFile(fp);
     });

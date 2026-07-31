@@ -4,6 +4,32 @@
 
 ---
 
+## Pack 48 — 2026-07-31
+
+Owner's requests:
+> "The file store is not displaying Arabic file
+> The certificate design theme is not working and the الثانوية is displaying Quran instead of SECONDARY CERTIFICATE
+> I pasted a student certificate but some information are missing open space for that to be filled
+> Let saved exam appear in file store automatically in words and PDF
+> Let be able to upload more than one file at once to file store"
+
+### FIX & FEATURE (Pack 48) — Arabic Filenames, Senior Secondary Certificate Fix, Exam Vaulting & Multi-Upload
+- **Senior Secondary (`الثانوية`) vs Qur'anic Level Fix (`js/certificates.js`)**:
+  - Fixed a mapping bug in `certLevelOf(cls)` where `\u062B\u0627\u0646\u0648\u064A` (`thanawi` / Senior Secondary) was erroneously labeled `Qur'anic`. Now `thanawi` properly maps to **Senior Secondary (`الثَّانَوِيَّة`)**, `idadi` maps to **Junior Secondary (`الإِعْدَادِيَّة`)**, `ibtidai` maps to **Primary (`الابْتِدَائِيَّة`)**, `tahdiri` maps to **Preliminary (`التَّحْضِيرِيَّة`)**, and `quran`/`tahfeedh` maps to **Qur'anic (`الْقُرْآنِيَّة`)**.
+- **Certificate Design Theme Switcher Fix (`certificates.html`, `css/certificates.css`, `js/certificates.js`)**:
+  - Aligned button `data-theme` attributes in `certificates.html` with the exact CSS rule selectors in `css/certificates.css` (`cert-theme-primary`, `cert-theme-thanawi`, `cert-theme-idadi`, `cert-theme-tahdiri`, `cert-theme-imperial`). Switching themes now instantly changes borders, colors, and Islamic ribbon patterns.
+- **Certificate Place of Birth, State & Grade Quick-Fill / Underlined Blanks (`certificates.html`, `js/certificates.js`)**:
+  - Added **City/Place of Birth (`certCity`)**, **State/Country (`certState`)**, and **Final Grade (`certGrade`)** quick-fill inputs in Step 2 of `certificates.html`.
+  - Updated the Level Certificate English and Arabic wording so that if City, State, or Grade are entered, they appear cleanly dotted-underlined; if left empty, they print solid underlined blank spaces (`___________`) so they can be written by hand without missing open holes.
+- **Arabic Filename Support in School File Store (`server.js`)**:
+  - Configured `school_file_store` with `utf8mb4_unicode_ci` and upgraded `/api/store/download/:id` and `/api/store/view/:id` headers to use RFC 5987 `filename*=UTF-8''` encoding. Arabic filenames now display, preview, and download flawlessly without ASCII header errors.
+- **Auto-Store Exam to Digital Vault in Word & Printable Sheet (`server.js`)**:
+  - Integrated `autoStoreExamToVault(...)` into `/save-exam`. Whenever any exam is created or updated, the system automatically saves a **Word Document (`.doc`)** and a **Printable Exam Sheet (`.html`)** into the **`/Saved Exams`** folder in the School File Store.
+- **Multi-File Simultaneous Upload in School File Store (`store.html`, `js/store.js`, `server.js`)**:
+  - Updated `/api/store/upload` to accept `uploadStore.array("files", 20)` and added the `multiple` attribute to `storeFileInput`. Teachers and admins can now select and upload up to 20 files at once into any vault folder.
+
+---
+
 ## Pack 47 — 2026-07-31
 
 Owner's requests:

@@ -76,16 +76,16 @@
       </div>
     </div>
 
-    <!-- Modal: Upload File -->
+    <!-- Modal: Upload File(s) -->
     <div id="storeUploadModal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.5); z-index:9999; align-items:center; justify-content:center;">
-      <div class="mg-card" style="width:420px; max-width:90vw; margin:auto;">
+      <div class="mg-card" style="width:440px; max-width:90vw; margin:auto;">
         <h3 style="margin-top:0;">📤 Upload to Digital Vault</h3>
-        <p style="font-size:12.5px; color:#555;">Upload any school document, PDF, Excel sheet, image, or audio recording (max 50MB).</p>
+        <p style="font-size:12.5px; color:#555;">Upload one or multiple school documents, PDFs, Excel sheets, images, or audio recordings (max 50MB per file).</p>
         <div class="mg-field" style="margin-top:14px;">
-          <label for="storeFileInput">Choose File</label>
-          <input type="file" id="storeFileInput" style="width:100%; border:1px dashed #1C5A42; padding:12px; border-radius:8px;">
+          <label for="storeFileInput">Choose File(s) (You can select multiple files at once!)</label>
+          <input type="file" id="storeFileInput" multiple style="width:100%; border:1px dashed #1C5A42; padding:12px; border-radius:8px;">
         </div>
-        <div id="storeUploadProgress" style="display:none; margin-top:12px; font-size:13px; color:#1C5A42; font-weight:700;">Uploading file... please wait</div>
+        <div id="storeUploadProgress" style="display:none; margin-top:12px; font-size:13px; color:#1C5A42; font-weight:700;">Uploading file(s)... please wait</div>
         <div style="display:flex; justify-content:flex-end; gap:10px; margin-top:18px;">
           <button type="button" class="mg-btn-light" onclick="storeCloseUploadModal()" id="storeUploadCancelBtn">Cancel</button>
           <button type="button" class="mg-btn" onclick="storeSubmitUpload()" id="storeUploadSubmitBtn">Upload Now</button>

@@ -32,10 +32,11 @@ var certChosenTheme = "auto"; // default auto by class/type
 function certLevelOf(cls) {
   var n = String(cls || "").replace(/[\u064B-\u0652\u0670\u0640]/g, "").replace(/[إأآٱ]/g, "ا").replace(/\s+/g, "");
   if (n.indexOf("\u062A\u062D\u0636\u064A\u0631\u064A") !== -1) return { key: "tahdiri", theme: "cert-theme-tahdiri", en: "Preliminary", ar: "التَّحْضِيرِيَّة", study: "preliminary" };
-  if (n.indexOf("\u0627\u0628\u062A\u062F\u0627\u0626\u064A") !== -1) return { key: "ibtidai", theme: "", en: "Primary", ar: "الابْتِدَائِيَّة", study: "primary" };
+  if (n.indexOf("\u0627\u0628\u062A\u062F\u0627\u0626\u064A") !== -1) return { key: "ibtidai", theme: "cert-theme-primary", en: "Primary", ar: "الابْتِدَائِيَّة", study: "primary" };
   if (n.indexOf("\u0627\u0639\u062F\u0627\u062F\u064A") !== -1) return { key: "idadi", theme: "cert-theme-idadi", en: "Junior Secondary", ar: "الإِعْدَادِيَّة", study: "junior secondary" };
-  if (n.indexOf("\u062B\u0627\u0646\u0648\u064A") !== -1) return { key: "thanawi", theme: "cert-theme-thanawi", en: "Qur'anic", ar: "الثَّانَوِيَّة", study: "Qur'anic" };
-  return { key: "gen", theme: "", en: "School", ar: "الشَّهَادَة", study: "school" };
+  if (n.indexOf("\u062B\u0627\u0646\u0648\u064A") !== -1) return { key: "thanawi", theme: "cert-theme-thanawi", en: "Senior Secondary", ar: "الثَّانَوِيَّة", study: "senior secondary" };
+  if (n.indexOf("\u0642\u0631\u0627\u0646") !== -1 || n.indexOf("\u062A\u062D\u0641\u064A\u0638") !== -1 || n.indexOf("quran") !== -1 || n.indexOf("tahfeedh") !== -1) return { key: "quranic", theme: "cert-theme-tahdiri", en: "Qur'anic", ar: "الْقُرْآنِيَّة", study: "Qur'anic" };
+  return { key: "gen", theme: "cert-theme-primary", en: "School", ar: "الشَّهَادَة", study: "school" };
 }
 
 var CERT_TYPES = {
@@ -45,15 +46,15 @@ var CERT_TYPES = {
     pills: function (lv) { return lv.en + " <small>" + lv.ar + "</small>"; },
     bodyEn: function (o, f) {
       return "The Administration of the above mentioned institution hereby certifies that the student " +
-        f.name + " born in " + f.blank60 + " in " + f.blank90 + " state, on the " + f.dobDay + " of " + f.dobMonth + ", " + f.dobYear +
+        f.name + " born in " + f.city + " in " + f.state + " state, on the " + f.dobDay + " of " + f.dobMonth + ", " + f.dobYear +
         ", and whose admission number is " + f.adm + " has completed his/her studies at the <b>" + certEsc(o.lv.study) + " level</b>, " +
-        "passed all the prescribed subjects at the end of the academic year " + f.ah + " A.H. " + f.ad + " A.D and got the final grade " + f.blank90 + ". " +
+        "passed all the prescribed subjects at the end of the academic year " + f.ah + " A.H. " + f.ad + " A.D and got the final grade " + f.grade + ". " +
         "May Almighty Allah grant him/her more blessings and success. (Aameen).";
     },
     bodyAr: function (o, f) {
-      return "تشهد إدارة المدرسة المذكورة أعلاه أنّ الطالب/ة " + f.nameAr + " المولود/ة في ولاية ــــــــ دولة ــــــــ يوم ــــــ شهر ــــــ سنة " + f.ahAr + " هـ / " + f.adAr + " م، " +
+      return "تشهد إدارة المدرسة المذكورة أعلاه أنّ الطالب/ة " + f.nameAr + " المولود/ة في ولاية " + f.cityAr + " دولة " + f.stateAr + " يوم ــــــ شهر ــــــ سنة " + f.ahAr + " هـ / " + f.adAr + " م، " +
         "والمسجَّل برقم " + f.admAr + "، أنهى/ت دراسته/ا بالمرحلة " + o.lv.ar + " في نهاية العام الدراسي " + f.sessionAr + "م " +
-        "ونجح/ت في الموادّ الدراسيّة المقرّرة. ونسأل الله العظيم له/ها مزيد البركة والتوفيق. (آمين)";
+        "ونجح/ت في الموادّ الدراسيّة المقرّرة وحصل/ت على التقدير " + f.gradeAr + ". ونسأل الله العظيم له/ها مزيد البركة والتوفيق. (آمين)";
     }
   },
   excellence: {
@@ -110,7 +111,10 @@ function certOpts() {
     customTitle: (document.getElementById("certCustomTitle") || {}).value || "",
     customBodyEn: (document.getElementById("certCustomBodyEn") || {}).value || "",
     customBodyAr: (document.getElementById("certCustomBodyAr") || {}).value || "",
-    customDate: (document.getElementById("certCustomDate") || {}).value || ""
+    customDate: (document.getElementById("certCustomDate") || {}).value || "",
+    city: (document.getElementById("certCity") || {}).value || "",
+    state: (document.getElementById("certState") || {}).value || "",
+    grade: (document.getElementById("certGrade") || {}).value || ""
   };
 }
 
@@ -294,19 +298,30 @@ function certBuildHtml(stu, posText) {
     if (m2) { dob.y = m2[1]; dob.m = months[Number(m2[2]) - 1] || m2[2]; dob.d = m2[3]; }
   }
   var blanks = function (cls) { return '<span class="cert-fill ' + cls + '">&nbsp;</span>'; };
+  var fillTxt = function (val, wCls) {
+    return val
+      ? '<span class="cert-fill ' + (wCls || "w90") + '" style="border-bottom:1.2px solid #222; font-weight:700;">' + certEsc(val) + '</span>'
+      : '<span class="cert-fill ' + (wCls || "w90") + '" style="border-bottom:1.2px solid #222; min-width:80px;">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span>';
+  };
   var f = {
     name: '<span class="cert-fill name">' + certEsc(stu.full_name || "-") + "</span>",
     nameAr: '<span style="border-bottom:1.2px dotted #555; padding:0 8px; font-weight:700; unicode-bidi:isolate;">' + certEsc(stu.full_name || "-") + "</span>",
     blank60: blanks("w60"), blank90: blanks("w90"),
-    dobDay: dob.d ? '<span class="cert-fill w60">' + dob.d + "</span>" : blanks("w60"),
-    dobMonth: dob.m ? '<span class="cert-fill w90">' + dob.m + "</span>" : blanks("w90"),
-    dobYear: dob.y ? '<span class="cert-fill w90">' + dob.y + "</span>" : blanks("w90"),
+    dobDay: dob.d ? '<span class="cert-fill w60">' + dob.d + "</span>" : fillTxt("", "w60"),
+    dobMonth: dob.m ? '<span class="cert-fill w90">' + dob.m + "</span>" : fillTxt("", "w90"),
+    dobYear: dob.y ? '<span class="cert-fill w90">' + dob.y + "</span>" : fillTxt("", "w90"),
     adm: '<span class="cert-fill w90">' + certEsc(stu.student_id || "-") + "</span>",
     admAr: '<span style="border-bottom:1.2px dotted #555; padding:0 6px; font-weight:700;">' + certEsc(stu.student_id || "-") + "</span>",
     ah: '<span class="cert-fill w60">' + ah + "</span>",
     ad: '<span class="cert-fill w90">' + certEsc(o.session || "-") + "</span>",
     ahAr: String(ah), adAr: certEsc(o.session || ""), sessionAr: certEsc(o.session || ""),
-    cls: '<span class="cert-fill w180">' + certEsc(o.cls || "-") + "</span>"
+    cls: '<span class="cert-fill w180">' + certEsc(o.cls || "-") + "</span>",
+    city: fillTxt(o.city, "w90"),
+    state: fillTxt(o.state, "w90"),
+    grade: fillTxt(o.grade, "w90"),
+    cityAr: fillTxt(o.city, "w90"),
+    stateAr: fillTxt(o.state, "w90"),
+    gradeAr: fillTxt(o.grade, "w90")
   };
   var sigT = certSigs.classTeacher ? '<img class="cert-sign-img" src="' + certEsc(certSigs.classTeacher) + '" alt="">' : "";
   var sigP = certSigs.principal ? '<img class="cert-sign-img" src="' + certEsc(certSigs.principal) + '" alt="">' : "";

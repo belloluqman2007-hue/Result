@@ -168,13 +168,14 @@ function storeCloseUploadModal() {
 function storeSubmitUpload() {
   var fileInput = document.getElementById("storeFileInput");
   if (!fileInput.files || !fileInput.files.length) {
-    alert("Please select a file to upload.");
+    alert("Please select at least one file to upload.");
     return;
   }
-  var file = fileInput.files[0];
   var fd = new FormData();
   fd.append("folder_path", storeCurrentFolder);
-  fd.append("file", file);
+  for (var i = 0; i < fileInput.files.length; i++) {
+    fd.append("files", fileInput.files[i]);
+  }
 
   document.getElementById("storeUploadProgress").style.display = "block";
   document.getElementById("storeUploadSubmitBtn").disabled = true;

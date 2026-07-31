@@ -60,7 +60,7 @@
         </button>
       </div>
 
-      <!-- NEW (Pack 47): Choose Certificate Design Theme directly on the page -->
+      <!-- NEW (Pack 47/48): Choose Certificate Design Theme directly on the page -->
       <div style="margin-top: 18px;">
         <label style="font-weight:700; font-size:13px; color:#0F3D2E; display:block; margin-bottom:8px;">🎨 Choose Certificate Design Theme (Border &amp; Color Style)</label>
         <div class="cert-themes" id="certThemes" style="display:flex; flex-wrap:wrap; gap:8px;">
@@ -68,23 +68,23 @@
             <span class="theme-dot" style="background:linear-gradient(135deg,#1C5A42,#C9A227)"></span>
             <b>Auto (by Class/Type)</b>
           </button>
-          <button type="button" class="cert-theme-btn" data-theme="theme-primary" onclick="certSetTheme('theme-primary')">
+          <button type="button" class="cert-theme-btn" data-theme="cert-theme-primary" onclick="certSetTheme('cert-theme-primary')">
             <span class="theme-dot" style="background:#1C5A42;"></span>
             <b>Emerald Green &amp; Gold</b>
           </button>
-          <button type="button" class="cert-theme-btn" data-theme="theme-tahdiri" onclick="certSetTheme('theme-tahdiri')">
+          <button type="button" class="cert-theme-btn" data-theme="cert-theme-thanawi" onclick="certSetTheme('cert-theme-thanawi')">
             <span class="theme-dot" style="background:#8C2F39;"></span>
             <b>Qur'anic Maroon &amp; Gold</b>
           </button>
-          <button type="button" class="cert-theme-btn" data-theme="theme-junior" onclick="certSetTheme('theme-junior')">
+          <button type="button" class="cert-theme-btn" data-theme="cert-theme-idadi" onclick="certSetTheme('cert-theme-idadi')">
             <span class="theme-dot" style="background:#1B365D;"></span>
             <b>Royal Navy Blue &amp; Gold</b>
           </button>
-          <button type="button" class="cert-theme-btn" data-theme="theme-prelim" onclick="certSetTheme('theme-prelim')">
+          <button type="button" class="cert-theme-btn" data-theme="cert-theme-tahdiri" onclick="certSetTheme('cert-theme-tahdiri')">
             <span class="theme-dot" style="background:#1A1A1A;"></span>
             <b>Classic Black &amp; Gold</b>
           </button>
-          <button type="button" class="cert-theme-btn" data-theme="theme-imperial" onclick="certSetTheme('theme-imperial')">
+          <button type="button" class="cert-theme-btn" data-theme="cert-theme-imperial" onclick="certSetTheme('cert-theme-imperial')">
             <span class="theme-dot" style="background:#5B2C6F;"></span>
             <b>Imperial Purple &amp; Star</b>
           </button>
@@ -118,6 +118,22 @@
         <div class="mg-field" id="certCustomWrap" style="display:none; flex:1; min-width:220px;">
           <label for="certCustom">Reason on the certificate</label>
           <input type="text" id="certCustom" maxlength="180" placeholder="e.g. exceptional conduct and helpfulness throughout the session" oninput="certRefresh(true)">
+        </div>
+      </div>
+
+      <!-- NEW (Pack 48): City, State, and Grade quick fillables (blank = clean underlined spaces) -->
+      <div class="mg-toolbar" style="flex-wrap:wrap; margin-top:10px; background:#F8FAF9; padding:10px 14px; border-radius:10px; border:1px solid #E2ECE7;">
+        <div class="mg-field" style="min-width:140px; flex:1;">
+          <label for="certCity" style="font-size:11px;">Place/City of Birth (blank = ___)</label>
+          <input type="text" id="certCity" placeholder="e.g. Ijebu-Ode" oninput="certRefresh(true)">
+        </div>
+        <div class="mg-field" style="min-width:140px; flex:1;">
+          <label for="certState" style="font-size:11px;">State / Country (blank = ___)</label>
+          <input type="text" id="certState" placeholder="e.g. Ogun State" oninput="certRefresh(true)">
+        </div>
+        <div class="mg-field" style="min-width:140px; flex:1;">
+          <label for="certGrade" style="font-size:11px;">Final Grade (blank = ___)</label>
+          <input type="text" id="certGrade" placeholder="e.g. Excellent / A+" oninput="certRefresh(true)">
         </div>
       </div>
 

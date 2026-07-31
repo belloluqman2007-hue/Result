@@ -209,6 +209,9 @@
   border-radius:12px; padding-top:4px; padding-bottom:4px;
 }
 
+/* Primary: Emerald green frame + gold triangles */
+.cert-theme-primary{ --ct:#1C5A42; --ct2:#C9A227; --ctpale:#EAF6EE; --ctsoft:#C9E8D4; --ctframe:#1C5A42; background:#fdfefb; }
+
 /* Qur'anic: MAROON + woven ribbons down the left and right edges
    (mirrors the owner's maroon paper certificate) */
 .cert-theme-thanawi{ --ct:#7E2434; --ct2:#B0404F; --ctpale:#FBEEEF; --ctsoft:#EECDD2; }
