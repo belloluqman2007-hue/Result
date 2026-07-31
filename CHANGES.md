@@ -4,6 +4,18 @@
 
 ---
 
+## Pack 55 — 2026-07-31
+
+Owner's requests:
+> "What is the real problem still not working... Page cannot be crawled: Blocked by robots.txt"
+
+### FIX (Pack 55) — Google Search Console Explicit Googlebot Allow & Cache Refresh Instructions
+- **Explicit `User-agent: Googlebot` Allow Rules (`server.js`, `robots.txt`)**:
+  - Why Google Search Console reported `"Blocked by robots.txt"`: Google Search Console caches a site's `robots.txt` file for up to **24 hours**. When testing a live URL, Search Console checks Google's **cached copy** of `robots.txt` rather than fetching a live file every time.
+  - Added an explicit `User-agent: Googlebot` block with `Allow: /` first in both `robots.txt` and the high-priority `/robots.txt` server endpoint so that when Google updates its crawler cache, Googlebot receives unambiguous priority indexing clearance.
+
+---
+
 ## Pack 54 — 2026-07-31
 
 Owner's requests:

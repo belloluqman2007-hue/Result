@@ -1,4 +1,10 @@
+User-agent: Googlebot
+Allow: /
+Disallow: /api/
+Disallow: /sql/
+
 User-agent: *
+Allow: /
 Disallow: /api/
 Disallow: /sql/
 
