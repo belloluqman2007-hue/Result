@@ -1967,8 +1967,8 @@ const uploadSignature = multer({
     }
 });
 
-app.get("/", requireLogin, (req, res) => {
-    res.sendFile(path.join(__dirname, "teacher-dashboard.html"));
+app.get("/", (req, res) => {
+    res.sendFile(path.join(__dirname, "index.html"));
 });
 
 console.log("THIS IS MY SERVER.JS")
@@ -2930,16 +2930,20 @@ app.delete("/api/messages/:id", requireLogin, (req, res) => {
     });
 });
 
-// NEW (Pack 50): Clear an entire conversation with a student/parent
+// NEW (Pack 50/53): Clear an entire conversation with a student/parent
 app.delete("/api/messages/thread/:sid", requireLogin, (req, res) => {
     const sid = req.params.sid;
-    connection.query("DELETE FROM messages WHERE student_id = ? OR recipient_ref = ? OR sender_ref = ?", [sid, sid, sid], (err, result) => {
-        if (err) {
-            console.log(err);
-            return res.status(500).json({ message: "Database Error" });
+    connection.query(
+        "DELETE FROM messages WHERE (sender_type = 'portal' AND sender_ref = ?) OR (recipient_type = 'parent' AND recipient_ref = ?) OR sender_ref = ? OR recipient_ref = ?",
+        [sid, sid, sid, sid],
+        (err, result) => {
+            if (err) {
+                console.log(err);
+                return res.status(500).json({ message: "Database Error" });
+            }
+            res.json({ message: "Conversation cleared.", count: result.affectedRows });
         }
-        res.json({ message: "Conversation cleared.", count: result.affectedRows });
-    });
+    );
 });
 
 app.get("/api/chat-students", requireLogin, (req, res) => {
@@ -4485,10 +4489,11 @@ app.delete("/delete-student/:studentId", requireLogin, requireAdmin, (req, res) 
                 console.log(err);
                 return res.status(500).send("Database Error");
             }
-            // Cascade delete any orphan scores, attendance, or tahfeedh records for this student
+            // Cascade delete any orphan scores, attendance, tahfeedh, or chat records for this student
             connection.query("DELETE FROM results WHERE student_id = ?", [studentId], () => {});
             connection.query("DELETE FROM attendance WHERE student_id = ?", [studentId], () => {});
             connection.query("DELETE FROM tahfeedh WHERE student_id = ?", [studentId], () => {});
+            connection.query("DELETE FROM messages WHERE (sender_type = 'portal' AND sender_ref = ?) OR (recipient_type = 'parent' AND recipient_ref = ?) OR sender_ref = ? OR recipient_ref = ?", [studentId, studentId, studentId, studentId], () => {});
 
             res.json({
                 message: "Student deleted successfully",

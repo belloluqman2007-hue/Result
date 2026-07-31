@@ -4,6 +4,24 @@
 
 ---
 
+## Pack 53 — 2026-07-31
+
+Owner's requests:
+> "Old deleted student chat is not deleting in chat
+> The live test is not working but it is on Google
+> Let me be able to delete who I am chatting with in case any student transfer or something else and the chat is no more useful or something else design the voice note well and beautiful"
+
+### FIX (Pack 53) — Chat Conversation Deletion SQL Fix & Student Deletion Cascade
+- **Chat Conversation Deletion Query Fix (`server.js`)**:
+  - Root cause found: In `DELETE /api/messages/thread/:sid`, the SQL query attempted `DELETE FROM messages WHERE student_id = ?`, but the `messages` table stores student IDs in `sender_ref` and `recipient_ref` (there is no `student_id` column in `messages`). That caused MySQL error 1054 (`Unknown column 'student_id'`), preventing old deleted student conversations from being removed.
+  - Corrected the delete query to `DELETE FROM messages WHERE (sender_type = 'portal' AND sender_ref = ?) OR (recipient_type = 'parent' AND recipient_ref = ?) OR sender_ref = ? OR recipient_ref = ?`. Now clicking the trash icon (`🗑️`) on any person in the chat list or clicking `"🗑️ Clear Chat"` permanently removes that conversation.
+- **Student Profile Deletion Cascade (`server.js`)**:
+  - Upgraded `/delete-student/:studentId` so that whenever an admin deletes a student from the system, all of that student's saved chat messages are automatically cascade-deleted alongside their exam results, attendance, and tahfeedh records.
+- **Why Google Search Console "Test Live URL" Requires a Render Deploy**:
+  - Clarified that although your website (`index.html`) is already indexed on Google from earlier crawls, Google Search Console's "Live Test" will keep testing the old `server.js` running on Render until you push these new commits to GitHub so Render re-deploys your server with the root `/` route fix from Pack 51.
+
+---
+
 ## Pack 52 — 2026-07-31
 
 Owner's requests:
