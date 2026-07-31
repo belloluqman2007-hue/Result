@@ -4,6 +4,41 @@
 
 ---
 
+## Pack 47 — 2026-07-31
+
+Owner's requests:
+> "In the certificate section
+> Let it be Quran and the other level certificate and custom also with different design and able to put different design from the section also
+> Let add store section where we can upload some folders and files to store and able to download and open the files which ever may it be
+> And be able to edit what will be inside the certificate"
+
+### FEATURE & UPGRADE (Pack 47) — Multi-Theme Certificate Studio & Customizable Wording Editor
+- **Qur'an / Tahfeedh Certificate (`certificates.html`, `js/certificates.js`)**:
+  - Enhanced the Tahfeedh certificate type to be explicitly titled **"Qur'an / Tahfeedh"**, featuring expanded Islamic Hifz and Tajweed completion wording in both English and Arabic.
+- **Design Theme Selector on Certificate Generator (`certificates.html`, `css/certificates.css`, `js/certificates.js`)**:
+  - Added a **"🎨 Choose Certificate Design Theme"** palette bar in Step 1 so users can switch the border, color scheme, and Islamic pattern for any certificate type with one click:
+    - *Auto (by Class/Type)*
+    - *Emerald Green & Gold (`theme-primary`)*
+    - *Qur'anic Maroon & Gold Ribbons (`theme-tahdiri`)*
+    - *Royal Navy Blue & Gold (`theme-junior`)*
+    - *Classic Black & Gold Chevron (`theme-prelim`)*
+    - *Imperial Purple & Gold (`theme-imperial` — NEW royal Islamic star-lattice design)*
+- **Live Wording & Title Editor (`#certCustomTitle`, `#certCustomBodyEn`, `#certCustomBodyAr`, `#certCustomDate`)**:
+  - Added a collapsible **"✏️ Customize & Edit Certificate Content (Title & Wording)"** card inside Step 2.
+  - Teachers and admins can now live-edit the Certificate Title word (e.g., `IJAZAH`, `DIPLOMA`, `HONOUR ROLL`), English body wording, Arabic body wording, and display date. Any edits instantly update the preview card and apply to downloaded single or whole-class PDFs. Includes a one-click **Reset Wording to Default** button.
+
+### NEW FEATURE (Pack 47) — Digital School File Store & Cloud Vault (`store.html`, `js/store.js`, `server.js`)
+- **Folder Navigation & Organization**:
+  - Created a dedicated **School File Store (`store.html`)** where admins and teachers can create folders (e.g., `2026-2027 Exam Papers`, `School Policies`, `Qur'an Audio Syllabuses`) and navigate through breadcrumbs.
+- **Any File Type Storage & Upload (`/api/store/upload`)**:
+  - Supports uploading any school document, PDF, spreadsheet, Word document, image, audio recording, or ZIP file (up to 50MB per file) via `/api/store/upload` using server disk storage in `uploads/store/`.
+- **In-Browser Preview & Direct Download (`/api/store/view/:id`, `/api/store/download/:id`)**:
+  - Added an **"👁️ Preview"** button to open images, PDFs, audio, and documents inline in the browser without downloading first, alongside a one-click **"⬇️ Download"** button and delete controls.
+- **Sidebar & Quick-Access Integration**:
+  - Added **File Store (`📁 File Store`)** links to the `teacher-dashboard.html` and `certificates.html` navigation headers so the vault is accessible from anywhere.
+
+---
+
 ## Pack 46 — 2026-07-30
 
 Owner's requests:

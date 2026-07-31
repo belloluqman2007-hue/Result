@@ -23,6 +23,7 @@ var certSchool = {
 };
 var certBusy = false;
 var certOrient = "ls"; // default landscape ('ls' or 'pt')
+var certChosenTheme = "auto"; // default auto by class/type
 
 // CHANGED (pack 36): types now mirror the school's real paper
 // certificates. "level" is the flagship - the exact paper wording with
@@ -67,13 +68,13 @@ var CERT_TYPES = {
   },
   tahfeedh: {
     code: "THF",
-    pills: function () { return "Tahfeedh Achievement <small>مَرْتَقَى الْحِفْظ</small>"; },
+    pills: function () { return "Qur'an Memorisation &amp; Islamic Studies <small>مَرْتَقَى الْحِفْظ</small>"; },
     bodyEn: function (o, f) {
-      var j = Math.max(1, Math.min(30, Number(o.juz) || 1));
-      return "This is to certify that " + f.name + " has by Allah's grace memorised <b>" + j + " Juz</b> of the glorious Qur'an" +
-        (j >= 30 ? ", completing the entire Book — ma sha Allah!" : " — may Allah bless him/her to completion, ameen") + ".";
+      var j = Math.max(1, Math.min(30, Number(o.juz) || 30));
+      return "This is to certify that " + f.name + " has by Allah's grace memorised and mastered <b>" + j + " Juz</b> of the glorious Qur'an with Tajweed" +
+        (j >= 30 ? ", completing the entire Holy Qur'an — Ma Sha Allah! May Almighty Allah make the Qur'an a light for him/her." : " — May Allah bless him/her to complete the entire Holy Qur'an, Aameen") + ".";
     },
-    bodyAr: function () { return "نسأل الله أن يجعل القرآن ربيع قلبه/قلبها ونور دربه/دربها. (آمين)"; }
+    bodyAr: function () { return "نشهد أن الطالب/ة المذكور/ة قد أتمّ حفظ ومراجعة القرآن الكريم بالتجويد، فنسأل الله أن يجعله ربيع قلبه ونور دربه. (آمين)"; }
   },
   custom: {
     code: "MRT",
@@ -105,7 +106,11 @@ function certOpts() {
     session: document.getElementById("certSession").value.trim(),
     juz: document.getElementById("certJuz").value,
     cls: document.getElementById("certClass").value,
-    custom: document.getElementById("certCustom").value
+    custom: document.getElementById("certCustom").value,
+    customTitle: (document.getElementById("certCustomTitle") || {}).value || "",
+    customBodyEn: (document.getElementById("certCustomBodyEn") || {}).value || "",
+    customBodyAr: (document.getElementById("certCustomBodyAr") || {}).value || "",
+    customDate: (document.getElementById("certCustomDate") || {}).value || ""
   };
 }
 
@@ -194,6 +199,22 @@ function certSetOrient(o) {
   certRefresh(false);
 }
 
+function certSetTheme(th) {
+  certChosenTheme = th || "auto";
+  document.querySelectorAll(".cert-theme-btn").forEach(function (btn) {
+    btn.classList.toggle("active", btn.getAttribute("data-theme") === certChosenTheme);
+  });
+  certRefresh(false);
+}
+
+function certResetWording() {
+  var t = document.getElementById("certCustomTitle"); if (t) t.value = "";
+  var en = document.getElementById("certCustomBodyEn"); if (en) en.value = "";
+  var ar = document.getElementById("certCustomBodyAr"); if (ar) ar.value = "";
+  var dt = document.getElementById("certCustomDate"); if (dt) dt.value = "";
+  certRefresh(true);
+}
+
 /* ---------------- students ---------------- */
 function certLoadStudents() {
   var cls = document.getElementById("certClass").value;
@@ -253,6 +274,12 @@ function certBuildHtml(stu, posText) {
   var o = certOpts();
   var t = CERT_TYPES[certType];
   var lv = certLevelOf(o.cls);
+  var th = certChosenTheme && certChosenTheme !== "auto" ? certChosenTheme : (certType === "tahfeedh" ? "theme-tahdiri" : lv.theme);
+  var art = th === "theme-tahdiri"
+    ? '<div class="cert-art edge-t"></div><div class="cert-art edge-b"></div><div class="cert-art edge-l"></div><div class="cert-art edge-r"></div>'
+    : (th === "theme-thanawi"
+       ? '<div class="cert-art edge-l"></div><div class="cert-art edge-r"></div>'
+       : '');
   var dt = new Date();
   var months = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
   var yearBit = (o.session || String(dt.getFullYear())).split("/")[0].replace(/[^0-9]/g, "") || String(dt.getFullYear());
@@ -288,8 +315,13 @@ function certBuildHtml(stu, posText) {
     : '<span>PASSPORT</span>';
   var dateStr = dt.getDate() + " " + months[dt.getMonth()] + " " + dt.getFullYear();
 
+  var titleWord = o.customTitle ? certEsc(o.customTitle.trim().toUpperCase()) : "CERTIFICATE";
+  var bodyEnText = o.customBodyEn ? certEsc(o.customBodyEn).replace(/\n/g, "<br>") : t.bodyEn(Object.assign({}, o, { lv: lv, pos: posText }), f);
+  var bodyArText = o.customBodyAr ? certEsc(o.customBodyAr).replace(/\n/g, "<br>") : t.bodyAr(Object.assign({}, o, { lv: lv }), f);
+  var displayDate = o.customDate ? certEsc(o.customDate.trim()) : dateStr;
+
   return '' +
-  '<div class="cert-frame ' + lv.theme + ' cert-' + certOrient + '">' +
+  '<div class="cert-frame ' + th + ' cert-' + certOrient + '">' + art +
     '<div class="cert-tri tl"></div><div class="cert-tri tl2"></div>' +
     '<div class="cert-tri br"></div><div class="cert-tri br2"></div>' +
     '<div class="cert-watermark"><img src="images/LOGO.JPG" alt=""></div>' +
@@ -310,14 +342,14 @@ function certBuildHtml(stu, posText) {
     "</div>" +
     '<div class="cert-trow">' +
       '<div class="cert-level">' + t.pills(lv) + "</div>" +
-      '<div class="cert-word">CERTIFICATE</div>' +
+      '<div class="cert-word">' + titleWord + '</div>' +
     "</div>" +
     '<div class="cert-b">' +
-      '<div class="cert-b-ar" lang="ar">' + t.bodyAr(Object.assign({}, o, { lv: lv }), f) + "</div>" +
-      '<div class="cert-b-en">' + t.bodyEn(Object.assign({}, o, { lv: lv, pos: posText }), f) + "</div>" +
+      '<div class="cert-b-ar" lang="ar">' + bodyArText + "</div>" +
+      '<div class="cert-b-en">' + bodyEnText + "</div>" +
     "</div>" +
     '<div class="cert-f">' +
-      '<div class="cert-sign"><div style="font-size:11px; font-weight:700; margin-bottom:14px;">' + ah + ' هـ &nbsp;/&nbsp; ' + certEsc(dateStr) + ' م</div><div class="ln"></div><small>DATE · التَّارِيخ</small></div>' +
+      '<div class="cert-sign"><div style="font-size:11px; font-weight:700; margin-bottom:14px;">' + ah + ' هـ &nbsp;/&nbsp; ' + certEsc(displayDate) + ' م</div><div class="ln"></div><small>DATE · التَّارِيخ</small></div>' +
       '<div class="cert-sign">' + sigT + '<div class="ln"></div><small>THE CLASS TEACHER · الْمُعَلِّم</small></div>' +
       '<div class="cert-rosette"></div>' +
       '<div class="cert-sign">' + sigP + '<div class="ln"></div><small>THE PRINCIPAL · الْعَمِيد</small></div>' +

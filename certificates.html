@@ -28,6 +28,9 @@
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5"/><path d="m12 19-7-7 7-7"/></svg>
         Dashboard
       </a>
+      <a class="mng-back" href="store.html" style="margin-left: 8px;">
+        📁 File Store
+      </a>
       <div class="mng-head-text">
         <h1>&#127891; Certificate Generator</h1>
         <p>Elegant printable certificates with the school crest, colours and saved signatures.</p>
@@ -48,13 +51,44 @@
           <small>Top performance for a term</small>
         </button>
         <button type="button" class="cert-type" data-type="tahfeedh" onclick="certSetType('tahfeedh')">
-          <span class="ct-emoji">&#128213;</span><b>Tahfeedh</b>
-          <small>Qur'an memorisation milestone</small>
+          <span class="ct-emoji">&#128213;</span><b>Qur'an / Tahfeedh</b>
+          <small>Qur'an memorisation / Hifz milestone</small>
         </button>
         <button type="button" class="cert-type" data-type="custom" onclick="certSetType('custom')">
           <span class="ct-emoji">&#11088;</span><b>Merit (Custom)</b>
           <small>Your own reason wording</small>
         </button>
+      </div>
+
+      <!-- NEW (Pack 47): Choose Certificate Design Theme directly on the page -->
+      <div style="margin-top: 18px;">
+        <label style="font-weight:700; font-size:13px; color:#0F3D2E; display:block; margin-bottom:8px;">🎨 Choose Certificate Design Theme (Border &amp; Color Style)</label>
+        <div class="cert-themes" id="certThemes" style="display:flex; flex-wrap:wrap; gap:8px;">
+          <button type="button" class="cert-theme-btn active" data-theme="auto" onclick="certSetTheme('auto')">
+            <span class="theme-dot" style="background:linear-gradient(135deg,#1C5A42,#C9A227)"></span>
+            <b>Auto (by Class/Type)</b>
+          </button>
+          <button type="button" class="cert-theme-btn" data-theme="theme-primary" onclick="certSetTheme('theme-primary')">
+            <span class="theme-dot" style="background:#1C5A42;"></span>
+            <b>Emerald Green &amp; Gold</b>
+          </button>
+          <button type="button" class="cert-theme-btn" data-theme="theme-tahdiri" onclick="certSetTheme('theme-tahdiri')">
+            <span class="theme-dot" style="background:#8C2F39;"></span>
+            <b>Qur'anic Maroon &amp; Gold</b>
+          </button>
+          <button type="button" class="cert-theme-btn" data-theme="theme-junior" onclick="certSetTheme('theme-junior')">
+            <span class="theme-dot" style="background:#1B365D;"></span>
+            <b>Royal Navy Blue &amp; Gold</b>
+          </button>
+          <button type="button" class="cert-theme-btn" data-theme="theme-prelim" onclick="certSetTheme('theme-prelim')">
+            <span class="theme-dot" style="background:#1A1A1A;"></span>
+            <b>Classic Black &amp; Gold</b>
+          </button>
+          <button type="button" class="cert-theme-btn" data-theme="theme-imperial" onclick="certSetTheme('theme-imperial')">
+            <span class="theme-dot" style="background:#5B2C6F;"></span>
+            <b>Imperial Purple &amp; Star</b>
+          </button>
+        </div>
       </div>
     </div>
 
@@ -86,6 +120,38 @@
           <input type="text" id="certCustom" maxlength="180" placeholder="e.g. exceptional conduct and helpfulness throughout the session" oninput="certRefresh(true)">
         </div>
       </div>
+
+      <!-- NEW (Pack 47): Live Custom Wording & Details Editor -->
+      <details class="cert-editor-wrap" style="margin: 14px 0; background:#F8FAF9; border:1px solid #DCE7E1; border-radius:12px; padding:12px 16px;">
+        <summary style="font-weight:700; color:#1C5A42; cursor:pointer; list-style:none; display:flex; align-items:center; justify-content:space-between;">
+          <span>✏️ Edit Certificate Wording &amp; Title (Optional Custom Text)</span>
+          <span style="font-size:12px; color:#555;">Click to toggle editor</span>
+        </summary>
+        <div style="margin-top: 14px; display:grid; gap:12px;">
+          <div style="display:flex; flex-wrap:wrap; gap:12px;">
+            <div class="mg-field" style="flex:1; min-width:180px;">
+              <label for="certCustomTitle">Certificate Title Word (e.g. CERTIFICATE, IJAZAH, DIPLOMA)</label>
+              <input type="text" id="certCustomTitle" placeholder="Default: CERTIFICATE" oninput="certRefresh(true)">
+            </div>
+            <div class="mg-field" style="flex:1; min-width:180px;">
+              <label for="certCustomDate">Certificate Date String</label>
+              <input type="text" id="certCustomDate" placeholder="Default: Today's date" oninput="certRefresh(true)">
+            </div>
+          </div>
+          <div class="mg-field">
+            <label for="certCustomBodyEn">English Body Wording (leave empty for automatic wording)</label>
+            <textarea id="certCustomBodyEn" rows="3" placeholder="e.g. This is to certify that [Student Name] has successfully completed..." style="width:100%; border-radius:8px; border:1px solid #ccc; padding:8px; font-family:inherit;" oninput="certRefresh(true)"></textarea>
+          </div>
+          <div class="mg-field">
+            <label for="certCustomBodyAr">Arabic Body Wording (leave empty for automatic Arabic wording)</label>
+            <textarea id="certCustomBodyAr" rows="2" dir="rtl" placeholder="e.g. نشهد أن الطالب/ة..." style="width:100%; border-radius:8px; border:1px solid #ccc; padding:8px; font-family:'Amiri',serif; font-size:15px;" oninput="certRefresh(true)"></textarea>
+          </div>
+          <div style="display:flex; justify-content:flex-end;">
+            <button type="button" class="mg-btn-light" onclick="certResetWording()" style="font-size:12px;">🔄 Reset Wording to Default</button>
+          </div>
+        </div>
+      </details>
+
       <div class="cert-stu-bar">
         <label class="cert-check-all"><input type="checkbox" id="certAll" checked onchange="certToggleAll()"> <b>All</b></label>
         <input type="text" id="certSearch" placeholder="Search student..." oninput="certRenderStudents()">

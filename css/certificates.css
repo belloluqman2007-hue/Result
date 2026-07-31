@@ -274,3 +274,48 @@
 .cert-pt .cert-rosette-ln{ display:none; }
 .cert-pt .cert-stamp{ right:52px; bottom:170px; }
 /* ===================== end pack 39 ===================== */
+
+/* ===================== Pack 47: Design Theme buttons & Imperial Theme ===================== */
+.cert-theme-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: #fff;
+  border: 1.5px solid #dcdcdc;
+  border-radius: 999px;
+  padding: 6px 14px;
+  cursor: pointer;
+  font-size: 12.5px;
+  color: #333;
+  transition: all 0.2s ease;
+}
+.cert-theme-btn:hover {
+  border-color: #1C5A42;
+  background: #F4FAF7;
+}
+.cert-theme-btn.active {
+  border-color: #1C5A42;
+  background: #EBF7F1;
+  color: #0F3D2E;
+  font-weight: 700;
+  box-shadow: 0 2px 8px rgba(28,90,66,0.15);
+}
+.theme-dot {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  display: inline-block;
+  border: 1.5px solid rgba(0,0,0,0.15);
+}
+
+/* Imperial Purple & Gold: sleek royal Islamic purple theme */
+.cert-theme-imperial {
+  --ct:#4A154B; --ct2:#D4AF37; --ctpale:#F9F4FA; --ctsoft:#E1C6E6;
+  --ctframe:#4A154B; background:#FCFAFD;
+}
+.cert-theme-imperial .cert-tri.tl2 { border-top-color:#D4AF37; }
+.cert-theme-imperial .cert-tri.br2 { border-bottom-color:#D4AF37; }
+.cert-theme-imperial .cert-motto-pill { background:#4A154B; color:#F7D87C; }
+.cert-theme-imperial .cert-word { color:#4A154B; }
+.cert-theme-imperial .cert-b { background:linear-gradient(180deg,rgba(247,242,250,.55),rgba(252,250,253,0) 70%); }
+

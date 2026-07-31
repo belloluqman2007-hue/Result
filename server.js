@@ -672,6 +672,18 @@ const addonTables = [
         spent_on DATE,
         note VARCHAR(255),
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )`,
+    // NEW (Pack 47 - School File Store & Digital Vault for documents/records).
+    `CREATE TABLE IF NOT EXISTS school_file_store (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        folder_path VARCHAR(255) NOT NULL DEFAULT '/',
+        file_name VARCHAR(255) NOT NULL,
+        original_name VARCHAR(255) NOT NULL,
+        file_size BIGINT UNSIGNED NOT NULL DEFAULT 0,
+        file_type VARCHAR(120) NOT NULL DEFAULT 'application/octet-stream',
+        file_path VARCHAR(500) NOT NULL DEFAULT '',
+        is_folder TINYINT(1) NOT NULL DEFAULT 0,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )`
 ];
 
@@ -6191,6 +6203,133 @@ app.get("/honour-roll", (req, res) => {
             );
         }
     );
+});
+
+/* =====================================================================
+   NEW (Pack 47): SCHOOL FILE STORE / DIGITAL VAULT ENDPOINTS
+   Allows teachers/admins to create folders, upload any files, preview, and download.
+===================================================================== */
+const storeDir = path.join(__dirname, "uploads", "store");
+try { fs.mkdirSync(storeDir, { recursive: true }); } catch (e) { /* exists */ }
+
+const storeStorage = multer.diskStorage({
+    destination: (req, file, cb) => cb(null, storeDir),
+    filename: (req, file, cb) => {
+        const safe = (file.originalname || "file").replace(/[^a-zA-Z0-9.\-_]/g, "_");
+        cb(null, "store_" + Date.now() + "_" + safe);
+    }
+});
+const uploadStore = multer({
+    storage: storeStorage,
+    limits: { fileSize: 50 * 1024 * 1024 } // 50MB max per file
+});
+
+app.get("/api/store/list", requireLogin, (req, res) => {
+    const folder = req.query.folder || "/";
+    connection.query(
+        "SELECT * FROM school_file_store WHERE folder_path = ? ORDER BY is_folder DESC, file_name ASC",
+        [folder],
+        (err, rows) => {
+            if (err) {
+                console.log(err);
+                return res.status(500).json({ message: "Database Error" });
+            }
+            res.json(rows || []);
+        }
+    );
+});
+
+app.post("/api/store/create-folder", requireLogin, (req, res) => {
+    const { folder_path, folder_name } = req.body;
+    if (!folder_name || !folder_name.trim()) {
+        return res.status(400).json({ message: "Folder name is required." });
+    }
+    const pathVal = folder_path || "/";
+    connection.query(
+        "INSERT INTO school_file_store (folder_path, file_name, original_name, is_folder) VALUES (?, ?, ?, 1)",
+        [pathVal, folder_name.trim(), folder_name.trim()],
+        (err, result) => {
+            if (err) {
+                console.log(err);
+                return res.status(500).json({ message: "Database Error" });
+            }
+            res.json({ message: "Folder created successfully.", id: result.insertId });
+        }
+    );
+});
+
+app.post("/api/store/upload", requireLogin, uploadStore.single("file"), (req, res) => {
+    if (!req.file) {
+        return res.status(400).json({ message: "No file uploaded." });
+    }
+    const folder = req.body.folder_path || "/";
+    connection.query(
+        "INSERT INTO school_file_store (folder_path, file_name, original_name, file_size, file_type, file_path, is_folder) VALUES (?, ?, ?, ?, ?, ?, 0)",
+        [
+            folder,
+            req.file.originalname,
+            req.file.originalname,
+            req.file.size,
+            req.file.mimetype || "application/octet-stream",
+            req.file.filename
+        ],
+        (err, result) => {
+            if (err) {
+                console.log(err);
+                return res.status(500).json({ message: "Database Error while saving file info" });
+            }
+            res.json({ message: "File uploaded successfully.", id: result.insertId });
+        }
+    );
+});
+
+app.delete("/api/store/delete/:id", requireLogin, (req, res) => {
+    const id = req.params.id;
+    connection.query("SELECT * FROM school_file_store WHERE id = ?", [id], (err, rows) => {
+        if (err || !rows || !rows.length) {
+            return res.status(404).json({ message: "Item not found." });
+        }
+        const item = rows[0];
+        connection.query("DELETE FROM school_file_store WHERE id = ?", [id], (err2) => {
+            if (err2) return res.status(500).json({ message: "Database Error" });
+            if (item.is_folder === 0 && item.file_path) {
+                const fp = path.join(storeDir, item.file_path);
+                try { if (fs.existsSync(fp)) fs.unlinkSync(fp); } catch (e) {}
+            }
+            res.json({ message: "Deleted successfully." });
+        });
+    });
+});
+
+app.get("/api/store/download/:id", requireLogin, (req, res) => {
+    const id = req.params.id;
+    connection.query("SELECT * FROM school_file_store WHERE id = ?", [id], (err, rows) => {
+        if (err || !rows || !rows.length || rows[0].is_folder === 1) {
+            return res.status(404).send("File not found.");
+        }
+        const item = rows[0];
+        const fp = path.join(storeDir, item.file_path);
+        if (!fs.existsSync(fp)) {
+            return res.status(404).send("File missing on server storage.");
+        }
+        res.download(fp, item.original_name);
+    });
+});
+
+app.get("/api/store/view/:id", requireLogin, (req, res) => {
+    const id = req.params.id;
+    connection.query("SELECT * FROM school_file_store WHERE id = ?", [id], (err, rows) => {
+        if (err || !rows || !rows.length || rows[0].is_folder === 1) {
+            return res.status(404).send("File not found.");
+        }
+        const item = rows[0];
+        const fp = path.join(storeDir, item.file_path);
+        if (!fs.existsSync(fp)) {
+            return res.status(404).send("File missing on server storage.");
+        }
+        res.setHeader("Content-Type", item.file_type || "application/octet-stream");
+        res.sendFile(fp);
+    });
 });
 
 app.get("/test", (req, res) => {
