@@ -187,6 +187,7 @@
         : "";
       var threadChip = '<span class="ch-list-chip' + (t.thread === "teacher" ? " teacher" : "") + '">' +
         (t.thread === "teacher" ? "Class Teacher" : "Office") + "</span>";
+      var delBtnHtml = '<span class="ch-del-thread-icon" title="Remove chat" onclick="event.stopPropagation(); chDeleteThread(\'' + esc(t.sid) + '\', \'' + esc(name).replace(/'/g, "\\'") + '\');">🗑️</span>';
       b.innerHTML =
         '<span class="ch-ava" style="background:' + avaColor(name) + ';">' + esc(initial(name)) + "</span>" +
         '<span class="ch-tinfo">' +
@@ -198,6 +199,7 @@
             '<span class="ch-tprev">' + ticks + esc(previewText(lastMsg)) + "</span>" +
             threadChip +
             (t.unread ? '<span class="ch-unread">' + t.unread + "</span>" : "") +
+            delBtnHtml +
           "</span>" +
         "</span>";
       b.addEventListener("click", function () { openThread(t.key); });
@@ -255,14 +257,15 @@
       var mine = m.sender_type === "staff";
       var who = mine ? "" : (m.sender_name || "Parent");
       var bodyHtml;
-      if (m.kind === "voice") { // NEW (pack 28): playable voice bubble
+      if (m.kind === "voice") {
         bodyHtml =
           '<div class="ch-audio-wrap">' +
+            '<div class="ch-audio-icon" title="Voice Recording">🎤</div>' +
             '<audio controls preload="metadata" src="/voice/' + encodeURIComponent(m.id) + '"></audio>' +
             (m.duration ? '<span class="ch-audio-dur">' + esc(fmtDur(m.duration)) + "</span>" : "") +
           "</div>";
       } else {
-        bodyHtml = esc(m.body);
+        bodyHtml = '<div class="ch-txt-body">' + esc(m.body) + '</div>';
       }
       var escBody = esc((m.body || "").replace(/'/g, "\\'"));
       html +=

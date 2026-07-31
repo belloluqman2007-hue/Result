@@ -4,6 +4,33 @@
 
 ---
 
+## Pack 52 — 2026-07-31
+
+Owner's requests:
+> "Let me be able to delete who I am chatting with in case any student transfer or something else and the chat is no more useful or something else design the voice note well and beautiful"
+
+### FEATURE & UPGRADE (Pack 52) — Chat List Contact Removal & Royal Voice Note Player
+- **Chat List Contact Removal (`js/chat.js`, `chat.html`)**:
+  - Added a **Delete Chat (`🗑️`)** icon directly onto each parent/student conversation item in the chat sidebar list (`.ch-thread`).
+  - Clicking `🗑️` on any person in the list prompts for confirmation and immediately removes all messages and the thread from your chat list. Ideal for cleaning up old chats when a student transfers or leaves.
+- **Royal Islamic Emerald Voice Note Player (`chat.html`, `js/chat.js`)**:
+  - Completely redesigned the voice note player bubble (`.ch-audio-wrap`).
+  - Features an emerald microphone badge (`🎤`), a custom glass/card container with inset shadows, and a rounded pill duration badge. Outgoing voice notes receive a warm emerald gradient while incoming notes display a crisp white card style.
+
+---
+
+## Pack 51 — 2026-07-31
+
+Owner's requests:
+> "The url inspection is still not working in live testing"
+
+### FIX (Pack 51) — Google Search Console URL Inspection Live Test Fix
+- **Public Front Door Route Fix (`server.js`)**:
+  - Root cause found: `app.get("/")` was guarded with `requireLogin` and served `teacher-dashboard.html`. When Google Search Console ran **"URL Inspection"** -> **"Live Test"**, Googlebot received an HTTP 302 redirect to `/login.html`, which caused Google to reject the indexing request (`"URL is not available to Google / Indexing request rejected"`).
+  - Updated `app.get("/")` to serve `index.html` (the official school website) directly without requiring login. Now when Google Search Console Live Test requests `/`, it receives **`200 OK`** with the SEO-optimized school website HTML and confirms that the URL is available and indexable.
+
+---
+
 ## Pack 50 — 2026-07-31
 
 Owner's requests:
