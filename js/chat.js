@@ -239,7 +239,8 @@
           '<span class="ch-thchip' + (t.thread === "teacher" ? " teacher" : "") + '">' +
             (t.thread === "teacher" ? "Class Teacher" : "Office") + "</span></span>" +
         '<span class="ch-csub">' + esc(t.sid) + (t.cls ? " · " + esc(t.cls) : "") + " · Parent</span>" +
-      "</span>";
+      "</span>" +
+      '<button type="button" class="ch-del-thread-btn" onclick="chDeleteThread(\'' + esc(t.sid) + '\', \'' + esc(name).replace(/'/g, "\\'") + '\')" title="Delete entire conversation">🗑️ Clear Chat</button>';
 
     var nearBottom = box.scrollHeight - box.scrollTop - box.clientHeight < 120;
 
@@ -263,9 +264,14 @@
       } else {
         bodyHtml = esc(m.body);
       }
+      var escBody = esc((m.body || "").replace(/'/g, "\\'"));
       html +=
-        '<div class="ch-row ' + (mine ? "mine" : "theirs") + '">' +
+        '<div class="ch-row ' + (mine ? "mine" : "theirs") + '" data-id="' + m.id + '">' +
           '<div class="ch-bub">' +
+            '<div class="ch-bubble-actions">' +
+              '<button type="button" class="ch-act-btn" onclick="chForwardMsg(' + m.id + ', \'' + escBody + '\')" title="Forward message">↪️</button>' +
+              '<button type="button" class="ch-act-btn" onclick="chDeleteMsg(' + m.id + ')" title="Delete message">🗑️</button>' +
+            '</div>' +
             (mine ? "" : '<div class="ch-who">' + esc(who) + "</div>") +
             bodyHtml +
             '<span class="ch-meta">' + esc(fmtClock(m.created_at)) + (mine ? ticksHtml(!!m.read_at) : "") + "</span>" +
@@ -548,4 +554,67 @@
       sendReply();
     }
   });
+
+  /* ----------- NEW (Pack 50): Delete, Forward, and Mobile Keyboard Fix ----------- */
+  window.chDeleteMsg = function (id) {
+    if (!confirm("Delete this message?")) return;
+    fetch("/api/messages/" + id, { method: "DELETE" })
+      .then(function (r) { return r.json(); })
+      .then(function () { loadThreads(true); })
+      .catch(function () { alert("Could not delete message."); });
+  };
+
+  window.chDeleteThread = function (sid, name) {
+    if (!confirm("Are you sure you want to delete ALL messages with " + name + " (" + sid + ")? This cannot be undone.")) return;
+    fetch("/api/messages/thread/" + encodeURIComponent(sid), { method: "DELETE" })
+      .then(function (r) { return r.json(); })
+      .then(function () {
+        activeKey = null;
+        loadThreads(false);
+      })
+      .catch(function () { alert("Could not delete conversation."); });
+  };
+
+  window.chForwardMsg = function (id, bodyText) {
+    var targetSid = prompt("Enter Student ID to forward this message to:");
+    if (!targetSid || !targetSid.trim()) return;
+    fetch("/api/messages", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        student_id: targetSid.trim(),
+        body: "FORWARDED: " + bodyText,
+        thread: "teacher"
+      })
+    })
+      .then(function (r) {
+        if (!r.ok) throw new Error("forward-failed");
+        return r.json();
+      })
+      .then(function () {
+        alert("Message forwarded to " + targetSid.trim() + " ✓");
+        loadThreads(true);
+      })
+      .catch(function () {
+        alert("Could not forward message. Make sure the Student ID is valid.");
+      });
+  };
+
+  function chFixViewport() {
+    var app = document.querySelector(".ch-app");
+    if (!app) return;
+    if (window.visualViewport) {
+      app.style.height = window.visualViewport.height + "px";
+      window.scrollTo(0, 0);
+    } else {
+      app.style.height = window.innerHeight + "px";
+    }
+  }
+  if (window.visualViewport) {
+    window.visualViewport.addEventListener("resize", chFixViewport);
+    window.visualViewport.addEventListener("scroll", chFixViewport);
+  }
+  window.addEventListener("resize", chFixViewport);
+  window.addEventListener("orientationchange", function () { setTimeout(chFixViewport, 200); });
+  document.addEventListener("DOMContentLoaded", chFixViewport);
 })();

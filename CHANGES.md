@@ -4,6 +4,29 @@
 
 ---
 
+## Pack 50 — 2026-07-31
+
+Owner's requests:
+> "The files I uploaded before is saying missing if I press it but new files are showing fix that
+> In chat I can select to delete messages or who I am chatting with or forward message
+> If my keyboard is up and backspace for it to go down on my mobile phone the keyboard space will just be there in empty which the chat suppose to come down as the keyboard come down also
+> Use nice design for the chat and very beautiful 😍 😍 😍 ❤️"
+
+### FIX & FEATURE (Pack 50) — Complete Legacy Upload Resolution, Chat Message Management & Royal Islamic UI
+- **7-Way Legacy Upload File Path Resolution (`server.js`)**:
+  - Upgraded `resolveStoreFilePath(filePath)` to inspect 7 server filesystem locations (`uploads/store/`, `uploads/`, `uploads/payment-evidence/`, `images/`, relative root paths, absolute disk paths, and subfolders). Files uploaded before the File Store upgrade now open, preview, and download reliably without saying `"File missing on server storage"`.
+- **Chat Message Deletion, Conversation Clearing & Message Forwarding (`server.js`, `js/chat.js`, `chat.html`)**:
+  - Added `DELETE /api/messages/:id` and `DELETE /api/messages/thread/:sid` backend routes.
+  - Every message bubble now features an interactive hover/tap action pill bar with **Forward (`↪️`)** and **Delete (`🗑️`)** buttons.
+  - Added a **`"🗑️ Clear Chat"`** button to the conversation top header (`#chConvoHead`) so teachers and admins can delete an entire conversation with any parent in one click.
+  - Forwarding a message prompts for a target Student ID and delivers the forwarded text instantly to that parent's portal.
+- **Mobile Software Keyboard Reflow & VisualViewport Fix (`js/chat.js`, `chat.html`)**:
+  - Implemented `chFixViewport()` with `window.visualViewport` event listeners (`resize` and `scroll`). When you close the software keyboard on mobile devices (Android Chrome or iOS Safari), `.ch-app` height instantly reflows to fill the screen—eliminating empty blank gaps at the bottom.
+- **Royal Islamic Emerald & Gold Chat UI (`chat.html`)**:
+  - Elevated the chat header and sidebar top bar with a royal **Islamic Emerald & Gold gradient** (`linear-gradient(135deg, #0F3D2E, #1C5A42, #144431)`) and styled incoming/outgoing bubbles with a modern glass/card look, giving the chat a luxury Islamic school aesthetic.
+
+---
+
 ## Pack 49 — 2026-07-31
 
 Owner's requests:

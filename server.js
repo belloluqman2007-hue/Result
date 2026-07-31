@@ -2918,6 +2918,30 @@ app.post("/api/messages/read", requireLogin, (req, res) => {
    3) GET /voice/:id - streams one voice note, only to people allowed to
       see that conversation.
    ========================================================================== */
+// NEW (Pack 50): Delete a single chat message
+app.delete("/api/messages/:id", requireLogin, (req, res) => {
+    const id = req.params.id;
+    connection.query("DELETE FROM messages WHERE id = ?", [id], (err, result) => {
+        if (err) {
+            console.log(err);
+            return res.status(500).json({ message: "Database Error" });
+        }
+        res.json({ message: "Message deleted.", count: result.affectedRows });
+    });
+});
+
+// NEW (Pack 50): Clear an entire conversation with a student/parent
+app.delete("/api/messages/thread/:sid", requireLogin, (req, res) => {
+    const sid = req.params.sid;
+    connection.query("DELETE FROM messages WHERE student_id = ? OR recipient_ref = ? OR sender_ref = ?", [sid, sid, sid], (err, result) => {
+        if (err) {
+            console.log(err);
+            return res.status(500).json({ message: "Database Error" });
+        }
+        res.json({ message: "Conversation cleared.", count: result.affectedRows });
+    });
+});
+
 app.get("/api/chat-students", requireLogin, (req, res) => {
     const q = String(req.query.q || "").trim();
     if (q.length < 2) return res.json([]);
