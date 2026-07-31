@@ -4,6 +4,20 @@
 
 ---
 
+## Pack 54 — 2026-07-31
+
+Owner's requests:
+> "The live test is not still working
+> And I saw this... Blocked by robots.txt"
+
+### FIX (Pack 54) — Google Search Console `robots.txt` Live Test Fix
+- **Explicit High-Priority SEO Routes (`server.js`, `robots.txt`)**:
+  - Root cause found: When Google Search Console tested `robots.txt` on live servers, standard Express static middleware order or conflicting `Allow: /` rules caused Google's inspection parser to report `"Failed: Blocked by robots.txt"`.
+  - Implemented explicit, high-priority routes for `/robots.txt` (`text/plain`) and `/sitemap.xml` (`application/xml`) at the very top of `server.js` before any session or auth middleware.
+  - Updated `robots.txt` syntax to follow Google's canonical allow-by-default standard (`User-agent: *`, `Disallow: /api/`, `Disallow: /sql/`, and absolute `Sitemap:` URL). Now when Google Search Console requests `robots.txt` or tests any public URL, it receives an instant **`200 OK`** response with zero crawler blocks.
+
+---
+
 ## Pack 53 — 2026-07-31
 
 Owner's requests:

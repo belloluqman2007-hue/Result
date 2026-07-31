@@ -1,9 +1,5 @@
-# NEW (pack 31 - owner: "if the school name is searched in Google it
-# should bring this website"): welcome Google to index the public website.
-# (Staff/portal pages stay behind their logins as always - Google never
-# sees private data, this file changes nothing about security.)
 User-agent: *
-Allow: /
 Disallow: /api/
+Disallow: /sql/
 
 Sitemap: https://result-1rto.onrender.com/sitemap.xml

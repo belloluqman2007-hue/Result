@@ -12,6 +12,17 @@ const connection = require("./db");
 const app = express();
 app.use(express.json());
 
+// NEW (Pack 54): Explicit high-priority SEO routes for Google crawler & Search Console
+app.get("/robots.txt", (req, res) => {
+    res.type("text/plain");
+    res.send("User-agent: *\nDisallow: /api/\nDisallow: /sql/\n\nSitemap: https://result-1rto.onrender.com/sitemap.xml\n");
+});
+
+app.get("/sitemap.xml", (req, res) => {
+    res.type("application/xml");
+    res.sendFile(path.join(__dirname, "sitemap.xml"));
+});
+
 const isProduction = process.env.NODE_ENV === "production";
 
 // Railway (and most hosting platforms) sit your app behind a proxy that
