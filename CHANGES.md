@@ -4,6 +4,28 @@
 
 ---
 
+## Pack 56 — 2026-07-31
+
+Owner's requests:
+> "I can't message teacher
+> In th search in chat let there be every student and user so I can pick without searching
+> In student score add dropdown for all students at top to just pick in case of not seeing if number or something else
+> The files I upload to file store before the changes is saying missing fix that also"
+
+### FIX & FEATURE (Pack 56) — Staff-to-Teacher Chat, Instant Chat Contact List, Score Student Dropdown & Universal Vault Resolution
+- **Instant Chat Contact List Without Typing (`server.js`, `js/chat.js`)**:
+  - Upgraded `/api/chat-students` so that even when the search query is empty (`""`), it returns up to 100 students and all staff users (`users`).
+  - When you click **"➕ New Chat"** in `chat.html`, it immediately populates a complete scrollable list of every parent/student and every teacher/staff member—allowing you to pick anyone with a single tap without typing a search query.
+- **Staff-to-Teacher Messaging (`server.js`)**:
+  - Expanded `/api/messages` POST and GET routes so that staff members (Admin or Teachers) can message other Teachers/Staff directly inside `chat.html`.
+- **Quick-Pick Student Dropdown on Score Entry (`scores.html`, `js/app.js`)**:
+  - Added a **"👥 Quick-Pick Student (Select from List)"** dropdown (`#studentSelectDropdown`) at the top of the Enter Student Score form on `scores.html`.
+  - When you select a Class, the dropdown populates with all students in that class. Selecting a student from the dropdown automatically fills their Student ID and Name, and loads their existing scores table.
+- **10-Location Multi-Candidate File Store Path Resolution (`server.js`)**:
+  - Upgraded `resolveStoreFilePath(item)` to inspect `item.file_path`, `item.file_name`, and `item.original_name` across 10 server filesystem directories (`uploads/store/`, `uploads/`, `uploads/payment-evidence/`, `images/`, `images/students/`, etc.). Files uploaded before the File Store upgrade now open, preview, and download reliably.
+
+---
+
 ## Pack 55 — 2026-07-31
 
 Owner's requests:

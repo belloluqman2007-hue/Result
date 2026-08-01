@@ -335,11 +335,41 @@
   var newResults = document.getElementById("chNewResults");
   var searchTimer = null;
 
+  function searchNewChat(q) {
+    newResults.innerHTML = '<div class="ch-newhint">Loading contacts...</div>';
+    fetch("/api/chat-students?q=" + encodeURIComponent(q || ""))
+      .then(function (r) { return r.ok ? r.json() : []; })
+      .then(function (rows) {
+        rows = Array.isArray(rows) ? rows : [];
+        if (!rows.length) {
+          newResults.innerHTML = '<div class="ch-newhint">No contact found.' +
+            (meRole !== "admin" ? "<br><small>You can only see your mapped classes and staff members.</small>" : "") + "</div>";
+          return;
+        }
+        newResults.innerHTML = "";
+        rows.forEach(function (st) {
+          var isUser = st.account_type === "user";
+          var b = document.createElement("button");
+          b.type = "button";
+          b.className = "ch-newrow";
+          b.innerHTML =
+            '<span class="ch-ava" style="width:42px; height:42px; flex-basis:42px; font-size:16px; background:' + avaColor(st.full_name) + ';">' + esc(initial(st.full_name)) + "</span>" +
+            '<span style="flex:1; min-width:0;">' +
+              "<b>" + esc(st.full_name) + "</b><br>" +
+              '<span class="sub">' + (isUser ? ("Staff Member · " + esc(st.class_name)) : (esc(st.student_id) + (st.class_name ? " · " + esc(st.class_name) : "") + " · Parent")) + "</span>" +
+            "</span>";
+          b.addEventListener("click", function () { startNewThread(st); });
+          newResults.appendChild(b);
+        });
+      })
+      .catch(function () { newResults.innerHTML = '<div class="ch-newhint">Network error - try again.</div>'; });
+  }
+
   function openNewChat() {
     newChat.classList.add("open");
     newChat.setAttribute("aria-hidden", "false");
     newSearch.value = "";
-    newResults.innerHTML = '<div class="ch-newhint">Type at least 2 letters to search for a parent.<br>Tap a student to open the chat.</div>';
+    searchNewChat("");
     setTimeout(function () { newSearch.focus(); }, 120);
   }
   function closeNewChat() {
@@ -352,37 +382,7 @@
   newSearch.addEventListener("input", function () {
     clearTimeout(searchTimer);
     searchTimer = setTimeout(function () {
-      var q = newSearch.value.trim();
-      if (q.length < 2) {
-        newResults.innerHTML = '<div class="ch-newhint">Type at least 2 letters to search for a parent.<br>Tap a student to open the chat.</div>';
-        return;
-      }
-      newResults.innerHTML = '<div class="ch-newhint">Searching...</div>';
-      fetch("/api/chat-students?q=" + encodeURIComponent(q))
-        .then(function (r) { return r.ok ? r.json() : []; })
-        .then(function (rows) {
-          rows = Array.isArray(rows) ? rows : [];
-          if (!rows.length) {
-            newResults.innerHTML = '<div class="ch-newhint">No student found for "' + esc(q) + '".' +
-              (meRole !== "admin" ? "<br><small>You can only start chats with parents of your own classes.</small>" : "") + "</div>";
-            return;
-          }
-          newResults.innerHTML = "";
-          rows.forEach(function (st) {
-            var b = document.createElement("button");
-            b.type = "button";
-            b.className = "ch-newrow";
-            b.innerHTML =
-              '<span class="ch-ava" style="width:42px; height:42px; flex-basis:42px; font-size:16px; background:' + avaColor(st.full_name) + ';">' + esc(initial(st.full_name)) + "</span>" +
-              '<span style="flex:1; min-width:0;">' +
-                "<b>" + esc(st.full_name) + "</b><br>" +
-                '<span class="sub">' + esc(st.student_id) + (st.class_name ? " · " + esc(st.class_name) : "") + "</span>" +
-              "</span>";
-            b.addEventListener("click", function () { startNewThread(st); });
-            newResults.appendChild(b);
-          });
-        })
-        .catch(function () { newResults.innerHTML = '<div class="ch-newhint">Network error - try again.</div>'; });
+      searchNewChat(newSearch.value.trim());
     }, 280);
   });
 

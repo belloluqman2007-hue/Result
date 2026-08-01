@@ -2827,6 +2827,7 @@ app.get("/api/messages", requireLogin, (req, res) => {
                 if (err) { if (err.code === "ER_NO_SUCH_TABLE") return res.json([]); return res.status(500).json({ message: "Database error" }); }
                 const mine = (rows || []).filter(m => {
                     if (m.sender_type === "staff" && m.sender_ref === me) return true; // my own replies
+                    if (m.recipient_type === "staff" && m.recipient_ref === me) return true; // messages sent to me!
                     if (m.sender_type !== "portal") return false;                      // other staff's threads
                     if (isAdmin) return true;                                          // admin sees all parent mail
                     // teacher: parent mail bound for teachers; honour class mapping,
@@ -2870,20 +2871,35 @@ app.post("/api/messages", requireLogin, (req, res) => {
     const me = req.session.username;
     const studentId = String(req.body.student_id || "").trim();
     const body = String(req.body.body || "").trim().slice(0, 2000);
-    if (!studentId || !body) return res.status(400).json({ message: "Student and message are required." });
-    // CHANGED (pack 28): the reply lands in the SAME conversation
-    // (office thread or class-teacher thread) the message came from.
+    if (!studentId || !body) return res.status(400).json({ message: "Recipient and message are required." });
     const thread = req.body.thread === "teacher" ? "teacher" : "admin";
     connection.query("SELECT full_name FROM students WHERE student_id = ? LIMIT 1", [studentId], (err, stu) => {
         if (err) return res.status(500).json({ message: "Database error" });
-        if (!stu.length) return res.status(404).json({ message: "No student with that ID - check it and try again." });
+        if (!stu.length) {
+            // Check if recipient is a teacher/admin user
+            connection.query("SELECT username AS full_name, role FROM users WHERE username = ? LIMIT 1", [studentId], (err2, uRows) => {
+                if (err2 || !uRows || !uRows.length) {
+                    return res.status(404).json({ message: "No recipient with that ID - check it and try again." });
+                }
+                const rec = uRows[0];
+                connection.query(
+                    `INSERT INTO messages (sender_type, sender_ref, sender_name, recipient_type, recipient_ref, recipient_class, body, thread)
+                     VALUES ('staff', ?, ?, 'staff', ?, '', ?, ?)`,
+                    [me, me + " (" + req.session.role + ")", studentId, body, thread],
+                    (iErr) => {
+                        if (iErr) return res.status(500).json({ message: "Database error" });
+                        res.json({ message: "Message sent to staff member." });
+                    }
+                );
+            });
+            return;
+        }
         connection.query(
             `INSERT INTO messages (sender_type, sender_ref, sender_name, recipient_type, recipient_ref, recipient_class, body, thread)
              VALUES ('staff', ?, ?, 'parent', ?, '', ?, ?)`,
             [me, me + " (" + req.session.role + ")", studentId, body, thread],
             (iErr) => {
                 if (iErr) return res.status(500).json({ message: "Database error" });
-                // NEW (pack 32): the parent's phone rings like WhatsApp
                 amsPushSend("portal", [studentId], {
                     title: "\u{1F4AC} New message from " + (thread === "teacher" ? "your class teacher" : "the school office"),
                     body: body.slice(0, 90),
@@ -2959,20 +2975,39 @@ app.delete("/api/messages/thread/:sid", requireLogin, (req, res) => {
 
 app.get("/api/chat-students", requireLogin, (req, res) => {
     const q = String(req.query.q || "").trim();
-    if (q.length < 2) return res.json([]);
     const isAdmin = req.session.role === "admin";
     staffMessageFilter(req, (fErr, myClasses) => {
-        if (!isAdmin && (!myClasses || !myClasses.length)) return res.json([]); // pack 25: no mapping = see nothing
-        let sql = "SELECT student_id, full_name, class_name, gender FROM students WHERE (full_name LIKE ? OR student_id LIKE ?)";
-        const params = ["%" + q + "%", "%" + q + "%"];
-        if (!isAdmin) {
-            sql += " AND class_name IN (" + myClasses.map(() => "?").join(",") + ")";
-            params.push.apply(params, myClasses);
+        let sql = "SELECT student_id, full_name, class_name, gender, 'student' AS account_type FROM students";
+        const params = [];
+        const where = [];
+        if (q) {
+            where.push("(full_name LIKE ? OR student_id LIKE ?)");
+            params.push("%" + q + "%", "%" + q + "%");
         }
-        sql += " ORDER BY full_name LIMIT 20";
-        connection.query(sql, params, (err, rows) => {
+        if (!isAdmin) {
+            if (!myClasses || !myClasses.length) {
+                where.push("1 = 0");
+            } else {
+                where.push("class_name IN (" + myClasses.map(() => "?").join(",") + ")");
+                params.push.apply(params, myClasses);
+            }
+        }
+        if (where.length) sql += " WHERE " + where.join(" AND ");
+        sql += " ORDER BY full_name LIMIT 100";
+
+        connection.query(sql, params, (err, students) => {
             if (err) { console.log(err); return res.status(500).json({ message: "Database error" }); }
-            res.json(rows);
+            let userSql = "SELECT username AS student_id, username AS full_name, role AS class_name, 'user' AS account_type FROM users";
+            const userParams = [];
+            if (q) {
+                userSql += " WHERE username LIKE ? OR role LIKE ?";
+                userParams.push("%" + q + "%", "%" + q + "%");
+            }
+            userSql += " ORDER BY username LIMIT 50";
+            connection.query(userSql, userParams, (uErr, users) => {
+                const combined = (students || []).concat(users || []);
+                res.json(combined);
+            });
         });
     });
 });
@@ -6449,14 +6484,36 @@ app.delete("/api/store/delete/:id", requireLogin, (req, res) => {
     });
 });
 
-function resolveStoreFilePath(filePath) {
-    if (!filePath) return null;
-    const fp1 = path.join(storeDir, path.basename(filePath));
-    if (fs.existsSync(fp1)) return fp1;
-    const fp2 = path.join(__dirname, filePath);
-    if (fs.existsSync(fp2)) return fp2;
-    const fp3 = path.join(storeDir, filePath);
-    if (fs.existsSync(fp3)) return fp3;
+function resolveStoreFilePath(item) {
+    if (!item) return null;
+    const candidates = [
+        item.file_path,
+        item.file_name,
+        item.original_name
+    ].filter(Boolean);
+
+    for (const cand of candidates) {
+        const base = path.basename(cand);
+        const paths = [
+            path.join(storeDir, base),
+            path.join(__dirname, "uploads", base),
+            path.join(__dirname, "uploads", "payment-evidence", base),
+            path.join(__dirname, "uploads", "store", base),
+            path.join(__dirname, "images", base),
+            path.join(__dirname, "images", "students", base),
+            path.join(__dirname, "images", "signatures", base),
+            path.join(__dirname, cand),
+            path.join(__dirname, "uploads", cand),
+            cand
+        ];
+        for (const p of paths) {
+            try {
+                if (fs.existsSync(p) && fs.statSync(p).isFile()) {
+                    return p;
+                }
+            } catch (e) {}
+        }
+    }
     return null;
 }
 
@@ -6467,9 +6524,9 @@ app.get("/api/store/download/:id", requireLogin, (req, res) => {
             return res.status(404).send("File not found.");
         }
         const item = rows[0];
-        const fp = resolveStoreFilePath(item.file_path);
+        const fp = resolveStoreFilePath(item);
         if (!fp) {
-            return res.status(404).send("File missing on server storage.");
+            return res.status(404).send("File missing on server storage: " + (item.file_name || item.original_name));
         }
         const cleanName = fixUtf8(item.original_name || item.file_name || "download");
         res.setHeader("Content-Disposition", `attachment; filename*=UTF-8''${encodeURIComponent(cleanName)}`);
@@ -6485,9 +6542,9 @@ app.get("/api/store/view/:id", requireLogin, (req, res) => {
             return res.status(404).send("File not found.");
         }
         const item = rows[0];
-        const fp = resolveStoreFilePath(item.file_path);
+        const fp = resolveStoreFilePath(item);
         if (!fp) {
-            return res.status(404).send("File missing on server storage.");
+            return res.status(404).send("File missing on server storage: " + (item.file_name || item.original_name));
         }
         const cleanName = fixUtf8(item.original_name || item.file_name || "view");
         res.setHeader("Content-Disposition", `inline; filename*=UTF-8''${encodeURIComponent(cleanName)}`);

@@ -533,6 +533,7 @@ function loadSubjects() {
     }
 
     const url = `/subjects?class=${encodeURIComponent(selectedClass)}`;
+    populateStudentDropdown(selectedClass);
 
     fetch(url)
         .then(response => response.json())
@@ -570,7 +571,41 @@ function loadSubjects() {
 }
 
 
+// NEW (Pack 56): Quick-pick student dropdown for score entry
+function populateStudentDropdown(className) {
+    const drop = document.getElementById("studentSelectDropdown");
+    if (!drop) return;
+    fetch("/students")
+        .then(r => r.json())
+        .then(list => {
+            const inClass = className ? (list || []).filter(s => s.class_name === className) : (list || []);
+            const label = className ? ('-- Select Student in ' + className + ' (' + inClass.length + ' found) --') : ('-- All Students (' + inClass.length + ' found) - pick class to filter --');
+            drop.innerHTML = '<option value="">' + label + '</option>';
+            inClass.sort((a, b) => String(a.full_name).localeCompare(String(b.full_name)));
+            inClass.forEach(s => {
+                const opt = document.createElement("option");
+                opt.value = s.student_id;
+                opt.textContent = s.student_id + " - " + s.full_name + (className ? "" : (" (" + s.class_name + ")"));
+                drop.appendChild(opt);
+            });
+        })
+        .catch(() => {});
+}
+
+window.pickStudentFromDropdown = function(sid) {
+    if (!sid) return;
+    const idEl = document.getElementById("studentId");
+    if (idEl) {
+        idEl.value = sid;
+        if (typeof loadStudent === "function") loadStudent();
+        if (typeof loadExistingResults === "function") {
+            setTimeout(loadExistingResults, 250);
+        }
+    }
+};
+
 document.addEventListener("DOMContentLoaded", function () {
+    populateStudentDropdown("");
 
     fetch("/dashboard-summary")
         .then(response => response.json())
