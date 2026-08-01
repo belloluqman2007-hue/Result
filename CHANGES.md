@@ -4,6 +4,24 @@
 
 ---
 
+## Pack 58 — 2026-07-31
+
+Owner's requests:
+> "Smart End-of-Term Class Promotion Wizard
+> Automatically promotes students from JSS 1 to JSS 2 (or Primary 1 to Primary 2) in bulk at the end of the school year while keeping their full result history intact
+> I think there is promotion there before ."
+
+### UPGRADE (Pack 58) — Smart End-of-Term Bilingual Class Promotion Wizard (`server.js`, `js/app.js`, `teacher-dashboard.html`)
+- **Bilingual Arabic & English Secular Class Mappings (`server.js`)**:
+  - Root cause found: The legacy `/promote-class` route used a hardcoded Arabic `switch (currentClass)` statement. If a school used English secular class names (like `JSS 1`, `Primary 1`, `SSS 1`, `Preliminary 1`), promotion failed with `"Invalid class selected."`.
+  - Upgraded `/promote-class` to support automatic promotion across **both Arabic and English class hierarchies** (`Primary 1` → `Primary 2`, `Primary 5` → `JSS 1`, `JSS 1` → `JSS 2`, `JSS 3` → `SSS 1`, `SSS 1` → `SSS 2`, `SSS 3`, `Preliminary 1` → `Preliminary 2`, alongside all standard Arabic madrasah classes).
+- **Target Next Class Override & UI Upgrades (`teacher-dashboard.html`, `js/app.js`)**:
+  - Added an optional **"Target Next Class"** dropdown to the Promote Students box on `teacher-dashboard.html`. Teachers and admins can now either let the wizard auto-promote to the standard next class level, or manually select any specific target class (including `"Graduated / Alumni"`).
+- **100% Result History Integrity Kept**:
+  - Because `results` table records are permanently tagged with their `session` and `class_name` at the time of entry, updating `students.class_name` rolls the student over to their new class for the upcoming academic session without touching a single historical result or broadsheet row.
+
+---
+
 ## Pack 57 — 2026-07-31
 
 Owner's requests:

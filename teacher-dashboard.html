@@ -480,29 +480,75 @@
              (same #adminDangerZone id, same wipeAllData() handler - app.js
              is loaded there too). The dashboard no longer carries it. -->
 
-        <!-- EXISTING: Promote Students (same select id + options + handler) -->
+        <!-- EXISTING: Promote Students (upgraded to support Arabic + English & custom target class) -->
         <div class="card-section">
           <h2>Promote Students</h2>
-          <div class="promote-box">
-            <label>Select Current Class</label>
-            <select id="currentClass">
-              <option value="الأوّل التّحضيريّ">الأوّل التّحضيريّ</option>
-              <option value="الثّاني التّحضيريّ">الثّاني التّحضيريّ</option>
-              <option value="الثّالث التّحضيريّ">الثّالث التّحضيريّ</option>
-              <option value="الأوّل الابتدائيّ">الأوّل الابتدائيّ</option>
-              <option value="الثّاني الابتدائيّ">الثّاني الابتدائيّ</option>
-              <option value="الثّالث الابتدائيّ">الثّالث الابتدائيّ</option>
-              <option value="الرّابع الابتدائيّ">الرّابع الابتدائيّ</option>
-              <option value="الأوّل الإعداديّ">الأوّل الإعداديّ</option>
-              <option value="الثّاني الإعداديّ">الثّاني الإعداديّ</option>
-              <option value="الثّالث الإعداديّ">الثّالث الإعداديّ</option>
-              <option value="الأوّل الثّانويّ">الأوّل الثّانويّ</option>
-              <option value="الثّاني الثّانويّ">الثّاني الثّانويّ</option>
-              <option value="الثّالث الثّانويّ">الثّالث الثّانويّ</option>
-            </select>
-
-            <button class="promote-btn" onclick="promoteStudents()">
-              Promote Class
+          <div class="promote-box" style="display:grid; gap:12px; max-width:480px;">
+            <div>
+              <label style="font-weight:700; font-size:13px; color:#1C5A42;">Select Current Class</label>
+              <select id="currentClass" style="width:100%; padding:10px; border-radius:8px; border:1px solid #ccc;">
+                <optgroup label="Arabic / Islamic Madrasah Classes">
+                  <option value="الأوّل التّحضيريّ">الأوّل التّحضيريّ (Preliminary 1)</option>
+                  <option value="الثّاني التّحضيريّ">الثّاني التّحضيريّ (Preliminary 2)</option>
+                  <option value="الثّالث التّحضيريّ">الثّالث التّحضيريّ (Preliminary 3)</option>
+                  <option value="الأوّل الابتدائيّ">الأوّل الابتدائيّ (Primary 1)</option>
+                  <option value="الثّاني الابتدائيّ">الثّاني الابتدائيّ (Primary 2)</option>
+                  <option value="الثّالث الابتدائيّ">الثّالث الابتدائيّ (Primary 3)</option>
+                  <option value="الرّابع الابتدائيّ">الرّابع الابتدائيّ (Primary 4)</option>
+                  <option value="الأوّل الإعداديّ">الأوّل الإعداديّ (JSS 1)</option>
+                  <option value="الثّاني الإعداديّ">الثّاني الإعداديّ (JSS 2)</option>
+                  <option value="الثّالث الإعداديّ">الثّالث الإعداديّ (JSS 3)</option>
+                  <option value="الأوّل الثّانويّ">الأوّل الثّانويّ (SSS 1)</option>
+                  <option value="الثّاني الثّانويّ">الثّاني الثّانويّ (SSS 2)</option>
+                  <option value="الثّالث الثّانويّ">الثّالث الثّانويّ (SSS 3)</option>
+                </optgroup>
+                <optgroup label="English Secular Classes">
+                  <option value="Primary 1">Primary 1</option>
+                  <option value="Primary 2">Primary 2</option>
+                  <option value="Primary 3">Primary 3</option>
+                  <option value="Primary 4">Primary 4</option>
+                  <option value="Primary 5">Primary 5</option>
+                  <option value="JSS 1">JSS 1</option>
+                  <option value="JSS 2">JSS 2</option>
+                  <option value="JSS 3">JSS 3</option>
+                  <option value="SSS 1">SSS 1</option>
+                  <option value="SSS 2">SSS 2</option>
+                  <option value="SSS 3">SSS 3</option>
+                </optgroup>
+              </select>
+            </div>
+            <div>
+              <label style="font-weight:700; font-size:13px; color:#1C5A42;">Target Next Class (Optional override)</label>
+              <select id="targetNextClass" style="width:100%; padding:10px; border-radius:8px; border:1px solid #ccc;">
+                <option value="">-- Auto-promote to next standard level --</option>
+                <option value="الأوّل التّحضيريّ">الأوّل التّحضيريّ</option>
+                <option value="الثّاني التّحضيريّ">الثّاني التّحضيريّ</option>
+                <option value="الثّالث التّحضيريّ">الثّالث التّحضيريّ</option>
+                <option value="الأوّل الابتدائيّ">الأوّل الابتدائيّ</option>
+                <option value="الثّاني الابتدائيّ">الثّاني الابتدائيّ</option>
+                <option value="الثّالث الابتدائيّ">الثّالث الابتدائيّ</option>
+                <option value="الرّابع الابتدائيّ">الرّابع الابتدائيّ</option>
+                <option value="الأوّل الإعداديّ">الأوّل الإعداديّ</option>
+                <option value="الثّاني الإعداديّ">الثّاني الإعداديّ</option>
+                <option value="الثّالث الإعداديّ">الثّالث الإعداديّ</option>
+                <option value="الأوّل الثّانويّ">الأوّل الثّانويّ</option>
+                <option value="الثّاني الثّانويّ">الثّاني الثّانويّ</option>
+                <option value="الثّالث الثّانويّ">الثّالث الثّانويّ</option>
+                <option value="Primary 2">Primary 2</option>
+                <option value="Primary 3">Primary 3</option>
+                <option value="Primary 4">Primary 4</option>
+                <option value="Primary 5">Primary 5</option>
+                <option value="JSS 1">JSS 1</option>
+                <option value="JSS 2">JSS 2</option>
+                <option value="JSS 3">JSS 3</option>
+                <option value="SSS 1">SSS 1</option>
+                <option value="SSS 2">SSS 2</option>
+                <option value="SSS 3">SSS 3</option>
+                <option value="Graduated">Graduated / Alumni</option>
+              </select>
+            </div>
+            <button class="promote-btn" onclick="promoteStudents()" style="width:100%;">
+              Promote Class 🚀
             </button>
           </div>
         </div>

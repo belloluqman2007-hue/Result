@@ -4344,61 +4344,44 @@ SELECT
 app.post("/promote-class", requireLogin, (req, res) => {
     console.log("PROMOTE ROUTE CALLED");
 
-    const { currentClass } = req.body;
+    const { currentClass, nextClass: reqNextClass } = req.body;
+    let nextClass = reqNextClass && reqNextClass.trim() ? reqNextClass.trim() : "";
 
-    let nextClass = "";
+    if (!nextClass) {
+        const promoteMap = {
+            // Arabic classes
+            "الأوّل التّحضيريّ": "الثّاني التّحضيريّ",
+            "الثّاني التّحضيريّ": "الثّالث التّحضيريّ",
+            "الثّالث التّحضيريّ": "الأوّل الابتدائيّ",
+            "الأوّل الابتدائيّ": "الثّاني الابتدائيّ",
+            "الثّاني الابتدائيّ": "الثّالث الابتدائيّ",
+            "الثّالث الابتدائيّ": "الرّابع الابتدائيّ",
+            "الرّابع الابتدائيّ": "الأوّل الإعداديّ",
+            "الأوّل الإعداديّ": "الثّاني الإعداديّ",
+            "الثّاني الإعداديّ": "الثّالث الإعداديّ",
+            "الثّالث الإعداديّ": "الأوّل الثّانويّ",
+            "الأوّل الثّانويّ": "الثّاني الثّانويّ",
+            "الثّاني الثّانويّ": "الثّالث الثّانويّ",
+            // English classes (JSS, SSS, Primary, Preliminary, Quranic)
+            "Primary 1": "Primary 2",
+            "Primary 2": "Primary 3",
+            "Primary 3": "Primary 4",
+            "Primary 4": "Primary 5",
+            "Primary 5": "JSS 1",
+            "JSS 1": "JSS 2",
+            "JSS 2": "JSS 3",
+            "JSS 3": "SSS 1",
+            "SSS 1": "SSS 2",
+            "SSS 2": "SSS 3",
+            "Preliminary 1": "Preliminary 2",
+            "Preliminary 2": "Preliminary 3",
+            "Preliminary 3": "Primary 1"
+        };
+        nextClass = promoteMap[currentClass] || "";
+    }
 
-    switch (currentClass) {
-        case "الأوّل التّحضيريّ":
-            nextClass = "الثّاني التّحضيريّ";
-            break;
-
-        case "الثّاني التّحضيريّ":
-            nextClass = "الثّالث التّحضيريّ";
-            break;
-
-        case "الثّالث التّحضيريّ":
-            nextClass = "الأوّل الابتدائيّ";
-            break;
-
-        case "الأوّل الابتدائيّ":
-            nextClass = "الثّاني الابتدائيّ";
-            break;
-
-        case "الثّاني الابتدائيّ":
-            nextClass = "الثّالث الابتدائيّ";
-            break;
-
-        case "الثّالث الابتدائيّ":
-            nextClass = "الرّابع الابتدائيّ";
-            break;
-
-        case "الرّابع الابتدائيّ":
-            nextClass = "الأوّل الإعداديّ";
-            break;
-
-        case "الأوّل الإعداديّ":
-            nextClass = "الثّاني الإعداديّ";
-            break;
-
-        case "الثّاني الإعداديّ":
-            nextClass = "الثّالث الإعداديّ";
-            break;
-
-        case "الثّالث الإعداديّ":
-            nextClass = "الأوّل الثّانويّ";
-            break;
-
-        case "الأوّل الثّانويّ":
-            nextClass = "الثّاني الثّانويّ";
-            break;
-
-        case "الثّاني الثّانويّ":
-            nextClass = "الثّالث الثّانويّ";
-            break;
-
-        default:
-            return res.status(400).send("Invalid class selected.");
+    if (!nextClass) {
+        return res.status(400).send("No target class found. Please select a valid current class or specify Target Next Class.");
     }
 
     const sql = `

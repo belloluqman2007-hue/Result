@@ -633,6 +633,8 @@ function promoteStudents() {
 
     let currentClass =
         document.getElementById("currentClass").value;
+    let nextClassEl = document.getElementById("targetNextClass");
+    let nextClass = nextClassEl ? nextClassEl.value : "";
 
     fetch("/promote-class", {
 
@@ -643,7 +645,8 @@ function promoteStudents() {
         },
 
         body: JSON.stringify({
-            currentClass: currentClass
+            currentClass: currentClass,
+            nextClass: nextClass
         })
 
     })
@@ -657,6 +660,13 @@ function promoteStudents() {
     })
 
     .catch(error => {
+
+        console.log(error);
+        alert("Error promoting class.");
+
+    });
+
+}
 
         console.log(error);
 
