@@ -4344,7 +4344,7 @@ SELECT
 app.post("/promote-class", requireLogin, (req, res) => {
     console.log("PROMOTE ROUTE CALLED");
 
-    const { currentClass, nextClass: reqNextClass } = req.body;
+    const { currentClass, nextClass: reqNextClass, mode } = req.body;
     let nextClass = reqNextClass && reqNextClass.trim() ? reqNextClass.trim() : "";
 
     if (!nextClass) {
@@ -4384,23 +4384,78 @@ app.post("/promote-class", requireLogin, (req, res) => {
         return res.status(400).send("No target class found. Please select a valid current class or specify Target Next Class.");
     }
 
-    const sql = `
-        UPDATE students
-        SET class_name = ?
-        WHERE class_name = ?
-    `;
+    if (mode === "all") {
+        const sql = `
+            UPDATE students
+            SET class_name = ?
+            WHERE class_name = ?
+        `;
+        connection.query(sql, [nextClass, currentClass], (err, result) => {
+            if (err) {
+                console.log(err);
+                return res.status(500).send("Database Error");
+            }
+            res.send(`🚀 Unconditional Promotion Complete: ${result.affectedRows} student(s) promoted from ${currentClass} to ${nextClass}.`);
+        });
+        return;
+    }
 
-    connection.query(sql, [nextClass, currentClass], (err, result) => {
+    // ⭐ Smart Merit-Based Promotion: check 3rd Term / session averages
+    connection.query(
+        "SELECT student_id, full_name FROM students WHERE class_name = ?",
+        [currentClass],
+        (err, students) => {
+            if (err || !students || !students.length) {
+                return res.send(`0 student(s) found in class ${currentClass}.`);
+            }
+            connection.query(
+                "SELECT student_id, ROUND(AVG(total), 1) AS avg_total FROM results WHERE class_name = ? GROUP BY student_id",
+                [currentClass],
+                (err2, avgs) => {
+                    const avgMap = {};
+                    (avgs || []).forEach(row => { avgMap[row.student_id] = Number(row.avg_total); });
 
-        if (err) {
-            console.log(err);
-            return res.status(500).send("Database Error");
+                    const promotedIds = [];
+                    const promotedNames = [];
+                    const repeatNames = [];
+
+                    students.forEach(st => {
+                        const score = avgMap[st.student_id];
+                        if (score === undefined || isNaN(score) || score >= 50) {
+                            promotedIds.push(st.student_id);
+                            promotedNames.push(st.full_name || st.student_id);
+                        } else {
+                            repeatNames.push(`${st.full_name || st.student_id} (${score}%)`);
+                        }
+                    });
+
+                    if (!promotedIds.length) {
+                        return res.send(`⚠️ Smart Merit-Based Summary for ${currentClass}:\n• 0 students promoted.\n• Held Back to Repeat (${repeatNames.length}): ${repeatNames.join(", ")}`);
+                    }
+
+                    const placeholders = promotedIds.map(() => "?").join(",");
+                    connection.query(
+                        `UPDATE students SET class_name = ? WHERE student_id IN (${placeholders})`,
+                        [nextClass].concat(promotedIds),
+                        (uErr, uRes) => {
+                            if (uErr) {
+                                console.log(uErr);
+                                return res.status(500).send("Database Error during promotion update");
+                            }
+                            let summary = `✅ Smart Merit-Based Promotion Summary for ${currentClass}:\n` +
+                                `• Promoted to ${nextClass}: ${promotedIds.length} student(s)\n`;
+                            if (repeatNames.length > 0) {
+                                summary += `• Held Back to Repeat ${currentClass} (<50% average): ${repeatNames.length} student(s)\n  [${repeatNames.join(", ")}]`;
+                            } else {
+                                summary += `• Repeaters (<50% average): 0 student(s) (100% promotion rate!)`;
+                            }
+                            res.send(summary);
+                        }
+                    );
+                }
+            );
         }
-
-        res.send(`${result.affectedRows} student(s) promoted from ${currentClass} to ${nextClass}.`);
-
-    });
-
+    );
 });
 
 

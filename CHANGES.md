@@ -4,6 +4,23 @@
 
 ---
 
+## Pack 59 — 2026-07-31
+
+Owner's requests:
+> "Are they promoting based on their results to next class that of student that repeat"
+
+### FEATURE & UPGRADE (Pack 59) — Smart Merit-Based Class Promotion & Repeat Wizard (`server.js`, `teacher-dashboard.html`, `js/app.js`)
+- **Merit-Based vs Unconditional Promotion Mode**:
+  - Upgraded `/promote-class` to support two operational modes selectable from `teacher-dashboard.html`:
+    1. **⭐ Smart Merit-Based Promotion (Default):** Automatically checks each student's overall session average in the `results` table. Students who scored **≥ 50% average** (or new students without recorded scores yet) are **Promoted** to the target next class. Students who scored **< 50% average** are **Held Back to Repeat** their current class for the upcoming academic session.
+    2. **🚀 Unconditional Promotion:** Promotes all students in the class regardless of recorded scores.
+- **Detailed Promotion & Repeat Summary**:
+  - Upon completing a promotion run, the wizard displays a clear summary report showing how many students were promoted to the new class and explicitly listing the names and percentages of any students held back to repeat (e.g., `• Held Back to Repeat JSS 1 (<50% average): 2 student(s) [Musa Bello (42%), Ibrahim Ali (45%)]`).
+- **100% Historical Data Preservation**:
+  - All historical exam results, broadsheets, and report cards remain permanently attached to the academic session and class in which they were recorded.
+
+---
+
 ## Pack 58 — 2026-07-31
 
 Owner's requests:

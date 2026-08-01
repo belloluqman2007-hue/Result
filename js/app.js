@@ -635,6 +635,8 @@ function promoteStudents() {
         document.getElementById("currentClass").value;
     let nextClassEl = document.getElementById("targetNextClass");
     let nextClass = nextClassEl ? nextClassEl.value : "";
+    let modeEl = document.getElementById("promoteMode");
+    let mode = modeEl ? modeEl.value : "merit";
 
     fetch("/promote-class", {
 
@@ -646,7 +648,8 @@ function promoteStudents() {
 
         body: JSON.stringify({
             currentClass: currentClass,
-            nextClass: nextClass
+            nextClass: nextClass,
+            mode: mode
         })
 
     })
