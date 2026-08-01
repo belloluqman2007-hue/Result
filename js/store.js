@@ -48,7 +48,9 @@ function storeRenderBreadcrumbs() {
 }
 
 function storeNavigate(folderPath) {
-  storeCurrentFolder = folderPath || "/";
+  var p = folderPath || "/";
+  if (p !== "/" && p.endsWith("/")) p = p.slice(0, -1);
+  storeCurrentFolder = p;
   storeLoad();
 }
 

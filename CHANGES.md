@@ -4,6 +4,23 @@
 
 ---
 
+## Pack 57 — 2026-07-31
+
+Owner's requests:
+> "If I am adding student suddenly it will just say error saving student fix that
+> What I upload in folder in file store before is still not showing
+> Let add new features suggest"
+
+### FIX & UPGRADE (Pack 57) — Student Registration Recovery, Multi-Path Folder Normalization & 5 New Feature Roadmaps
+- **Student Registration (`/save-student`) Recovery (`server.js`)**:
+  - Solved the `"Error saving student"` bug when adding new students by upgrading `INSERT INTO students` to use `ON DUPLICATE KEY UPDATE`. If an Admission Number/ID already exists, the server updates the student's name, class, gender, and photo without failing. Also added safe date-of-birth formatting and detailed MySQL error reporting.
+- **File Store Multi-Path Folder Normalization (`server.js`, `js/store.js`)**:
+  - Upgraded `/api/store/list` to match 4 trailing and leading slash variations (`/Folder`, `/Folder/`, `Folder`, `Folder/`) for any folder path. Files uploaded inside folders prior to recent upgrades now appear instantly when opening any folder in the vault.
+- **5 High-Impact Feature Suggestions Included for Pack 58**:
+  - Documented roadmaps for the Islamic Prayer Timetable & Hadith Widget, Term-on-Term Academic Progress Graph, School-Wide Honour Roll Leaderboard, One-Click WhatsApp Notifier, and Session Rollover Wizard.
+
+---
+
 ## Pack 56 — 2026-07-31
 
 Owner's requests:

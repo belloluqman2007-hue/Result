@@ -3981,22 +3981,16 @@ SELECT
             date_of_birth
         } = req.body;
 
-        // FIX (pack 39 - owner: "if i add student like ten to the website it
-        // will say error"): a BLANK Date of Birth went in as '' and MySQL
-        // strict mode refuses '' for a DATE column, so those saves always
-        // failed with "Error saving student". Blank now becomes NULL - the
-        // exact same treatment the bulk uploader, the admission pipeline and
-        // the profile editor already use. Real dates pass through unchanged.
-        const dobValue = (date_of_birth || "").trim() || null;
+        let dobValue = (date_of_birth || "").trim();
+        if (dobValue && !/^\d{4}-\d{2}-\d{2}$/.test(dobValue)) {
+            dobValue = null;
+        }
+        if (!dobValue) dobValue = null;
 
         const photoPath = req.file
             ? `images/students/${req.file.filename}`
             : null;
 
-        // NEW (student profile fields): the redesigned Add Student form can
-        // optionally send parent_name / parent_phone / address. When they
-        // are present AND the columns exist, we store them too; otherwise
-        // the ORIGINAL insert below runs unchanged (backward compatible).
         const parentName  = (req.body.parent_name  || "").trim();
         const parentPhone = (req.body.parent_phone || "").trim();
         const address     = (req.body.address      || "").trim();
@@ -4007,19 +4001,26 @@ SELECT
                 `INSERT INTO students
                  (student_id, full_name, gender, class_name, date_of_birth, photo_path,
                   parent_name, parent_phone, address)
-                 VALUES (?,?,?,?,?,?,?,?,?)`,
-                [student_id, full_name, gender, class_name, dobValue, photoPath, // FIX (pack 39): dobValue
+                 VALUES (?,?,?,?,?,?,?,?,?)
+                 ON DUPLICATE KEY UPDATE
+                   full_name = VALUES(full_name),
+                   gender = VALUES(gender),
+                   class_name = VALUES(class_name),
+                   date_of_birth = VALUES(date_of_birth),
+                   photo_path = COALESCE(VALUES(photo_path), photo_path),
+                   parent_name = COALESCE(VALUES(parent_name), parent_name),
+                   parent_phone = COALESCE(VALUES(parent_phone), parent_phone),
+                   address = COALESCE(VALUES(address), address)`,
+                [student_id, full_name, gender, class_name, dobValue, photoPath,
                  parentName || null, parentPhone || null, address || null],
                 (err) => {
                     if (err) {
-                        // Columns unexpectedly missing - fall back to the original insert.
                         if (err.code === "ER_BAD_FIELD_ERROR") {
                             return insertStudentOriginal();
                         }
                         console.log(err);
-                        return res.status(500).send("Error saving student");
+                        return res.status(500).send("Database Error: " + (err.sqlMessage || err.message || "Could not save student"));
                     }
-                    // FIX (pack 20): database copy of the photo (survives disk wipes)
                     if (photoPath) backupStudentPhoto(student_id, req.file && req.file.path);
                     res.send("Student saved successfully");
                 }
@@ -4029,12 +4030,17 @@ SELECT
 
         insertStudentOriginal();
 
-        // ORIGINAL insert - untouched behaviour for all existing clients.
         function insertStudentOriginal() {
             const sql =`
             INSERT INTO students
             (student_id, full_name, gender, class_name, date_of_birth, photo_path)
             VALUES (?,?,?,?,?,?)
+            ON DUPLICATE KEY UPDATE
+              full_name = VALUES(full_name),
+              gender = VALUES(gender),
+              class_name = VALUES(class_name),
+              date_of_birth = VALUES(date_of_birth),
+              photo_path = COALESCE(VALUES(photo_path), photo_path)
             `;
 
             connection.query(
@@ -4044,15 +4050,14 @@ SELECT
                     full_name,
                     gender,
                     class_name,
-                    dobValue, // FIX (pack 39): blank date of birth -> NULL (strict-mode save error)
+                    dobValue,
                     photoPath
                 ],
                 (err, result) => {
                     if(err) {
                         console.log(err);
-                        res.status(500).send("Error saving student");
+                        res.status(500).send("Database Error: " + (err.sqlMessage || err.message || "Could not save student"));
                     } else {
-                        // FIX (pack 20): database copy of the photo (survives disk wipes)
                         if (photoPath) backupStudentPhoto(student_id, req.file && req.file.path);
                         res.send("Student saved successfully");
                     }
@@ -6398,11 +6403,18 @@ const uploadStore = multer({
 });
 
 app.get("/api/store/list", requireLogin, (req, res) => {
-    const folder = req.query.folder || "/";
+    let folder = (req.query.folder || "/").trim();
+    let p1 = folder;
+    let p2 = folder.endsWith("/") && folder !== "/" ? folder.slice(0, -1) : (folder === "/" ? "/" : folder + "/");
+    let p3 = folder.replace(/^\//, "");
+    let p4 = p3.endsWith("/") && p3 !== "" ? p3.slice(0, -1) : p3 + "/";
+    if (!p3) p3 = "/";
+    if (!p4) p4 = "/";
+
     syncExamsToVault(() => {
         connection.query(
-            "SELECT * FROM school_file_store WHERE folder_path = ? ORDER BY is_folder DESC, file_name ASC",
-            [folder],
+            "SELECT * FROM school_file_store WHERE (folder_path = ? OR folder_path = ? OR folder_path = ? OR folder_path = ?) ORDER BY is_folder DESC, file_name ASC",
+            [p1, p2, p3, p4],
             (err, rows) => {
                 if (err) {
                     console.log(err);
