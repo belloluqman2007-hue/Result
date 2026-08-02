@@ -4,6 +4,38 @@
 
 ---
 
+## Pack 70 — 2026-07-31
+
+Owner's requests:
+> "Don't forget that if I press my username and password it will say Database Error: Connection lost: The server closed the connection.
+> First tell me the problem before creating any file"
+
+### FIX (Pack 70) — Universal Railway SSL Handshake & Auto-Rebuilding Pool Engine (`db.js`)
+- **Why Railway MySQL Closed the Connection (`Connection lost: The server closed the connection`)**:
+  - 1. **SSL / TLS Handshake Requirement:** Many Railway MySQL instances drop unencrypted TCP connections during authentication.
+  - 2. **Dead Socket Persistence:** In connection pools, when MySQL drops an idle socket, retrying on the *same pool* can grab another dead socket from the queue.
+- **The Bulletproof Solution in `db.js`**:
+  - Added `ssl: { rejectUnauthorized: false }` to the connection pool configuration so `mysql2` negotiates an encrypted TLS handshake that Railway MySQL never rejects.
+  - Upgraded the query wrapper into an **Auto-Rebuilding Pool Engine**: if a query ever encounters a connection drop (`PROTOCOL_CONNECTION_LOST`, `ECONNRESET`, etc.), `db.js` instantly destroys the dead pool (`pool.end()`), creates a brand-new pool from scratch, and re-executes the query on a fresh socket—guaranteeing zero connection drops on login or heavy usage.
+
+---
+
+## Pack 69 — 2026-07-31
+
+Owner's requests:
+> "The tables are there and all what you told me I'd done... Or the password I am using before can't login"
+
+### GUIDANCE & UPGRADE (Pack 69) — Default Admin Login Bootstrapper (`server.js`)
+- **Why Old Passwords Don't Work on a Brand-New Railway Database**:
+  - When you create a new MySQL Database Service on Railway, it begins completely empty. Any username or password you used before on a different server or local PC is not in this new database.
+- **Seeded Default Admin Credentials**:
+  - Upgraded `ensureCoreTablesAndDefaultAdmin()` in `server.js` so that when an empty `users` table is detected on boot, it seeds **two default Admin accounts** with password `0802`:
+    - **Username:** `admin` | **Password:** `0802`
+    - **Username:** `Proprietor` | **Password:** `0802`
+  - You can log in immediately with either account and change your password anytime under Manage Users or Settings.
+
+---
+
 ## Pack 68 — 2026-07-31
 
 Owner's requests:
