@@ -39,7 +39,7 @@
 </head>
 <!-- Same onload wiring the dashboard used for this module: fills the
      Class dropdown, refreshes subjects, verifies login. -->
-<body onload="loadClassesIntoSelects(); loadSubjects(); checkAuth();">
+<body onload="loadClassesIntoSelects(); loadSubjects(); checkAuth(); if(typeof populateStudentDropdown==='function') populateStudentDropdown('');">
   <header class="sc-top">
     <img src="images/LOGO.JPG" alt="Logo">
     <div><b>&#128221; Student Scores</b><small>Enter &amp; manage scores - moved from the dashboard</small></div>

@@ -612,6 +612,19 @@ window.pickStudentFromDropdown = function(sid) {
     }
 };
 
+function onDOMReady(fn) {
+    if (document.readyState === "complete" || document.readyState === "interactive") {
+        setTimeout(fn, 10);
+    } else {
+        document.addEventListener("DOMContentLoaded", fn);
+    }
+}
+
+onDOMReady(function() {
+    populateStudentDropdown("");
+});
+setTimeout(function() { populateStudentDropdown(""); }, 50);
+
 document.addEventListener("DOMContentLoaded", function () {
     populateStudentDropdown("");
 
@@ -674,12 +687,6 @@ function promoteStudents() {
 
         console.log(error);
         alert("Error promoting class.");
-
-    });
-
-}
-
-        console.log(error);
 
     });
 

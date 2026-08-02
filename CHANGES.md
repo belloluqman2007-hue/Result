@@ -4,6 +4,50 @@
 
 ---
 
+## Pack 62 — 2026-07-31
+
+Owner's requests:
+> "I can't message teacher
+> In th search in chat let there be every student and user so I can pick without searching
+> In student score add dropdown for all students at top to just pick in case of not seeing if number or something else
+> The files I upload to file store before the changes is saying missing fix that also
+> I mean in student score"
+
+### FIX & UPGRADE (Pack 62) — Full Staff-to-Teacher Chat, Instant Contact Picker, Score Dropdown Guarantee & Universal Vault Resolution
+- **Instant Chat Contact Directory Without Typing (`server.js`, `js/chat.js`)**:
+  - Upgraded `/api/chat-students` to return a combined list of up to 100 students/parents and all staff accounts (`users`) even when the search box is empty (`""`).
+  - When you click **"➕ New Chat"** in `chat.html`, it immediately populates a complete scrollable list of every parent/student and every teacher/staff member—allowing you to pick anyone with a single click without typing a search query.
+- **Staff-to-Teacher Messaging (`server.js`)**:
+  - Expanded `/api/messages` POST and GET routes so that staff members (Admin or Teachers) can chat directly with other Teachers/Staff inside `chat.html`. Both sender and recipient see the staff conversation clearly in their sidebar list.
+- **Fail-Proof Quick-Pick Student Dropdown on Enter Scores (`scores.html`, `js/app.js`)**:
+  - Solved the `"Loading students list..."` / dropdown empty bug on `scores.html`.
+  - Added `onDOMReady(fn)` and wired `populateStudentDropdown("")` into `<body onload="...">` on `scores.html` so it executes 100% of the time whether `DOMContentLoaded` fired earlier or later.
+  - When you open Enter Scores (`scores.html`), the dropdown populates immediately with all school students. Selecting a Class filters the dropdown to that class. Choosing a student automatically fills their Student ID and Name, and loads their existing scores table.
+- **10-Location Multi-Candidate File Store Path Resolution (`server.js`)**:
+  - Upgraded `resolveStoreFilePath(item)` to inspect `item.file_path`, `item.file_name`, and `item.original_name` across 10 server filesystem directories (`uploads/store/`, `uploads/`, `uploads/payment-evidence/`, `images/`, `images/students/`, relative root paths, and absolute disk paths). Files uploaded before the File Store upgrade now open, preview, and download reliably without saying `"File missing on server storage"`.
+
+---
+
+## Pack 61 — 2026-07-31
+
+Owner's requests:
+> "I can't message teacher
+> In th search in chat let there be every student and user so I can pick without searching
+> In student score add dropdown for all students at top to just pick in case of not seeing if number or something else
+> The files I upload to file store before the changes is saying missing fix that also"
+
+### FIX & FEATURE (Pack 61) — Staff-to-Teacher Messaging, Complete Instant Chat Directory, DOM-Ready Student Dropdown & Universal Vault Resolution
+- **Instant Chat Directory & Staff-to-Teacher Messaging (`server.js`, `js/chat.js`)**:
+  - Upgraded `/api/chat-students` to return a combined list of up to 100 students/parents and all staff accounts (`users`) even when the search box is empty (`""`).
+  - Upgraded `/api/messages` POST and GET routes along with `groupThreads(...)` in `js/chat.js` so staff members (Admin and Teachers) can send messages directly to other Teachers/Staff inside `chat.html`. Both sender and recipient see the staff conversation clearly in their sidebar list.
+- **Fail-Proof DOM-Ready Quick-Pick Student Dropdown (`scores.html`, `js/app.js`, `js/subject.js`)**:
+  - Solved the `"Loading students list..."` / dropdown empty bug on `scores.html`. Integrated `onDOMReady(fn)` into `js/app.js` and wired `populateStudentDropdown` directly into `loadClassesIntoSelects()` in `js/subject.js`.
+  - Whether `scores.html` is freshly opened, a class is selected, or a student is loaded, the dropdown populates immediately with all school students or class-filtered students.
+- **Universal 10-Location File Vault Path Resolution (`server.js`)**:
+  - Upgraded `resolveStoreFilePath(item)` to inspect `item.file_path`, `item.file_name`, and `item.original_name` across 10 server filesystem locations (`uploads/store/`, `uploads/`, `uploads/payment-evidence/`, `images/`, relative root paths, and absolute disk paths). Files uploaded before the File Store upgrade now open, preview, and download reliably.
+
+---
+
 ## Pack 60 — 2026-07-31
 
 Owner's requests:

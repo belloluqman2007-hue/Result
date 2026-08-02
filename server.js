@@ -1599,36 +1599,14 @@ app.get("/recent-activity", requireLogin, async (req, res) => {
 // (Named /students to complement - not replace - the existing
 //  single-student route /student/:studentId, which is untouched.)
 app.get("/students", requireLogin, (req, res) => {
-    // NEW (student profile fields): when the 3 profile columns exist,
-    // include them so the profile viewer / edit form is complete.
-    // If they don't (older DB), fall back to the ORIGINAL query -
-    // the response shape stays backward compatible either way.
-    const baseCols = "student_id, full_name, gender, class_name, date_of_birth, photo_path";
-    const cols = studentProfileColsReady
-        ? baseCols + ", parent_name, parent_phone, address"
-        : baseCols;
-
     connection.query(
-        `SELECT ${cols} FROM students ORDER BY class_name, full_name`,
+        "SELECT * FROM students ORDER BY class_name, full_name",
         (err, rows) => {
             if (err) {
-                // Safety net: columns vanished/flag wrong - retry with the original list.
-                if (err.code === "ER_BAD_FIELD_ERROR" && cols !== baseCols) {
-                    return connection.query(
-                        `SELECT ${baseCols} FROM students ORDER BY class_name, full_name`,
-                        (err2, rows2) => {
-                            if (err2) {
-                                console.log(err2);
-                                return res.status(500).send("Database Error");
-                            }
-                            res.json(rows2);
-                        }
-                    );
-                }
                 console.log(err);
                 return res.status(500).send("Database Error");
             }
-            res.json(rows);
+            res.json(rows || []);
         }
     );
 });
@@ -2310,17 +2288,17 @@ app.get("/student-position/:studentId", portalOwnerGate, (req, res) => { // CHAN
 
 app.get("/student/:studentId", portalOwnerGate, (req, res) => { // CHANGED (pack 13): portal/anon users - owner only; staff unchanged
 
-    const studentId = req.params.studentId;
+    const studentId = String(req.params.studentId || "").trim();
 
-    const sql = "SELECT * FROM students WHERE student_id = ?";
+    const sql = "SELECT * FROM students WHERE TRIM(student_id) = ? OR LOWER(TRIM(student_id)) = LOWER(?) LIMIT 1";
 
-    connection.query(sql, [studentId], (err, results) => {
+    connection.query(sql, [studentId, studentId], (err, results) => {
 
         if (err) {
             console.log(err);
             res.status(500).send("Database Error");
         } else {
-            res.json(results);
+            res.json(results || []);
         }
 
     });
