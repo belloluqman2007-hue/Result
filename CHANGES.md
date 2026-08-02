@@ -4,6 +4,20 @@
 
 ---
 
+## Pack 65 — 2026-07-31
+
+Owner's requests:
+> "I used railway now but I am seeing database error if I try to log in"
+
+### FIX (Pack 65) — Railway Universal Database Connection String & Variable Sharing (`db.js`)
+- **Universal Connection String Support (`db.js`)**:
+  - Why login said `"Database error"` on Railway: When deploying to Railway, `db.js` only inspected individual environment variables (`MYSQLHOST`, `MYSQLPORT`, etc.). If a user pasted Railway's full connection URL string (`MYSQL_URL`, `DATABASE_URL`, or `MYSQL_PUBLIC_URL`) into their environment variables, `db.js` ignored it and attempted to connect to `localhost`, causing database connection failures during login.
+  - Upgraded `db.js` to inspect `process.env.MYSQL_URL`, `process.env.DATABASE_URL`, and `process.env.MYSQL_PUBLIC_URL` first. If any connection URL is present, `mysql.createPool(...)` connects directly with that URL; otherwise, it falls back to Railway's individual `MYSQLHOST`/`MYSQLUSER`/`MYSQLPASSWORD` variables.
+- **Railway Variable Reference Guide**:
+  - Documented the exact 3-step process in Railway to link MySQL environment variables to the Web Service (`Variables tab -> New Variable -> Add Reference -> Select MySQL Service`).
+
+---
+
 ## Pack 64 — 2026-07-31
 
 Owner's requests:
