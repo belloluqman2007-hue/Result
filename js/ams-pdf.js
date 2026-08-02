@@ -169,32 +169,59 @@
     ]);
 
     d.setDrawColor(15, 61, 46);
-    d.setLineWidth(1);
-    d.rect(M, y, W - 2 * M, 140);
-    var ry = y + 20;
-    function label(val, x) { d.setFont("helvetica", "normal"); d.setFontSize(7.5); d.setTextColor(120, 120, 120); d.text(val, x, ry - 4); }
-    function value(val, x) { d.setFont("helvetica", "bold"); d.setFontSize(10.5); d.setTextColor(0, 0, 0); amsText(d, val, x, ry + 4); }
+    d.setLineWidth(1.5);
+    d.rect(M, y, W - 2 * M, 240);
+    var ry = y + 25;
 
-    label("RECEIVED FROM", M + 12); value(o.studentName, M + 12);
-    label("STUDENT ID", M + 270); value(o.studentId, M + 270); ry += 26;
-    label("CLASS", M + 12); value(o.className, M + 12); ry += 26;
-    label("FEE TYPE", M + 12); value(o.feeType || "School Fee", M + 12);
-    label("TERM", M + 270); value(o.term, M + 270);
-    label("SESSION", M + 390); value(o.session, M + 390); ry += 26;
-    label("AMOUNT (NAIRA)", M + 12);
-    d.setFont("helvetica", "bold"); d.setFontSize(15); d.setTextColor(15, 61, 46);
-    d.text(nairaText(o.amount), M + 12, ry + 4);
-    label("PAYMENT METHOD", M + 270); value(o.method, M + 270); ry += 26;
-    label("RECEIVED BY", M + 12); value(o.receivedBy, M + 12);
-    label("NOTE", M + 270); value(o.note || "-", M + 270);
+    function drawBox(lbl, val, x, topY, width) {
+      d.setFont("helvetica", "normal");
+      d.setFontSize(8);
+      d.setTextColor(100, 100, 100);
+      d.text(lbl, x, topY);
+      d.setFont("helvetica", "bold");
+      d.setFontSize(11);
+      d.setTextColor(10, 30, 20);
+      amsText(d, val || "-", x, topY + 14);
+    }
 
-    y += 162;
+    drawBox("RECEIVED FROM", o.studentName, M + 20, ry, 240);
+    drawBox("STUDENT ID", o.studentId, M + 280, ry, 200);
+    ry += 45;
+
+    drawBox("CLASS", o.className, M + 20, ry, 240);
+    drawBox("FEE TYPE", o.feeType || "School Fee", M + 280, ry, 200);
+    ry += 45;
+
+    drawBox("TERM / SESSION", o.term + " (" + o.session + ")", M + 20, ry, 240);
+    drawBox("PAYMENT METHOD", o.method || "Cash / Transfer", M + 280, ry, 200);
+    ry += 45;
+
+    drawBox("RECEIVED BY", o.receivedBy || "Bursar", M + 20, ry, 240);
+    drawBox("NOTE", o.note || "-", M + 280, ry, 200);
+    ry += 45;
+
+    d.setFillColor(235, 247, 241);
+    d.rect(M + 15, ry, W - 2 * M - 30, 32, "F");
+    d.setFont("helvetica", "bold");
+    d.setFontSize(14);
+    d.setTextColor(15, 61, 46);
+    d.text("AMOUNT PAID:   " + nairaText(o.amount), M + 30, ry + 21);
+
+    y += 275;
     d.setFont("helvetica", "italic");
     d.setFontSize(9);
-    d.setTextColor(90, 90, 90);
-    d.text("Thank you for your payment. Please keep this receipt as proof of payment.", W / 2, y, { align: "center" });
+    d.setTextColor(80, 80, 80);
+    d.text("Thank you for your payment. This receipt remains valid proof of payment for this academic session.", W / 2, y, { align: "center" });
 
-    footer(d, y + 40);
+    y += 50;
+    d.setFont("helvetica", "normal");
+    d.setFontSize(9);
+    d.text("__________________________", M + 40, y);
+    d.text("__________________________", W - M - 180, y);
+    d.setFont("helvetica", "bold");
+    d.text("THE BURSAR / ACCOUNTANT", M + 45, y + 14);
+    d.text("THE PRINCIPAL", W - M - 145, y + 14);
+
     return d;
   };
 

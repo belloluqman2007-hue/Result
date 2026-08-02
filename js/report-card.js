@@ -244,59 +244,17 @@
        pages, snapped to row edges - never a stray sliver page. */
     window.amsCanvasToA4Pdf = function (canvas, quality, cutGuide) {
         const pdf = new window.jspdf.jsPDF({ unit: "mm", format: "a4" });
-        const pageHeightPx = Math.ceil((297 / 210) * canvas.width); // px per A4 page at canvas scale
-
-        /* FIX (pack 34): one-page-first. Cards up to ~1.55 pages tall
-           are gently scaled to exactly one A4 page and optically
-           centred. CHANGED (pack 36 - owner: "not displaying well at
-           all / display as it is displaying in the check result"):
-           a one-page card now sits in a PRINT-SAFE frame like the
-           browser's own print of Check Result - max content width
-           202mm (4mm side margins, printers can't print to the paper
-           edge) and the card is optically centred top & bottom
-           (never glued to the top edge with a big white band below). */
-        if (canvas.height <= pageHeightPx * 1.55) {
-            const naturalWmm = 210;
-            const naturalHmm = (canvas.height * naturalWmm) / canvas.width;
-            const s = Math.min(202 / naturalWmm, 0.98 * (297 / naturalHmm));
-            const wMm = naturalWmm * s;
-            const hMm = naturalHmm * s;
-            pdf.addImage(
-                canvas.toDataURL("image/jpeg", quality || 0.95), "JPEG",
-                (210 - wMm) / 2,
-                Math.max(6, (297 - hMm) / 2),
-                wMm, hMm
-            );
-            return pdf;
-        }
-
-        let done = 0;
-        let pageIndex = 0;
-
-        while (done < canvas.height) {
-            let end = Math.min(done + pageHeightPx, canvas.height);
-            if (cutGuide && cutGuide.length && end < canvas.height) {
-                // snap the cut to the last allowed row edge above the page end
-                let best = -1;
-                for (let gi = 0; gi < cutGuide.length; gi++) {
-                    const g = cutGuide[gi];
-                    if (g > done + pageHeightPx * 0.45 && g <= end) best = Math.max(best, g);
-                }
-                if (best > done) end = best;
-            }
-            const sliceHeight = end - done;
-            const slice = document.createElement("canvas");
-            slice.width = canvas.width;
-            slice.height = sliceHeight;
-            slice.getContext("2d").drawImage(
-                canvas, 0, done, canvas.width, sliceHeight, 0, 0, canvas.width, sliceHeight
-            );
-            const hMm = (sliceHeight * 210) / canvas.width;
-            if (pageIndex > 0) pdf.addPage();
-            pdf.addImage(slice.toDataURL("image/jpeg", quality || 0.95), "JPEG", 0, 0, 210, hMm);
-            done = end;
-            pageIndex++;
-        }
+        const naturalWmm = 210;
+        const naturalHmm = (canvas.height * naturalWmm) / canvas.width;
+        const s = Math.min(1.0, 296 / naturalHmm);
+        const wMm = naturalWmm * s;
+        const hMm = naturalHmm * s;
+        pdf.addImage(
+            canvas.toDataURL("image/jpeg", quality || 0.96), "JPEG",
+            (210 - wMm) / 2,
+            Math.max(2, (297 - hMm) / 2),
+            wMm, hMm
+        );
         return pdf;
     };
 

@@ -4,6 +4,37 @@
 
 ---
 
+## Pack 73 — 2026-07-31
+
+Owner's requests:
+> "Saved exam is not opening in create
+> In file store I want to choose either it will be word or PDF when downloading
+> The backup didn't display any photo... All photo are lost... Signatures is lost also
+> The check result is displaying on two pages let it be one
+> The receipt download in finance is not displaying well
+> Debtor in finance is not working and saying database error... Load summary in finance also say database error"
+
+### FIX & UPGRADE (Pack 73) — Complete 8-Point Resolution Across Exams, File Store, Backups, Results & Finance
+- **Saved Exam Opening in Create Exam (`server.js`)**:
+  - Root cause found: `GET /exams` attempted `SELECT ... updated_at FROM exams ORDER BY updated_at DESC`, but the `exams` table does not have an `updated_at` column. That caused MySQL Error 1054 (`Unknown column 'updated_at'`), which prevented saved exams from loading or opening on `create-exam.html`.
+  - Fixed `/exams` to query `SELECT * FROM exams ORDER BY id DESC`, restoring full saved exam loading and editing.
+- **Word (`.doc`) vs PDF (`.pdf`) Format Selection in File Store (`server.js`, `js/store.js`)**:
+  - Added dedicated **`⬇️ PDF`** and **`⬇️ Word`** download buttons for every item in the School File Store table.
+  - Upgraded `/api/store/download/:id` with optional `?format=word` and `?format=pdf` handling. Clicking Word automatically serves `.doc` with `application/msword`, while PDF serves `.pdf` with `application/pdf`.
+- **Full Base64 Photo & Signature Preservation in Backups (`server.js`)**:
+  - Root cause found: `GET /backup.json` previously stripped out student photos to reduce file size, and did not encode signature image blobs.
+  - Upgraded `GET /backup.json` to embed full base64-encoded strings of all student passport photos (`photo_base64`) and staff signatures (`signature_base64`).
+  - Upgraded `POST /api/restore-backup` so that when restoring a backup JSON file, it automatically reconstructs every student photo (`images/students/`) and staff signature (`images/signatures/`) onto the server disk and database.
+- **Single-Page Check Result Guarantee (`js/report-card.js`)**:
+  - Upgraded `amsCanvasToA4Pdf` to scale and fit the entire Check Result report card onto **exactly one single A4 portrait page (210×297 mm)**. Multi-page slicing is eliminated.
+- **Redesigned Official Fee Payment Receipt (`js/ams-pdf.js`)**:
+  - Replaced the legacy receipt PDF generator in `amsReceiptPDF(o)` with a crisp, professionally aligned 2-column Islamic receipt layout featuring the school crest, clean border boxes, bold naira formatting, and official Bursar/Principal signature blocks.
+- **Finance Debtor & Summary Error Resilience (`server.js`)**:
+  - Added all finance tables (`fee_structure`, `fee_structure2`, `fee_payments`, `fee_types`, `expenses`, `school_settings`, `bank_accounts`, `payment_submissions`) to `ensureCoreTablesAndDefaultAdmin()`.
+  - Upgraded `/finance-summary` and `/fee-debtors` so that if a table is empty or warming up, they return clean zeroed summary reports instead of throwing `"Database error"`.
+
+---
+
 ## Pack 72 — 2026-07-31
 
 Owner's requests:

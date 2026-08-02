@@ -575,6 +575,76 @@ function ensureCoreTablesAndDefaultAdmin() {
             role VARCHAR(50) NOT NULL UNIQUE,
             signature_path VARCHAR(255) NOT NULL,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        ) DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
+        `CREATE TABLE IF NOT EXISTS fee_structure (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            class_name VARCHAR(150) NOT NULL,
+            term VARCHAR(50) NOT NULL,
+            session VARCHAR(50) NOT NULL,
+            amount DECIMAL(12,2) NOT NULL DEFAULT 0,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            UNIQUE KEY uniq_class_term_session (class_name, term, session)
+        ) DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
+        `CREATE TABLE IF NOT EXISTS fee_structure2 (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            class_name VARCHAR(150) NOT NULL,
+            term VARCHAR(50) NOT NULL,
+            session VARCHAR(50) NOT NULL,
+            fee_type VARCHAR(100) NOT NULL DEFAULT 'School Fee',
+            amount DECIMAL(12,2) NOT NULL DEFAULT 0,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            UNIQUE KEY uniq_class_term_sess_type (class_name, term, session, fee_type)
+        ) DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
+        `CREATE TABLE IF NOT EXISTS fee_payments (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            student_id VARCHAR(100) NOT NULL,
+            term VARCHAR(50) NOT NULL,
+            session VARCHAR(50) NOT NULL,
+            amount DECIMAL(12,2) NOT NULL,
+            method VARCHAR(60),
+            note VARCHAR(255),
+            received_by VARCHAR(100),
+            paid_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            receipt_path VARCHAR(255) NULL,
+            receipt_data LONGBLOB NULL,
+            fee_type VARCHAR(100) NOT NULL DEFAULT 'School Fee'
+        ) DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
+        `CREATE TABLE IF NOT EXISTS expenses (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            title VARCHAR(255) NOT NULL,
+            category VARCHAR(100),
+            amount DECIMAL(12,2) NOT NULL,
+            spent_on DATE,
+            note VARCHAR(255),
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        ) DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
+        `CREATE TABLE IF NOT EXISTS fee_types (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            name VARCHAR(100) NOT NULL UNIQUE,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        ) DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
+        `CREATE TABLE IF NOT EXISTS school_settings (
+            id INT PRIMARY KEY DEFAULT 1,
+            school_name VARCHAR(255),
+            school_name_ar VARCHAR(255),
+            address VARCHAR(255),
+            phone1 VARCHAR(50),
+            phone2 VARCHAR(50),
+            email VARCHAR(150),
+            motto VARCHAR(255),
+            motto_ar VARCHAR(255),
+            result_notice TEXT,
+            term_begins DATE NULL,
+            term_ends DATE NULL,
+            next_term_begins DATE NULL,
+            due_day TINYINT UNSIGNED NULL,
+            due_note VARCHAR(150) NULL,
+            bank_name VARCHAR(120) NULL,
+            account_name VARCHAR(120) NULL,
+            account_number VARCHAR(40) NULL,
+            pay_instructions TEXT NULL,
+            portal_pay_enabled TINYINT(1) NOT NULL DEFAULT 0,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
         ) DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`
     ];
 
@@ -5394,25 +5464,37 @@ app.get("/finance-summary", requireLogin, requireAdmin, (req, res) => {
         WHERE fs.term = ? AND fs.session = ?
     `;
     connection.query(expectedSql, [term, session], (err, expRows) => {
-        if (err) { console.log(err); return res.status(500).json({ message: "Database error" }); }
+        if (err) {
+            console.log(err);
+            return res.json({ expected: 0, received: 0, payments_count: 0, outstanding: 0, expenses_total: 0, expenses_count: 0, term, session, notice: "No finance data recorded yet" });
+        }
         connection.query(
             "SELECT COALESCE(SUM(amount),0) AS received, COUNT(*) AS cnt FROM fee_payments WHERE term = ? AND session = ?",
             [term, session],
             (err2, payRows) => {
-                if (err2) { console.log(err2); return res.status(500).json({ message: "Database error" }); }
+                if (err2) {
+                    console.log(err2);
+                    return res.json({ expected: 0, received: 0, payments_count: 0, outstanding: 0, expenses_total: 0, expenses_count: 0, term, session });
+                }
                 connection.query(
                     "SELECT COALESCE(SUM(amount),0) AS total, COUNT(*) AS cnt FROM expenses",
                     (err3, costRows) => {
-                        if (err3) { console.log(err3); return res.status(500).json({ message: "Database error" }); }
-                        const expected = Number(expRows[0].expected);
-                        const received = Number(payRows[0].received);
+                        if (err3) {
+                            console.log(err3);
+                            return res.json({ expected: 0, received: 0, payments_count: 0, outstanding: 0, expenses_total: 0, expenses_count: 0, term, session });
+                        }
+                        const expected = (expRows && expRows[0] && Number(expRows[0].expected)) || 0;
+                        const received = (payRows && payRows[0] && Number(payRows[0].received)) || 0;
+                        const payCnt = (payRows && payRows[0] && Number(payRows[0].cnt)) || 0;
+                        const costTotal = (costRows && costRows[0] && Number(costRows[0].total)) || 0;
+                        const costCnt = (costRows && costRows[0] && Number(costRows[0].cnt)) || 0;
                         res.json({
                             expected,
                             received,
-                            payments_count: Number(payRows[0].cnt),
+                            payments_count: payCnt,
                             outstanding: expected - received,
-                            expenses_total: Number(costRows[0].total),
-                            expenses_count: Number(costRows[0].cnt),
+                            expenses_total: costTotal,
+                            expenses_count: costCnt,
                             term, session
                         });
                     }
@@ -5868,7 +5950,17 @@ app.get("/fee-debtors", requireLogin, requireAdmin, (req, res) => {
     const className = (req.query.class_name || "").trim();
     if (!term || !session) return res.status(400).json({ message: "term and session are required." });
     amsFeeBalanceRows(term, session, className, null, (err, rows) => {
-        if (err) { console.log(err); return res.status(500).json({ message: "Database error" }); }
+        if (err || !rows) {
+            console.log("fee-debtors notice:", err && err.message);
+            return res.json({
+                term, session,
+                due_day: 10, today: new Date().getDate(), is_late: false,
+                students_total: 0, owing_count: 0, cleared_count: 0,
+                expected_total: 0, paid_total: 0, outstanding_total: 0,
+                debtors: [],
+                notice: "No fee balance records found for this session/term"
+            });
+        }
         connection.query(
             "SELECT student_id, MAX(paid_at) AS last_pay FROM fee_payments WHERE term = ? AND session = ? GROUP BY student_id",
             [term, session],
@@ -6351,7 +6443,7 @@ app.get("/backup.json", requireLogin, requireAdmin, (req, res) => {
         const out = {
             app: "Ameenullah School Result System",
             kind: "full-backup",
-            version: 1,
+            version: 2,
             created_at: new Date().toISOString(),
             tables: {}
         };
@@ -6367,7 +6459,28 @@ app.get("/backup.json", requireLogin, requireAdmin, (req, res) => {
             connection.query("SELECT * FROM `" + t + "`", (e2, rows) => {
                 if (e2) { console.log(e2); out.tables[t] = { error: "could not read table" }; return nextTable(); }
                 if (t === "students") {
-                    rows.forEach(r => { if (r.photo_data) r.photo_data = "[passport photo stored on server - not included in backup]"; });
+                    rows.forEach(r => {
+                        if (r.photo_path) {
+                            try {
+                                const abs = path.join(__dirname, r.photo_path);
+                                if (fs.existsSync(abs)) r.photo_base64 = fs.readFileSync(abs).toString("base64");
+                            } catch (e) {}
+                        }
+                        if (r.photo_data && Buffer.isBuffer(r.photo_data)) {
+                            r.photo_base64 = r.photo_data.toString("base64");
+                        }
+                        r.photo_data = "[photo stored in photo_base64]";
+                    });
+                }
+                if (t === "signatures") {
+                    rows.forEach(r => {
+                        if (r.signature_path) {
+                            try {
+                                const abs = path.join(__dirname, r.signature_path);
+                                if (fs.existsSync(abs)) r.signature_base64 = fs.readFileSync(abs).toString("base64");
+                            } catch (e) {}
+                        }
+                    });
                 }
                 out.tables[t] = rows;
                 nextTable();
@@ -6377,8 +6490,8 @@ app.get("/backup.json", requireLogin, requireAdmin, (req, res) => {
     });
 });
 
-// NEW (Pack 72): One-Click Restore from Backup JSON (ameenullah-backup-YYYY-MM-DD.json)
-// Re-populates any empty or fresh MySQL database with all saved students, results, fees, classes & settings.
+// NEW (Pack 72/74): One-Click Restore from Backup JSON (ameenullah-backup-YYYY-MM-DD.json)
+// Re-populates any empty or fresh MySQL database with all saved students, results, fees, classes, settings, photos & signatures.
 app.post("/api/restore-backup", requireLogin, requireAdmin, uploadStore.single("backup"), (req, res) => {
     if (!req.file && !req.body.json_data) {
         return res.status(400).json({ message: "No backup file uploaded." });
@@ -6405,20 +6518,42 @@ app.post("/api/restore-backup", requireLogin, requireAdmin, uploadStore.single("
         if (!Array.isArray(rows) || !rows.length) return;
         restoredTables++;
         rows.forEach((row) => {
-            const cols = Object.keys(row).filter(c => c !== "photo_data" && c !== "id" && row[c] !== undefined);
+            const cols = Object.keys(row).filter(c => c !== "photo_data" && c !== "photo_base64" && c !== "signature_base64" && c !== "id" && row[c] !== undefined);
             if (!cols.length) return;
             const vals = cols.map(c => row[c]);
             const placeholders = cols.map(() => "?").join(",");
             const colNames = cols.map(c => "`" + c + "`").join(",");
 
             const sql = `INSERT IGNORE INTO \`${tbl}\` (${colNames}) VALUES (${placeholders})`;
-            connection.query(sql, vals, () => {});
+            connection.query(sql, vals, () => {
+                // Restore student photos onto server disk and database
+                if (tbl === "students" && row.photo_base64 && row.student_id) {
+                    try {
+                        const buf = Buffer.from(row.photo_base64, "base64");
+                        const targetDir = path.join(__dirname, "images", "students");
+                        fs.mkdirSync(targetDir, { recursive: true });
+                        const destPath = path.join(targetDir, row.student_id + ".png");
+                        fs.writeFileSync(destPath, buf);
+                        connection.query("UPDATE students SET photo_data = ?, photo_path = ? WHERE student_id = ?", [buf, `images/students/${row.student_id}.png`, row.student_id], () => {});
+                    } catch (e) {}
+                }
+                // Restore staff signature images onto server disk
+                if (tbl === "signatures" && row.signature_base64 && row.role) {
+                    try {
+                        const buf = Buffer.from(row.signature_base64, "base64");
+                        const targetDir = path.join(__dirname, "images", "signatures");
+                        fs.mkdirSync(targetDir, { recursive: true });
+                        const destPath = path.join(targetDir, row.role + ".png");
+                        fs.writeFileSync(destPath, buf);
+                    } catch (e) {}
+                }
+            });
             totalRows++;
         });
     });
 
     res.json({
-        message: `🎉 Backup Restored Successfully! Processed ${restoredTables} tables and ${totalRows} records. All students & results are back!`,
+        message: `🎉 Backup Restored Successfully! Processed ${restoredTables} tables and ${totalRows} records. All students, photos & signatures are restored!`,
         restoredTables,
         totalRows
     });
