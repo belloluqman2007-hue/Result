@@ -4,6 +4,22 @@
 
 ---
 
+## Pack 64 — 2026-07-31
+
+Owner's requests:
+> "What can be the problem in my website seeing this: 502 Bad Gateway... Bind your host to 0.0.0.0... Try increasing the values for server.keepAliveTimeout and server.headersTimeout"
+> "Stop building except it is necessary first state the problem then if it need build something else we will do that... Yes"
+
+### FIX (Pack 64) — Render `502 Bad Gateway` Host Binding & Keep-Alive Timeout Resolution (`server.js`)
+- **Explicit `0.0.0.0` Host Binding**:
+  - Root cause found: Calling `app.listen(PORT)` without specifying an interface defaulted Node.js to `127.0.0.1` (localhost loopback only), preventing Render's external reverse proxies and load balancers from connecting to the server.
+  - Upgraded the server listener to `app.listen(PORT, "0.0.0.0", ...)` so the app binds to all network interfaces as required by Render.
+- **Node.js Keep-Alive & Headers Timeout Mismatch Fix**:
+  - Root cause found: Node.js HTTP default connection keep-alive timeout (5–50s) was shorter than Render/Cloudflare proxy idle timeouts (60s), causing intermittent `Connection reset by peer` / `502 Bad Gateway` errors when the proxy reused a socket that Node had just closed.
+  - Set `server.keepAliveTimeout = 120000;` and `server.headersTimeout = 120000;` (120 seconds) in accordance with Render's official troubleshooting documentation.
+
+---
+
 ## Pack 63 — 2026-07-31
 
 Owner's requests:

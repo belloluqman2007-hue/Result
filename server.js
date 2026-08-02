@@ -6603,6 +6603,10 @@ app.use((err, req, res, next) => {
 
 const PORT = process.env.PORT || 3000;
 
-app.listen(PORT, () => {
-    console.log(`Server running on port ${PORT}`);
+// NEW (Pack 64): Render 502 Bad Gateway compliance - bind explicitly to 0.0.0.0
+// and increase keepAliveTimeout/headersTimeout to 120s as advised in Render docs.
+const server = app.listen(PORT, "0.0.0.0", () => {
+    console.log(`Server running on port ${PORT} bound to 0.0.0.0`);
 });
+server.keepAliveTimeout = 120000; // 120 seconds (Render official recommendation)
+server.headersTimeout = 120000;   // 120 seconds
