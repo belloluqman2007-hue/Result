@@ -4,6 +4,20 @@
 
 ---
 
+## Pack 68 — 2026-07-31
+
+Owner's requests:
+> "Why this again: Database Error: Connection lost: The server closed the connection."
+
+### FIX (Pack 68) — Self-Healing Database Pool & Automatic Connection Retry Wrapper (`db.js`)
+- **Why `"Connection lost: The server closed the connection"` Happened**:
+  - MySQL databases on Railway and cloud hosting platforms have aggressive idle timeouts. When a connection sits idle in the pool for several minutes, the server silently terminates the TCP socket (`PROTOCOL_CONNECTION_LOST` / `ECONNRESET`). When Node.js attempted to execute the next query on an idle socket, MySQL threw a connection lost error.
+- **The Self-Healing Pool Fix (`db.js`)**:
+  - Configured `mysql2` pool options with explicit keep-alive and idle management (`enableKeepAlive: true`, `keepAliveInitialDelay: 10000`, `maxIdle: 10`, `idleTimeout: 60000`, `connectTimeout: 20000`).
+  - Wrapped `connection.query(sql, params, cb)` with an automatic reconnection retry layer. If any query ever fails with a connection drop error (`PROTOCOL_CONNECTION_LOST`, `ECONNRESET`, `ETIMEDOUT`, `SERVER_LOST`), `db.js` intercepts the error, discards the dead socket, and automatically retries the query once on a fresh connection from the pool. The application and users never see `"Connection lost: The server closed the connection"` errors again.
+
+---
+
 ## Pack 67 — 2026-07-31
 
 Owner's requests:
