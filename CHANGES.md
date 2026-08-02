@@ -4,6 +4,36 @@
 
 ---
 
+## Pack 67 — 2026-07-31
+
+Owner's requests:
+> "But I am still seeing database error... Table 'railway.users' doesn't exist on fresh database"
+
+### FIX & UPGRADE (Pack 67) — Zero-Configuration Auto-Schema & Default Admin Bootstrapper (`server.js`)
+- **Automatic Core Table Provisioning (`server.js`)**:
+  - Why login said `"Database error"` on a brand-new Railway MySQL database: When creating a fresh MySQL database on Railway, the database has 0 tables. Previously, `server.js` only created new add-on tables on startup and assumed the core legacy tables (`users`, `students`, `results`, `classes`, `subjects`, `exams`, `signatures`) already existed. Querying an empty database for `SELECT * FROM users` threw MySQL Error 1146 (`Table 'railway.users' doesn't exist`), which caused login to fail with `"Database error"`.
+  - Upgraded `server.js` with `ensureCoreTablesAndDefaultAdmin()`. Now whenever the server boots up, it automatically executes `CREATE TABLE IF NOT EXISTS` for all 7 core legacy tables with UTF-8 (`utf8mb4_unicode_ci`) support.
+- **Automatic Default Admin Account Seeding (`server.js`)**:
+  - Whenever the server boots up, it inspects the `users` table. If `users` is empty (`COUNT(*) === 0`), it automatically hashes and inserts a default Admin account (`username: admin`, `password: 0802`, `role: admin`), enabling instant zero-configuration login on any fresh deployment.
+- **Detailed Login Error Reporting (`/login`)**:
+  - Upgraded `/login` in `server.js` so that if a MySQL query error ever occurs during login, the server returns the exact MySQL error message (`Database Error: ...`) instead of generic `"Database error"`.
+
+---
+
+## Pack 66 — 2026-07-31
+
+Owner's requests:
+> "This is what I found in variables... DB_HOST: localhost, DB_USER: root, DB_PASSWORD: your-mysql-password, DB_NAME: school_result_db... I deploy the pack 65 but still database error"
+
+### FIX & GUIDANCE (Pack 66) — Railway Variable Override Prevention & MySQL Reference Guide (`db.js`)
+- **Fake Example Variable Override Prevention (`db.js`)**:
+  - Why login said `"Database error"`: Railway automatically scanned `.env.example` in the source code and populated the website service's environment variables with fake placeholder values (`DB_HOST=localhost`, `DB_PASSWORD=your-mysql-password`, `DB_NAME=school_result_db`). Because `db.js` checked `process.env.DB_HOST` before default fallbacks, it attempted to connect to `localhost` with fake credentials.
+  - Upgraded `db.js` to intelligently detect and ignore fake `localhost` placeholder values when running on Railway if real `MYSQLHOST`/`MYSQL_URL` variables are present. Added support for all Railway MySQL variable naming conventions (`MYSQL_HOST`, `MYSQL_PORT`, `MYSQL_USER`, `MYSQL_PASSWORD`, `MYSQL_DATABASE`).
+- **Exact Railway 4-Step Fix Documented**:
+  - Explained the exact steps to replace the fake example variables with real MySQL database credentials in the Railway dashboard (`Web Service -> Variables tab -> Delete fake DB_* variables -> Click 'New Variable' -> 'Add Reference' -> Select MySQL Database Service`).
+
+---
+
 ## Pack 65 — 2026-07-31
 
 Owner's requests:

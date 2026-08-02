@@ -234,7 +234,7 @@ app.post("/login", (req, res) => {
         (err, results) => {
             if (err) {
                 console.log(err);
-                return res.status(500).json({ message: "Database error" });
+                return res.status(500).json({ message: "Database Error: " + (err.sqlMessage || err.message || "Could not check users table") });
             }
             if (results.length === 0) {
                 return res.status(401).json({ message: "Invalid username or password" });
@@ -501,6 +501,102 @@ app.use(express.static(__dirname));
        dashboard widgets). The result system is never written to
        outside the original routes.
 ================================================================== */
+
+// NEW (Pack 67): Zero-Configuration Auto-Schema & Default Admin Bootstrapper
+// Automatically creates all core legacy tables if they don't exist in a new MySQL database
+// (e.g. fresh Railway deployment) and seeds a default Admin account (username: admin, password: 0802).
+function ensureCoreTablesAndDefaultAdmin() {
+    const coreTables = [
+        `CREATE TABLE IF NOT EXISTS users (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            username VARCHAR(100) NOT NULL UNIQUE,
+            password_hash VARCHAR(255) NOT NULL,
+            role VARCHAR(50) NOT NULL DEFAULT 'teacher',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        ) DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
+        `CREATE TABLE IF NOT EXISTS students (
+            student_id VARCHAR(64) PRIMARY KEY,
+            full_name VARCHAR(160) NOT NULL,
+            gender VARCHAR(20) DEFAULT '',
+            class_name VARCHAR(100) DEFAULT '',
+            date_of_birth DATE NULL,
+            photo_path VARCHAR(255) DEFAULT '',
+            photo_data LONGBLOB NULL,
+            parent_name VARCHAR(160) DEFAULT '',
+            parent_phone VARCHAR(60) DEFAULT '',
+            address VARCHAR(255) DEFAULT '',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        ) DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
+        `CREATE TABLE IF NOT EXISTS results (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            student_id VARCHAR(64) NOT NULL,
+            student_name VARCHAR(160) DEFAULT '',
+            class_name VARCHAR(100) DEFAULT '',
+            term VARCHAR(50) DEFAULT '',
+            session VARCHAR(50) DEFAULT '',
+            subject VARCHAR(120) DEFAULT '',
+            first_test DECIMAL(5,2) DEFAULT 0,
+            second_test DECIMAL(5,2) DEFAULT 0,
+            note_score DECIMAL(5,2) DEFAULT 0,
+            attendance_score DECIMAL(5,2) DEFAULT 0,
+            ca_score DECIMAL(5,2) DEFAULT 0,
+            exam_score DECIMAL(5,2) DEFAULT 0,
+            total DECIMAL(5,2) DEFAULT 0,
+            grade VARCHAR(10) DEFAULT '',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        ) DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
+        `CREATE TABLE IF NOT EXISTS classes (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            class_name VARCHAR(100) NOT NULL UNIQUE,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        ) DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
+        `CREATE TABLE IF NOT EXISTS subjects (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            class_name VARCHAR(100) NOT NULL,
+            subject_name VARCHAR(120) NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        ) DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
+        `CREATE TABLE IF NOT EXISTS exams (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            title VARCHAR(255) NOT NULL,
+            class_name VARCHAR(100) NOT NULL,
+            subject VARCHAR(120) NOT NULL,
+            term VARCHAR(50) NOT NULL,
+            session VARCHAR(50) NOT NULL,
+            duration VARCHAR(100) NULL,
+            instructions TEXT NULL,
+            body_html LONGTEXT NOT NULL,
+            created_by VARCHAR(100) NULL,
+            exam_date DATE NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        ) DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
+        `CREATE TABLE IF NOT EXISTS signatures (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            role VARCHAR(50) NOT NULL UNIQUE,
+            signature_path VARCHAR(255) NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        ) DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`
+    ];
+
+    coreTables.forEach(sql => {
+        connection.query(sql, (err) => {
+            if (err) console.error("Core table creation error:", err.message || err);
+        });
+    });
+
+    connection.query("SELECT COUNT(*) AS cnt FROM users", (err, rows) => {
+        if (!err && rows && rows[0] && rows[0].cnt === 0) {
+            bcrypt.hash("0802", 10, (herr, hash) => {
+                if (!herr && hash) {
+                    connection.query("INSERT IGNORE INTO users (username, password_hash, role) VALUES ('admin', ?, 'admin')", [hash], () => {
+                        console.log("Seeded default admin account (username: admin, password: 0802)");
+                    });
+                }
+            });
+        }
+    });
+}
+ensureCoreTablesAndDefaultAdmin();
 
 const addonTables = [
     // Notice board / school news for the dashboard
