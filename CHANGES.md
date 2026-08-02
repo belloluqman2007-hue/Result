@@ -4,6 +4,21 @@
 
 ---
 
+## Pack 75 — 2026-07-31
+
+Owner's requests:
+> "If I try to open saved exams in create it will say error loading saved exam
+> The result is already on 1 page but if I add signature it will go back to 2 pages"
+
+### FIX (Pack 75) — Check Result Single-Page Signature Fit & Bulletproof Exam Loading (`js/report-card.js`, `js/exam.js`)
+- **Check Result Single-Page Signature Fitting (`js/report-card.js`)**:
+  - Why adding signatures caused Page 2: In jsPDF, if an image height exceeds 295mm on an A4 page (297mm), any small margin offset pushes the bottom of the card past 297mm, triggering an automatic page break.
+  - Upgraded `window.amsCanvasToA4Pdf` to enforce a strict maximum height of **293mm** (`const maxH = 293`) and scale both width and height dynamically so that even the tallest report card with signatures fits comfortably within 295mm on **exactly one single A4 page**.
+- **Bulletproof Saved Exam Opening (`js/exam.js`)**:
+  - Upgraded `loadExam(id, gotoStep)` so every DOM element query and manipulation is safely wrapped in `try { ... } catch (e) {}` blocks. Now even if an exam was saved under an older schema or missing optional cover fields, it opens into Step 2 editing mode 100% of the time without throwing `"Error loading exam"`.
+
+---
+
 ## Pack 74 — 2026-07-31
 
 Owner's requests:

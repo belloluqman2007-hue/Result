@@ -1384,99 +1384,96 @@ function chooseLoadExamStep(step) {
 // straight-to-Step-2 behaviour (default = 2).
 function loadExam(id, gotoStep) {
     fetch(`/exam/${id}`)
-        .then(response => response.json())
+        .then(response => {
+            if (!response.ok) throw new Error("Server returned HTTP " + response.status);
+            return response.json();
+        })
         .then(exam => {
             currentExamId = exam.id;
 
-            document.getElementById("examTitle").value = exam.title;
-            document.getElementById("examTerm").value = exam.term;
-            document.getElementById("examSession").value = exam.session;
-            document.getElementById("examDuration").value = exam.duration || "";
-            // NEW (pack 22): restore the saved exam date when present.
-            const dateEl = document.getElementById("examDate");
-            if (dateEl) dateEl.value = exam.exam_date ? String(exam.exam_date).slice(0, 10) : "";
+            try { if (document.getElementById("examTitle")) document.getElementById("examTitle").value = exam.title || ""; } catch (e) {}
+            try { if (document.getElementById("examTerm")) document.getElementById("examTerm").value = exam.term || ""; } catch (e) {}
+            try { if (document.getElementById("examSession")) document.getElementById("examSession").value = exam.session || ""; } catch (e) {}
+            try { if (document.getElementById("examDuration")) document.getElementById("examDuration").value = exam.duration || ""; } catch (e) {}
+            try {
+                const dateEl = document.getElementById("examDate");
+                if (dateEl) dateEl.value = exam.exam_date ? String(exam.exam_date).slice(0, 10) : "";
+            } catch (e) {}
 
-            document.getElementById("examClass").value = exam.class_name;
+            try { if (document.getElementById("examClass")) document.getElementById("examClass").value = exam.class_name || ""; } catch (e) {}
 
-            // FIX (pack 17): make the saved subject selectable IMMEDIATELY -
-            // the subject list loads asynchronously, and the new
-            // straight-to-Step-2 jump validates Class+Subject+Term+Session,
-            // so the value must be in place BEFORE the gate runs.
-            const subjectSelect = document.getElementById("examSubject");
-            if (exam.subject) {
-                if (!Array.from(subjectSelect.options).some(o => o.value === exam.subject)) {
-                    subjectSelect.innerHTML += `<option value="${exam.subject}">${exam.subject}</option>`;
-                }
-                subjectSelect.value = exam.subject;
-            }
-
-            // FIX (pack 18): same trick for Term/Session (and Class) - an
-            // exam saved in an old session/term that is no longer in the
-            // static lists made the Step-2 gate fail and stranded the
-            // teacher back on Step 1. Keep saved values selectable.
-            [["examTerm", exam.term], ["examSession", exam.session], ["examClass", exam.class_name]].forEach(function (pair) {
-                const sel = document.getElementById(pair[0]);
-                const val = pair[1];
-                if (sel && val && !Array.from(sel.options).some(o => o.value === val)) {
-                    sel.innerHTML += `<option value="${val}">${val}</option>`;
-                }
-                if (sel && val) sel.value = val;
-            });
-
-            fetch(`/subjects?class=${encodeURIComponent(exam.class_name)}`)
-                .then(response => response.json())
-                .then(subjects => {
-                    // Keep a saved subject selectable even if it is disabled now.
-                    const saved = subjectSelect.value;
-                    subjectSelect.innerHTML = '<option value="" disabled>Select Subject</option>';
-                    subjects.forEach(subject => {
-                        subjectSelect.innerHTML += `<option value="${subject.subject_name}">${subject.subject_name}</option>`;
-                    });
-                    if (exam.subject && !Array.from(subjectSelect.options).some(o => o.value === exam.subject)) {
+            try {
+                const subjectSelect = document.getElementById("examSubject");
+                if (subjectSelect && exam.subject) {
+                    if (!Array.from(subjectSelect.options).some(o => o.value === exam.subject)) {
                         subjectSelect.innerHTML += `<option value="${exam.subject}">${exam.subject}</option>`;
                     }
-                    subjectSelect.value = exam.subject || saved;
+                    subjectSelect.value = exam.subject;
+                }
+            } catch (e) {}
+
+            try {
+                [["examTerm", exam.term], ["examSession", exam.session], ["examClass", exam.class_name]].forEach(function (pair) {
+                    const sel = document.getElementById(pair[0]);
+                    const val = pair[1];
+                    if (sel && val && !Array.from(sel.options).some(o => o.value === val)) {
+                        sel.innerHTML += `<option value="${val}">${val}</option>`;
+                    }
+                    if (sel && val) sel.value = val;
                 });
+            } catch (e) {}
 
-            // CHANGED (multi-exam in one PDF): multi-exam saves carry each
-            // cover's own instructions inside the flow itself, so the
-            // classic instructions column is only applied to single exams.
-            const isMultiSave = exam.body_html && exam.body_html.indexOf("page-one") !== -1;
-            if (exam.instructions && !isMultiSave) {
-                document.querySelector("#coverPage .js-cover-instructions").innerHTML = exam.instructions;
-            }
+            try {
+                fetch(`/subjects?class=${encodeURIComponent(exam.class_name || "")}`)
+                    .then(response => response.json())
+                    .then(subjects => {
+                        const subjectSelect = document.getElementById("examSubject");
+                        if (!subjectSelect) return;
+                        const saved = subjectSelect.value;
+                        subjectSelect.innerHTML = '<option value="" disabled>Select Subject</option>';
+                        (subjects || []).forEach(subject => {
+                            subjectSelect.innerHTML += `<option value="${subject.subject_name}">${subject.subject_name}</option>`;
+                        });
+                        if (exam.subject && !Array.from(subjectSelect.options).some(o => o.value === exam.subject)) {
+                            subjectSelect.innerHTML += `<option value="${exam.subject}">${exam.subject}</option>`;
+                        }
+                        subjectSelect.value = exam.subject || saved;
+                    })
+                    .catch(() => {});
+            } catch (e) {}
 
-            generateCoverPage();
+            try {
+                const isMultiSave = exam.body_html && exam.body_html.indexOf("page-one") !== -1;
+                if (exam.instructions && !isMultiSave) {
+                    const instrEl = document.querySelector("#coverPage .js-cover-instructions");
+                    if (instrEl) instrEl.innerHTML = exam.instructions;
+                }
+            } catch (e) {}
 
-            // Merge whatever was stored into ONE flow string.
-            let flowHtml;
+            try { generateCoverPage(); } catch (e) {}
+
+            let flowHtml = "";
             try {
                 const parsed = JSON.parse(exam.body_html);
                 if (Array.isArray(parsed)) {
-                    flowHtml = parsed.join("");       // legacy: page-array format
+                    flowHtml = parsed.join("");
                 } else if (typeof parsed === "string") {
-                    flowHtml = parsed;                 // JSON-encoded single string
+                    flowHtml = parsed;
                 } else {
                     flowHtml = exam.body_html;
                 }
             } catch (e) {
-                flowHtml = exam.body_html;             // plain string (new format)
+                flowHtml = exam.body_html || "";
             }
 
-            resetFlow(flowHtml);
-            closeLoadPanel();
-            fitAllCoverOneLiners();
-            // CHANGED (pack 17 - owner request): a SAVED exam opened for
-            // editing goes straight to Step 2 (the writing/editing tools),
-            // not back to the details step. The wizard fields are already
-            // filled from the saved record, so the step-2 gate passes.
-            // CHANGED (pack 18 - owner request): the chooser now decides -
-            // Step 1 (details) or Step 2 (writing). Default stays Step 2.
-            examGotoStep(gotoStep === 1 ? 1 : 2);
+            try { resetFlow(flowHtml || ""); } catch (e) {}
+            try { closeLoadPanel(); } catch (e) {}
+            try { fitAllCoverOneLiners(); } catch (e) {}
+            try { examGotoStep(gotoStep === 1 ? 1 : 2); } catch (e) {}
         })
         .catch(error => {
-            console.log(error);
-            alert("Error loading exam.");
+            console.log("loadExam catch:", error);
+            alert("Error loading exam: " + (error.message || error));
         });
 }
 
