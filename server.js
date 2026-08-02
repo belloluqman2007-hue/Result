@@ -1,5 +1,13 @@
 require("dotenv").config();
 
+// NEW (Pack 63): Global Crash Shield - prevents Node.js from exiting on unhandled errors
+process.on("uncaughtException", (err) => {
+    console.error("Uncaught Exception caught:", err);
+});
+process.on("unhandledRejection", (reason, promise) => {
+    console.error("Unhandled Rejection caught:", reason);
+});
+
 const express = require("express");
 const path = require("path");
 const multer = require("multer");

@@ -4,6 +4,21 @@
 
 ---
 
+## Pack 63 — 2026-07-31
+
+Owner's requests:
+> "What can be the problem in my website seeing this: 502 Bad Gateway... This service is currently unavailable"
+
+### FIX & GUIDANCE (Pack 63) — Global Crash Shield & Render `502 Bad Gateway` Resolution
+- **Global Crash Shield (`server.js`)**:
+  - Added process-level `uncaughtException` and `unhandledRejection` safety shields at the very top of `server.js`. Even if an asynchronous database query, network timeout, or filesystem check throws an unexpected error during boot or under heavy load, the Node.js server process will log the error without exiting—preventing process crashes that trigger Cloudflare/Render `502 Bad Gateway` errors.
+- **Why `502 Bad Gateway` Happens on Render & Exactly What to Check**:
+  - **1. Deployment in Progress:** When you push a commit to GitHub, Render restarts the container. During the ~60–90 seconds while Render is building and starting the Node service, visiting the site temporarily returns `502 Bad Gateway`. Once the deployment status in your Render dashboard turns green (**Live**), the 502 disappears.
+  - **2. Database Connection Limit / Sleep:** If your Railway MySQL database paused due to inactivity or hit its 15-connection limit, the initial pool connection may take up to 30 seconds to wake up.
+  - **3. Render Free Tier Sleep (15-Minute Inactivity):** Free web services on Render spin down after 15 minutes of inactivity. When the next visitor opens the site, Render takes ~40–50 seconds to spin the container back up.
+
+---
+
 ## Pack 62 — 2026-07-31
 
 Owner's requests:
