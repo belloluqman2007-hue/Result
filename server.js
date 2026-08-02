@@ -2002,6 +2002,22 @@ const uploadExcel = multer({
     }
 });
 
+const storeDir = path.join(__dirname, "uploads", "store");
+try { fs.mkdirSync(storeDir, { recursive: true }); } catch (e) { /* exists */ }
+
+const storeStorage = multer.diskStorage({
+    destination: (req, file, cb) => cb(null, storeDir),
+    filename: (req, file, cb) => {
+        const cleanName = typeof fixUtf8 === "function" ? fixUtf8(file.originalname || "file") : (file.originalname || "file");
+        const safe = cleanName.replace(/[^a-zA-Z0-9.\-_؀-ۿ]/g, "_");
+        cb(null, "store_" + Date.now() + "_" + safe);
+    }
+});
+const uploadStore = multer({
+    storage: storeStorage,
+    limits: { fileSize: 50 * 1024 * 1024 } // 50MB max per file
+});
+
 // Signatures: stored in images/signatures, named by role (class_teacher.png, principal.png)
 const signatureDir = path.join(__dirname, "images", "signatures");
 if (!fs.existsSync(signatureDir)) {
@@ -6516,9 +6532,6 @@ app.get("/honour-roll", (req, res) => {
    NEW (Pack 47/49): SCHOOL FILE STORE / DIGITAL VAULT ENDPOINTS
    Allows teachers/admins to create folders, upload any files, preview, and download.
 ===================================================================== */
-const storeDir = path.join(__dirname, "uploads", "store");
-try { fs.mkdirSync(storeDir, { recursive: true }); } catch (e) { /* exists */ }
-
 function fixUtf8(str) {
     if (!str) return str;
     try {
@@ -6556,19 +6569,6 @@ function syncExamsToVault(cb) {
         }
     );
 }
-
-const storeStorage = multer.diskStorage({
-    destination: (req, file, cb) => cb(null, storeDir),
-    filename: (req, file, cb) => {
-        const cleanName = fixUtf8(file.originalname || "file");
-        const safe = cleanName.replace(/[^a-zA-Z0-9.\-_؀-ۿ]/g, "_");
-        cb(null, "store_" + Date.now() + "_" + safe);
-    }
-});
-const uploadStore = multer({
-    storage: storeStorage,
-    limits: { fileSize: 50 * 1024 * 1024 } // 50MB max per file
-});
 
 app.get("/api/store/list", requireLogin, (req, res) => {
     let folder = (req.query.folder || "/").trim();

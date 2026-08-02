@@ -4,6 +4,21 @@
 
 ---
 
+## Pack 72 — 2026-07-31
+
+Owner's requests:
+> "Why am I seeing the: Application failed to respond... Uncaught Exception caught: ReferenceError: Cannot access 'uploadStore' before initialization at Object.<anonymous> (/app/server.js:6366:61)"
+> "I don't know how to put the JSON for recovery"
+
+### FIX & GUIDANCE (Pack 72) — File Store TDZ Initialization Fix & 3-Step Backup Restore Guide (`server.js`)
+- **`uploadStore` Temporal Dead Zone (TDZ) Fix (`server.js`)**:
+  - Root cause found: When `POST /api/restore-backup` was added at line 6366 (`uploadStore.single("backup")`), `const uploadStore` was declared at line 6568 (200 lines below). In Node.js, accessing a `const` before its declaration throws `ReferenceError: Cannot access 'uploadStore' before initialization`, which caused the server process to crash on boot and trigger Railway's `"Application failed to respond"`.
+  - Moved `const storeDir`, `const storeStorage`, and `const uploadStore` to the top of `server.js` (line 1999, alongside `uploadExcel` and `uploadSignature`) so they are fully initialized before any route accesses them.
+- **3-Step Backup JSON Restoration Guide**:
+  - Documented the exact 3 steps to restore any lost students, results, fees, classes, or settings using the new **"🔄 Restore Backup JSON"** button on `teacher-dashboard.html`.
+
+---
+
 ## Pack 71 — 2026-07-31
 
 Owner's requests:
