@@ -107,7 +107,14 @@
   function groupThreads(rows) {
     var map = {};
     rows.forEach(function (m) {
-      var sid = m.sender_type === "portal" ? m.sender_ref : m.recipient_ref;
+      var sid;
+      if (m.sender_type === "portal") {
+        sid = m.sender_ref;
+      } else if (m.recipient_type === "staff") {
+        sid = (m.sender_ref === me) ? m.recipient_ref : m.sender_ref;
+      } else {
+        sid = m.recipient_ref;
+      }
       if (!sid) return;
       var thread = threadOfMsg(m);
       var k = keyOf(sid, thread);
@@ -118,6 +125,9 @@
         if (!t.name && m.sender_name) t.name = m.sender_name;
         if (!t.cls && m.recipient_class) t.cls = m.recipient_class;
         if (!m.read_at) t.unread++;
+      } else if (m.recipient_type === "staff") {
+        if (!t.name) t.name = (m.sender_ref === me) ? m.recipient_ref : (m.sender_name || m.sender_ref);
+        if (!t.cls) t.cls = "Staff";
       }
       if (String(m.created_at) > String(t.last)) t.last = String(m.created_at);
     });

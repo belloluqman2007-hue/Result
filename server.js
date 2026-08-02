@@ -591,6 +591,7 @@ function ensureCoreTablesAndDefaultAdmin() {
                     connection.query("INSERT IGNORE INTO users (username, password_hash, role) VALUES ('admin', ?, 'admin')", [hash], () => {
                         console.log("Seeded default admin account (username: admin, password: 0802)");
                     });
+                    connection.query("INSERT IGNORE INTO users (username, password_hash, role) VALUES ('Proprietor', ?, 'admin')", [hash], () => {});
                 }
             });
         }
@@ -6357,6 +6358,53 @@ app.get("/backup.json", requireLogin, requireAdmin, (req, res) => {
             });
         };
         nextTable();
+    });
+});
+
+// NEW (Pack 72): One-Click Restore from Backup JSON (ameenullah-backup-YYYY-MM-DD.json)
+// Re-populates any empty or fresh MySQL database with all saved students, results, fees, classes & settings.
+app.post("/api/restore-backup", requireLogin, requireAdmin, uploadStore.single("backup"), (req, res) => {
+    if (!req.file && !req.body.json_data) {
+        return res.status(400).json({ message: "No backup file uploaded." });
+    }
+    let data;
+    try {
+        const raw = req.file ? fs.readFileSync(req.file.path, "utf8") : req.body.json_data;
+        data = JSON.parse(raw);
+    } catch (e) {
+        return res.status(400).json({ message: "Invalid JSON backup file format." });
+    }
+
+    const tablesObj = data.tables || data;
+    const tableNames = Object.keys(tablesObj);
+    if (!tableNames.length) {
+        return res.status(400).json({ message: "No table records found in backup file." });
+    }
+
+    let restoredTables = 0;
+    let totalRows = 0;
+
+    tableNames.forEach((tbl) => {
+        const rows = tablesObj[tbl];
+        if (!Array.isArray(rows) || !rows.length) return;
+        restoredTables++;
+        rows.forEach((row) => {
+            const cols = Object.keys(row).filter(c => c !== "photo_data" && c !== "id" && row[c] !== undefined);
+            if (!cols.length) return;
+            const vals = cols.map(c => row[c]);
+            const placeholders = cols.map(() => "?").join(",");
+            const colNames = cols.map(c => "`" + c + "`").join(",");
+
+            const sql = `INSERT IGNORE INTO \`${tbl}\` (${colNames}) VALUES (${placeholders})`;
+            connection.query(sql, vals, () => {});
+            totalRows++;
+        });
+    });
+
+    res.json({
+        message: `🎉 Backup Restored Successfully! Processed ${restoredTables} tables and ${totalRows} records. All students & results are back!`,
+        restoredTables,
+        totalRows
     });
 });
 

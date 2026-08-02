@@ -183,6 +183,10 @@ function loadClassesIntoSelects() {
                     select.value = previousValue;
                 }
             });
+            if (typeof populateStudentDropdown === "function") {
+                const sc = document.getElementById("studentClass");
+                populateStudentDropdown(sc ? sc.value : "");
+            }
         })
         .catch(error => console.log(error));
 }

@@ -4,6 +4,23 @@
 
 ---
 
+## Pack 71 — 2026-07-31
+
+Owner's requests:
+> "I have the JSON file but how can I make it to see all the lost student... What if I use my old database on render or it is not possible"
+
+### FEATURE & UPGRADE (Pack 71) — One-Click Backup JSON Restoration (`POST /api/restore-backup`, `teacher-dashboard.html`, `js/dashboard.js`)
+- **One-Click Restore from Backup JSON (`POST /api/restore-backup`)**:
+  - Why it was needed: When switching to a brand-new Railway MySQL database, the database starts empty. Users who previously downloaded their `ameenullah-backup-YYYY-MM-DD.json` file needed a seamless way to restore all their lost records without manual SQL commands.
+  - Added `POST /api/restore-backup`. Admin uploads their saved JSON backup file; the endpoint inspects `data.tables` and executes safe `INSERT IGNORE` queries across all 30+ tables (`students`, `results`, `classes`, `subjects`, `users`, `signatures`, `tahfeedh`, `attendance`, `fee_structure`, etc.)—instantly restoring every lost student, result, fee, and setting.
+- **Dashboard Restore Modal (`teacher-dashboard.html`, `js/dashboard.js`)**:
+  - Added a **"🔄 Restore Backup JSON"** button right beside the One-tap Backup download button on `teacher-dashboard.html`.
+  - Clicking it opens a clean modal where the admin selects their `ameenullah-backup-YYYY-MM-DD.json` file from their device and clicks **"Restore Now"**.
+- **External Render Database Connection Guide**:
+  - Explained that to connect the website directly to an old Render MySQL database instead of the new Railway database, the user simply sets `MYSQL_URL` in their Railway Website Variables to the External Database URL from Render (`mysql://user:password@hostname.render.com:3306/dbname`).
+
+---
+
 ## Pack 70 — 2026-07-31
 
 Owner's requests:

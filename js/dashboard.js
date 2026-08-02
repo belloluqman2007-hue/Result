@@ -744,4 +744,47 @@
             }
         }
     });
+
+    /* NEW (Pack 72): One-click restore from ameenullah-backup-YYYY-MM-DD.json */
+    window.amsOpenRestoreModal = function () {
+        var m = document.getElementById("amsRestoreModal");
+        if (m) m.style.display = "flex";
+    };
+    window.amsCloseRestoreModal = function () {
+        var m = document.getElementById("amsRestoreModal");
+        if (m) m.style.display = "none";
+    };
+    window.amsSubmitRestore = function () {
+        var fi = document.getElementById("amsRestoreFileInput");
+        if (!fi || !fi.files || !fi.files.length) {
+            alert("Please select your ameenullah-backup .json file first.");
+            return;
+        }
+        var file = fi.files[0];
+        var fd = new FormData();
+        fd.append("backup", file);
+
+        var prog = document.getElementById("amsRestoreProgress");
+        var btn = document.getElementById("amsRestoreSubmitBtn");
+        if (prog) prog.style.display = "block";
+        if (btn) btn.disabled = true;
+
+        fetch("/api/restore-backup", {
+            method: "POST",
+            body: fd
+        })
+        .then(function (r) { return r.json(); })
+        .then(function (res) {
+            if (prog) prog.style.display = "none";
+            if (btn) btn.disabled = false;
+            amsCloseRestoreModal();
+            alert(res.message || "Backup restored successfully!");
+            window.location.reload();
+        })
+        .catch(function (err) {
+            if (prog) prog.style.display = "none";
+            if (btn) btn.disabled = false;
+            alert("Error restoring backup file: " + (err.message || "check file format"));
+        });
+    };
 })();

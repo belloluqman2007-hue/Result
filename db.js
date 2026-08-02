@@ -1,7 +1,7 @@
 require("dotenv").config();
 const mysql = require("mysql2");
 
-// NEW (Pack 70): Universal Railway connection support + SSL + Auto-Rebuilding Pool
+// NEW (Pack 71): Universal Railway connection support + SSL + Heartbeat Ping + 3-Retry Engine
 let dbHost = process.env.MYSQLHOST || process.env.MYSQL_HOST || process.env.DB_HOST || "localhost";
 if ((process.env.RAILWAY_ENVIRONMENT || process.env.MYSQLHOST) && dbHost === "localhost" && process.env.MYSQLHOST) {
   dbHost = process.env.MYSQLHOST;
@@ -15,11 +15,11 @@ function getPoolConfig() {
     waitForConnections: true,
     queueLimit: 0,
     enableKeepAlive: true,
-    keepAliveInitialDelay: 10000,
+    keepAliveInitialDelay: 8000,
     maxIdle: 10,
-    idleTimeout: 60000,
+    idleTimeout: 15000, // close idle connections at 15s before Railway's 30s proxy timeout
     connectTimeout: 30000,
-    ssl: { rejectUnauthorized: false } // Required by Railway MySQL to prevent connection drop/closure
+    ssl: { rejectUnauthorized: false }
   };
   if (dbUrl) {
     return Object.assign({ uri: dbUrl }, baseOptions);
@@ -51,40 +51,46 @@ function isDisconnectError(err) {
   );
 }
 
-// Auto-Rebuilding Query Wrapper: if Railway MySQL drops or closes a connection,
-// destroys the dead pool and rebuilds a brand-new pool before retrying.
+// 3-Retry Auto-Rebuilding Query Wrapper with Backoff: if Railway MySQL drops or closes
+// a connection, destroys the dead pool, waits briefly, and retries up to 3 times.
 const wrappedPool = {
   query: function (sql, params, cb) {
     if (typeof params === "function") {
       cb = params;
       params = [];
     }
-    pool.query(sql, params, function (err, results, fields) {
-      if (err && isDisconnectError(err)) {
-        console.warn("MySQL connection dropped (" + (err.code || err.message) + "). Rebuilding pool and retrying query...");
-        try { pool.end(); } catch (e) {}
-        pool = mysql.createPool(getPoolConfig());
-        pool.query(sql, params, function (err2, results2, fields2) {
-          if (err2) {
-            console.error("MySQL retry on rebuilt pool failed:", err2.message || err2);
-          }
-          if (cb) cb(err2, results2, fields2);
-        });
-        return;
-      }
-      if (cb) cb(err, results, fields);
-    });
+    function attemptQuery(retriesLeft) {
+      pool.query(sql, params, function (err, results, fields) {
+        if (err && isDisconnectError(err) && retriesLeft > 0) {
+          console.warn("MySQL connection dropped (" + (err.code || err.message) + "). Rebuilding pool and retrying (" + retriesLeft + " attempts left)...");
+          try { pool.end(); } catch (e) {}
+          pool = mysql.createPool(getPoolConfig());
+          setTimeout(function () {
+            attemptQuery(retriesLeft - 1);
+          }, 300);
+          return;
+        }
+        if (cb) cb(err, results, fields);
+      });
+    }
+    attemptQuery(3);
   },
   getConnection: function (cb) { return pool.getConnection(cb); },
   on: function (ev, cb) { return pool.on(ev, cb); },
   end: function (cb) { return pool.end(cb); }
 };
 
+// Heartbeat Ping every 10 seconds: keeps Railway MySQL proxy connections warm
+// so they never trigger the 30-second idle disconnect timeout.
+setInterval(function () {
+  pool.query("SELECT 1", function () {});
+}, 10000);
+
 wrappedPool.query("SELECT 1", (err) => {
   if (err) {
     console.error("Database boot connection notice:", err.message || err);
   } else {
-    console.log("Connected to MySQL successfully (Auto-Rebuilding Pool, SSL enabled)!");
+    console.log("Connected to MySQL successfully (10s Heartbeat Ping, 15s Idle Timeout, 3-Retry Pool, SSL enabled)!");
   }
 });
 
