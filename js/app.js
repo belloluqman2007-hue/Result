@@ -514,6 +514,9 @@ function loadSubjects() {
 
     const classSelect = document.getElementById("studentClass");
     const selectedClass = classSelect ? classSelect.value : "";
+    if (typeof populateStudentDropdown === "function") {
+        populateStudentDropdown(selectedClass);
+    }
 
     let subjectSelect = document.getElementById("subject");
     if (!subjectSelect) return;
@@ -533,7 +536,6 @@ function loadSubjects() {
     }
 
     const url = `/subjects?class=${encodeURIComponent(selectedClass)}`;
-    populateStudentDropdown(selectedClass);
 
     fetch(url)
         .then(response => response.json())
@@ -571,25 +573,31 @@ function loadSubjects() {
 }
 
 
-// NEW (Pack 56): Quick-pick student dropdown for score entry
+// NEW (Pack 56/60): Quick-pick student dropdown for score entry
 function populateStudentDropdown(className) {
     const drop = document.getElementById("studentSelectDropdown");
     if (!drop) return;
     fetch("/students")
         .then(r => r.json())
         .then(list => {
-            const inClass = className ? (list || []).filter(s => s.class_name === className) : (list || []);
-            const label = className ? ('-- Select Student in ' + className + ' (' + inClass.length + ' found) --') : ('-- All Students (' + inClass.length + ' found) - pick class to filter --');
+            const arr = Array.isArray(list) ? list : [];
+            const cleanClass = (className || "").trim();
+            const inClass = cleanClass ? arr.filter(s => (s.class_name || "").trim() === cleanClass) : arr;
+            const label = cleanClass
+                ? ('-- Select Student in ' + cleanClass + ' (' + inClass.length + ' found) --')
+                : ('-- All Students (' + inClass.length + ' found) - pick class to filter --');
             drop.innerHTML = '<option value="">' + label + '</option>';
-            inClass.sort((a, b) => String(a.full_name).localeCompare(String(b.full_name)));
+            inClass.sort((a, b) => String(a.full_name || "").localeCompare(String(b.full_name || "")));
             inClass.forEach(s => {
                 const opt = document.createElement("option");
                 opt.value = s.student_id;
-                opt.textContent = s.student_id + " - " + s.full_name + (className ? "" : (" (" + s.class_name + ")"));
+                opt.textContent = (s.student_id || "") + " - " + (s.full_name || "") + (cleanClass ? "" : (" (" + (s.class_name || "-") + ")"));
                 drop.appendChild(opt);
             });
         })
-        .catch(() => {});
+        .catch(() => {
+            drop.innerHTML = '<option value="">Could not load students list - check connection</option>';
+        });
 }
 
 window.pickStudentFromDropdown = function(sid) {

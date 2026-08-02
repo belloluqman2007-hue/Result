@@ -480,13 +480,20 @@
              (same #adminDangerZone id, same wipeAllData() handler - app.js
              is loaded there too). The dashboard no longer carries it. -->
 
-        <!-- EXISTING: Promote Students (upgraded to support Arabic + English & custom target class) -->
-        <div class="card-section">
-          <h2>Promote Students</h2>
-          <div class="promote-box" style="display:grid; gap:12px; max-width:480px;">
+        <!-- NEW (Pack 60): Gorgeous Smart Class Promotion Wizard Card -->
+        <div class="card-section" style="background:linear-gradient(135deg,#ffffff,#F8FAFA); border:2px solid #E0EEE7; border-radius:18px; padding:22px; box-shadow:0 6px 20px rgba(15,61,46,0.06); margin:20px 0;">
+          <div style="display:flex; align-items:center; gap:12px; margin-bottom:14px; border-bottom:1px solid #E5EFE9; padding-bottom:12px;">
+            <div style="width:44px; height:44px; border-radius:12px; background:linear-gradient(135deg,#1C5A42,#0F3D2E); color:#fff; display:flex; align-items:center; justify-content:center; font-size:22px; box-shadow:0 3px 8px rgba(28,90,66,0.25);">🎓</div>
             <div>
-              <label style="font-weight:700; font-size:13px; color:#1C5A42;">Select Current Class</label>
-              <select id="currentClass" style="width:100%; padding:10px; border-radius:8px; border:1px solid #ccc;">
+              <h2 style="margin:0; font-size:18px; color:#0F3D2E; font-weight:800;">Smart Class Promotion Wizard</h2>
+              <p style="margin:2px 0 0; font-size:12.5px; color:#555;">End-of-session promotion engine. Keeps 100% of historical result records intact.</p>
+            </div>
+          </div>
+
+          <div class="promote-box" style="display:grid; gap:16px; max-width:560px;">
+            <div>
+              <label style="font-weight:700; font-size:13px; color:#1C5A42; display:flex; align-items:center; gap:6px; margin-bottom:6px;"><span>🏫</span> Select Current Class to Promote</label>
+              <select id="currentClass" style="width:100%; padding:11px 12px; border-radius:10px; border:1.5px solid #C4DFD1; background:#fff; font-weight:600; color:#111; font-size:14px; outline:none; transition:border 0.2s;">
                 <optgroup label="Arabic / Islamic Madrasah Classes">
                   <option value="الأوّل التّحضيريّ">الأوّل التّحضيريّ (Preliminary 1)</option>
                   <option value="الثّاني التّحضيريّ">الثّاني التّحضيريّ (Preliminary 2)</option>
@@ -517,9 +524,10 @@
                 </optgroup>
               </select>
             </div>
+
             <div>
-              <label style="font-weight:700; font-size:13px; color:#1C5A42;">Target Next Class (Optional override)</label>
-              <select id="targetNextClass" style="width:100%; padding:10px; border-radius:8px; border:1px solid #ccc;">
+              <label style="font-weight:700; font-size:13px; color:#1C5A42; display:flex; align-items:center; gap:6px; margin-bottom:6px;"><span>🎯</span> Target Next Class (Optional override)</label>
+              <select id="targetNextClass" style="width:100%; padding:11px 12px; border-radius:10px; border:1.5px solid #C4DFD1; background:#fff; font-weight:600; color:#111; font-size:14px; outline:none;">
                 <option value="">-- Auto-promote to next standard level --</option>
                 <option value="الأوّل التّحضيريّ">الأوّل التّحضيريّ</option>
                 <option value="الثّاني التّحضيريّ">الثّاني التّحضيريّ</option>
@@ -547,15 +555,21 @@
                 <option value="Graduated">Graduated / Alumni</option>
               </select>
             </div>
+
             <div>
-              <label style="font-weight:700; font-size:13px; color:#1C5A42;">Promotion Mode (Merit vs Unconditional)</label>
-              <select id="promoteMode" style="width:100%; padding:10px; border-radius:8px; border:1px solid #ccc; font-weight:600; color:#0F3D2E;">
+              <label style="font-weight:700; font-size:13px; color:#1C5A42; display:flex; align-items:center; gap:6px; margin-bottom:6px;"><span>⚙️</span> Promotion Mode</label>
+              <select id="promoteMode" style="width:100%; padding:11px 12px; border-radius:10px; border:1.5px solid #C4DFD1; background:#EBF7F1; font-weight:700; color:#0F3D2E; font-size:13.5px; outline:none;">
                 <option value="merit">⭐ Smart Merit-Based (Auto-promote passing students, hold back Repeaters &lt;50%)</option>
                 <option value="all">🚀 Promote Entire Class Unconditionally (Move everyone regardless of score)</option>
               </select>
             </div>
-            <button class="promote-btn" onclick="promoteStudents()" style="width:100%;">
-              Promote Class 🚀
+
+            <div style="background:#EBF8F2; border-left:4px solid #1C5A42; padding:10px 12px; border-radius:8px; font-size:12px; color:#144431; line-height:1.45;">
+              <b>💡 Smart Merit-Based Summary:</b> Students with overall average <b>≥50%</b> are promoted to the next class. Students below 50% are automatically held back to repeat, and a detailed summary report is displayed.
+            </div>
+
+            <button class="promote-btn" onclick="promoteStudents()" style="width:100%; padding:14px; background:linear-gradient(135deg,#1C5A42,#0F3D2E); color:#fff; border:none; border-radius:12px; font-weight:800; font-size:15px; cursor:pointer; box-shadow:0 4px 12px rgba(28,90,66,0.25); transition:all 0.2s;">
+              🚀 Execute Smart Class Promotion
             </button>
           </div>
         </div>

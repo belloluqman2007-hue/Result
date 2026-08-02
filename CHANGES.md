@@ -4,6 +4,24 @@
 
 ---
 
+## Pack 60 — 2026-07-31
+
+Owner's requests:
+> "If I request indexing I am seeing this: Sorry--we couldn't process this request because you've exceeded your daily quota...
+> I am just seeing load student in student score no student in drop-down
+> Design the promotion section well and Beautiful"
+
+### FIX & UPGRADE (Pack 60) — Promotion Wizard Design, Student Dropdown Readiness & Quota Guidance
+- **Royal Islamic Class Promotion Wizard Design (`teacher-dashboard.html`)**:
+  - Replaced the basic promote section on `teacher-dashboard.html` with a **gorgeous Smart Class Promotion Wizard Card**.
+  - Features an emerald graduation badge (`🎓`), royal borders (`#E0EEE7`), clear icon-labeled fields (`🏫`, `🎯`, `⚙️`), a helpful info banner explaining merit vs. unconditional promotion, and a prominent gradient action button (`🚀 Execute Smart Class Promotion`).
+- **Score Entry Student Dropdown Readiness (`js/app.js`, `scores.html`)**:
+  - Ensured `populateStudentDropdown("")` runs when `scores.html` loads and is called whenever a class is selected on the page. Added clear network error reporting (`"Could not load students list - check connection"`) if student contacts cannot be fetched.
+- **Google Search Console Daily Quota Guidance**:
+  - Clarified that exceeding Google's daily manual indexing request limit is temporary and harmless—once `sitemap.xml` is submitted, Google's automatic crawlers will index the site in the background without needing manual button clicks.
+
+---
+
 ## Pack 59 — 2026-07-31
 
 Owner's requests:
