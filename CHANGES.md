@@ -4,6 +4,19 @@
 
 ---
 
+## Pack 74 — 2026-07-31
+
+Owner's requests:
+> "Signatures is saying error... The check result student results is still displaying 2 pages when printed... Open saved exam is still saying error also"
+
+### FIX (Pack 74) — Signatures Schema Stabilization & `queryImageSave` Fallback (`server.js`)
+- **Signatures & Class Teacher Signatures Schema Fix (`server.js`)**:
+  - Root cause found: In `ensureCoreTablesAndDefaultAdmin()`, the `signatures` table was created without the `signature_data` blob column or `updated_at` timestamp. When `POST /save-signature` executed `ON DUPLICATE KEY UPDATE signature_path = ..., signature_data = ..., updated_at = CURRENT_TIMESTAMP`, MySQL threw Error 1054 (`Unknown column 'signature_data'`), and the fallback query also threw Error 1054 (`Unknown column 'updated_at'`).
+  - Added full schema provisioning for `signatures` and `class_teacher_signatures` (including `signature_data LONGBLOB NULL` and `updated_at`) in `ensureCoreTablesAndDefaultAdmin()`.
+  - Upgraded `queryImageSave` with a 3rd fallback query level that dynamically strips `updated_at = CURRENT_TIMESTAMP` if an older database table is missing the column—ensuring signature saving never fails on any database schema.
+
+---
+
 ## Pack 73 — 2026-07-31
 
 Owner's requests:

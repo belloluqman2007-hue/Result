@@ -467,7 +467,13 @@ app.use((req, res, next) => {
 function queryImageSave(sqlWithData, paramsWithData, sqlWithout, paramsWithout, cb) {
     connection.query(sqlWithData, paramsWithData, (err, result) => {
         if (err && err.code === "ER_BAD_FIELD_ERROR") {
-            return connection.query(sqlWithout, paramsWithout, cb);
+            return connection.query(sqlWithout, paramsWithout, (err2, res2) => {
+                if (err2 && err2.code === "ER_BAD_FIELD_ERROR") {
+                    const cleanSql = sqlWithout.replace(/,\s*updated_at\s*=\s*CURRENT_TIMESTAMP/gi, "");
+                    return connection.query(cleanSql, paramsWithout, cb);
+                }
+                cb(err2, res2);
+            });
         }
         cb(err, result);
     });
@@ -574,6 +580,16 @@ function ensureCoreTablesAndDefaultAdmin() {
             id INT AUTO_INCREMENT PRIMARY KEY,
             role VARCHAR(50) NOT NULL UNIQUE,
             signature_path VARCHAR(255) NOT NULL,
+            signature_data LONGBLOB NULL,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        ) DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
+        `CREATE TABLE IF NOT EXISTS class_teacher_signatures (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            class_name VARCHAR(150) NOT NULL UNIQUE,
+            signature_path VARCHAR(255) NOT NULL,
+            signature_data LONGBLOB NULL,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         ) DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
         `CREATE TABLE IF NOT EXISTS fee_structure (
