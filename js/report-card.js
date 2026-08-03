@@ -244,15 +244,19 @@
        pages, snapped to row edges - never a stray sliver page. */
     window.amsCanvasToA4Pdf = function (canvas, quality, cutGuide) {
         const pdf = new window.jspdf.jsPDF({ unit: "mm", format: "a4" });
+        const maxWmm = 202; // 202mm content width (leaving 4mm left & right margins)
+        const maxHmm = 289; // 289mm content height (leaving 4mm top & bottom margins)
         const naturalWmm = 210;
         const naturalHmm = (canvas.height * naturalWmm) / canvas.width;
-        const s = Math.min(1.0, 296 / naturalHmm);
-        const wMm = naturalWmm * s;
-        const hMm = naturalHmm * s;
+        const scale = Math.min(1.0, maxWmm / naturalWmm, maxHmm / naturalHmm);
+        const wMm = naturalWmm * scale;
+        const hMm = naturalHmm * scale;
+        const xMm = (210 - wMm) / 2;
+        const yMm = Math.max(4, (297 - hMm) / 2);
         pdf.addImage(
             canvas.toDataURL("image/jpeg", quality || 0.96), "JPEG",
-            (210 - wMm) / 2,
-            Math.max(2, (297 - hMm) / 2),
+            xMm,
+            yMm,
             wMm, hMm
         );
         return pdf;

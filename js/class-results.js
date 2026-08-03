@@ -417,7 +417,7 @@
         // CHANGED (pack 34b): rcpzip = one-page compact skin (css/style.css)
         // so real cards (tall Arabic rows + photo) fit ONE A4 page.
         stage.className = "ams-staging rcpzip";
-        stage.style.width = "900px";
+        stage.style.width = "794px";
         document.body.appendChild(stage);
 
         // Signatures are identical for every report - fetch once (#8 speed).

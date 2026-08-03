@@ -3876,13 +3876,13 @@ app.delete("/api/teacher-classes/:id", requireLogin, requireAdmin, (req, res) =>
 
 app.get("/exams", requireLogin, (req, res) => {
     connection.query(
-        "SELECT id, title, class_name, subject, term, session, updated_at FROM exams ORDER BY updated_at DESC",
+        "SELECT id, title, class_name, subject, term, session, created_at FROM exams ORDER BY id DESC",
         (err, rows) => {
             if (err) {
                 console.log(err);
                 return res.status(500).send("Database Error");
             }
-            res.json(rows);
+            res.json(rows || []);
         }
     );
 });

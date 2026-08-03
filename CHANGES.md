@@ -4,6 +4,34 @@
 
 ---
 
+## Pack 77 — 2026-07-31
+
+Owner's requests:
+> "The class result zip is not a4 page it is too big"
+> "Did you fixed my remaining request?"
+
+### FIX (Pack 77) — Class Result ZIP A4 Portrait Dimension & Margin Standardization (`js/class-results.js`, `js/report-card.js`)
+- **Standardized A4 Portrait Staging Width (`js/class-results.js`)**:
+  - Why student PDFs in the Class Results ZIP appeared oversized/zoomed-in: Previously, `crDownloadAllZip` staged individual report cards at `width: 900px`, which exceeded standard A4 portrait pixel dimensions (794px at 96 DPI) and caused the PDF output to look magnified.
+  - Adjusted staging width from `900px` to `794px` (`stage.style.width = "794px"`), matching standard A4 portrait proportions.
+- **Universal A4 Printable Margins (`js/report-card.js`)**:
+  - Upgraded `window.amsCanvasToA4Pdf` with explicit printable margin boundaries (`maxWmm = 202`, `maxHmm = 289`, leaving a 4mm margin on all four sides of the page).
+  - Whether a report card is downloaded individually on Check Result or generated inside a whole-class ZIP file on Class Results, every single student report sheet is scaled and centered on **exactly one standard A4 portrait page** without visual magnification or clipping.
+
+---
+
+## Pack 76 — 2026-07-31
+
+Owner's requests:
+> "The open saved is not opening because error loading saved exam... Fix any possible error that is causing it not to open"
+
+### FIX (Pack 76) — Saved Exam List SQL Column Fix (`server.js`)
+- **Saved Exam List (`GET /exams`) Query Fix (`server.js`)**:
+  - Root cause found: Line 3879 of `server.js` (`GET /exams`) attempted `SELECT ... updated_at FROM exams ORDER BY updated_at DESC`, but the `exams` table does not have an `updated_at` column. That caused MySQL Error 1054 (`Unknown column 'updated_at'`), which caused `/exams` to return HTTP 500 and prevented saved exams from opening in `create-exam.html`.
+  - Replaced the query with `SELECT id, title, class_name, subject, term, session, created_at FROM exams ORDER BY id DESC`, permanently restoring saved exam loading and opening in Create Exam.
+
+---
+
 ## Pack 75 — 2026-07-31
 
 Owner's requests:
