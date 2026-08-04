@@ -4,6 +4,23 @@
 
 ---
 
+## Pack 79 — 2026-07-31
+
+Owner's requests:
+> "In classes and subjects let the two be at different section also"
+> "And let it be like If I choose one class it will display all there subject not that all classes subjects will be just in one place"
+> "The icon for delete and change in subjects is not showing also"
+
+### FEATURE & UPGRADE (Pack 79) — Separate Class/Subject Views, Subject Class Filter & Visible Action Badges (`add-subject.html`, `js/subject.js`)
+- **Section Switcher Tabs (`add-subject.html`, `js/subject.js`)**:
+  - Separated the **Classes** and **Subjects** cards into independently togglable views. Added a tab navigation bar (`🔀 Show Both Sections`, `🏫 Manage Classes`, `📚 Manage Subjects`) at the top of the page so teachers and admins can switch directly to Subjects without scrolling past Classes.
+- **Filter Subjects by Class (`#subjClassFilter`)**:
+  - Added a **Filter by Class** dropdown to the top of the Subjects card. When a class is selected (e.g., `JSS 1` / `الأوّل الإعداديّ`), the table dynamically filters to display only the subjects assigned to that specific class.
+- **Visible Edit & Delete Action Badges (`js/subject.js`)**:
+  - Upgraded the action column in both `renderClassesList()` and `renderSubjectsList()` with high-contrast text badges (`✏️ Edit`, `🗑️ Delete`) alongside their SVG icons, guaranteeing 100% visibility on all desktop browsers and mobile devices.
+
+---
+
 ## Pack 78 — 2026-07-31
 
 Owner's requests:

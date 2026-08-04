@@ -34,10 +34,17 @@
       </div>
     </div>
 
-    <div class="mng-two-col">
+    <!-- NEW (Pack 79): Section Switcher Tabs so Classes and Subjects can be viewed separately -->
+    <div style="display:flex; gap:10px; margin-bottom:16px; flex-wrap:wrap;">
+      <button type="button" class="mng-btn mng-tab-btn active" data-tab="both" onclick="showSubjTab('both')" style="padding:8px 16px; border-radius:10px;">🔀 Show Both Sections</button>
+      <button type="button" class="mng-btn-light mng-tab-btn" data-tab="classes" onclick="showSubjTab('classes')" style="padding:8px 16px; border-radius:10px;">🏫 Manage Classes</button>
+      <button type="button" class="mng-btn-light mng-tab-btn" data-tab="subjects" onclick="showSubjTab('subjects')" style="padding:8px 16px; border-radius:10px;">📚 Manage Subjects</button>
+    </div>
+
+    <div class="mng-two-col" id="mngTwoColWrap">
 
       <!-- ===== CARD: classes ===== -->
-      <div class="mng-card">
+      <div class="mng-card" id="classesCardSection">
         <h2 class="mng-card-title">
           <span class="mng-ico">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-6 9 6v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M9 22V12h6v10"/></svg>
@@ -64,16 +71,13 @@
       </div>
 
       <!-- ===== CARD: subjects ===== -->
-      <div class="mng-card">
+      <div class="mng-card" id="subjectsCardSection">
         <h2 class="mng-card-title">
           <span class="mng-ico">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
           </span>
           Subjects
         </h2>
-        <!-- CHANGED (request #3): NOTHING is hardcoded anymore - the
-             subject list comes fully from the database. Type any name;
-             suggestions appear from subjects you already created. -->
         <p class="mng-card-sub">Type a subject name, tick the classes it belongs to, and add. Toggle the switch to hide a subject from dropdowns without deleting it.</p>
 
         <div class="mng-grid" style="grid-template-columns:1fr;">
@@ -95,10 +99,17 @@
           </button>
         </div>
 
-        <!-- NEW: live search makes long subject lists manageable -->
-        <div class="mng-search" style="margin-top:18px;">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
-          <input type="text" id="subjSearchInput" placeholder="Search subjects or classes..." oninput="renderSubjectsList()">
+        <!-- NEW (Pack 79): Filter by Class dropdown + Search box -->
+        <div style="display:flex; gap:10px; flex-wrap:wrap; margin-top:18px; align-items:center;">
+          <div class="mng-search" style="flex:1; min-width:180px; margin-top:0;">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+            <input type="text" id="subjSearchInput" placeholder="🔍 Search subjects..." oninput="renderSubjectsList()">
+          </div>
+          <div style="min-width:200px; flex:1;">
+            <select id="subjClassFilter" onchange="renderSubjectsList()" style="width:100%; padding:10px 14px; border-radius:10px; border:1.5px solid #C4DFD1; background:#fff; font-weight:700; color:#0F3D2E; font-size:13.5px; outline:none;">
+              <option value="">📚 All Classes (Show All Subjects)</option>
+            </select>
+          </div>
         </div>
 
         <!-- Container keeps the ORIGINAL id (allSubjectsTable). -->

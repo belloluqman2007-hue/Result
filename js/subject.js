@@ -118,10 +118,10 @@ function renderClassesList() {
             actions.className = "mng-row-actions";
             actions.innerHTML =
                 '<button type="button" class="mng-icon-btn mng-danger" title="Delete class" ' +
+                'style="display:inline-flex; align-items:center; gap:4px; font-weight:700; color:#B91C1C; padding:5px 10px; border:1px solid #FCA5A5; border-radius:8px; background:#FEF2F2;" ' +
                 'onclick="deleteClass(' + cls.id + ')">' +
-                '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
-                '<path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>' +
-                "</svg></button>";
+                '🗑️ <span style="font-size:12.5px;">Delete</span>' +
+                '</button>';
 
             row.appendChild(main);
             row.appendChild(actions);
@@ -183,6 +183,15 @@ function loadClassesIntoSelects() {
                     select.value = previousValue;
                 }
             });
+            const filterSel = document.getElementById("subjClassFilter");
+            if (filterSel) {
+                const prev = filterSel.value;
+                filterSel.innerHTML = '<option value="">📚 All Classes (Show All Subjects)</option>';
+                classes.forEach(cls => {
+                    filterSel.innerHTML += `<option value="${cls.class_name}">🏫 Filter: ${cls.class_name}</option>`;
+                });
+                if (prev) filterSel.value = prev;
+            }
             if (typeof populateStudentDropdown === "function") {
                 const sc = document.getElementById("studentClass");
                 populateStudentDropdown(sc ? sc.value : "");
@@ -305,7 +314,9 @@ function renderSubjectsList() {
     if (!box) return;
 
     const query = (document.getElementById("subjSearchInput") || { value: "" }).value.trim().toLowerCase();
+    const classFilter = (document.getElementById("subjClassFilter") || { value: "" }).value.trim();
     const list = amsSubjectsCache.filter(s => {
+        if (classFilter && s.class_name !== classFilter) return false;
         if (!query) return true;
         return (s.subject_name || "").toLowerCase().includes(query) ||
                (s.class_name || "").toLowerCase().includes(query);
@@ -313,13 +324,12 @@ function renderSubjectsList() {
 
     if (!list.length) {
         box.innerHTML = '<div class="mng-empty">' +
-            (query ? "No subjects match your search." : "No subjects yet - add one above.") +
+            (query || classFilter ? "No subjects match your search or class filter." : "No subjects yet - add one above.") +
             "</div>";
     } else {
         box.innerHTML = "";
         list.forEach(subject => {
             const row = document.createElement("div");
-            // NEW (request #3): disabled subjects are dimmed and get a switch.
             const isActive = subject.is_active === undefined || subject.is_active === null
                 ? true
                 : Number(subject.is_active) === 1;
@@ -328,7 +338,6 @@ function renderSubjectsList() {
             const main = document.createElement("div");
             main.className = "mng-row-main";
             main.textContent = subject.subject_name;
-            // Subjects can be Arabic or English - dir="auto" keeps both tidy.
             main.setAttribute("dir", "auto");
             if (!isActive) {
                 const offTag = document.createElement("span");
@@ -344,7 +353,6 @@ function renderSubjectsList() {
             const actions = document.createElement("div");
             actions.className = "mng-row-actions";
 
-            // NEW (request #3): Enable/Disable switch
             const toggle = document.createElement("button");
             toggle.type = "button";
             toggle.className = "mng-switch" + (isActive ? " mng-switch-on" : "");
@@ -356,23 +364,20 @@ function renderSubjectsList() {
             });
             actions.appendChild(toggle);
 
-            // NEW (request #3): Edit button -> opens the edit modal.
             const editBtn = document.createElement("button");
             editBtn.type = "button";
             editBtn.className = "mng-icon-btn";
             editBtn.title = "Edit subject";
-            editBtn.innerHTML =
-                '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
-                '<path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>';
+            editBtn.innerHTML = '✏️ <span style="font-size:12.5px; font-weight:700;">Edit</span>';
+            editBtn.style.cssText = "display:inline-flex; align-items:center; gap:4px; font-weight:700; color:#0F3D2E; padding:5px 10px; border:1px solid #C4DFD1; border-radius:8px; background:#EBF8F2;";
             editBtn.addEventListener("click", function () { openSubjectEdit(subject); });
 
             const delBtn = document.createElement("button");
             delBtn.type = "button";
             delBtn.className = "mng-icon-btn mng-danger";
             delBtn.title = "Delete subject";
-            delBtn.innerHTML =
-                '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
-                '<path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>';
+            delBtn.innerHTML = '🗑️ <span style="font-size:12.5px; font-weight:700; color:#B91C1C;">Delete</span>';
+            delBtn.style.cssText = "display:inline-flex; align-items:center; gap:4px; font-weight:700; color:#B91C1C; padding:5px 10px; border:1px solid #FCA5A5; border-radius:8px; background:#FEF2F2;";
             delBtn.addEventListener("click", function () { deleteSubject(subject.id); });
 
             actions.appendChild(editBtn);
@@ -387,7 +392,7 @@ function renderSubjectsList() {
 
     const countLine = document.getElementById("subjCountLine");
     if (countLine) {
-        countLine.textContent = list.length + " subject(s)" + (query ? " match your search." : " in total.");
+        countLine.textContent = list.length + " subject(s)" + (query || classFilter ? " match your filter." : " in total.");
     }
 }
 
@@ -501,3 +506,31 @@ document.addEventListener("keydown", function (e) {
         if (overlay && overlay.style.display !== "none") closeSubjectEdit();
     }
 });
+
+// NEW (Pack 79): Section Switcher Tabs for Classes vs Subjects
+window.showSubjTab = function (tab) {
+    const clsCard = document.getElementById("classesCardSection");
+    const subjCard = document.getElementById("subjectsCardSection");
+    if (!clsCard || !subjCard) return;
+    if (tab === "classes") {
+        clsCard.style.display = "block";
+        subjCard.style.display = "none";
+    } else if (tab === "subjects") {
+        clsCard.style.display = "none";
+        subjCard.style.display = "block";
+    } else {
+        clsCard.style.display = "block";
+        subjCard.style.display = "block";
+    }
+    document.querySelectorAll(".mng-tab-btn").forEach(function (b) {
+        const isTarget = b.getAttribute("data-tab") === tab;
+        b.classList.toggle("active", isTarget);
+        if (isTarget) {
+            b.style.background = "#0F3D2E";
+            b.style.color = "#fff";
+        } else {
+            b.style.background = "#f4f4f4";
+            b.style.color = "#333";
+        }
+    });
+};
