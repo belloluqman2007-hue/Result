@@ -38,7 +38,7 @@
     // CHANGED (per-class class teacher signature, owner request):
     // sharedSignatures is now a pack { signatures, classSignatures }.
     // A plain array (older callers) is treated as just the role list.
-    window.amsFetchReportPack = function (studentId, term, session, sharedSignatures) {
+    window.amsFetchReportPack = function (studentId, term, session, sharedSignatures, className) {
         const enc = encodeURIComponent;
         const sigPromise = sharedSignatures
             ? Promise.resolve(sharedSignatures)
@@ -50,19 +50,28 @@
             fetch(`/search-result/${enc(studentId)}?term=${enc(term)}&session=${enc(session)}`)
                 .then(r => r.json()),
             fetch(`/student/${enc(studentId)}`).then(r => r.json()).catch(() => []),
-            fetch(`/student-position/${enc(studentId)}`).then(r => r.json()).catch(() => ({})),
             sigPromise
-        ]).then(([rows, studentArr, positionData, sigPack]) => ({
-            rows: Array.isArray(rows) ? rows : [],
-            student: Array.isArray(studentArr) && studentArr.length ? studentArr[0] : null,
-            position: positionData && positionData.position ? positionData.position : null,
-            signatures: Array.isArray(sigPack)
-                ? sigPack                                  // legacy plain-array caller
-                : (sigPack.signatures || []),
-            classSignatures: Array.isArray(sigPack)
-                ? []
-                : (sigPack.classSignatures || [])
-        }));
+        ]).then(([rows, studentArr, sigPack]) => {
+            const st = Array.isArray(studentArr) && studentArr.length ? studentArr[0] : null;
+            const cls = className || (st && st.class_name) || (Array.isArray(rows) && rows.length && rows[0].class_name) || "";
+            const posUrl = cls
+                ? `/student-position/${enc(studentId)}?className=${enc(cls)}&term=${enc(term)}&session=${enc(session)}`
+                : `/student-position/${enc(studentId)}`;
+            return fetch(posUrl)
+                .then(r => r.ok ? r.json() : {})
+                .catch(() => ({}))
+                .then(positionData => ({
+                    rows: Array.isArray(rows) ? rows : [],
+                    student: st,
+                    position: positionData && positionData.position ? positionData.position : null,
+                    signatures: Array.isArray(sigPack)
+                        ? sigPack
+                        : (sigPack.signatures || []),
+                    classSignatures: Array.isArray(sigPack)
+                        ? []
+                        : (sigPack.classSignatures || [])
+                }));
+        });
     };
 
     function positionSuffix(position) {

@@ -917,10 +917,11 @@ body{
 }
 
 /* The spacing selector still works - every step stays in the same
-   paper style, only the density changes. */
+   paper style, only the density changes. Standardized in Pack 78
+   for clean rendering across Windows, Mac, and mobile fallbacks. */
 .exam-body.spacing-compact{
-  line-height:1.6;
-  font-size:26pt;
+  line-height:1.5;
+  font-size:16pt;
 }
 .exam-body.spacing-compact p,
 .exam-body.spacing-compact li{
@@ -928,30 +929,30 @@ body{
 }
 
 .exam-body.spacing-normal{
-  line-height:2;      /* 67pt per question - the paper's exact pitch */
-  font-size:32pt;
+  line-height:1.8;
+  font-size:18pt;
 }
 .exam-body.spacing-normal p,
 .exam-body.spacing-normal li{
-  margin-bottom:4px;
+  margin-bottom:8px;
 }
 
 .exam-body.spacing-relaxed{
-  line-height:2.6;
-  font-size:34pt;
+  line-height:2.1;
+  font-size:22pt;
 }
 .exam-body.spacing-relaxed p,
 .exam-body.spacing-relaxed li{
-  margin-bottom:20px;
+  margin-bottom:14px;
 }
 
 .exam-body.spacing-spacious{
-  line-height:3.1;
-  font-size:36pt;
+  line-height:2.4;
+  font-size:26pt;
 }
 .exam-body.spacing-spacious p,
 .exam-body.spacing-spacious li{
-  margin-bottom:34px;
+  margin-bottom:24px;
 }
 
 .toolbar-label{

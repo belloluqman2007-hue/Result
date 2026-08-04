@@ -4,6 +4,27 @@
 
 ---
 
+## Pack 78 — 2026-07-31
+
+Owner's requests:
+> "The exam font: On my pc if I open live server it will display well. But if I open it on the real website the font will be bigger...
+> The receipt is not well designed and student class is not displaying and purpose of the payment is not there...
+> The result zip is still big not like the check result itself and position is not displaying in the class zip"
+
+### FIX & UPGRADE (Pack 78) — Exam Font Standardization, Class ZIP Position Sync & Official Islamic Fee Receipt
+- **Universal Exam Font Sizing (`css/exam.css`)**:
+  - Why exam fonts appeared larger on the deployed website than on a local PC: The stylesheet previously hardcoded `font-size: 32pt` for `.exam-body`. On Windows PCs with `Sakkal Majalla` installed, `32pt` rendered at a medium visual size; however, on mobile devices, Macs, and PCs without Sakkal Majalla, fallback fonts (`Arial`, `Cairo`, `Amiri`) rendered `32pt` as an oversized display font.
+  - Standardized `.exam-body` font sizes across compact (`16pt`), normal (`18pt`), relaxed (`22pt`), and spacious (`26pt`) spacing tiers so exam questions display at a clean, professional paper size across all devices and fallback fonts.
+- **Class Result ZIP Position Guarantee (`js/report-card.js`)**:
+  - Why student positions (`1st`, `2nd`, `3rd`) were missing inside the Class Result ZIP: Previously, `amsFetchReportPack` called `/student-position/:id` without passing `className`, `term`, and `session` parameters, which caused the backend position endpoint to reject the request with HTTP 400.
+  - Upgraded `amsFetchReportPack` to resolve `className` from the student profile and automatically pass `?className=...&term=...&session=...` to `/student-position/:id`. Every student report sheet inside the whole-class ZIP now displays their exact class position.
+- **Official Islamic Fee Payment Receipt Redesign (`js/ams-pdf.js`)**:
+  - Redesigned `amsReceiptPDF(o)` into a luxury 2-column official fee receipt.
+  - Guaranteed display of **STUDENT CLASS** (`o.className || o.class_name || o.cls || "-"`) and **PURPOSE OF PAYMENT / FEE TYPE** (`o.purpose || o.feeType || o.title || "School Fee"`).
+  - Added a prominent emerald-tinted **AMOUNT PAID (NAIRA)** box, school crest watermark, and official Bursar and Principal signature blocks.
+
+---
+
 ## Pack 77 — 2026-07-31
 
 Owner's requests:
