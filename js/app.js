@@ -573,27 +573,48 @@ function loadSubjects() {
 }
 
 
-// NEW (Pack 56/60): Quick-pick student dropdown for score entry
+// NEW (Pack 56/60/80): Quick-pick student dropdown for score entry
+let amsCachedStudentList = null;
+
+function normalizeArClass(str) {
+    return String(str || "")
+        .replace(/[\u064B-\u0652\u0670\u0640]/g, "") // remove Tashkeel / diacritics
+        .replace(/[إأآٱ]/g, "ا")                     // normalize Alef
+        .replace(/\s+/g, "")                         // strip whitespace
+        .toLowerCase();
+}
+
 function populateStudentDropdown(className) {
     const drop = document.getElementById("studentSelectDropdown");
     if (!drop) return;
+
+    function renderList(list) {
+        const arr = Array.isArray(list) ? list : [];
+        const normTarget = normalizeArClass(className);
+        const inClass = normTarget ? arr.filter(s => normalizeArClass(s.class_name) === normTarget) : arr;
+        const label = normTarget
+            ? ('-- Select Student in ' + (className || "").trim() + ' (' + inClass.length + ' found) --')
+            : ('-- All Students (' + inClass.length + ' found) - pick class to filter --');
+        drop.innerHTML = '<option value="">' + label + '</option>';
+        inClass.sort((a, b) => String(a.full_name || "").localeCompare(String(b.full_name || "")));
+        inClass.forEach(s => {
+            const opt = document.createElement("option");
+            opt.value = s.student_id;
+            opt.textContent = (s.student_id || "") + " - " + (s.full_name || "") + (normTarget ? "" : (" (" + (s.class_name || "-") + ")"));
+            drop.appendChild(opt);
+        });
+    }
+
+    if (amsCachedStudentList) {
+        renderList(amsCachedStudentList);
+        return;
+    }
+
     fetch("/students")
         .then(r => r.json())
         .then(list => {
-            const arr = Array.isArray(list) ? list : [];
-            const cleanClass = (className || "").trim();
-            const inClass = cleanClass ? arr.filter(s => (s.class_name || "").trim() === cleanClass) : arr;
-            const label = cleanClass
-                ? ('-- Select Student in ' + cleanClass + ' (' + inClass.length + ' found) --')
-                : ('-- All Students (' + inClass.length + ' found) - pick class to filter --');
-            drop.innerHTML = '<option value="">' + label + '</option>';
-            inClass.sort((a, b) => String(a.full_name || "").localeCompare(String(b.full_name || "")));
-            inClass.forEach(s => {
-                const opt = document.createElement("option");
-                opt.value = s.student_id;
-                opt.textContent = (s.student_id || "") + " - " + (s.full_name || "") + (cleanClass ? "" : (" (" + (s.class_name || "-") + ")"));
-                drop.appendChild(opt);
-            });
+            amsCachedStudentList = Array.isArray(list) ? list : [];
+            renderList(amsCachedStudentList);
         })
         .catch(() => {
             drop.innerHTML = '<option value="">Could not load students list - check connection</option>';

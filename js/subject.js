@@ -117,10 +117,9 @@ function renderClassesList() {
             const actions = document.createElement("div");
             actions.className = "mng-row-actions";
             actions.innerHTML =
-                '<button type="button" class="mng-icon-btn mng-danger" title="Delete class" ' +
-                'style="display:inline-flex; align-items:center; gap:4px; font-weight:700; color:#B91C1C; padding:5px 10px; border:1px solid #FCA5A5; border-radius:8px; background:#FEF2F2;" ' +
+                '<button type="button" class="mng-action-pill del" title="Delete class" ' +
                 'onclick="deleteClass(' + cls.id + ')">' +
-                '🗑️ <span style="font-size:12.5px;">Delete</span>' +
+                '<span>🗑️</span><span>Delete</span>' +
                 '</button>';
 
             row.appendChild(main);
@@ -366,18 +365,16 @@ function renderSubjectsList() {
 
             const editBtn = document.createElement("button");
             editBtn.type = "button";
-            editBtn.className = "mng-icon-btn";
+            editBtn.className = "mng-action-pill edit";
             editBtn.title = "Edit subject";
-            editBtn.innerHTML = '✏️ <span style="font-size:12.5px; font-weight:700;">Edit</span>';
-            editBtn.style.cssText = "display:inline-flex; align-items:center; gap:4px; font-weight:700; color:#0F3D2E; padding:5px 10px; border:1px solid #C4DFD1; border-radius:8px; background:#EBF8F2;";
+            editBtn.innerHTML = '<span>✏️</span><span>Edit</span>';
             editBtn.addEventListener("click", function () { openSubjectEdit(subject); });
 
             const delBtn = document.createElement("button");
             delBtn.type = "button";
-            delBtn.className = "mng-icon-btn mng-danger";
+            delBtn.className = "mng-action-pill del";
             delBtn.title = "Delete subject";
-            delBtn.innerHTML = '🗑️ <span style="font-size:12.5px; font-weight:700; color:#B91C1C;">Delete</span>';
-            delBtn.style.cssText = "display:inline-flex; align-items:center; gap:4px; font-weight:700; color:#B91C1C; padding:5px 10px; border:1px solid #FCA5A5; border-radius:8px; background:#FEF2F2;";
+            delBtn.innerHTML = '<span>🗑️</span><span>Delete</span>';
             delBtn.addEventListener("click", function () { deleteSubject(subject.id); });
 
             actions.appendChild(editBtn);

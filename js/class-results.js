@@ -414,9 +414,9 @@
 
         // Off-screen staging area with a fixed report width.
         var stage = document.createElement("div");
-        // CHANGED (pack 34b): rcpzip = one-page compact skin (css/style.css)
-        // so real cards (tall Arabic rows + photo) fit ONE A4 page.
-        stage.className = "ams-staging rcpzip";
+        // CHANGED (pack 80): remove .rcpzip skin so the report card inside
+        // the ZIP renders EXACTLY identical to Check Result on screen/print.
+        stage.className = "ams-staging";
         stage.style.width = "794px";
         document.body.appendChild(stage);
 
@@ -473,7 +473,7 @@
                         scale: 2,
                         backgroundColor: "#ffffff",
                         useCORS: true,
-                        windowWidth: 1400
+                        windowWidth: 1024
                     });
 
                     /* FIX (pack 30): phones under memory pressure sometimes
@@ -490,7 +490,7 @@
                             scale: 1.6,
                             backgroundColor: "#ffffff",
                             useCORS: true,
-                            windowWidth: 1400 /* FIX (pack 37): same phone fix on the retry capture */
+                            windowWidth: 1024 /* FIX (pack 80): same desktop windowWidth on retry */
                         });
                     }
 

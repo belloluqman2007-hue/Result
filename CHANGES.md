@@ -4,6 +4,39 @@
 
 ---
 
+## Pack 81 — 2026-07-31
+
+Owner's requests:
+> "The icon in subjects is not displaying well and delete also it is falling on eachother"
+
+### FIX (Pack 81) — Action Button Pill Geometry & Wrap Layout (`css/manage.css`, `js/subject.js`)
+- **Action Button Pill Geometry (`css/manage.css`, `js/subject.js`)**:
+  - Why Edit and Delete buttons overlapped on `add-subject.html`: Previously, `.mng-icon-btn` had a hardcoded `width: 34px`. When text labels (`Edit`, `Delete`) were added alongside SVG icons, the text exceeded 34px and visually collided with adjacent buttons.
+  - Replaced fixed-width icon boxes with `.mng-action-pill` (`width: auto !important; min-width: 68px !important; white-space: nowrap !important;`), ensuring buttons dynamically size to fit their icon and text.
+  - Upgraded `.mng-row-actions` with `flex-wrap: wrap !important; gap: 10px !important;` so buttons never overlap on narrow mobile screens.
+
+---
+
+## Pack 80 — 2026-07-31
+
+Owner's requests:
+> "The exam font is still big and not sakamajala font , use only sakamajala font for the exam"
+> "The zip result is still big let it be like how it is displaying in check results , let is all be exactly how it is displaying in check results"
+> "In student score All students is still having some problem It sometimes display just two student it just went off sometimes"
+
+### FIX & UPGRADE (Pack 80) — Universal Sakkal Majalla Font Enforcement, Class Result ZIP Fidelity & Tashkeel-Insensitive Dropdown
+- **Universal `Sakkal Majalla` Exam Font Enforcement (`css/exam.css`)**:
+  - Why exam fonts appeared large and non-Sakkal Majalla on non-Windows devices: `Sakkal Majalla` is a Windows proprietary font that is not installed on mobile phones, tablets, or Macs by default. Previously, only `.exam-page.page-one` specified Sakkal Majalla, while `.exam-body` questions fell back to larger fonts.
+  - Added `@font-face` bindings for `Sakkal Majalla` and locked `.exam-body, .exam-page, .exam-flow, .exam-flow *` with `font-family: 'Sakkal Majalla', 'SakkalMajalla', 'Traditional Arabic', 'Amiri', serif !important;`. Upgraded question font sizes (`14pt` compact, `16pt` normal, `18pt` relaxed, `20pt` spacious) so exams display at an identical, professional paper size across PCs and mobile fallbacks.
+- **100% Check Result Fidelity in Class Result ZIP (`js/class-results.js`)**:
+  - Why student report cards inside the Class Result ZIP appeared oversized/modified: Previously, staging used the `.rcpzip` skin and `windowWidth: 1400`.
+  - Removed `.rcpzip` from the staging container (`stage.className = "ams-staging"`) and set `windowWidth: 1024` on both primary and fallback captures. Every student report card generated inside the whole-class ZIP now uses the exact same unmodified CSS, padding, margins, and layout as Check Result (`student-result.html`).
+- **Tashkeel & Diacritic-Insensitive Student Dropdown (`js/app.js`)**:
+  - Why `#studentSelectDropdown` sometimes displayed only 2 students for an Arabic class: Arabic class names typed with Tashkeel/shadda (`الأوّل التّحضيريّ`) did not match names stored without Tashkeel (`الأول التحضيري`) under an exact string comparison.
+  - Implemented `normalizeArClass(str)` to strip Arabic diacritics/Tashkeel, normalize Alef, and ignore whitespace when filtering students by class. Added in-memory student caching (`amsCachedStudentList`) so the dropdown populates 100% of class students instantly without network spam.
+
+---
+
 ## Pack 79 — 2026-07-31
 
 Owner's requests:

@@ -5,6 +5,15 @@
    The editing chrome uses our brand colors.
 ========================================== */
 
+@font-face {
+  font-family: 'Sakkal Majalla';
+  src: local('Sakkal Majalla'), local('SakkalMajalla');
+}
+
+.exam-body, .exam-page, .exam-flow, .exam-flow * {
+  font-family: 'Sakkal Majalla', 'SakkalMajalla', 'Traditional Arabic', 'Amiri', serif !important;
+}
+
 body{
   background:var(--parchment-deep);
 }
@@ -917,11 +926,11 @@ body{
 }
 
 /* The spacing selector still works - every step stays in the same
-   paper style, only the density changes. Standardized in Pack 78
+   paper style, only the density changes. Standardized in Pack 78/80
    for clean rendering across Windows, Mac, and mobile fallbacks. */
 .exam-body.spacing-compact{
-  line-height:1.5;
-  font-size:16pt;
+  line-height:1.4 !important;
+  font-size:14pt !important;
 }
 .exam-body.spacing-compact p,
 .exam-body.spacing-compact li{
@@ -929,8 +938,8 @@ body{
 }
 
 .exam-body.spacing-normal{
-  line-height:1.8;
-  font-size:18pt;
+  line-height:1.6 !important;
+  font-size:16pt !important;
 }
 .exam-body.spacing-normal p,
 .exam-body.spacing-normal li{
@@ -938,8 +947,8 @@ body{
 }
 
 .exam-body.spacing-relaxed{
-  line-height:2.1;
-  font-size:22pt;
+  line-height:1.8 !important;
+  font-size:18pt !important;
 }
 .exam-body.spacing-relaxed p,
 .exam-body.spacing-relaxed li{
@@ -947,8 +956,8 @@ body{
 }
 
 .exam-body.spacing-spacious{
-  line-height:2.4;
-  font-size:26pt;
+  line-height:2.0 !important;
+  font-size:20pt !important;
 }
 .exam-body.spacing-spacious p,
 .exam-body.spacing-spacious li{
