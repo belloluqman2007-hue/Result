@@ -19,6 +19,8 @@ const connection = require("./db");
 
 const app = express();
 app.use(express.json());
+// Accept classic HTML form posts too, in case any page submits without JS.
+app.use(express.urlencoded({ extended: true }));
 
 // NEW (Pack 54/55): Explicit high-priority SEO routes for Google crawler & Search Console
 app.get("/robots.txt", (req, res) => {
@@ -114,6 +116,18 @@ class MySqlSessionStore extends session.Store {
     }
 }
 const sessionStore = new MySqlSessionStore(connection);
+
+// SECURITY: in production a real SESSION_SECRET must be provided. The insecure
+// dev fallback below is ONLY tolerated when NODE_ENV is not "production" - a
+// predictable secret would let anyone forge session cookies.
+if (isProduction && !process.env.SESSION_SECRET) {
+    console.error(
+        "FATAL: SESSION_SECRET is not set but NODE_ENV=production. Refusing to start " +
+        "with the insecure development secret. Generate one with:\n" +
+        "  node -e \"console.log(require('crypto').randomBytes(48).toString('hex'))\""
+    );
+    process.exit(1);
+}
 
 app.use(session({
     secret: process.env.SESSION_SECRET || "local-dev-only-insecure-secret-change-me",
@@ -221,7 +235,34 @@ function requireAdminPage(req, res, next) {
     return res.status(401).json({ message: "Not logged in" });
 }
 
+/* ---------- Brute-force protection for the two login routes -----------
+   Simple in-memory, per-IP rate limiter (same bucket pattern used by the
+   AI assistant limiter further down). Allows LOGIN_MAX_ATTEMPTS attempts
+   per LOGIN_WINDOW_MS window per IP, then returns 429 until the window
+   resets. In-memory is enough for a single-instance deployment. */
+const LOGIN_MAX_ATTEMPTS = 10;
+const LOGIN_WINDOW_MS = 15 * 60 * 1000; // 15 minutes
+const loginHits = Object.create(null); // ip -> { count, resetAt }
+setInterval(function () { // sweep expired buckets (memory hygiene)
+    const now = Date.now();
+    Object.keys(loginHits).forEach(function (k) { if (loginHits[k].resetAt < now) delete loginHits[k]; });
+}, 600000).unref();
+
+function loginRateLimit(req, res) {
+    const ip = req.ip || (req.connection && req.connection.remoteAddress) || "?";
+    const now = Date.now();
+    let bucket = loginHits[ip];
+    if (!bucket || bucket.resetAt < now) bucket = loginHits[ip] = { count: 0, resetAt: now + LOGIN_WINDOW_MS };
+    if (++bucket.count > LOGIN_MAX_ATTEMPTS) {
+        const waitMin = Math.max(1, Math.ceil((bucket.resetAt - now) / 60000));
+        res.status(429).json({ message: "Too many login attempts. Please try again in about " + waitMin + " minute(s)." });
+        return false;
+    }
+    return true;
+}
+
 app.post("/login", (req, res) => {
+    if (!loginRateLimit(req, res)) return;
     const { username, password } = req.body;
 
     if (!username || !password) {
@@ -2512,7 +2553,13 @@ app.get("/student/:studentId", portalOwnerGate, (req, res) => { // CHANGED (pack
 
 });
 
-// Public - the result-checking page needs this without being logged in
+// SECURITY (audited, INTENTIONALLY PUBLIC): the public result-checking
+// page (student-result.html -> js/result.js) renders report cards for
+// parents/students who are NOT logged in, and needs the head-teacher /
+// principal / class-teacher signature images to do so. This endpoint only
+// returns role labels + signature image file paths (no financial or
+// personal data), so it is deliberately left open. If report cards ever
+// move fully behind a login, add requireLogin here.
 app.get("/signatures", (req, res) => {
     connection.query("SELECT role, signature_path FROM signatures", (err, rows) => {
         if (err) {
@@ -2591,6 +2638,11 @@ app.delete("/delete-signature/:role", requireLogin, (req, res) => {
    save/delete stay behind login. Nothing here replaces the existing
    /signatures flow - classes without an assignment still fall back to
    the shared class_teacher signature exactly as before.
+
+   SECURITY (audited, INTENTIONALLY PUBLIC): like /signatures, this feeds
+   the public result-checking page and only returns class names +
+   signature image file paths (no financial/personal data), so it stays
+   open on purpose. Writes (save/delete below) remain behind requireLogin.
 ================================================================== */
 
 app.get("/class-signatures", (req, res) => {
@@ -4870,6 +4922,7 @@ app.delete("/wipe-all-data", requireLogin, requireAdmin, (req, res) => {
 
 /* ---------- Student / Parent portal (login: Student ID + surname) --- */
 app.post("/portal-login", (req, res) => {
+    if (!loginRateLimit(req, res)) return;
     const studentId = (req.body.student_id || "").trim();
     const password  = (req.body.password  || "").trim();
     if (!studentId || !password) {
@@ -5603,9 +5656,44 @@ app.get("/attendance/summary", requireLogin, (req, res) => {
     );
 });
 
-/* ---------- School settings (admin) ----------------------------------
-   GET is public so the website can show the correct contact details. */
+/* ---------- School settings ------------------------------------------
+   SECURITY (split): the public GET below returns ONLY the harmless
+   branding/contact fields the login and landing pages need (name, motto,
+   address, phones, email, term info). It deliberately does NOT do a
+   SELECT * any more, because school_settings also holds bank_name,
+   account_name, account_number and pay_instructions - financial data
+   that must not be handed to anonymous visitors. The full row
+   (including those bank columns) is served by /school-settings/full,
+   which is behind requireLogin. Bank details for the parent portal are
+   served separately by /bank-accounts (gated for portal users). */
+const PUBLIC_SCHOOL_SETTINGS_COLUMNS =
+    "id, school_name, school_name_ar, motto, motto_ar, address, " +
+    "phone1, phone2, email, result_notice, term_begins, term_ends, " +
+    "next_term_begins, due_day, current_term";
+
 app.get("/school-settings", (req, res) => {
+    connection.query(
+        "SELECT " + PUBLIC_SCHOOL_SETTINGS_COLUMNS + " FROM school_settings WHERE id = 1",
+        (err, rows) => {
+            if (err && err.code === "ER_BAD_FIELD_ERROR") {
+                // Older schema without the v2 columns (due_day/current_term) -
+                // fall back to the guaranteed base branding/contact columns.
+                return connection.query(
+                    "SELECT id, school_name, school_name_ar, motto, motto_ar, address, phone1, phone2, email FROM school_settings WHERE id = 1",
+                    (err2, rows2) => {
+                        if (err2) { console.log(err2); return res.status(500).json({ message: "Database error" }); }
+                        res.json(rows2 && rows2.length ? rows2[0] : {});
+                    }
+                );
+            }
+            if (err) { console.log(err); return res.status(500).json({ message: "Database error" }); }
+            res.json(rows && rows.length ? rows[0] : {});
+        }
+    );
+});
+
+// Full settings row INCLUDING bank/payment details - staff only.
+app.get("/school-settings/full", requireLogin, (req, res) => {
     connection.query("SELECT * FROM school_settings WHERE id = 1", (err, rows) => {
         if (err) { console.log(err); return res.status(500).json({ message: "Database error" }); }
         res.json(rows && rows.length ? rows[0] : {});
@@ -6063,8 +6151,20 @@ app.post("/fee-debtors/remind", requireLogin, requireAdmin, (req, res) => {
     });
 });
 
-/* ---------- BANK ACCOUNTS (many; shown on parent portal) ------------- */
+/* ---------- BANK ACCOUNTS (many; shown on parent portal) -------------
+   SECURITY: this returns the school's bank name / account name / account
+   number, so it is no longer fully open. Parents genuinely need it to pay
+   fees, so instead of full requireLogin it is gated to callers who hold
+   EITHER a staff session (req.session.userId - the School Settings page)
+   OR a portal session (req.session.portalStudentId - the parent portal
+   "where to pay" card), mirroring how /portal/exams gates portal users.
+   Anonymous visitors get a 401. */
 app.get("/bank-accounts", (req, res) => {
+    const isStaff = !!(req.session && req.session.userId);
+    const isPortal = !!(req.session && req.session.portalStudentId);
+    if (!isStaff && !isPortal) {
+        return res.status(401).json({ message: "Not logged in" });
+    }
     connection.query("SELECT id, bank_name, account_name, account_number FROM bank_accounts ORDER BY id", (err, rows) => {
         if (err) { console.log(err); return res.status(500).json({ message: "Database error" }); }
         res.json(rows);

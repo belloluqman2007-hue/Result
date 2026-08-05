@@ -9,6 +9,20 @@ if ((process.env.RAILWAY_ENVIRONMENT || process.env.MYSQLHOST) && dbHost === "lo
 
 const dbUrl = process.env.MYSQL_URL || process.env.DATABASE_URL || process.env.MYSQL_PUBLIC_URL;
 
+// SECURITY: never fall back to a hardcoded DB password. If we are not using a
+// full connection URL (which carries its own credentials) and no password is
+// provided via the environment, refuse to start rather than silently connecting
+// with a baked-in default like "0802".
+const dbPassword = process.env.MYSQLPASSWORD || process.env.MYSQL_PASSWORD || process.env.DB_PASSWORD;
+if (!dbUrl && !dbPassword) {
+  console.error(
+    "FATAL: No database password configured. Set DB_PASSWORD (or MYSQLPASSWORD / " +
+    "MYSQL_PASSWORD), or provide a full MYSQL_URL / DATABASE_URL. Refusing to start " +
+    "with a default password."
+  );
+  process.exit(1);
+}
+
 function getPoolConfig() {
   const baseOptions = {
     connectionLimit: 15,
@@ -28,7 +42,7 @@ function getPoolConfig() {
     host: dbHost,
     port: Number(process.env.MYSQLPORT || process.env.MYSQL_PORT || process.env.DB_PORT || 3306),
     user: process.env.MYSQLUSER || process.env.MYSQL_USER || process.env.DB_USER || "root",
-    password: process.env.MYSQLPASSWORD || process.env.MYSQL_PASSWORD || process.env.DB_PASSWORD || "0802",
+    password: dbPassword,
     database: process.env.MYSQLDATABASE || process.env.MYSQL_DATABASE || process.env.DB_NAME || "railway"
   }, baseOptions);
 }
