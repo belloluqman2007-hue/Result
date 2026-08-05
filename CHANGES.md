@@ -4,6 +4,26 @@
 
 ---
 
+## Pack 82 — 2026-08-05
+
+Owner's requests:
+> Railway domain migration; File Store must keep ONE printable styled exam file (no duplicate .doc); finance must clearly separate OFFICIAL payments from parent-snapped evidence; receipts must be a proper OFFICIAL school receipt showing class + purpose.
+
+| File | What happened |
+|---|---|
+| `index.html`, `robots.txt`, `sitemap.xml`, `server.js` | **Railway domain migration:** every live-code mention of `https://result-1rto.onrender.com` (canonical, og:url, og:image, twitter:image, Schema.org JSON-LD url/logo/image, robots `Sitemap:` line - both the static file and the `server.js` route string, and the sitemap `<loc>`) now points to `https://result-production-69ea.up.railway.app`. Zero onrender references remain in code (historical changelogs untouched). |
+| `server.js` — `autoStoreExamToVault()` | **ONE printable exam file:** deleted the twin writers (bare-Arial `.doc` + duplicate `_sheet.html`). The vault now stores a single self-contained printable `.html`: it links the real `/css/exam.css`, wraps `body_html` in `<body class="exam-body"><div class="exam-flow">…</div>`, and auto-calls `window.print()` on load. Because `body_html` already carries the full letterhead cover markup, the saved copy renders EXACTLY like Create Exam (letterhead, Sakkal Majalla + fallbacks, spacing, margins, A4, Arabic; exam font sizes untouched). Stored as `text/html` named `"{class} - {subject} - {title} (Printable).html"`. |
+| `server.js` — `syncExamsToVault()` | Dedup check now uses the new `(Printable).html` name, and every sync DELETES leftover pre-pack-82 duplicates (`"… .doc"` and `"… (Printable Sheet).html"`) so no exam ever appears twice. |
+| `finance.html` | **Section separation:** the "Payments" tab is now **"💵 Record Payment & Official Receipt"** with a green banner inside `#finPanelPay` ("the school's OFFICIAL payment record…") and the card heading reads **"Record a Payment (Official)"**; the "Parent Payments" tab is now **"📸 Snapped Payment Evidence"** with an amber banner inside `#finPanelSubs` ("parent-submitted screenshots… not official until approved"). All existing functionality preserved. |
+| `js/ams-pdf.js` — `amsReceiptPDF()` | **OFFICIAL SCHOOL PAYMENT RECEIPT redesign:** school letterhead (existing `header()`), receipt-no + date strip, a labelled details box (student name, student ID / admission no, class, term/session, purpose/fee type, method), a prominent green AMOUNT PAID banner, amount in words (new `numberToWords()` → "… Naira Only"), optional note, and Bursar ("Received by") + Principal signature areas. Still returns the jsPDF doc — download path unchanged. |
+| `server.js` — `GET /fee-payments` | Now `SELECT fp.*, s.full_name AS student_name, s.class_name AS class_name FROM fee_payments fp LEFT JOIN students s ON s.student_id = fp.student_id` (qualified WHERE + `ORDER BY fp.paid_at DESC LIMIT 200`), with a graceful fallback to the original plain `SELECT * FROM fee_payments` if the join ever errors — records can never break. |
+| `js/finance.js` — `downloadReceipt()` | Uses `row.student_name` / `row.class_name` from the new join (falling back to the picked student), passes `purpose: row.fee_type`, and issues official receipt numbers `RCP-00000` (zero-padded id). |
+| `sw.js` | Cache v33. |
+
+Result calculations, grading, positions, report card generation, printing and every staff result query: completely untouched. All auth/security (credential handling, auth gating, login rate-limiting) preserved.
+
+---
+
 ## Pack 81 — 2026-07-31
 
 Owner's requests:

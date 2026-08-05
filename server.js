@@ -25,7 +25,7 @@ app.use(express.urlencoded({ extended: true }));
 // NEW (Pack 54/55): Explicit high-priority SEO routes for Google crawler & Search Console
 app.get("/robots.txt", (req, res) => {
     res.type("text/plain");
-    res.send("User-agent: Googlebot\nAllow: /\nDisallow: /api/\nDisallow: /sql/\n\nUser-agent: *\nAllow: /\nDisallow: /api/\nDisallow: /sql/\n\nSitemap: https://result-1rto.onrender.com/sitemap.xml\n");
+    res.send("User-agent: Googlebot\nAllow: /\nDisallow: /api/\nDisallow: /sql/\n\nUser-agent: *\nAllow: /\nDisallow: /api/\nDisallow: /sql/\n\nSitemap: https://result-production-69ea.up.railway.app/sitemap.xml\n");
 });
 
 app.get("/sitemap.xml", (req, res) => {
@@ -2720,43 +2720,37 @@ function autoStoreExamToVault(title, class_name, subject, term, session, duratio
     const safeName = `${class_name}_${subject}_${title}`.replace(/[^a-zA-Z0-9\-_]/g, "_");
     const timestamp = Date.now();
 
-    const wordContent = `<!DOCTYPE html>
-<html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>
-<head><meta charset="utf-8"><title>${title}</title>
-<style>body { font-family: 'Arial', sans-serif; }</style>
+    /* CHANGED (pack 82): ONE self-contained printable .html per exam - no more
+       duplicate bare-Arial .doc + "_sheet.html" pair. body_html already carries
+       the full letterhead cover markup, so linking the REAL /css/exam.css makes
+       the stored copy render EXACTLY like Create Exam (letterhead, Sakkal
+       Majalla + fallbacks, spacing, margins, A4, Arabic) - and it auto-opens
+       the print dialog on load. */
+    const printContent = `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>${title} - ${class_name} - ${subject}</title>
+<link rel="stylesheet" href="/css/exam.css">
 </head>
-<body>
-<h2 style="text-align:center;">AMEENULLAH SCHOOL OF ARABIC AND ISLAMIC STUDIES</h2>
-<h3 style="text-align:center;">${title} (${class_name} - ${subject} - ${term} ${session})</h3>
-${duration ? `<p><b>Duration:</b> ${duration}</p>` : ""}
-${instructions ? `<p><b>Instructions:</b> ${instructions}</p>` : ""}
-<hr/>
+<body class="exam-body">
+<div class="exam-flow">
 ${body_html}
-</body></html>`;
+</div>
+<script>window.addEventListener("load", function () { window.print(); });</script>
+</body>
+</html>`;
 
-    const wordFilename = `store_exam_${timestamp}_${safeName}.doc`;
-    const wordPath = path.join(vaultDir, wordFilename);
-    const wordOriginalName = `${class_name} - ${subject} - ${title}.doc`;
-
-    fs.writeFile(wordPath, wordContent, "utf8", (err) => {
-        if (!err) {
-            connection.query(
-                "INSERT INTO school_file_store (folder_path, file_name, original_name, file_size, file_type, file_path, is_folder) VALUES (?, ?, ?, ?, ?, ?, 0)",
-                ["/Saved Exams", wordOriginalName, wordOriginalName, Buffer.byteLength(wordContent, "utf8"), "application/msword", wordFilename],
-                () => {}
-            );
-        }
-    });
-
-    const printFilename = `store_exam_${timestamp}_${safeName}_sheet.html`;
+    const printFilename = `store_exam_${timestamp}_${safeName}.html`;
     const printPath = path.join(vaultDir, printFilename);
-    const printOriginalName = `${class_name} - ${subject} - ${title} (Printable Sheet).html`;
+    const printOriginalName = `${class_name} - ${subject} - ${title} (Printable).html`;
 
-    fs.writeFile(printPath, wordContent, "utf8", (err) => {
+    fs.writeFile(printPath, printContent, "utf8", (err) => {
         if (!err) {
             connection.query(
                 "INSERT INTO school_file_store (folder_path, file_name, original_name, file_size, file_type, file_path, is_folder) VALUES (?, ?, ?, ?, ?, ?, 0)",
-                ["/Saved Exams", printOriginalName, printOriginalName, Buffer.byteLength(wordContent, "utf8"), "text/html", printFilename],
+                ["/Saved Exams", printOriginalName, printOriginalName, Buffer.byteLength(printContent, "utf8"), "text/html", printFilename],
                 () => {}
             );
         }
@@ -5480,17 +5474,32 @@ app.post("/fee-payment", requireLogin, requireAdmin, (req, res) => {
 });
 
 app.get("/fee-payments", requireLogin, requireAdmin, (req, res) => {
-    // CHANGED (pack 15): SELECT * so the new fee_type column comes along.
-    let sql = "SELECT * FROM fee_payments";
+    /* CHANGED (pack 82): LEFT JOIN students so every payment row also carries
+       the student's NAME and CLASS (needed for the official receipt). If the
+       join ever errors, we gracefully fall back to the original plain
+       SELECT * so payment records NEVER break. */
     const params = [], wh = [];
-    if (req.query.student_id) { wh.push("student_id = ?"); params.push(req.query.student_id); }
-    if (req.query.term)       { wh.push("term = ?");       params.push(req.query.term); }
-    if (req.query.session)    { wh.push("session = ?");    params.push(req.query.session); }
-    if (wh.length) sql += " WHERE " + wh.join(" AND ");
-    sql += " ORDER BY paid_at DESC LIMIT 200";
-    connection.query(sql, params, (err, rows) => {
-        if (err) { console.log(err); return res.status(500).json({ message: "Database error" }); }
-        res.json(rows);
+    if (req.query.student_id) { wh.push("fp.student_id = ?"); params.push(req.query.student_id); }
+    if (req.query.term)       { wh.push("fp.term = ?");       params.push(req.query.term); }
+    if (req.query.session)    { wh.push("fp.session = ?");    params.push(req.query.session); }
+    let joinSql = "SELECT fp.*, s.full_name AS student_name, s.class_name AS class_name " +
+                  "FROM fee_payments fp LEFT JOIN students s ON s.student_id = fp.student_id";
+    if (wh.length) joinSql += " WHERE " + wh.join(" AND ");
+    joinSql += " ORDER BY fp.paid_at DESC LIMIT 200";
+    connection.query(joinSql, params, (err, rows) => {
+        if (!err) return res.json(rows);
+        console.log("fee-payments join failed - falling back to plain select:", err.message || err);
+        let sql = "SELECT * FROM fee_payments";
+        const p2 = [], w2 = [];
+        if (req.query.student_id) { w2.push("student_id = ?"); p2.push(req.query.student_id); }
+        if (req.query.term)       { w2.push("term = ?");       p2.push(req.query.term); }
+        if (req.query.session)    { w2.push("session = ?");    p2.push(req.query.session); }
+        if (w2.length) sql += " WHERE " + w2.join(" AND ");
+        sql += " ORDER BY paid_at DESC LIMIT 200";
+        connection.query(sql, p2, (err2, rows2) => {
+            if (err2) { console.log(err2); return res.status(500).json({ message: "Database error" }); }
+            res.json(rows2);
+        });
     });
 });
 
@@ -6804,10 +6813,22 @@ function syncExamsToVault(cb) {
             connection.query("SELECT * FROM exams", (err2, exams) => {
                 if (err2 || !exams || !exams.length) { if (cb) cb(); return; }
                 exams.forEach((ex) => {
-                    const wordOriginalName = `${ex.class_name} - ${ex.subject} - ${ex.title}.doc`;
+                    // CHANGED (pack 82): dedup on the single new "(Printable).html" name...
+                    const printOriginalName = `${ex.class_name} - ${ex.subject} - ${ex.title} (Printable).html`;
+                    // ...and REMOVE any leftover pre-pack-82 duplicates (the bare
+                    // ".doc" and the duplicate "(Printable Sheet).html") so no exam
+                    // ever appears twice in the vault.
+                    connection.query(
+                        "DELETE FROM school_file_store WHERE folder_path = '/Saved Exams' AND original_name IN (?, ?)",
+                        [
+                            `${ex.class_name} - ${ex.subject} - ${ex.title}.doc`,
+                            `${ex.class_name} - ${ex.subject} - ${ex.title} (Printable Sheet).html`
+                        ],
+                        () => {}
+                    );
                     connection.query(
                         "SELECT id FROM school_file_store WHERE folder_path = '/Saved Exams' AND original_name = ?",
-                        [wordOriginalName],
+                        [printOriginalName],
                         (err3, exist) => {
                             if (!exist || !exist.length) {
                                 autoStoreExamToVault(ex.title, ex.class_name, ex.subject, ex.term, ex.session, ex.duration, ex.instructions, ex.body_html);

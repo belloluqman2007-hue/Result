@@ -705,12 +705,17 @@ function finStudentMeta() {
 function downloadReceipt(row) {
   var ts = finTermSession();
   var meta = finStudentMeta();
+  /* CHANGED (pack 82): prefer the student NAME and CLASS that now travel with
+     each /fee-payments row (server JOIN), falling back to the currently-picked
+     student so receipts never lose the details. Receipt numbers are the
+     official RCP-00000 series. */
   var d = window.amsReceiptPDF({
-    receiptNo: "REC-" + row.id,
+    receiptNo: "RCP-" + String(row.id).padStart(5, "0"),
     date: row.paid_at ? String(row.paid_at).slice(0, 10) : "-",
-    studentName: meta.studentName,
-    studentId: meta.studentId,
-    className: meta.className,
+    studentName: row.student_name || meta.studentName,
+    studentId: row.student_id || meta.studentId,
+    className: row.class_name || meta.className,
+    purpose: row.fee_type || "School Fee",
     feeType: row.fee_type || "School Fee",
     term: ts.term,
     session: ts.session,

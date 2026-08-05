@@ -58,10 +58,10 @@
 
     <div class="mg-tabs">
       <button class="mg-tab active" type="button" onclick="finSwitchTab('fees', this)">&#128181; Fees Setup</button>
-      <button class="mg-tab" type="button" onclick="finSwitchTab('pay', this)">&#128184; Payments</button>
+      <button class="mg-tab" type="button" onclick="finSwitchTab('pay', this)">&#128181; Record Payment &amp; Official Receipt</button>
       <!-- NEW (pack 33): debtors board tab -->
       <button class="mg-tab" type="button" onclick="finSwitchTab('deb', this)">&#9200; Debtors <span id="debBadge" class="deb-badge" style="display:none;"></span></button>
-      <button class="mg-tab" type="button" onclick="finSwitchTab('subs', this)">&#128395;&#65039; Parent Payments <span id="subsBadge" style="display:none; background:#D64541; color:#fff; border-radius:999px; padding:1px 8px; font-size:11px;"></span></button>
+      <button class="mg-tab" type="button" onclick="finSwitchTab('subs', this)">&#128248; Snapped Payment Evidence <span id="subsBadge" style="display:none; background:#D64541; color:#fff; border-radius:999px; padding:1px 8px; font-size:11px;"></span></button>
       <button class="mg-tab" type="button" onclick="finSwitchTab('exp', this)">&#128177; Expenses</button>
       <button class="mg-tab" type="button" onclick="finSwitchTab('sum', this)">&#128202; Summary</button>
     </div>
@@ -134,9 +134,13 @@
 
     <!-- Payments -->
     <div class="mg-panel" id="finPanelPay">
+      <!-- NEW (pack 82): green banner - this panel is the school's OFFICIAL record -->
+      <div style="background:#E8F5E9; border:1px solid #A5D6A7; border-left:5px solid #1E7D46; color:#14532D; border-radius:10px; padding:10px 14px; margin-bottom:12px; font-size:13.5px; line-height:1.55;">
+        &#9989; <b>This is the school's OFFICIAL payment record.</b> Every payment recorded here is issued an official school receipt and counts immediately toward the student's fees.
+      </div>
       <div class="mg-cards">
         <div class="mg-card">
-          <h3>&#128184; Record a Payment</h3>
+          <h3>Record a Payment (Official)</h3>
           <div class="mg-toolbar">
             <div class="mg-field">
               <label for="payClass">Class</label>
@@ -228,6 +232,11 @@
     <!-- NEW (pack 15): payment proofs parents uploaded on their portal.
          Approve => it becomes a real payment for that student. -->
     <div class="mg-panel" id="finPanelSubs">
+      <!-- NEW (pack 82): amber banner - parent-submitted screenshots, only
+           official once approved -->
+      <div style="background:#FFF8E1; border:1px solid #FFE082; border-left:5px solid #F59E0B; color:#7C2D12; border-radius:10px; padding:10px 14px; margin-bottom:12px; font-size:13.5px; line-height:1.55;">
+        &#128247; <b>These are parent-submitted payment screenshots</b> snapped and sent in from the parent portal. They are <b>not official school records until approved</b> - approving one converts it into an official recorded payment.
+      </div>
       <div class="mg-toolbar">
         <div class="mg-field">
           <label for="subsStatus">Show</label>
