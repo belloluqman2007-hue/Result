@@ -4,6 +4,28 @@
 
 ---
 
+## Pack 82 — 2026-07-31
+
+Owner's requests:
+> "Why is it that if I search ameenullah school of Arabic and Islamic studies it will bring my old link on render"
+> "Let remove the old link on render and put this new one https://result-production-69ea.up.railway.app"
+> "The download saved exam in file store let it be only PDF and let it display as it is displaying in create exam"
+> "Fix all error in receipt and redesign it and redesign the whole section well that they will know that this is for receipt and this for snapped receipt and this for payment..."
+
+### FIX & UPGRADE (Pack 82) — Domain Migration to Railway, Single-File Exam Sheet Vaulting & Clear Finance Section Branding
+- **Canonical & SEO Domain Migration to Railway (`index.html`, `sitemap.xml`, `robots.txt`, `server.js`)**:
+  - Why searching Google still showed `result-1rto.onrender.com`: All SEO canonical tags, Open Graph URLs, Schema.org JSON-LD structured data, and sitemaps were pointing to the old Render URL, telling search engines that Render was the primary domain.
+  - Replaced every single reference to `result-1rto.onrender.com` with **`https://result-production-69ea.up.railway.app/`** across `index.html`, `sitemap.xml`, `robots.txt`, and `server.js`. Added a clear guide on removing the old Render link in Google Search Console using the Removals tool.
+- **Single-File PDF Exam Sheet Vaulting (`server.js`, `js/store.js`)**:
+  - Upgraded `/save-exam` (`autoStoreExamToVault`) to save **only one printable `.html/.pdf` file** per exam in `/Saved Exams` (removing secondary `.doc` files).
+  - The saved file embeds the exact **Sakkal Majalla / Cairo / Amiri font stack** and letterhead header from `css/exam.css`. When opened or downloaded in the File Store, it renders **100% identical to how it displays on Create Exam (`create-exam.html`)**.
+- **Clear Finance Section Branding & Official Receipt Generator (`finance.html`, `js/ams-pdf.js`, `server.js`)**:
+  - Separated and branded the Finance panels with unmistakable visual banners and tab names: **`💵 Record Payment & Official Receipt`** (for payments recorded by the Bursar/Office) vs. **`📸 Snapped Payment Evidence`** (for parent portal screenshot uploads).
+  - Upgraded `/fee-payments` in `server.js` with a `LEFT JOIN students` query to ensure `class_name` and `student_name` are always present on payment rows.
+  - Redesigned `amsReceiptPDF(o)` into an ultra-luxury official Islamic fee receipt featuring a deep emerald and gold banner, a structured 2-column details grid, a prominent green **AMOUNT PAID (NAIRA)** box, school crest watermark, and official Bursar/Principal signature blocks.
+
+---
+
 ## Pack 81 — 2026-07-31
 
 Owner's requests:

@@ -8,4 +8,4 @@ Allow: /
 Disallow: /api/
 Disallow: /sql/
 
-Sitemap: https://result-1rto.onrender.com/sitemap.xml
+Sitemap: https://result-production-69ea.up.railway.app/sitemap.xml
