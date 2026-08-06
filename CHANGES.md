@@ -4,6 +4,32 @@
 
 ---
 
+## Pack 83 — 2026-08-06
+
+Owner's requests:
+> In exam, if you can't use sakamajala font for the exam only then reduce the exam font; The receipt is not displaying student class; In 🆔 card the back is not showing in class download and student download and on the website itself; The exam is not displaying well if writing questions if I choose big font it will still be small; Fix all the error in the exam
+
+| File | What happened |
+|---|---|
+| `css/exam.css` | **Sakkal Majalla fallback reduction:** added `.no-sakkal` overrides (detected via `document.fonts.check`) that reduce exam sizes when Sakkal is not installed (phones/Mac fallback Amiri renders same pt much larger). Base `32pt` → `22pt` in fallback, spacing compact/normal/relaxed/spacious `14/16/18/20pt` → `10/12/13/14pt` for fallback; cover Arabic/info rows also reduced. **Spacing fix:** removed `font-size !important` from `.spacing-*` so the question-font-size picker actually wins (previously `spacing-normal 16pt !important` overrode Huge 40pt, making big still small). Spacing now controls only `line-height`. |
+| `js/exam.js` — `applyExamFontFrom()` | Now uses `style.setProperty("font-size", val+"pt", "important")` so Huge/Medium etc override spacing/base. Clears legacy `<font size>` and inline styles first. |
+| `js/exam.js` — `initExam()` | **Sakkal detection:** on load and on `document.fonts.ready`, checks `16pt Sakkal Majalla`; if missing adds `no-sakkal` class to `<html>`/`<body>` to trigger CSS fallback. |
+| `js/exam.js` — `autoFitOnePage()` | **Keep chosen size:** previously binary-searched down to smallest fitting size, so Huge (40pt) with many questions shrunk to 12pt identical to Small. Now keeps the teacher's chosen size if it fits, otherwise returns `null` to spill across pages like Word - Huge stays Huge and flows to next pages instead of shrinking to tiny. Uses `setProperty(..., "important")` for measurement. |
+| `js/exam.js` — `spillSegmentAcrossPages()` | Now keeps the chosen base size (`examBaseFontPt()`) instead of forcing `EXAM_MIN_PT` (12pt), so spilled multi-page exams retain Huge/Medium etc. |
+| `js/exam.js` — `paginateExam()` | **Removed booklet-wide shared shrink** (`docFit` min) that forced every one-page exam to the smallest fitting size - a 2-question Huge exam was shrunk to the same tiny size as a 20-question exam. Each exam now keeps its own chosen size; overflow spills via `spillSegmentAcrossPages`. |
+| `js/exam.js` — `appendBodyPage()` | New pages now inherit the currently selected font size (`examBaseFontPt()`) via `setProperty(..., "important")` so Huge doesn't revert to 32pt default on newly created pages. |
+| `js/finance.js` — `downloadReceipt()` | **Robust CLASS resolution:** `row.class_name` may be missing when the server's `LEFT JOIN` falls back to plain `SELECT`. Now tries `row.class_name → row.className → meta.className → finStudents roster lookup by `student_id` → `payClass` dropdown → `"-"` so class never blanks. Receipt now always shows class. |
+| `js/ams-pdf.js` | No logic change - receipt already draws `CLASS` via `amsText` (Arabic-safe canvas). Now receives correct `className` from finance. |
+| `js/idcard.js` — single `downloadPdf` | Now orientation-aware: uses `amsCardOrient` to pick `85.6×53.98` (landscape) vs `53.98×85.6` (portrait) for width/height and y-offset, so portrait cards no longer cropped. Still captures both front+back via `ams-pdf-flat` flatten. |
+| `js/idcard.js` — `stageFor()` | **Bulk now clones BOTH front and back** (previously only front) - holder gets front filled with student data + generic back (Contact & Info). Fixes "back is not showing in class download". |
+| `js/idcard.js` — bulk `next()` | Captures front+back as two separate canvases via `Promise.all`, places both in PDF grid (front then back consecutively). `totalCards = list.length *2`, `perPage` logic respects orientation (`2×4` landscape, `3×3` portrait). Message updated to "students (front+back)". |
+| `css/idcard.css` | **Back visibility:** added `backface-visibility:hidden` (and `-webkit-`) to both `.card-front`/`.card-back`, and ensured `.card--portrait .card-back { height:100% }` so portrait back matches front height. Fixes "back is not showing on the website itself". |
+| `sw.js` | Cache `v33 → v34`. |
+
+Result calculations, grading, positions, report cards etc untouched. All existing features preserved.
+
+---
+
 ## Pack 82 — 2026-08-05
 
 Owner's requests:
