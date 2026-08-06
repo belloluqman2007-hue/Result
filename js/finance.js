@@ -705,17 +705,24 @@ function finStudentMeta() {
 function downloadReceipt(row) {
   var ts = finTermSession();
   var meta = finStudentMeta();
-  /* CHANGED (pack 82): prefer the student NAME and CLASS that now travel with
-     each /fee-payments row (server JOIN), falling back to the currently-picked
-     student so receipts never lose the details. Receipt numbers are the
-     official RCP-00000 series. */
+  /* FIX (pack 83): robust CLASS resolution - server JOIN may fallback to plain
+     SELECT without class_name when students table is warming up, and meta may
+     be empty if the class dropdown changed. Try row, then meta, then the
+     loaded roster finStudents, then the student's stored class. */
+  var resolvedClass = row.class_name || row.className || meta.className || "";
+  if (!resolvedClass || resolvedClass === "-") {
+    var rosterMatch = (finStudents || []).find(function(s){ return s.student_id === row.student_id; });
+    if (rosterMatch && rosterMatch.class_name) resolvedClass = rosterMatch.class_name;
+  }
+  // final fallback: keep the picked class dropdown value or dash, but never blank
+  if (!resolvedClass) resolvedClass = (document.getElementById("payClass") && document.getElementById("payClass").value) || "-";
   var d = window.amsReceiptPDF({
     receiptNo: "RCP-" + String(row.id).padStart(5, "0"),
     date: row.paid_at ? String(row.paid_at).slice(0, 10) : "-",
-    studentName: row.student_name || meta.studentName,
+    studentName: row.student_name || row.studentName || meta.studentName,
     studentId: row.student_id || meta.studentId,
-    className: row.class_name || meta.className,
-    purpose: row.fee_type || "School Fee",
+    className: resolvedClass,
+    purpose: row.fee_type || row.purpose || "School Fee",
     feeType: row.fee_type || "School Fee",
     term: ts.term,
     session: ts.session,

@@ -510,8 +510,11 @@
 .card--portrait .card-front .details{ grid-area:5/1; justify-self:stretch; text-align:center; padding-right:0; margin-top:0; } /* polish 2: drop the legacy 92px photo-column padding that narrowed the name */
 .card--portrait .card-front .details h2{ font-size:15px; }
 .card--portrait .card-front .footer{ grid-area:6/1; width:100%; display:flex; justify-content:space-between; align-items:flex-end; }
-.card--portrait .card-back{ justify-content:flex-start; padding-top:26px; text-align:center; }
+.card--portrait .card-back{ justify-content:flex-start; padding-top:26px; text-align:center; height:100%; backface-visibility:hidden; }
 .card--portrait .card-back h3{ border-left:none; border-bottom:3px solid var(--gold,#C9A227); padding:0 0 6px; }
+/* FIX (pack 83): ensure back is visible on website and in PDFs - backface was hidden by overflow */
+.card-back{ backface-visibility:hidden; -webkit-backface-visibility:hidden; }
+.card-front{ backface-visibility:hidden; -webkit-backface-visibility:hidden; }
 
 /* print: portrait prints at its own real card size */
 @media print{

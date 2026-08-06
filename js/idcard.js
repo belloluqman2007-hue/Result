@@ -99,11 +99,14 @@ document.getElementById("downloadPdf").addEventListener("click", function () {
             card.classList.remove("ams-pdf-flat");
             btn.disabled = false;
 
+            var isPortSingle = (typeof amsCardOrient !== 'undefined' && amsCardOrient === 'portrait');
+            var wSingle = isPortSingle ? 53.98 : 85.6;
+            var hSingle = isPortSingle ? 85.6 : 53.98;
             var pdf = new window.jspdf.jsPDF({ unit: "mm", format: "a4" });
             canvases.forEach(function (cv, i) {
-                var w = 85.6;                                     // real ID-card width
-                var h = Math.min((cv.height * w) / cv.width, 53.98); // keep proportion, cap at card height
-                var y = 20 + i * (53.98 + 10);                    // front, then back below it
+                var w = wSingle;                                     // real ID-card width (orientation-aware)
+                var h = Math.min((cv.height * w) / cv.width, hSingle); // keep proportion, cap at card height
+                var y = 20 + i * (hSingle + 10);                    // front, then back below it
                 pdf.addImage(cv.toDataURL("image/png"), "PNG", (210 - w) / 2, y, w, h);
             });
 
@@ -177,14 +180,16 @@ document.getElementById("downloadPdf").addEventListener("click", function () {
 
     function say(t) { prog.style.display = t ? "" : "none"; prog.textContent = t || ""; }
 
-    /* Clone the live card front (keeping ALL its styling), fill it with a
-       profile, wrap it so orientation CSS applies, and park it off-screen. */
+    /* FIX (pack 83): stage now clones BOTH front and back so the class
+       PDF shows the back side as well (owner: "back is not showing in class
+       download"). The holder keeps both stacked vertically; bulk capture
+       photographs front and back separately and places both in the PDF. */
     function stageFor(stu, school, issueText) {
         var isPort = amsCardOrient === "portrait";
         var wrap = document.createElement("div");
         wrap.style.cssText = "position:fixed; left:-13000px; top:0; background:#fff; z-index:-1;";
         var holder = document.createElement("div");
-        // FIX (pack 40): ams-pdf-flat pins the cloned front to the exact
+        // FIX (pack 40): ams-pdf-flat pins the cloned card to the exact
         // card height (same flattening the single-card PDF relies on).
         holder.className = "card ams-pdf-flat" + (isPort ? " card--portrait" : "");
         var front = document.querySelector("#card .card-front").cloneNode(true);
@@ -197,6 +202,8 @@ document.getElementById("downloadPdf").addEventListener("click", function () {
         img.src = stu.photo_path || "images/LOGO.JPG";
         img.style.transform = "";
         holder.appendChild(front);
+        var back = document.querySelector("#card .card-back").cloneNode(true);
+        holder.appendChild(back);
         wrap.appendChild(holder);
         document.body.appendChild(wrap);
         return wrap;
@@ -225,13 +232,15 @@ document.getElementById("downloadPdf").addEventListener("click", function () {
             var page = pdf.internal.pageSize;
             void page;
 
+            var totalCards = list.length * 2; // front + back per student
+            var cardIdx = 0; // counts every physical card side placed
             var i = 0;
             (function next() {
                 if (i >= list.length) {
                     var safe = cls.replace(/[\\/:*?"<>|]+/g, "_");
                     pdf.save("ID-Cards-" + safe + ".pdf");
                     btn.disabled = false; say("");
-                    window.amsToast && amsToast("Class PDF downloaded ✓ " + list.length + " cards", "success", 6000);
+                    window.amsToast && amsToast("Class PDF downloaded ✓ " + list.length + " students (front+back)", "success", 6000);
                     return;
                 }
                 var stu = list[i];
@@ -239,23 +248,29 @@ document.getElementById("downloadPdf").addEventListener("click", function () {
                 var stage = stageFor(stu, school, issueText);
                 // give the photo a beat to load
                 setTimeout(function () {
-                    html2canvas(stage.querySelector(".card-front"), { scale: 3, backgroundColor: "#ffffff", useCORS: true })
-                        .then(function (cv) {
+                    var frontEl = stage.querySelector(".card-front");
+                    var backEl = stage.querySelector(".card-back");
+                    Promise.all([
+                        html2canvas(frontEl, { scale: 3, backgroundColor: "#ffffff", useCORS: true }),
+                        html2canvas(backEl, { scale: 3, backgroundColor: "#ffffff", useCORS: true })
+                    ]).then(function(cvs){
                             document.body.removeChild(stage);
-                            var slot = i % perPage;
-                            if (i > 0 && slot === 0) pdf.addPage("a4", "portrait");
-                            var col = slot % cols, row = Math.floor(slot / cols);
-                            var x = offX + col * (cw + gapX);
-                            var y = top + row * (ch + gapY);
-                            var h = Math.min((cv.height * cw) / cv.width, ch);
-                            pdf.addImage(cv.toDataURL("image/png"), "PNG", x, y, cw, h);
+                            cvs.forEach(function(cv){
+                                var slot = cardIdx % perPage;
+                                if (cardIdx > 0 && slot === 0) pdf.addPage("a4", "portrait");
+                                var col = slot % cols, row = Math.floor(slot / cols);
+                                var x = offX + col * (cw + gapX);
+                                var y = top + row * (ch + gapY);
+                                var h = Math.min((cv.height * cw) / cv.width, ch);
+                                pdf.addImage(cv.toDataURL("image/png"), "PNG", x, y, cw, h);
+                                cardIdx++;
+                            });
                             i++; next();
-                        })
-                        .catch(function () {
-                            document.body.removeChild(stage);
-                            i++; next();   // skip a broken photo/render, keep going
-                        });
-                }, 60);
+                    }).catch(function () {
+                            try{ document.body.removeChild(stage); }catch(e){}
+                            i++; next();   // skip a broken student, keep going
+                    });
+                }, 80);
             })();
         }).catch(function () {
             btn.disabled = false; say("");
