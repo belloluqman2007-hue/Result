@@ -151,20 +151,20 @@ app.use(session({
 // Validates all state-changing POST/PUT/DELETE except login/portal-login/logout.
 const { doubleCsrf } = require("csrf-csrf");
 const { generateToken, doubleCsrfProtection } = doubleCsrf({
-    getSecret: () => process.env.SESSION_SECRET || "local-dev-only-insecure-secret-change-me",
-    cookieName: "x-csrf-token",
-    cookieOptions: {
-        sameSite: "lax",
-        path: "/",
-        secure: isProduction,
-        httpOnly: true
-    },
-    size: 64,
-    ignoredMethods: ["GET", "HEAD", "OPTIONS"],
-    getTokenFromRequest: (req) => req.headers["x-csrf-token"] || req.body._csrf
+  getSecret: () => process.env.SESSION_SECRET,
+  cookieName: "x-csrf-token",
+  cookieOptions: {
+    sameSite: "strict",
+    secure: process.env.NODE_ENV === "production",
+    httpOnly: true,
+  },
+  size: 64,
+  ignoredMethods: ["GET", "HEAD", "OPTIONS"],
 });
+
+// CSRF token endpoint
 app.get("/api/csrf-token", (req, res) => {
-    res.json({ csrfToken: generateToken(req, res) });
+  res.json({ csrfToken: generateToken(req, res) });
 });
 const csrfExemptPaths = ["/login", "/portal-login", "/logout"];
 function csrfMiddleware(req, res, next) {
