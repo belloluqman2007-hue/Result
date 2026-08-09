@@ -3,3 +3,6 @@ node_modules/
 images/students/
 images/signatures/
 *.log
+uploads/
+uploads/payment-evidence/
+uploads/store/

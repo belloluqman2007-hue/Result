@@ -1,4 +1,5 @@
 require("dotenv").config();
+const helmet = require("helmet");
 
 // NEW (Pack 63): Global Crash Shield - prevents Node.js from exiting on unhandled errors
 process.on("uncaughtException", (err) => {
@@ -18,6 +19,10 @@ const bcrypt = require("bcryptjs");
 const connection = require("./db");
 
 const app = express();
+app.use(helmet({
+    contentSecurityPolicy: false,
+    crossOriginEmbedderPolicy: false
+}));
 app.use(express.json());
 // Accept classic HTML form posts too, in case any page submits without JS.
 app.use(express.urlencoded({ extended: true }));
@@ -140,6 +145,57 @@ app.use(session({
         httpOnly: true
     }
 }));
+
+// SECURITY: CSRF protection via double-submit cookie (csrf-csrf, Express 5 compatible)
+// Uses SESSION_SECRET as the signing secret. Issues token via /api/csrf-token.
+// Validates all state-changing POST/PUT/DELETE except login/portal-login/logout.
+const { doubleCsrf } = require("csrf-csrf");
+const { generateToken, doubleCsrfProtection } = doubleCsrf({
+    getSecret: () => process.env.SESSION_SECRET || "local-dev-only-insecure-secret-change-me",
+    cookieName: "x-csrf-token",
+    cookieOptions: {
+        sameSite: "lax",
+        path: "/",
+        secure: isProduction,
+        httpOnly: true
+    },
+    size: 64,
+    ignoredMethods: ["GET", "HEAD", "OPTIONS"],
+    getTokenFromRequest: (req) => req.headers["x-csrf-token"] || req.body._csrf
+});
+app.get("/api/csrf-token", (req, res) => {
+    res.json({ csrfToken: generateToken(req, res) });
+});
+const csrfExemptPaths = ["/login", "/portal-login", "/logout"];
+function csrfMiddleware(req, res, next) {
+    if (csrfExemptPaths.includes(req.path)) return next();
+    // Only protect state-changing methods
+    if (["POST", "PUT", "DELETE", "PATCH"].includes(req.method)) {
+        return doubleCsrfProtection(req, res, next);
+    }
+    next();
+}
+app.use(csrfMiddleware);
+
+// SECURITY: Rate limiting for sensitive write APIs (same in-memory bucket pattern as login)
+const WRITE_MAX_ATTEMPTS = 30;
+const WRITE_WINDOW_MS = 15 * 60 * 1000;
+const writeHits = Object.create(null);
+setInterval(function () {
+    const now = Date.now();
+    Object.keys(writeHits).forEach(function (k) { if (writeHits[k].resetAt < now) delete writeHits[k]; });
+}, 600000).unref();
+function writeRateLimit(req, res, next) {
+    const ip = req.ip || (req.connection && req.connection.remoteAddress) || "?";
+    const now = Date.now();
+    let bucket = writeHits[ip];
+    if (!bucket || bucket.resetAt < now) bucket = writeHits[ip] = { count: 0, resetAt: now + WRITE_WINDOW_MS };
+    if (++bucket.count > WRITE_MAX_ATTEMPTS) {
+        const waitMin = Math.max(1, Math.ceil((bucket.resetAt - now) / 60000));
+        return res.status(429).json({ message: "Too many requests. Please try again in about " + waitMin + " minute(s)." });
+    }
+    next();
+}
 
 // Auth guard: blocks access to protected pages/routes if not logged in
 function requireLogin(req, res, next) {
@@ -551,7 +607,7 @@ app.use(express.static(__dirname));
 
 // NEW (Pack 67): Zero-Configuration Auto-Schema & Default Admin Bootstrapper
 // Automatically creates all core legacy tables if they don't exist in a new MySQL database
-// (e.g. fresh Railway deployment) and seeds a default Admin account (username: admin, password: 0802).
+// (e.g. fresh Railway deployment) and seeds a default Admin account (username: admin) from ADMIN_DEFAULT_PASSWORD env var.
 function ensureCoreTablesAndDefaultAdmin() {
     const coreTables = [
         `CREATE TABLE IF NOT EXISTS users (
@@ -713,10 +769,15 @@ function ensureCoreTablesAndDefaultAdmin() {
 
     connection.query("SELECT COUNT(*) AS cnt FROM users", (err, rows) => {
         if (!err && rows && rows[0] && rows[0].cnt === 0) {
-            bcrypt.hash("0802", 10, (herr, hash) => {
+            const adminDefaultPassword = process.env.ADMIN_DEFAULT_PASSWORD;
+            if (!adminDefaultPassword) {
+                console.warn("WARNING: ADMIN_DEFAULT_PASSWORD not set - skipping default admin seed. Set ADMIN_DEFAULT_PASSWORD to create initial admin account.");
+                return;
+            }
+            bcrypt.hash(adminDefaultPassword, 10, (herr, hash) => {
                 if (!herr && hash) {
                     connection.query("INSERT IGNORE INTO users (username, password_hash, role) VALUES ('admin', ?, 'admin')", [hash], () => {
-                        console.log("Seeded default admin account (username: admin, password: 0802)");
+                        console.log("Seeded default admin account (username: admin)");
                     });
                     connection.query("INSERT IGNORE INTO users (username, password_hash, role) VALUES ('Proprietor', ?, 'admin')", [hash], () => {});
                 }
@@ -939,11 +1000,19 @@ const addonTables = [
 const mysql2 = require("mysql2");
 
 function addonConnection() {
+    const dbUrl = process.env.MYSQL_URL || process.env.DATABASE_URL || process.env.MYSQL_PUBLIC_URL;
+    const dbPassword = process.env.MYSQLPASSWORD || process.env.MYSQL_PASSWORD || process.env.DB_PASSWORD;
+    if (!dbUrl && !dbPassword) {
+        console.error(
+            "FATAL: No database password configured for addonConnection. Set DB_PASSWORD (or MYSQLPASSWORD / MYSQL_PASSWORD), or provide a full MYSQL_URL / DATABASE_URL. Refusing to start with a default password."
+        );
+        process.exit(1);
+    }
     return mysql2.createConnection({
         host: process.env.MYSQLHOST || process.env.DB_HOST || "localhost",
         port: process.env.MYSQLPORT || process.env.DB_PORT || 3306,
         user: process.env.MYSQLUSER || process.env.DB_USER || "root",
-        password: process.env.MYSQLPASSWORD || process.env.DB_PASSWORD || "0802",
+        password: dbPassword,
         database: process.env.MYSQLDATABASE || process.env.DB_NAME || "railway"
     });
 }
@@ -2209,7 +2278,7 @@ app.get("/", (req, res) => {
 });
 
 console.log("THIS IS MY SERVER.JS")
-app.post("/save-result", requireLogin, (req, res) => {
+app.post("/save-result", requireLogin, writeRateLimit, (req, res) => {
 
     const {
         student_id,
@@ -2272,7 +2341,7 @@ console.log(req.body);
 
 });
 
-app.put("/update-result/:id", requireLogin, (req, res) => {
+app.put("/update-result/:id", requireLogin, writeRateLimit, (req, res) => {
 
     const id = req.params.id;
 
@@ -2560,7 +2629,7 @@ app.get("/student/:studentId", portalOwnerGate, (req, res) => { // CHANGED (pack
 // returns role labels + signature image file paths (no financial or
 // personal data), so it is deliberately left open. If report cards ever
 // move fully behind a login, add requireLogin here.
-app.get("/signatures", (req, res) => {
+app.get("/signatures", requireLogin, (req, res) => {
     connection.query("SELECT role, signature_path FROM signatures", (err, rows) => {
         if (err) {
             console.log(err);
@@ -2573,7 +2642,7 @@ app.get("/signatures", (req, res) => {
 // Handles both a drawn signature (canvas converted to a PNG file on the
 // client) and a real uploaded image - both arrive here as a normal file
 // upload, so the server treats them identically.
-app.post("/save-signature", requireLogin, uploadSignature.single("signature"), (req, res) => {
+app.post("/save-signature", requireLogin, writeRateLimit, uploadSignature.single("signature"), (req, res) => {
     const role = req.body.role;
 
     // CHANGED (signature management, request #4): four staff roles are
@@ -2645,7 +2714,7 @@ app.delete("/delete-signature/:role", requireLogin, (req, res) => {
    open on purpose. Writes (save/delete below) remain behind requireLogin.
 ================================================================== */
 
-app.get("/class-signatures", (req, res) => {
+app.get("/class-signatures", requireLogin, (req, res) => {
     connection.query(
         "SELECT class_name, signature_path FROM class_teacher_signatures ORDER BY class_name",
         (err, rows) => {
@@ -2658,7 +2727,7 @@ app.get("/class-signatures", (req, res) => {
     );
 });
 
-app.post("/save-class-signature", requireLogin, uploadClassSignature.single("signature"), (req, res) => {
+app.post("/save-class-signature", requireLogin, writeRateLimit, uploadClassSignature.single("signature"), (req, res) => {
     const className = (req.body.class_name || "").trim();
 
     if (!className) {
@@ -2757,7 +2826,7 @@ ${body_html}
     });
 }
 
-app.post("/save-exam", requireLogin, (req, res) => {
+app.post("/save-exam", requireLogin, writeRateLimit, (req, res) => {
     const { id, title, class_name, subject, term, session, duration, instructions, body_html } = req.body;
     const examDate = /^\d{4}-\d{2}-\d{2}$/.test(req.body.exam_date || "") ? req.body.exam_date : null;
 
@@ -3159,7 +3228,9 @@ app.post("/api/messages/read", requireLogin, (req, res) => {
                     return false;
                 }).map(m => m.id);
                 if (!ids.length) return res.json({ message: "ok" });
-                connection.query("UPDATE messages SET read_at = NOW() WHERE id IN (" + ids.join(",") + ")", () => res.json({ message: "ok" }));
+                const safeIds = ids.map(function(id){ return parseInt(id, 10); }).filter(function(n){ return Number.isFinite(n); });
+                if (!safeIds.length) return res.json({ message: "ok" });
+                connection.query("UPDATE messages SET read_at = NOW() WHERE id IN (" + safeIds.join(",") + ")", () => res.json({ message: "ok" }));
             }
         );
     });
@@ -3698,7 +3769,7 @@ setInterval(function () { // sweep expired buckets every 10 min (memory hygiene)
     Object.keys(aiAssistantHits).forEach(function (k) { if (aiAssistantHits[k].resetAt < now) delete aiAssistantHits[k]; });
 }, 600000).unref();
 
-app.post("/api/ai/assistant", async (req, res) => {
+app.post("/api/ai/assistant", requireLogin, async (req, res) => {
     const cfg = await aiConfig(); // CHANGED (pack 29): in-app key counts too
     if (!cfg.key) return aiNotReady(res);
     const ip = req.ip || req.connection.remoteAddress || "?";
@@ -4203,7 +4274,7 @@ SELECT
 
 
 
-    app.post("/save-student", requireLogin, upload.single("photo"), (req, res) => {
+    app.post("/save-student", requireLogin, writeRateLimit, upload.single("photo"), (req, res) => {
         const{
             student_id,
             full_name,
@@ -4314,7 +4385,7 @@ SELECT
     // renamed student keeps all of their saved results. Nothing about
     // result VALUES or calculations is touched - only the id text.
     // ----------------------------------------------------------------
-    app.post("/update-student/:studentId", requireLogin, requireAdmin, upload.single("photo"), (req, res) => {
+    app.post("/update-student/:studentId", requireLogin, requireAdmin, writeRateLimit, upload.single("photo"), (req, res) => {
         const origId = (req.params.studentId || "").trim();
 
         const fullName = (req.body.full_name || "").trim();
@@ -4416,7 +4487,7 @@ SELECT
     // The client must send the "student_id" FormData field BEFORE the
     // file, because multer uses it to name the saved file.
     // ----------------------------------------------------------------
-    app.post("/update-student-photo", requireLogin, upload.single("photo"), (req, res) => {
+    app.post("/update-student-photo", requireLogin, writeRateLimit, upload.single("photo"), (req, res) => {
         if (!req.file) {
             return res.status(400).json({ message: "No photo uploaded." });
         }
@@ -4455,7 +4526,7 @@ SELECT
         });
     });
 
-    app.post("/bulk-add-students", requireLogin, uploadExcel.single("file"), (req, res) => {
+    app.post("/bulk-add-students", requireLogin, writeRateLimit, uploadExcel.single("file"), (req, res) => {
         if (!req.file) {
             return res.status(400).json({ message: "No file uploaded." });
         }
@@ -5791,7 +5862,7 @@ app.get("/users", requireLogin, requireAdmin, (req, res) => {
     });
 });
 
-app.post("/create-user", requireLogin, requireAdmin, (req, res) => {
+app.post("/create-user", requireLogin, requireAdmin, writeRateLimit, (req, res) => {
     const username = (req.body.username || "").trim();
     const password = req.body.password || "";
     const role = (req.body.role || "teacher").trim().toLowerCase().replace(/[^a-z_]/g, "") || "teacher";
@@ -6394,7 +6465,7 @@ app.post("/payment-submission/:id/reject",  requireLogin, requireAdmin, (req, re
    the payment; the parent sees it in their portal (My Fees & Balance);
    admin can remove it if it is not clear. Reuses the image upload
    machinery (uploads/payment-evidence) built for parent proofs. */
-app.post("/fee-payment/:id/receipt", requireLogin, requireAdmin, (req, res) => {
+app.post("/fee-payment/:id/receipt", requireLogin, requireAdmin, writeRateLimit, (req, res) => {
     uploadEvidence.single("receipt")(req, res, (upErr) => {
         if (upErr) return res.status(400).json({ message: upErr.message || "Upload failed" });
         if (!req.file) return res.status(400).json({ message: "Choose the receipt photo first." });
@@ -6617,7 +6688,7 @@ app.get("/backup.json", requireLogin, requireAdmin, (req, res) => {
 
 // NEW (Pack 72/74): One-Click Restore from Backup JSON (ameenullah-backup-YYYY-MM-DD.json)
 // Re-populates any empty or fresh MySQL database with all saved students, results, fees, classes, settings, photos & signatures.
-app.post("/api/restore-backup", requireLogin, requireAdmin, uploadStore.single("backup"), (req, res) => {
+app.post("/api/restore-backup", requireLogin, requireAdmin, writeRateLimit, uploadStore.single("backup"), (req, res) => {
     if (!req.file && !req.body.json_data) {
         return res.status(400).json({ message: "No backup file uploaded." });
     }
@@ -6890,7 +6961,7 @@ app.post("/api/store/create-folder", requireLogin, (req, res) => {
     );
 });
 
-app.post("/api/store/upload", requireLogin, uploadStore.array("files", 20), (req, res) => {
+app.post("/api/store/upload", requireLogin, writeRateLimit, uploadStore.array("files", 20), (req, res) => {
     let files = req.files || [];
     if (!files.length && req.file) files = [req.file];
     if (!files.length) {
