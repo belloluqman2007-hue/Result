@@ -705,12 +705,24 @@ function finStudentMeta() {
 function downloadReceipt(row) {
   var ts = finTermSession();
   var meta = finStudentMeta();
+  /* FIX (pack 83): robust CLASS resolution - server JOIN may fallback to plain
+     SELECT without class_name when students table is warming up, and meta may
+     be empty if the class dropdown changed. Try row, then meta, then the
+     loaded roster finStudents, then the student's stored class. */
+  var resolvedClass = row.class_name || row.className || meta.className || "";
+  if (!resolvedClass || resolvedClass === "-") {
+    var rosterMatch = (finStudents || []).find(function(s){ return s.student_id === row.student_id; });
+    if (rosterMatch && rosterMatch.class_name) resolvedClass = rosterMatch.class_name;
+  }
+  // final fallback: keep the picked class dropdown value or dash, but never blank
+  if (!resolvedClass) resolvedClass = (document.getElementById("payClass") && document.getElementById("payClass").value) || "-";
   var d = window.amsReceiptPDF({
-    receiptNo: "REC-" + row.id,
+    receiptNo: "RCP-" + String(row.id).padStart(5, "0"),
     date: row.paid_at ? String(row.paid_at).slice(0, 10) : "-",
-    studentName: meta.studentName,
-    studentId: meta.studentId,
-    className: meta.className,
+    studentName: row.student_name || row.studentName || meta.studentName,
+    studentId: row.student_id || meta.studentId,
+    className: resolvedClass,
+    purpose: row.fee_type || row.purpose || "School Fee",
     feeType: row.fee_type || "School Fee",
     term: ts.term,
     session: ts.session,

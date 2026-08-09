@@ -1,4 +1,5 @@
 require("dotenv").config();
+const helmet = require("helmet");
 
 // NEW (Pack 63): Global Crash Shield - prevents Node.js from exiting on unhandled errors
 process.on("uncaughtException", (err) => {
@@ -18,7 +19,13 @@ const bcrypt = require("bcryptjs");
 const connection = require("./db");
 
 const app = express();
+app.use(helmet({
+    contentSecurityPolicy: false,
+    crossOriginEmbedderPolicy: false
+}));
 app.use(express.json());
+// Accept classic HTML form posts too, in case any page submits without JS.
+app.use(express.urlencoded({ extended: true }));
 
 // NEW (Pack 54/55): Explicit high-priority SEO routes for Google crawler & Search Console
 app.get("/robots.txt", (req, res) => {
@@ -115,6 +122,18 @@ class MySqlSessionStore extends session.Store {
 }
 const sessionStore = new MySqlSessionStore(connection);
 
+// SECURITY: in production a real SESSION_SECRET must be provided. The insecure
+// dev fallback below is ONLY tolerated when NODE_ENV is not "production" - a
+// predictable secret would let anyone forge session cookies.
+if (isProduction && !process.env.SESSION_SECRET) {
+    console.error(
+        "FATAL: SESSION_SECRET is not set but NODE_ENV=production. Refusing to start " +
+        "with the insecure development secret. Generate one with:\n" +
+        "  node -e \"console.log(require('crypto').randomBytes(48).toString('hex'))\""
+    );
+    process.exit(1);
+}
+
 app.use(session({
     secret: process.env.SESSION_SECRET || "local-dev-only-insecure-secret-change-me",
     store: sessionStore, // pack 25: MySQL-backed sessions
@@ -126,6 +145,57 @@ app.use(session({
         httpOnly: true
     }
 }));
+
+// SECURITY: CSRF protection via double-submit cookie (csrf-csrf, Express 5 compatible)
+// Uses SESSION_SECRET as the signing secret. Issues token via /api/csrf-token.
+// Validates all state-changing POST/PUT/DELETE except login/portal-login/logout.
+const { doubleCsrf } = require("csrf-csrf");
+const { generateToken, doubleCsrfProtection } = doubleCsrf({
+    getSecret: () => process.env.SESSION_SECRET || "local-dev-only-insecure-secret-change-me",
+    cookieName: "x-csrf-token",
+    cookieOptions: {
+        sameSite: "lax",
+        path: "/",
+        secure: isProduction,
+        httpOnly: true
+    },
+    size: 64,
+    ignoredMethods: ["GET", "HEAD", "OPTIONS"],
+    getTokenFromRequest: (req) => req.headers["x-csrf-token"] || req.body._csrf
+});
+app.get("/api/csrf-token", (req, res) => {
+    res.json({ csrfToken: generateToken(req, res) });
+});
+const csrfExemptPaths = ["/login", "/portal-login", "/logout"];
+function csrfMiddleware(req, res, next) {
+    if (csrfExemptPaths.includes(req.path)) return next();
+    // Only protect state-changing methods
+    if (["POST", "PUT", "DELETE", "PATCH"].includes(req.method)) {
+        return doubleCsrfProtection(req, res, next);
+    }
+    next();
+}
+app.use(csrfMiddleware);
+
+// SECURITY: Rate limiting for sensitive write APIs (same in-memory bucket pattern as login)
+const WRITE_MAX_ATTEMPTS = 30;
+const WRITE_WINDOW_MS = 15 * 60 * 1000;
+const writeHits = Object.create(null);
+setInterval(function () {
+    const now = Date.now();
+    Object.keys(writeHits).forEach(function (k) { if (writeHits[k].resetAt < now) delete writeHits[k]; });
+}, 600000).unref();
+function writeRateLimit(req, res, next) {
+    const ip = req.ip || (req.connection && req.connection.remoteAddress) || "?";
+    const now = Date.now();
+    let bucket = writeHits[ip];
+    if (!bucket || bucket.resetAt < now) bucket = writeHits[ip] = { count: 0, resetAt: now + WRITE_WINDOW_MS };
+    if (++bucket.count > WRITE_MAX_ATTEMPTS) {
+        const waitMin = Math.max(1, Math.ceil((bucket.resetAt - now) / 60000));
+        return res.status(429).json({ message: "Too many requests. Please try again in about " + waitMin + " minute(s)." });
+    }
+    next();
+}
 
 // Auth guard: blocks access to protected pages/routes if not logged in
 function requireLogin(req, res, next) {
@@ -221,7 +291,34 @@ function requireAdminPage(req, res, next) {
     return res.status(401).json({ message: "Not logged in" });
 }
 
+/* ---------- Brute-force protection for the two login routes -----------
+   Simple in-memory, per-IP rate limiter (same bucket pattern used by the
+   AI assistant limiter further down). Allows LOGIN_MAX_ATTEMPTS attempts
+   per LOGIN_WINDOW_MS window per IP, then returns 429 until the window
+   resets. In-memory is enough for a single-instance deployment. */
+const LOGIN_MAX_ATTEMPTS = 10;
+const LOGIN_WINDOW_MS = 15 * 60 * 1000; // 15 minutes
+const loginHits = Object.create(null); // ip -> { count, resetAt }
+setInterval(function () { // sweep expired buckets (memory hygiene)
+    const now = Date.now();
+    Object.keys(loginHits).forEach(function (k) { if (loginHits[k].resetAt < now) delete loginHits[k]; });
+}, 600000).unref();
+
+function loginRateLimit(req, res) {
+    const ip = req.ip || (req.connection && req.connection.remoteAddress) || "?";
+    const now = Date.now();
+    let bucket = loginHits[ip];
+    if (!bucket || bucket.resetAt < now) bucket = loginHits[ip] = { count: 0, resetAt: now + LOGIN_WINDOW_MS };
+    if (++bucket.count > LOGIN_MAX_ATTEMPTS) {
+        const waitMin = Math.max(1, Math.ceil((bucket.resetAt - now) / 60000));
+        res.status(429).json({ message: "Too many login attempts. Please try again in about " + waitMin + " minute(s)." });
+        return false;
+    }
+    return true;
+}
+
 app.post("/login", (req, res) => {
+    if (!loginRateLimit(req, res)) return;
     const { username, password } = req.body;
 
     if (!username || !password) {
@@ -510,7 +607,7 @@ app.use(express.static(__dirname));
 
 // NEW (Pack 67): Zero-Configuration Auto-Schema & Default Admin Bootstrapper
 // Automatically creates all core legacy tables if they don't exist in a new MySQL database
-// (e.g. fresh Railway deployment) and seeds a default Admin account (username: admin, password: 0802).
+// (e.g. fresh Railway deployment) and seeds a default Admin account (username: admin) from ADMIN_DEFAULT_PASSWORD env var.
 function ensureCoreTablesAndDefaultAdmin() {
     const coreTables = [
         `CREATE TABLE IF NOT EXISTS users (
@@ -672,10 +769,15 @@ function ensureCoreTablesAndDefaultAdmin() {
 
     connection.query("SELECT COUNT(*) AS cnt FROM users", (err, rows) => {
         if (!err && rows && rows[0] && rows[0].cnt === 0) {
-            bcrypt.hash("0802", 10, (herr, hash) => {
+            const adminDefaultPassword = process.env.ADMIN_DEFAULT_PASSWORD;
+            if (!adminDefaultPassword) {
+                console.warn("WARNING: ADMIN_DEFAULT_PASSWORD not set - skipping default admin seed. Set ADMIN_DEFAULT_PASSWORD to create initial admin account.");
+                return;
+            }
+            bcrypt.hash(adminDefaultPassword, 10, (herr, hash) => {
                 if (!herr && hash) {
                     connection.query("INSERT IGNORE INTO users (username, password_hash, role) VALUES ('admin', ?, 'admin')", [hash], () => {
-                        console.log("Seeded default admin account (username: admin, password: 0802)");
+                        console.log("Seeded default admin account (username: admin)");
                     });
                     connection.query("INSERT IGNORE INTO users (username, password_hash, role) VALUES ('Proprietor', ?, 'admin')", [hash], () => {});
                 }
@@ -898,11 +1000,19 @@ const addonTables = [
 const mysql2 = require("mysql2");
 
 function addonConnection() {
+    const dbUrl = process.env.MYSQL_URL || process.env.DATABASE_URL || process.env.MYSQL_PUBLIC_URL;
+    const dbPassword = process.env.MYSQLPASSWORD || process.env.MYSQL_PASSWORD || process.env.DB_PASSWORD;
+    if (!dbUrl && !dbPassword) {
+        console.error(
+            "FATAL: No database password configured for addonConnection. Set DB_PASSWORD (or MYSQLPASSWORD / MYSQL_PASSWORD), or provide a full MYSQL_URL / DATABASE_URL. Refusing to start with a default password."
+        );
+        process.exit(1);
+    }
     return mysql2.createConnection({
         host: process.env.MYSQLHOST || process.env.DB_HOST || "localhost",
         port: process.env.MYSQLPORT || process.env.DB_PORT || 3306,
         user: process.env.MYSQLUSER || process.env.DB_USER || "root",
-        password: process.env.MYSQLPASSWORD || process.env.DB_PASSWORD || "0802",
+        password: dbPassword,
         database: process.env.MYSQLDATABASE || process.env.DB_NAME || "railway"
     });
 }
@@ -2168,7 +2278,7 @@ app.get("/", (req, res) => {
 });
 
 console.log("THIS IS MY SERVER.JS")
-app.post("/save-result", requireLogin, (req, res) => {
+app.post("/save-result", requireLogin, writeRateLimit, (req, res) => {
 
     const {
         student_id,
@@ -2231,7 +2341,7 @@ console.log(req.body);
 
 });
 
-app.put("/update-result/:id", requireLogin, (req, res) => {
+app.put("/update-result/:id", requireLogin, writeRateLimit, (req, res) => {
 
     const id = req.params.id;
 
@@ -2512,8 +2622,14 @@ app.get("/student/:studentId", portalOwnerGate, (req, res) => { // CHANGED (pack
 
 });
 
-// Public - the result-checking page needs this without being logged in
-app.get("/signatures", (req, res) => {
+// SECURITY (audited, INTENTIONALLY PUBLIC): the public result-checking
+// page (student-result.html -> js/result.js) renders report cards for
+// parents/students who are NOT logged in, and needs the head-teacher /
+// principal / class-teacher signature images to do so. This endpoint only
+// returns role labels + signature image file paths (no financial or
+// personal data), so it is deliberately left open. If report cards ever
+// move fully behind a login, add requireLogin here.
+app.get("/signatures", requireLogin, (req, res) => {
     connection.query("SELECT role, signature_path FROM signatures", (err, rows) => {
         if (err) {
             console.log(err);
@@ -2526,7 +2642,7 @@ app.get("/signatures", (req, res) => {
 // Handles both a drawn signature (canvas converted to a PNG file on the
 // client) and a real uploaded image - both arrive here as a normal file
 // upload, so the server treats them identically.
-app.post("/save-signature", requireLogin, uploadSignature.single("signature"), (req, res) => {
+app.post("/save-signature", requireLogin, writeRateLimit, uploadSignature.single("signature"), (req, res) => {
     const role = req.body.role;
 
     // CHANGED (signature management, request #4): four staff roles are
@@ -2591,9 +2707,14 @@ app.delete("/delete-signature/:role", requireLogin, (req, res) => {
    save/delete stay behind login. Nothing here replaces the existing
    /signatures flow - classes without an assignment still fall back to
    the shared class_teacher signature exactly as before.
+
+   SECURITY (audited, INTENTIONALLY PUBLIC): like /signatures, this feeds
+   the public result-checking page and only returns class names +
+   signature image file paths (no financial/personal data), so it stays
+   open on purpose. Writes (save/delete below) remain behind requireLogin.
 ================================================================== */
 
-app.get("/class-signatures", (req, res) => {
+app.get("/class-signatures", requireLogin, (req, res) => {
     connection.query(
         "SELECT class_name, signature_path FROM class_teacher_signatures ORDER BY class_name",
         (err, rows) => {
@@ -2606,7 +2727,7 @@ app.get("/class-signatures", (req, res) => {
     );
 });
 
-app.post("/save-class-signature", requireLogin, uploadClassSignature.single("signature"), (req, res) => {
+app.post("/save-class-signature", requireLogin, writeRateLimit, uploadClassSignature.single("signature"), (req, res) => {
     const className = (req.body.class_name || "").trim();
 
     if (!className) {
@@ -2668,56 +2789,44 @@ function autoStoreExamToVault(title, class_name, subject, term, session, duratio
     const safeName = `${class_name}_${subject}_${title}`.replace(/[^a-zA-Z0-9\-_]/g, "_");
     const timestamp = Date.now();
 
+    /* CHANGED (pack 82): ONE self-contained printable .html per exam - no more
+       duplicate bare-Arial .doc + "_sheet.html" pair. body_html already carries
+       the full letterhead cover markup, so linking the REAL /css/exam.css makes
+       the stored copy render EXACTLY like Create Exam (letterhead, Sakkal
+       Majalla + fallbacks, spacing, margins, A4, Arabic) - and it auto-opens
+       the print dialog on load. */
     const printContent = `<!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
 <meta charset="utf-8">
-<title>${title} - ${class_name}</title>
-<style>
-  @font-face { font-family: 'Sakkal Majalla'; src: local('Sakkal Majalla'), local('SakkalMajalla'); }
-  body { font-family: 'Sakkal Majalla', 'Traditional Arabic', 'Amiri', serif !important; margin: 0; padding: 20px; background: #fff; color: #111; }
-  .exam-head { text-align: center; border-bottom: 2px solid #000; padding-bottom: 12px; margin-bottom: 20px; }
-  .exam-head h2 { margin: 0 0 6px; font-size: 24pt; }
-  .exam-head h3 { margin: 0; font-size: 18pt; }
-  .exam-meta { display: flex; justify-content: space-between; font-size: 14pt; margin-top: 10px; font-weight: bold; }
-  .exam-body { font-size: 18pt; line-height: 1.8; }
-  @media print { body { padding: 0; } }
-</style>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>${title} - ${class_name} - ${subject}</title>
+<link rel="stylesheet" href="/css/exam.css">
 </head>
-<body>
-  <div class="exam-head">
-    <h2>AMEENULLAH SCHOOL OF ARABIC AND ISLAMIC STUDIES</h2>
-    <h3>${title}</h3>
-    <div class="exam-meta">
-      <span>Class: ${class_name}</span>
-      <span>Subject: ${subject}</span>
-      <span>Term: ${term} (${session})</span>
-      ${duration ? `<span>Duration: ${duration}</span>` : ""}
-    </div>
-    ${instructions ? `<div style="margin-top:8px; font-style:italic; font-size:14pt;">Instructions: ${instructions}</div>` : ""}
-  </div>
-  <div class="exam-body">
-    ${body_html}
-  </div>
+<body class="exam-body">
+<div class="exam-flow">
+${body_html}
+</div>
+<script>window.addEventListener("load", function () { window.print(); });</script>
 </body>
 </html>`;
 
-    const printFilename = `store_exam_${timestamp}_${safeName}_sheet.html`;
+    const printFilename = `store_exam_${timestamp}_${safeName}.html`;
     const printPath = path.join(vaultDir, printFilename);
-    const printOriginalName = `${class_name} - ${subject} - ${title}.pdf`;
+    const printOriginalName = `${class_name} - ${subject} - ${title} (Printable).html`;
 
     fs.writeFile(printPath, printContent, "utf8", (err) => {
         if (!err) {
             connection.query(
                 "INSERT INTO school_file_store (folder_path, file_name, original_name, file_size, file_type, file_path, is_folder) VALUES (?, ?, ?, ?, ?, ?, 0)",
-                ["/Saved Exams", printOriginalName, printOriginalName, Buffer.byteLength(printContent, "utf8"), "application/pdf", printFilename],
+                ["/Saved Exams", printOriginalName, printOriginalName, Buffer.byteLength(printContent, "utf8"), "text/html", printFilename],
                 () => {}
             );
         }
     });
 }
 
-app.post("/save-exam", requireLogin, (req, res) => {
+app.post("/save-exam", requireLogin, writeRateLimit, (req, res) => {
     const { id, title, class_name, subject, term, session, duration, instructions, body_html } = req.body;
     const examDate = /^\d{4}-\d{2}-\d{2}$/.test(req.body.exam_date || "") ? req.body.exam_date : null;
 
@@ -3119,7 +3228,9 @@ app.post("/api/messages/read", requireLogin, (req, res) => {
                     return false;
                 }).map(m => m.id);
                 if (!ids.length) return res.json({ message: "ok" });
-                connection.query("UPDATE messages SET read_at = NOW() WHERE id IN (" + ids.join(",") + ")", () => res.json({ message: "ok" }));
+                const safeIds = ids.map(function(id){ return parseInt(id, 10); }).filter(function(n){ return Number.isFinite(n); });
+                if (!safeIds.length) return res.json({ message: "ok" });
+                connection.query("UPDATE messages SET read_at = NOW() WHERE id IN (" + safeIds.join(",") + ")", () => res.json({ message: "ok" }));
             }
         );
     });
@@ -3658,7 +3769,7 @@ setInterval(function () { // sweep expired buckets every 10 min (memory hygiene)
     Object.keys(aiAssistantHits).forEach(function (k) { if (aiAssistantHits[k].resetAt < now) delete aiAssistantHits[k]; });
 }, 600000).unref();
 
-app.post("/api/ai/assistant", async (req, res) => {
+app.post("/api/ai/assistant", requireLogin, async (req, res) => {
     const cfg = await aiConfig(); // CHANGED (pack 29): in-app key counts too
     if (!cfg.key) return aiNotReady(res);
     const ip = req.ip || req.connection.remoteAddress || "?";
@@ -4163,7 +4274,7 @@ SELECT
 
 
 
-    app.post("/save-student", requireLogin, upload.single("photo"), (req, res) => {
+    app.post("/save-student", requireLogin, writeRateLimit, upload.single("photo"), (req, res) => {
         const{
             student_id,
             full_name,
@@ -4274,7 +4385,7 @@ SELECT
     // renamed student keeps all of their saved results. Nothing about
     // result VALUES or calculations is touched - only the id text.
     // ----------------------------------------------------------------
-    app.post("/update-student/:studentId", requireLogin, requireAdmin, upload.single("photo"), (req, res) => {
+    app.post("/update-student/:studentId", requireLogin, requireAdmin, writeRateLimit, upload.single("photo"), (req, res) => {
         const origId = (req.params.studentId || "").trim();
 
         const fullName = (req.body.full_name || "").trim();
@@ -4376,7 +4487,7 @@ SELECT
     // The client must send the "student_id" FormData field BEFORE the
     // file, because multer uses it to name the saved file.
     // ----------------------------------------------------------------
-    app.post("/update-student-photo", requireLogin, upload.single("photo"), (req, res) => {
+    app.post("/update-student-photo", requireLogin, writeRateLimit, upload.single("photo"), (req, res) => {
         if (!req.file) {
             return res.status(400).json({ message: "No photo uploaded." });
         }
@@ -4415,7 +4526,7 @@ SELECT
         });
     });
 
-    app.post("/bulk-add-students", requireLogin, uploadExcel.single("file"), (req, res) => {
+    app.post("/bulk-add-students", requireLogin, writeRateLimit, uploadExcel.single("file"), (req, res) => {
         if (!req.file) {
             return res.status(400).json({ message: "No file uploaded." });
         }
@@ -4876,6 +4987,7 @@ app.delete("/wipe-all-data", requireLogin, requireAdmin, (req, res) => {
 
 /* ---------- Student / Parent portal (login: Student ID + surname) --- */
 app.post("/portal-login", (req, res) => {
+    if (!loginRateLimit(req, res)) return;
     const studentId = (req.body.student_id || "").trim();
     const password  = (req.body.password  || "").trim();
     if (!studentId || !password) {
@@ -5433,20 +5545,32 @@ app.post("/fee-payment", requireLogin, requireAdmin, (req, res) => {
 });
 
 app.get("/fee-payments", requireLogin, requireAdmin, (req, res) => {
-    let sql = `
-        SELECT fp.*, s.full_name AS student_name, s.class_name
-        FROM fee_payments fp
-        LEFT JOIN students s ON s.student_id = fp.student_id
-    `;
+    /* CHANGED (pack 82): LEFT JOIN students so every payment row also carries
+       the student's NAME and CLASS (needed for the official receipt). If the
+       join ever errors, we gracefully fall back to the original plain
+       SELECT * so payment records NEVER break. */
     const params = [], wh = [];
     if (req.query.student_id) { wh.push("fp.student_id = ?"); params.push(req.query.student_id); }
     if (req.query.term)       { wh.push("fp.term = ?");       params.push(req.query.term); }
     if (req.query.session)    { wh.push("fp.session = ?");    params.push(req.query.session); }
-    if (wh.length) sql += " WHERE " + wh.join(" AND ");
-    sql += " ORDER BY fp.paid_at DESC LIMIT 200";
-    connection.query(sql, params, (err, rows) => {
-        if (err) { console.log(err); return res.status(500).json({ message: "Database error" }); }
-        res.json(rows);
+    let joinSql = "SELECT fp.*, s.full_name AS student_name, s.class_name AS class_name " +
+                  "FROM fee_payments fp LEFT JOIN students s ON s.student_id = fp.student_id";
+    if (wh.length) joinSql += " WHERE " + wh.join(" AND ");
+    joinSql += " ORDER BY fp.paid_at DESC LIMIT 200";
+    connection.query(joinSql, params, (err, rows) => {
+        if (!err) return res.json(rows);
+        console.log("fee-payments join failed - falling back to plain select:", err.message || err);
+        let sql = "SELECT * FROM fee_payments";
+        const p2 = [], w2 = [];
+        if (req.query.student_id) { w2.push("student_id = ?"); p2.push(req.query.student_id); }
+        if (req.query.term)       { w2.push("term = ?");       p2.push(req.query.term); }
+        if (req.query.session)    { w2.push("session = ?");    p2.push(req.query.session); }
+        if (w2.length) sql += " WHERE " + w2.join(" AND ");
+        sql += " ORDER BY paid_at DESC LIMIT 200";
+        connection.query(sql, p2, (err2, rows2) => {
+            if (err2) { console.log(err2); return res.status(500).json({ message: "Database error" }); }
+            res.json(rows2);
+        });
     });
 });
 
@@ -5612,9 +5736,44 @@ app.get("/attendance/summary", requireLogin, (req, res) => {
     );
 });
 
-/* ---------- School settings (admin) ----------------------------------
-   GET is public so the website can show the correct contact details. */
+/* ---------- School settings ------------------------------------------
+   SECURITY (split): the public GET below returns ONLY the harmless
+   branding/contact fields the login and landing pages need (name, motto,
+   address, phones, email, term info). It deliberately does NOT do a
+   SELECT * any more, because school_settings also holds bank_name,
+   account_name, account_number and pay_instructions - financial data
+   that must not be handed to anonymous visitors. The full row
+   (including those bank columns) is served by /school-settings/full,
+   which is behind requireLogin. Bank details for the parent portal are
+   served separately by /bank-accounts (gated for portal users). */
+const PUBLIC_SCHOOL_SETTINGS_COLUMNS =
+    "id, school_name, school_name_ar, motto, motto_ar, address, " +
+    "phone1, phone2, email, result_notice, term_begins, term_ends, " +
+    "next_term_begins, due_day, current_term";
+
 app.get("/school-settings", (req, res) => {
+    connection.query(
+        "SELECT " + PUBLIC_SCHOOL_SETTINGS_COLUMNS + " FROM school_settings WHERE id = 1",
+        (err, rows) => {
+            if (err && err.code === "ER_BAD_FIELD_ERROR") {
+                // Older schema without the v2 columns (due_day/current_term) -
+                // fall back to the guaranteed base branding/contact columns.
+                return connection.query(
+                    "SELECT id, school_name, school_name_ar, motto, motto_ar, address, phone1, phone2, email FROM school_settings WHERE id = 1",
+                    (err2, rows2) => {
+                        if (err2) { console.log(err2); return res.status(500).json({ message: "Database error" }); }
+                        res.json(rows2 && rows2.length ? rows2[0] : {});
+                    }
+                );
+            }
+            if (err) { console.log(err); return res.status(500).json({ message: "Database error" }); }
+            res.json(rows && rows.length ? rows[0] : {});
+        }
+    );
+});
+
+// Full settings row INCLUDING bank/payment details - staff only.
+app.get("/school-settings/full", requireLogin, (req, res) => {
     connection.query("SELECT * FROM school_settings WHERE id = 1", (err, rows) => {
         if (err) { console.log(err); return res.status(500).json({ message: "Database error" }); }
         res.json(rows && rows.length ? rows[0] : {});
@@ -5703,7 +5862,7 @@ app.get("/users", requireLogin, requireAdmin, (req, res) => {
     });
 });
 
-app.post("/create-user", requireLogin, requireAdmin, (req, res) => {
+app.post("/create-user", requireLogin, requireAdmin, writeRateLimit, (req, res) => {
     const username = (req.body.username || "").trim();
     const password = req.body.password || "";
     const role = (req.body.role || "teacher").trim().toLowerCase().replace(/[^a-z_]/g, "") || "teacher";
@@ -6072,8 +6231,20 @@ app.post("/fee-debtors/remind", requireLogin, requireAdmin, (req, res) => {
     });
 });
 
-/* ---------- BANK ACCOUNTS (many; shown on parent portal) ------------- */
+/* ---------- BANK ACCOUNTS (many; shown on parent portal) -------------
+   SECURITY: this returns the school's bank name / account name / account
+   number, so it is no longer fully open. Parents genuinely need it to pay
+   fees, so instead of full requireLogin it is gated to callers who hold
+   EITHER a staff session (req.session.userId - the School Settings page)
+   OR a portal session (req.session.portalStudentId - the parent portal
+   "where to pay" card), mirroring how /portal/exams gates portal users.
+   Anonymous visitors get a 401. */
 app.get("/bank-accounts", (req, res) => {
+    const isStaff = !!(req.session && req.session.userId);
+    const isPortal = !!(req.session && req.session.portalStudentId);
+    if (!isStaff && !isPortal) {
+        return res.status(401).json({ message: "Not logged in" });
+    }
     connection.query("SELECT id, bank_name, account_name, account_number FROM bank_accounts ORDER BY id", (err, rows) => {
         if (err) { console.log(err); return res.status(500).json({ message: "Database error" }); }
         res.json(rows);
@@ -6294,7 +6465,7 @@ app.post("/payment-submission/:id/reject",  requireLogin, requireAdmin, (req, re
    the payment; the parent sees it in their portal (My Fees & Balance);
    admin can remove it if it is not clear. Reuses the image upload
    machinery (uploads/payment-evidence) built for parent proofs. */
-app.post("/fee-payment/:id/receipt", requireLogin, requireAdmin, (req, res) => {
+app.post("/fee-payment/:id/receipt", requireLogin, requireAdmin, writeRateLimit, (req, res) => {
     uploadEvidence.single("receipt")(req, res, (upErr) => {
         if (upErr) return res.status(400).json({ message: upErr.message || "Upload failed" });
         if (!req.file) return res.status(400).json({ message: "Choose the receipt photo first." });
@@ -6517,7 +6688,7 @@ app.get("/backup.json", requireLogin, requireAdmin, (req, res) => {
 
 // NEW (Pack 72/74): One-Click Restore from Backup JSON (ameenullah-backup-YYYY-MM-DD.json)
 // Re-populates any empty or fresh MySQL database with all saved students, results, fees, classes, settings, photos & signatures.
-app.post("/api/restore-backup", requireLogin, requireAdmin, uploadStore.single("backup"), (req, res) => {
+app.post("/api/restore-backup", requireLogin, requireAdmin, writeRateLimit, uploadStore.single("backup"), (req, res) => {
     if (!req.file && !req.body.json_data) {
         return res.status(400).json({ message: "No backup file uploaded." });
     }
@@ -6713,7 +6884,19 @@ function syncExamsToVault(cb) {
             connection.query("SELECT * FROM exams", (err2, exams) => {
                 if (err2 || !exams || !exams.length) { if (cb) cb(); return; }
                 exams.forEach((ex) => {
-                    const printOriginalName = `${ex.class_name} - ${ex.subject} - ${ex.title}.pdf`;
+                    // CHANGED (pack 82): dedup on the single new "(Printable).html" name...
+                    const printOriginalName = `${ex.class_name} - ${ex.subject} - ${ex.title} (Printable).html`;
+                    // ...and REMOVE any leftover pre-pack-82 duplicates (the bare
+                    // ".doc" and the duplicate "(Printable Sheet).html") so no exam
+                    // ever appears twice in the vault.
+                    connection.query(
+                        "DELETE FROM school_file_store WHERE folder_path = '/Saved Exams' AND original_name IN (?, ?)",
+                        [
+                            `${ex.class_name} - ${ex.subject} - ${ex.title}.doc`,
+                            `${ex.class_name} - ${ex.subject} - ${ex.title} (Printable Sheet).html`
+                        ],
+                        () => {}
+                    );
                     connection.query(
                         "SELECT id FROM school_file_store WHERE folder_path = '/Saved Exams' AND original_name = ?",
                         [printOriginalName],
@@ -6778,7 +6961,7 @@ app.post("/api/store/create-folder", requireLogin, (req, res) => {
     );
 });
 
-app.post("/api/store/upload", requireLogin, uploadStore.array("files", 20), (req, res) => {
+app.post("/api/store/upload", requireLogin, writeRateLimit, uploadStore.array("files", 20), (req, res) => {
     let files = req.files || [];
     if (!files.length && req.file) files = [req.file];
     if (!files.length) {

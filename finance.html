@@ -57,12 +57,13 @@
     </div>
 
     <div class="mg-tabs">
-      <button class="mg-tab active" type="button" onclick="finSwitchTab('fees', this)">📋 Set School Fees</button>
-      <button class="mg-tab" type="button" onclick="finSwitchTab('pay', this)">💵 Record Payment &amp; Official Receipt</button>
-      <button class="mg-tab" type="button" onclick="finSwitchTab('deb', this)">⏳ Debtors &amp; Owing List <span id="debBadge" class="deb-badge" style="display:none;"></span></button>
-      <button class="mg-tab" type="button" onclick="finSwitchTab('subs', this)">📸 Snapped Payment Evidence <span id="subsBadge" style="display:none; background:#D64541; color:#fff; border-radius:999px; padding:1px 8px; font-size:11px;"></span></button>
-      <button class="mg-tab" type="button" onclick="finSwitchTab('exp', this)">📉 School Expenses</button>
-      <button class="mg-tab" type="button" onclick="finSwitchTab('sum', this)">📊 Finance Summary</button>
+      <button class="mg-tab active" type="button" onclick="finSwitchTab('fees', this)">&#128181; Fees Setup</button>
+      <button class="mg-tab" type="button" onclick="finSwitchTab('pay', this)">&#128181; Record Payment &amp; Official Receipt</button>
+      <!-- NEW (pack 33): debtors board tab -->
+      <button class="mg-tab" type="button" onclick="finSwitchTab('deb', this)">&#9200; Debtors <span id="debBadge" class="deb-badge" style="display:none;"></span></button>
+      <button class="mg-tab" type="button" onclick="finSwitchTab('subs', this)">&#128248; Snapped Payment Evidence <span id="subsBadge" style="display:none; background:#D64541; color:#fff; border-radius:999px; padding:1px 8px; font-size:11px;"></span></button>
+      <button class="mg-tab" type="button" onclick="finSwitchTab('exp', this)">&#128177; Expenses</button>
+      <button class="mg-tab" type="button" onclick="finSwitchTab('sum', this)">&#128202; Summary</button>
     </div>
 
     <!-- Fee structure -->
@@ -133,18 +134,13 @@
 
     <!-- Payments -->
     <div class="mg-panel" id="finPanelPay">
-      <!-- NEW (Pack 82): Clear section banner -->
-      <div style="background:#EBF8F2; border:1.5px solid #1C5A42; border-radius:12px; padding:14px 16px; margin-bottom:18px;">
-        <h3 style="margin:0; color:#0F3D2E; display:flex; align-items:center; gap:8px;">
-          <span>💵</span> OFFICIAL SCHOOL PAYMENT &amp; RECEIPT GENERATOR
-        </h3>
-        <p style="margin:4px 0 0; font-size:13px; color:#144431;">
-          Record fees paid directly to the Bursar or School Office. Once recorded, click <b>"Download Receipt (PDF)"</b> on any row below to generate an official printable Islamic fee receipt (.pdf) for the parent!
-        </p>
+      <!-- NEW (pack 82): green banner - this panel is the school's OFFICIAL record -->
+      <div style="background:#E8F5E9; border:1px solid #A5D6A7; border-left:5px solid #1E7D46; color:#14532D; border-radius:10px; padding:10px 14px; margin-bottom:12px; font-size:13.5px; line-height:1.55;">
+        &#9989; <b>This is the school's OFFICIAL payment record.</b> Every payment recorded here is issued an official school receipt and counts immediately toward the student's fees.
       </div>
       <div class="mg-cards">
         <div class="mg-card">
-          <h3>&#128184; Record a Payment</h3>
+          <h3>Record a Payment (Official)</h3>
           <div class="mg-toolbar">
             <div class="mg-field">
               <label for="payClass">Class</label>
@@ -236,14 +232,10 @@
     <!-- NEW (pack 15): payment proofs parents uploaded on their portal.
          Approve => it becomes a real payment for that student. -->
     <div class="mg-panel" id="finPanelSubs">
-      <!-- NEW (Pack 82): Clear section banner -->
-      <div style="background:#FEF7EA; border:1.5px solid #FAD189; border-radius:12px; padding:14px 16px; margin-bottom:18px;">
-        <h3 style="margin:0; color:#7A4A12; display:flex; align-items:center; gap:8px;">
-          <span>📸</span> PARENT SNAPPED PAYMENT EVIDENCE (PORTAL UPLOADS)
-        </h3>
-        <p style="margin:4px 0 0; font-size:13px; color:#6C4009;">
-          Review payment screenshots, bank teller slips, and transfer receipts uploaded by parents from their portal. Check the proof image, then click <b>"Approve &amp; Record"</b> to generate an official fee payment receipt!
-        </p>
+      <!-- NEW (pack 82): amber banner - parent-submitted screenshots, only
+           official once approved -->
+      <div style="background:#FFF8E1; border:1px solid #FFE082; border-left:5px solid #F59E0B; color:#7C2D12; border-radius:10px; padding:10px 14px; margin-bottom:12px; font-size:13.5px; line-height:1.55;">
+        &#128247; <b>These are parent-submitted payment screenshots</b> snapped and sent in from the parent portal. They are <b>not official school records until approved</b> - approving one converts it into an official recorded payment.
       </div>
       <div class="mg-toolbar">
         <div class="mg-field">
@@ -330,6 +322,7 @@
     <div class="mg-msg" id="finMsg"></div>
   </div>
 
+  <script src="js/csrf.js"></script>
   <script src="js/ui.js"></script>
   <script src="js/app.js"></script>
   <!-- NEW (pack 14): jsPDF + shared receipt/list PDF maker (local vendor) -->

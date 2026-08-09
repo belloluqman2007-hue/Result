@@ -162,10 +162,23 @@ function initExam() {
             b.querySelectorAll("[style]").forEach(function (el) {
                 if (el.style && el.style.fontSize) el.style.fontSize = "";
             });
-            b.style.fontSize = val + "pt";
+            b.style.setProperty("font-size", val + "pt", "important");
         });
         if (other && other.value !== val) other.value = val;
         paginateExam();
+    }
+    // FIX (pack 83): when Sakkal Majalla is missing (phones/Mac) reduce sizes via CSS .no-sakkal
+    try {
+        if (document.fonts && !document.fonts.check('16pt Sakkal Majalla')) {
+            document.documentElement.classList.add('no-sakkal');
+            document.body.classList.add('no-sakkal');
+        }
+    } catch(e) {}
+    if (document.fonts && document.fonts.ready) {
+        document.fonts.ready.then(function(){
+            try { if (!document.fonts.check('16pt Sakkal Majalla')) { document.documentElement.classList.add('no-sakkal'); document.body.classList.add('no-sakkal'); } } catch(e2){}
+            updateExamZoom();
+        });
     }
     if (fontSel) fontSel.addEventListener("change", function () { applyExamFontFrom(fontSel.value, fontSelTools); });
     if (fontSelTools) fontSelTools.addEventListener("change", function () { applyExamFontFrom(fontSelTools.value, fontSel); });
@@ -511,6 +524,12 @@ function appendBodyPage(flow, afterEl) {
     page.className = "exam-page body-page";
     const spacing = document.getElementById("spacingSelect").value;
     page.innerHTML = `<div class="page-content exam-body spacing-${spacing}"></div>`;
+    // FIX (pack 83): new pages must inherit the currently selected question font size (otherwise Huge reverts to 32pt default)
+    try {
+        var base = examBaseFontPt();
+        var pc = page.querySelector(".page-content");
+        if (pc) pc.style.setProperty("font-size", base + "pt", "important");
+    } catch(e) {}
     if (afterEl && afterEl.parentNode === flow) {
         flow.insertBefore(page, afterEl.nextElementSibling);
     } else {
@@ -613,30 +632,13 @@ function paginateExam() {
 
     segments.forEach(function (seg) { paginateSegment(flow, seg); });
 
-    /* NEW (pack 17 - owner: "let it all display as the first one
-       display"): ONE question text size for the whole downloaded
-       booklet. Each auto-fitted exam used to shrink on its own, so the
-       first exam printed full-size while a fuller exam printed tiny and
-       cramped. Now every one-page exam shares the size that fitted the
-       FULLEST exam - applying a smaller size can never overflow a page,
-       so this is always safe. Exams split with manual page breaks keep
-       the chosen (full) size, exactly like before. */
-    let docFit = Infinity;
-    segments.forEach(function (seg) {
-        if (seg.spilled) return; // pack 25: spilled sections ride their own flow, don't drag the shared size down
-        if (seg.bodies.some(function (p) { return !!p.querySelector(".manual-page-break"); })) return;
-        const c = seg.bodies[0] && seg.bodies[0].querySelector(".page-content");
-        const pt = c && parseFloat(c.style.fontSize);
-        if (pt) docFit = Math.min(docFit, pt);
-    });
-    if (docFit !== Infinity) {
-        segments.forEach(function (seg) {
-            if (seg.spilled) return; // pack 25
-            if (seg.bodies.some(function (p) { return !!p.querySelector(".manual-page-break"); })) return;
-            const c = seg.bodies[0] && seg.bodies[0].querySelector(".page-content");
-            if (c) c.style.fontSize = docFit + "pt";
-        });
-    }
+    /* FIX (pack 83): removed the booklet-wide shared shrink that forced
+       every one-page exam to the smallest fitting size - so a 2-question
+       Huge exam was shrunk to the same tiny size as a 20-question exam.
+       Now each exam keeps its own chosen size (Huge stays huge) and
+       overflows spill to new pages instead of shrinking. Manual-break
+       exams already kept their size. */
+
 
     refreshAllPageHeaders();
     checkAllPagesOverflow();
@@ -654,18 +656,12 @@ function examBaseFontPt() {
     return s && s.value ? parseFloat(s.value) : 32;
 }
 
-/* Shrink (or grow back) ONE question page's font until its blocks fit the
-   page budget. Measured live, so wrapping is accounted for - the page
-   count NEVER grows from typing; only an explicit "Insert Page Break"
-   gives a section more than one page. */
-/* CHANGED (pack 17 - "the other exams after the first one is not
-   displaying well"): the old proportional shrink OVERSHOT badly on phone
-   fonts (Amiri measures far taller than Sakkal Majalla): one big
-   overshoot slammed the font to the 12pt floor and STOPPED there with no
-   grow-back, so exam 2, 3... printed TINY on half a page while exam 1
-   stayed full-size. The fitter now binary-searches between the floor and
-   the teacher's chosen size and keeps the LARGEST size that truly fits
-   the page - every exam stays as readable as its content allows. */
+/* FIX (pack 83): autoFit now KEEPS the teacher's chosen size (Huge stays huge).
+   Previously it binary-searched down to the smallest size that fit one page,
+   so choosing Huge (40pt) with many questions shrunk to 12pt and looked
+   identical to Small - "big font still small". Now we either keep the chosen
+   size if it fits, or return null to let the caller SPILL the exam across
+   pages so big fonts stay big and flow to next pages like Word. */
 function autoFitOnePage(page) {
     const content = page.querySelector(".page-content");
     if (!content) return null;
@@ -673,11 +669,11 @@ function autoFitOnePage(page) {
     const blocks = Array.from(content.children).filter(function (b) {
         return !b.classList.contains("manual-page-break");
     });
-    if (!blocks.length) { content.style.fontSize = base + "pt"; return base; }
+    if (!blocks.length) { content.style.setProperty("font-size", base + "pt", "important"); return base; }
 
     const budget = budgetFor(page);
     const measure = function (pt) {
-        content.style.fontSize = pt + "pt";
+        content.style.setProperty("font-size", pt + "pt", "important");
         let used = 0;
         blocks.forEach(function (b) { used += outerHeightPx(b); });
         return used;
@@ -686,21 +682,9 @@ function autoFitOnePage(page) {
     // Fits at the teacher's chosen size? Keep it - the exact paper look.
     if (measure(base) <= budget + 1) return base;
 
-    /* CHANGED (pack 25 - owner: "downloaded exam is missing questions"):
-       even the floor cannot fit it -> return NULL so the caller SPILLS
-       the questions onto more pages instead of clipping them off the
-       bottom of a one-page sheet (questions silently vanished from the
-       PDF before). */
-    if (measure(EXAM_MIN_PT) > budget + 1) return null;
-
-    // Binary search: LARGEST readable size that fits the one page.
-    let lo = EXAM_MIN_PT, hi = base;
-    for (let i = 0; i < 7; i++) {
-        const mid = (lo + hi) / 2;
-        if (measure(mid) <= budget + 1) lo = mid; else hi = mid;
-    }
-    content.style.fontSize = (Math.floor(lo * 4) / 4) + "pt"; // tidy 0.25pt steps
-    return parseFloat(content.style.fontSize);
+    // Doesn't fit -> don't shrink to tiny, keep chosen size and signal spill
+    content.style.setProperty("font-size", base + "pt", "important");
+    return null;
 }
 
 /* NEW (pack 25 - owner: "downloaded exam is missing questions; page 6
@@ -715,7 +699,8 @@ function autoFitOnePage(page) {
 function spillSegmentAcrossPages(flow, seg) {
     const first = seg.bodies[0];
     const firstContent = first.querySelector(".page-content");
-    firstContent.style.fontSize = EXAM_MIN_PT + "pt";
+    const base = examBaseFontPt();
+    firstContent.style.setProperty("font-size", base + "pt", "important");
     seg.spilled = true;
 
     const blocks = Array.from(firstContent.children).filter(function (b) {

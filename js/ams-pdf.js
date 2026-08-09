@@ -36,6 +36,37 @@
     return "N" + (Number(n) || 0).toLocaleString(undefined, { maximumFractionDigits: 2 });
   }
 
+  /* NEW (pack 82): amount in words for the official receipt
+     (e.g. 45000 -> "Forty Five Thousand Naira Only"). */
+  function numberToWords(num) {
+    var n = Math.round(Math.abs(Number(num) || 0));
+    var ones = ["", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine",
+                "Ten", "Eleven", "Twelve", "Thirteen", "Fourteen", "Fifteen", "Sixteen",
+                "Seventeen", "Eighteen", "Nineteen"];
+    var tens = ["", "", "Twenty", "Thirty", "Forty", "Fifty", "Sixty", "Seventy", "Eighty", "Ninety"];
+    function under100(x) {
+      return x < 20 ? ones[x] : tens[Math.floor(x / 10)] + (x % 10 ? " " + ones[x % 10] : "");
+    }
+    function under1000(x) {
+      var h = Math.floor(x / 100), r = x % 100, s = "";
+      if (h) s = ones[h] + " Hundred";
+      if (r) s += (s ? " " : "") + under100(r);
+      return s;
+    }
+    if (n === 0) return "Zero Naira Only";
+    var parts = [];
+    var scales = [[1000000000, "Billion"], [1000000, "Million"], [1000, "Thousand"]];
+    for (var i = 0; i < scales.length; i++) {
+      var v = scales[i][0];
+      if (n >= v) {
+        parts.push(under1000(Math.floor(n / v)) + " " + scales[i][1]);
+        n = n % v;
+      }
+    }
+    if (n) parts.push(under1000(n));
+    return parts.join(" ") + " Naira Only";
+  }
+
   /* True when the string has only characters jsPDF's fonts can draw. */
   function isLatin(s) { return !/[^\x00-\xFF]/.test(String(s == null ? "" : s)); }
 
@@ -162,18 +193,35 @@
   }
 
   /* ---------------------- fee payment RECEIPT ----------------------- */
+  /* REDESIGNED (pack 82): "OFFICIAL SCHOOL PAYMENT RECEIPT" - school
+     letterhead, receipt no + date strip, a labelled details box (student
+     name, student ID / admission no, class, term/session, purpose, method),
+     a prominent green AMOUNT PAID banner, amount in words, optional note,
+     and Bursar ("Received by") + Principal signature areas. Still returns
+     the jsPDF doc, so the existing download path is unchanged. */
   window.amsReceiptPDF = function (o) {
     var d = doc();
-    var y = header(d, "OFFICIAL FEE PAYMENT RECEIPT", [
-      "Receipt No: " + (o.receiptNo || "-") + "      Date: " + (o.date || "-")
-    ]);
+    var y = header(d, "OFFICIAL SCHOOL PAYMENT RECEIPT", []);
+    y += 8;
 
+    /* receipt no + date strip */
+    d.setFillColor(240, 247, 243);
+    d.rect(M, y, W - 2 * M, 24, "F");
+    d.setFont("helvetica", "bold");
+    d.setFontSize(10.5);
+    d.setTextColor(15, 61, 46);
+    d.text("Receipt No: " + (o.receiptNo || "-"), M + 12, y + 16);
+    d.text("Date: " + (o.date || "-"), W - M - 12, y + 16, { align: "right" });
+    y += 36;
+
+    /* --------------------------- details box --------------------------- */
+    var boxH = 150;
     d.setDrawColor(15, 61, 46);
     d.setLineWidth(1.5);
-    d.rect(M, y, W - 2 * M, 240);
-    var ry = y + 25;
+    d.rect(M, y, W - 2 * M, boxH);
+    var ry = y + 24;
 
-    function drawBox(lbl, val, x, topY, width) {
+    function drawBox(lbl, val, x, topY) {
       d.setFont("helvetica", "normal");
       d.setFontSize(8);
       d.setTextColor(100, 100, 100);
@@ -184,43 +232,65 @@
       amsText(d, val || "-", x, topY + 14);
     }
 
-    drawBox("RECEIVED FROM", o.studentName, M + 20, ry, 240);
-    drawBox("STUDENT ID", o.studentId, M + 280, ry, 200);
-    ry += 45;
+    drawBox("STUDENT NAME", o.studentName, M + 20, ry);
+    drawBox("STUDENT ID / ADMISSION NO", o.studentId, M + 290, ry);
+    ry += 46;
 
-    drawBox("CLASS", o.className, M + 20, ry, 240);
-    drawBox("FEE TYPE", o.feeType || "School Fee", M + 280, ry, 200);
-    ry += 45;
+    drawBox("CLASS", o.className, M + 20, ry);
+    drawBox("TERM / SESSION", (o.term || "-") + " (" + (o.session || "-") + ")", M + 290, ry);
+    ry += 46;
 
-    drawBox("TERM / SESSION", o.term + " (" + o.session + ")", M + 20, ry, 240);
-    drawBox("PAYMENT METHOD", o.method || "Cash / Transfer", M + 280, ry, 200);
-    ry += 45;
+    drawBox("PURPOSE (FEE TYPE)", o.purpose || o.feeType || "School Fee", M + 20, ry);
+    drawBox("PAYMENT METHOD", o.method || "Cash / Transfer", M + 290, ry);
+    y += boxH + 16;
 
-    drawBox("RECEIVED BY", o.receivedBy || "Bursar", M + 20, ry, 240);
-    drawBox("NOTE", o.note || "-", M + 280, ry, 200);
-    ry += 45;
-
-    d.setFillColor(235, 247, 241);
-    d.rect(M + 15, ry, W - 2 * M - 30, 32, "F");
+    /* ------------------- prominent AMOUNT PAID banner ------------------- */
+    d.setFillColor(15, 61, 46);
+    d.rect(M, y, W - 2 * M, 38, "F");
     d.setFont("helvetica", "bold");
-    d.setFontSize(14);
-    d.setTextColor(15, 61, 46);
-    d.text("AMOUNT PAID:   " + nairaText(o.amount), M + 30, ry + 21);
+    d.setFontSize(15);
+    d.setTextColor(255, 255, 255);
+    d.text("AMOUNT PAID:   " + nairaText(o.amount), W / 2, y + 24.5, { align: "center" });
+    y += 38 + 12;
 
-    y += 275;
+    /* ------------------------- amount in words ------------------------- */
+    d.setFont("helvetica", "italic");
+    d.setFontSize(9.8);
+    d.setTextColor(60, 60, 60);
+    var wordLines = d.splitTextToSize("Amount in words: " + numberToWords(o.amount), W - 2 * M - 24);
+    d.text(wordLines, M + 12, y + 4);
+    y += wordLines.length * 13 + 4;
+
+    /* --------------------------- optional note --------------------------- */
+    if (o.note && String(o.note).trim()) {
+      d.setFont("helvetica", "normal");
+      d.setFontSize(9.5);
+      d.setTextColor(60, 60, 60);
+      amsText(d, "Note: " + o.note, M + 12, y + 2);
+      y += 16;
+    }
+
+    /* --------------------------- closing line --------------------------- */
     d.setFont("helvetica", "italic");
     d.setFontSize(9);
     d.setTextColor(80, 80, 80);
-    d.text("Thank you for your payment. This receipt remains valid proof of payment for this academic session.", W / 2, y, { align: "center" });
+    d.text("Thank you for your payment. This receipt remains valid proof of payment for this academic session.", W / 2, y + 20, { align: "center" });
 
-    y += 50;
+    /* ----------------- Bursar + Principal signature areas ----------------- */
+    var sigY = Math.max(y + 55, H - M - 110);
+    d.setDrawColor(15, 61, 46);
+    d.setLineWidth(0.9);
+    d.line(M + 30, sigY, M + 210, sigY);
+    d.line(W - M - 210, sigY, W - M - 30, sigY);
     d.setFont("helvetica", "normal");
-    d.setFontSize(9);
-    d.text("__________________________", M + 40, y);
-    d.text("__________________________", W - M - 180, y);
+    d.setFontSize(8.5);
+    d.setTextColor(90, 90, 90);
+    d.text("Received by: " + (o.receivedBy || "__________"), M + 32, sigY - 6);
     d.setFont("helvetica", "bold");
-    d.text("THE BURSAR / ACCOUNTANT", M + 45, y + 14);
-    d.text("THE PRINCIPAL", W - M - 145, y + 14);
+    d.setFontSize(9);
+    d.setTextColor(10, 30, 20);
+    d.text("THE BURSAR / ACCOUNTANT", M + 40, sigY + 13);
+    d.text("THE PRINCIPAL", W - M - 175, sigY + 13);
 
     return d;
   };

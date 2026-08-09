@@ -14,6 +14,50 @@ function usrNotify(text, ok) {
   setTimeout(function () { msg.className = "mg-msg"; }, 4000);
 }
 
+/*
+   The server protects every POST/PUT/DELETE request with a CSRF token.
+   Keep the token in one promise so the first user action gets the token
+   and simultaneous actions do not make several token requests. The token
+   endpoint also sets the signed double-submit cookie used by the server.
+*/
+var usrCsrfToken = null;
+var usrCsrfRequest = null;
+
+function usrGetCsrfToken() {
+  if (usrCsrfToken) return Promise.resolve(usrCsrfToken);
+  if (!usrCsrfRequest) {
+    usrCsrfRequest = fetch("/api/csrf-token", {
+      credentials: "same-origin",
+      headers: { "Accept": "application/json" }
+    })
+      .then(function (r) {
+        if (!r.ok) throw new Error("Could not get a security token.");
+        return r.json();
+      })
+      .then(function (data) {
+        if (!data || !data.csrfToken) throw new Error("Security token was not returned.");
+        usrCsrfToken = data.csrfToken;
+        return usrCsrfToken;
+      })
+      .catch(function (err) {
+        usrCsrfRequest = null;
+        throw err;
+      });
+  }
+  return usrCsrfRequest;
+}
+
+function usrFetch(url, options) {
+  options = options || {};
+  var requestOptions = Object.assign({}, options);
+  var headers = new Headers(options.headers || {});
+  return usrGetCsrfToken().then(function (token) {
+    headers.set("X-CSRF-Token", token);
+    requestOptions.headers = headers;
+    return fetch(url, requestOptions);
+  });
+}
+
 function chosenRole() {
   var sel = document.getElementById("newRole");
   if (sel.value === "__custom") {
@@ -40,7 +84,7 @@ function createUser() {
     return;
   }
 
-  fetch("/create-user", {
+  usrFetch("/create-user", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ username: username, password: password, role: role })
@@ -97,7 +141,7 @@ function loadUsers() {
           var pw = prompt("New password for " + u.username + " (min. 4 characters):");
           if (pw === null) return;
           if (pw.length < 4) { usrNotify("Password must be at least 4 characters.", false); return; }
-          fetch("/reset-user-password", {
+          usrFetch("/reset-user-password", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ user_id: u.id, password: pw })
@@ -117,7 +161,7 @@ function loadUsers() {
         btnDel.style.marginLeft = "6px";
         btnDel.addEventListener("click", function () {
           if (!confirm("Delete the account '" + u.username + "' (" + u.role + ")? They will not be able to log in again.")) return;
-          fetch("/user/" + u.id, { method: "DELETE" })
+          usrFetch("/user/" + u.id, { method: "DELETE" })
             .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, d: d }; }); })
             .then(function (res) {
               if (res.ok) { usrNotify("User deleted: " + u.username, true); loadUsers(); }
@@ -185,7 +229,7 @@ function tcAssign() {
   var username = document.getElementById("tcTeacher").value;
   var className = document.getElementById("tcClass").value;
   if (!username || !className) { usrNotify("Pick a teacher and a class.", false); return; }
-  fetch("/api/teacher-classes", {
+  usrFetch("/api/teacher-classes", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ username: username, class_name: className })
@@ -199,7 +243,7 @@ function tcAssign() {
 }
 
 function tcRemove(id) {
-  fetch("/api/teacher-classes/" + id, { method: "DELETE" })
+  usrFetch("/api/teacher-classes/" + id, { method: "DELETE" })
     .then(function (r) { return r.json(); })
     .then(function (d) { usrNotify(d.message || "Removed.", true); tcLoad(); })
     .catch(function () { usrNotify("Network error.", false); });

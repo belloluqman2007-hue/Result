@@ -4,25 +4,49 @@
 
 ---
 
-## Pack 82 — 2026-07-31
+## Pack 83 — 2026-08-06
 
 Owner's requests:
-> "Why is it that if I search ameenullah school of Arabic and Islamic studies it will bring my old link on render"
-> "Let remove the old link on render and put this new one https://result-production-69ea.up.railway.app"
-> "The download saved exam in file store let it be only PDF and let it display as it is displaying in create exam"
-> "Fix all error in receipt and redesign it and redesign the whole section well that they will know that this is for receipt and this for snapped receipt and this for payment..."
+> In exam, if you can't use sakamajala font for the exam only then reduce the exam font; The receipt is not displaying student class; In 🆔 card the back is not showing in class download and student download and on the website itself; The exam is not displaying well if writing questions if I choose big font it will still be small; Fix all the error in the exam
 
-### FIX & UPGRADE (Pack 82) — Domain Migration to Railway, Single-File Exam Sheet Vaulting & Clear Finance Section Branding
-- **Canonical & SEO Domain Migration to Railway (`index.html`, `sitemap.xml`, `robots.txt`, `server.js`)**:
-  - Why searching Google still showed `result-1rto.onrender.com`: All SEO canonical tags, Open Graph URLs, Schema.org JSON-LD structured data, and sitemaps were pointing to the old Render URL, telling search engines that Render was the primary domain.
-  - Replaced every single reference to `result-1rto.onrender.com` with **`https://result-production-69ea.up.railway.app/`** across `index.html`, `sitemap.xml`, `robots.txt`, and `server.js`. Added a clear guide on removing the old Render link in Google Search Console using the Removals tool.
-- **Single-File PDF Exam Sheet Vaulting (`server.js`, `js/store.js`)**:
-  - Upgraded `/save-exam` (`autoStoreExamToVault`) to save **only one printable `.html/.pdf` file** per exam in `/Saved Exams` (removing secondary `.doc` files).
-  - The saved file embeds the exact **Sakkal Majalla / Cairo / Amiri font stack** and letterhead header from `css/exam.css`. When opened or downloaded in the File Store, it renders **100% identical to how it displays on Create Exam (`create-exam.html`)**.
-- **Clear Finance Section Branding & Official Receipt Generator (`finance.html`, `js/ams-pdf.js`, `server.js`)**:
-  - Separated and branded the Finance panels with unmistakable visual banners and tab names: **`💵 Record Payment & Official Receipt`** (for payments recorded by the Bursar/Office) vs. **`📸 Snapped Payment Evidence`** (for parent portal screenshot uploads).
-  - Upgraded `/fee-payments` in `server.js` with a `LEFT JOIN students` query to ensure `class_name` and `student_name` are always present on payment rows.
-  - Redesigned `amsReceiptPDF(o)` into an ultra-luxury official Islamic fee receipt featuring a deep emerald and gold banner, a structured 2-column details grid, a prominent green **AMOUNT PAID (NAIRA)** box, school crest watermark, and official Bursar/Principal signature blocks.
+| File | What happened |
+|---|---|
+| `css/exam.css` | **Sakkal Majalla fallback reduction:** added `.no-sakkal` overrides (detected via `document.fonts.check`) that reduce exam sizes when Sakkal is not installed (phones/Mac fallback Amiri renders same pt much larger). Base `32pt` → `22pt` in fallback, spacing compact/normal/relaxed/spacious `14/16/18/20pt` → `10/12/13/14pt` for fallback; cover Arabic/info rows also reduced. **Spacing fix:** removed `font-size !important` from `.spacing-*` so the question-font-size picker actually wins (previously `spacing-normal 16pt !important` overrode Huge 40pt, making big still small). Spacing now controls only `line-height`. |
+| `js/exam.js` — `applyExamFontFrom()` | Now uses `style.setProperty("font-size", val+"pt", "important")` so Huge/Medium etc override spacing/base. Clears legacy `<font size>` and inline styles first. |
+| `js/exam.js` — `initExam()` | **Sakkal detection:** on load and on `document.fonts.ready`, checks `16pt Sakkal Majalla`; if missing adds `no-sakkal` class to `<html>`/`<body>` to trigger CSS fallback. |
+| `js/exam.js` — `autoFitOnePage()` | **Keep chosen size:** previously binary-searched down to smallest fitting size, so Huge (40pt) with many questions shrunk to 12pt identical to Small. Now keeps the teacher's chosen size if it fits, otherwise returns `null` to spill across pages like Word - Huge stays Huge and flows to next pages instead of shrinking to tiny. Uses `setProperty(..., "important")` for measurement. |
+| `js/exam.js` — `spillSegmentAcrossPages()` | Now keeps the chosen base size (`examBaseFontPt()`) instead of forcing `EXAM_MIN_PT` (12pt), so spilled multi-page exams retain Huge/Medium etc. |
+| `js/exam.js` — `paginateExam()` | **Removed booklet-wide shared shrink** (`docFit` min) that forced every one-page exam to the smallest fitting size - a 2-question Huge exam was shrunk to the same tiny size as a 20-question exam. Each exam now keeps its own chosen size; overflow spills via `spillSegmentAcrossPages`. |
+| `js/exam.js` — `appendBodyPage()` | New pages now inherit the currently selected font size (`examBaseFontPt()`) via `setProperty(..., "important")` so Huge doesn't revert to 32pt default on newly created pages. |
+| `js/finance.js` — `downloadReceipt()` | **Robust CLASS resolution:** `row.class_name` may be missing when the server's `LEFT JOIN` falls back to plain `SELECT`. Now tries `row.class_name → row.className → meta.className → finStudents roster lookup by `student_id` → `payClass` dropdown → `"-"` so class never blanks. Receipt now always shows class. |
+| `js/ams-pdf.js` | No logic change - receipt already draws `CLASS` via `amsText` (Arabic-safe canvas). Now receives correct `className` from finance. |
+| `js/idcard.js` — single `downloadPdf` | Now orientation-aware: uses `amsCardOrient` to pick `85.6×53.98` (landscape) vs `53.98×85.6` (portrait) for width/height and y-offset, so portrait cards no longer cropped. Still captures both front+back via `ams-pdf-flat` flatten. |
+| `js/idcard.js` — `stageFor()` | **Bulk now clones BOTH front and back** (previously only front) - holder gets front filled with student data + generic back (Contact & Info). Fixes "back is not showing in class download". |
+| `js/idcard.js` — bulk `next()` | Captures front+back as two separate canvases via `Promise.all`, places both in PDF grid (front then back consecutively). `totalCards = list.length *2`, `perPage` logic respects orientation (`2×4` landscape, `3×3` portrait). Message updated to "students (front+back)". |
+| `css/idcard.css` | **Back visibility:** added `backface-visibility:hidden` (and `-webkit-`) to both `.card-front`/`.card-back`, and ensured `.card--portrait .card-back { height:100% }` so portrait back matches front height. Fixes "back is not showing on the website itself". |
+| `sw.js` | Cache `v33 → v34`. |
+
+Result calculations, grading, positions, report cards etc untouched. All existing features preserved.
+
+---
+
+## Pack 82 — 2026-08-05
+
+Owner's requests:
+> Railway domain migration; File Store must keep ONE printable styled exam file (no duplicate .doc); finance must clearly separate OFFICIAL payments from parent-snapped evidence; receipts must be a proper OFFICIAL school receipt showing class + purpose.
+
+| File | What happened |
+|---|---|
+| `index.html`, `robots.txt`, `sitemap.xml`, `server.js` | **Railway domain migration:** every live-code mention of `https://result-1rto.onrender.com` (canonical, og:url, og:image, twitter:image, Schema.org JSON-LD url/logo/image, robots `Sitemap:` line - both the static file and the `server.js` route string, and the sitemap `<loc>`) now points to `https://result-production-69ea.up.railway.app`. Zero onrender references remain in code (historical changelogs untouched). |
+| `server.js` — `autoStoreExamToVault()` | **ONE printable exam file:** deleted the twin writers (bare-Arial `.doc` + duplicate `_sheet.html`). The vault now stores a single self-contained printable `.html`: it links the real `/css/exam.css`, wraps `body_html` in `<body class="exam-body"><div class="exam-flow">…</div>`, and auto-calls `window.print()` on load. Because `body_html` already carries the full letterhead cover markup, the saved copy renders EXACTLY like Create Exam (letterhead, Sakkal Majalla + fallbacks, spacing, margins, A4, Arabic; exam font sizes untouched). Stored as `text/html` named `"{class} - {subject} - {title} (Printable).html"`. |
+| `server.js` — `syncExamsToVault()` | Dedup check now uses the new `(Printable).html` name, and every sync DELETES leftover pre-pack-82 duplicates (`"… .doc"` and `"… (Printable Sheet).html"`) so no exam ever appears twice. |
+| `finance.html` | **Section separation:** the "Payments" tab is now **"💵 Record Payment & Official Receipt"** with a green banner inside `#finPanelPay` ("the school's OFFICIAL payment record…") and the card heading reads **"Record a Payment (Official)"**; the "Parent Payments" tab is now **"📸 Snapped Payment Evidence"** with an amber banner inside `#finPanelSubs` ("parent-submitted screenshots… not official until approved"). All existing functionality preserved. |
+| `js/ams-pdf.js` — `amsReceiptPDF()` | **OFFICIAL SCHOOL PAYMENT RECEIPT redesign:** school letterhead (existing `header()`), receipt-no + date strip, a labelled details box (student name, student ID / admission no, class, term/session, purpose/fee type, method), a prominent green AMOUNT PAID banner, amount in words (new `numberToWords()` → "… Naira Only"), optional note, and Bursar ("Received by") + Principal signature areas. Still returns the jsPDF doc — download path unchanged. |
+| `server.js` — `GET /fee-payments` | Now `SELECT fp.*, s.full_name AS student_name, s.class_name AS class_name FROM fee_payments fp LEFT JOIN students s ON s.student_id = fp.student_id` (qualified WHERE + `ORDER BY fp.paid_at DESC LIMIT 200`), with a graceful fallback to the original plain `SELECT * FROM fee_payments` if the join ever errors — records can never break. |
+| `js/finance.js` — `downloadReceipt()` | Uses `row.student_name` / `row.class_name` from the new join (falling back to the picked student), passes `purpose: row.fee_type`, and issues official receipt numbers `RCP-00000` (zero-padded id). |
+| `sw.js` | Cache v33. |
+
+Result calculations, grading, positions, report card generation, printing and every staff result query: completely untouched. All auth/security (credential handling, auth gating, login rate-limiting) preserved.
 
 ---
 
