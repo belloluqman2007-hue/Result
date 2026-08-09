@@ -149,34 +149,34 @@ app.use(session({
 // SECURITY: CSRF protection via double-submit cookie (csrf-csrf, Express 5 compatible)
 // Uses SESSION_SECRET as the signing secret. Issues token via /api/csrf-token.
 // Validates all state-changing POST/PUT/DELETE except login/portal-login/logout.
-const { doubleCsrf } = require("csrf-csrf");
-const { generateToken, doubleCsrfProtection } = doubleCsrf({
-  getSecret: () => process.env.SESSION_SECRET,
-  cookieName: "x-csrf-token",
-  cookieOptions: {
-    sameSite: "strict",
-    secure: process.env.NODE_ENV === "production",
-    httpOnly: true,
-  },
-  size: 64,
-  ignoredMethods: ["GET", "HEAD", "OPTIONS"],
-});
+const crypto = require("crypto");
 
-// CSRF token endpoint
+// Simple session-based CSRF - no external package needed
 app.get("/api/csrf-token", (req, res) => {
-  res.json({ csrfToken: generateToken(req, res) });
+    try {
+        if (!req.session) {
+            return res.status(500).json({ error: "Session not available" });
+        }
+        if (!req.session.csrfToken) {
+            req.session.csrfToken = crypto.randomBytes(32).toString("hex");
+        }
+        res.json({ csrfToken: req.session.csrfToken });
+    } catch (e) {
+        console.error("CSRF ERROR:", e.message, e.stack);
+        res.status(500).json({ error: e.message });
+    }
 });
-const csrfExemptPaths = ["/login", "/portal-login", "/logout"];
 function csrfMiddleware(req, res, next) {
-    if (csrfExemptPaths.includes(req.path)) return next();
-    // Only protect state-changing methods
-    if (["POST", "PUT", "DELETE", "PATCH"].includes(req.method)) {
-        return doubleCsrfProtection(req, res, next);
+    const exempt = ["/login", "/portal-login", "/logout", "/api/csrf-token"];
+    if (exempt.includes(req.path)) return next();
+    if (!["POST", "PUT", "DELETE", "PATCH"].includes(req.method)) return next();
+    const token = req.headers["x-csrf-token"];
+    if (!token || token !== req.session.csrfToken) {
+        return res.status(403).json({ message: "Invalid CSRF token. Please refresh the page and try again." });
     }
     next();
 }
 app.use(csrfMiddleware);
-
 // SECURITY: Rate limiting for sensitive write APIs (same in-memory bucket pattern as login)
 const WRITE_MAX_ATTEMPTS = 30;
 const WRITE_WINDOW_MS = 15 * 60 * 1000;
@@ -787,6 +787,12 @@ function ensureCoreTablesAndDefaultAdmin() {
 }
 ensureCoreTablesAndDefaultAdmin();
 
+// ONE-TIME: fix collation mismatch
+connection.query(`ALTER TABLE students CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`, () => {});
+connection.query(`ALTER TABLE fee_structure2 CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`, () => {});
+connection.query(`ALTER TABLE fee_payments CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`, () => {});
+connection.query(`ALTER TABLE payment_submissions CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`, () => {});
+connection.query(`ALTER TABLE users CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`, () => {});
 const addonTables = [
     // Notice board / school news for the dashboard
     `CREATE TABLE IF NOT EXISTS announcements (
