@@ -1,0 +1,446 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AI Image Generator | Ameenullah School</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <meta name="theme-color" content="#2f5021">
+  <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <style>
+    /* ── Base ── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; }
+    body {
+      font-family: 'Segoe UI', Arial, sans-serif;
+      background: #dfe5dd;
+      color: #1f2d26;
+      min-height: 100dvh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* ── Top bar (matches school style) ── */
+    .aig-top {
+      background: linear-gradient(120deg, #14291c, #1d4a30 55%, #276b43);
+      color: #fff;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 11px 14px;
+      box-shadow: 0 2px 12px rgba(0,0,0,.22);
+      flex: 0 0 auto;
+    }
+    .aig-back {
+      color: #fff;
+      text-decoration: none;
+      font-size: 20px;
+      line-height: 1;
+      padding: 6px 9px;
+      border-radius: 9px;
+      background: rgba(255,255,255,.12);
+      font-weight: 700;
+      flex: 0 0 auto;
+    }
+    .aig-back:hover { background: rgba(255,255,255,.22); }
+    .aig-avatar {
+      width: 42px; height: 42px; border-radius: 50%; flex: 0 0 42px;
+      background: linear-gradient(135deg, #f3c94e, #d9a419);
+      display: flex; align-items: center; justify-content: center;
+      box-shadow: 0 2px 8px rgba(0,0,0,.25); font-size: 22px;
+    }
+    .aig-who { min-width: 0; }
+    .aig-who b  { font-size: 15.5px; display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .aig-who small { font-size: 11.5px; opacity: .85; }
+
+    /* ── Main layout ── */
+    .aig-body {
+      flex: 1 1 auto;
+      padding: 18px 14px 32px;
+      max-width: 780px;
+      margin: 0 auto;
+      width: 100%;
+    }
+
+    /* ── Card ── */
+    .aig-card {
+      background: #fff;
+      border-radius: 16px;
+      box-shadow: 0 2px 14px rgba(0,0,0,.09);
+      padding: 22px 20px;
+      margin-bottom: 18px;
+    }
+    .aig-card h2 {
+      font-size: 16px;
+      font-weight: 700;
+      color: #14291c;
+      margin-bottom: 14px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    /* ── Prompt area ── */
+    .aig-label {
+      font-size: 13px;
+      font-weight: 600;
+      color: #3a5441;
+      margin-bottom: 6px;
+      display: block;
+    }
+    .aig-textarea {
+      width: 100%;
+      min-height: 110px;
+      padding: 11px 13px;
+      border: 1.5px solid #c8d6ca;
+      border-radius: 10px;
+      font-family: inherit;
+      font-size: 14.5px;
+      color: #1f2d26;
+      background: #f7faf7;
+      resize: vertical;
+      transition: border-color .2s;
+      line-height: 1.55;
+    }
+    .aig-textarea:focus {
+      outline: none;
+      border-color: #2f7a4e;
+      background: #fff;
+      box-shadow: 0 0 0 3px rgba(47,122,78,.10);
+    }
+    .aig-textarea::placeholder { color: #99b09e; }
+    .aig-charcount {
+      font-size: 11.5px;
+      color: #7d9488;
+      text-align: right;
+      margin-top: 4px;
+    }
+
+    /* ── Suggestions ── */
+    .aig-suggestions { margin-top: 10px; }
+    .aig-suggest-label { font-size: 12px; color: #7d9488; margin-bottom: 6px; }
+    .aig-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+    .aig-chip {
+      background: #eaf3ec;
+      border: 1px solid #b8d5be;
+      border-radius: 20px;
+      padding: 5px 11px;
+      font-size: 12px;
+      color: #1d4a30;
+      cursor: pointer;
+      transition: background .15s, border-color .15s;
+      line-height: 1.3;
+    }
+    .aig-chip:hover { background: #d3ebd8; border-color: #2f7a4e; }
+
+    /* ── Button ── */
+    .aig-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: linear-gradient(135deg, #1d4a30, #2f7a4e);
+      color: #fff;
+      border: none;
+      border-radius: 10px;
+      padding: 12px 24px;
+      font-size: 15px;
+      font-weight: 700;
+      cursor: pointer;
+      margin-top: 14px;
+      transition: opacity .2s, transform .1s;
+      box-shadow: 0 2px 8px rgba(29,74,48,.25);
+      width: 100%;
+      justify-content: center;
+    }
+    .aig-btn:hover:not(:disabled) { opacity: .9; }
+    .aig-btn:active:not(:disabled) { transform: scale(.98); }
+    .aig-btn:disabled { opacity: .6; cursor: not-allowed; }
+
+    .aig-btn-secondary {
+      background: #eaf3ec;
+      color: #1d4a30;
+      border: 1.5px solid #b8d5be;
+      box-shadow: none;
+      font-weight: 600;
+    }
+    .aig-btn-secondary:hover:not(:disabled) { background: #d3ebd8; opacity: 1; }
+
+    /* ── Keyboard hint ── */
+    .aig-hint { font-size: 11.5px; color: #99b09e; text-align: center; margin-top: 6px; }
+
+    /* ── Spinner ── */
+    .aig-spinner {
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      gap: 14px;
+      padding: 30px 16px;
+    }
+    .aig-spinner-ring {
+      width: 54px; height: 54px;
+      border: 5px solid #d3ebd8;
+      border-top-color: #2f7a4e;
+      border-radius: 50%;
+      animation: aig-spin .9s linear infinite;
+    }
+    @keyframes aig-spin { to { transform: rotate(360deg); } }
+    .aig-spinner p { color: #3a5441; font-size: 14.5px; font-weight: 600; }
+    .aig-spinner small { color: #7d9488; font-size: 12px; text-align: center; }
+
+    /* ── Error ── */
+    .aig-error {
+      display: none;
+      background: #fdf0f0;
+      border: 1.5px solid #f0b8b8;
+      border-radius: 10px;
+      padding: 11px 14px;
+      color: #c0392b;
+      font-size: 13.5px;
+      margin-top: 12px;
+    }
+
+    /* ── Result card ── */
+    .aig-result { display: none; }
+    .aig-img-wrap {
+      border-radius: 12px;
+      overflow: hidden;
+      background: #1f2d26;
+      text-align: center;
+      margin-bottom: 14px;
+      box-shadow: 0 4px 18px rgba(0,0,0,.14);
+    }
+    .aig-img-wrap img {
+      width: 100%;
+      max-width: 100%;
+      display: block;
+      border-radius: 12px;
+    }
+    .aig-revised {
+      display: none;
+      background: #f7faf7;
+      border-left: 3px solid #2f7a4e;
+      border-radius: 0 8px 8px 0;
+      padding: 9px 13px;
+      font-size: 12.5px;
+      color: #3a5441;
+      margin-bottom: 12px;
+    }
+    .aig-revised strong { color: #14291c; display: block; margin-bottom: 3px; font-size: 11.5px; text-transform: uppercase; letter-spacing: .04em; }
+    .aig-actions { display: flex; gap: 10px; flex-wrap: wrap; }
+    .aig-actions .aig-btn { flex: 1 1 140px; margin-top: 0; }
+
+    /* ── History ── */
+    .aig-history { display: none; }
+    .aig-history h2 { margin-bottom: 10px; }
+    .aig-hist-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+      gap: 10px;
+    }
+    .aig-hist-card {
+      background: #f7faf7;
+      border: 1.5px solid #d3e8d6;
+      border-radius: 10px;
+      overflow: hidden;
+      cursor: pointer;
+      transition: box-shadow .15s, border-color .15s;
+    }
+    .aig-hist-card:hover { box-shadow: 0 3px 12px rgba(29,74,48,.13); border-color: #2f7a4e; }
+    .aig-hist-thumb {
+      width: 100%;
+      aspect-ratio: 1;
+      object-fit: cover;
+      display: block;
+      background: #dfe5dd;
+    }
+    .aig-hist-no-thumb {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 28px;
+      aspect-ratio: 1;
+      background: #e8f0e9;
+      color: #7d9488;
+    }
+    .aig-hist-caption {
+      font-size: 11.5px;
+      color: #3a5441;
+      padding: 6px 8px 2px;
+      line-height: 1.35;
+      overflow: hidden;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+    }
+    .aig-hist-ts { display: block; font-size: 10.5px; color: #99b09e; padding: 0 8px 7px; }
+
+    /* ── Tips card ── */
+    .aig-tips-list { list-style: none; padding: 0; }
+    .aig-tips-list li {
+      font-size: 13px;
+      color: #3a5441;
+      padding: 5px 0;
+      border-bottom: 1px solid #edf4ee;
+      display: flex;
+      gap: 8px;
+      align-items: flex-start;
+      line-height: 1.4;
+    }
+    .aig-tips-list li:last-child { border-bottom: none; }
+    .aig-tips-list li::before { content: "✦"; color: #d9a419; flex: 0 0 auto; margin-top: 1px; }
+
+    /* ── Responsive ── */
+    @media (max-width: 500px) {
+      .aig-card { padding: 16px 13px; }
+      .aig-top { padding: 9px 11px; }
+    }
+  </style>
+</head>
+<body onload="checkAuth()">
+
+  <!-- Top bar -->
+  <header class="aig-top">
+    <a class="aig-back" href="teacher-dashboard.html" title="Back to Dashboard">&#8592;</a>
+    <div class="aig-avatar">🎨</div>
+    <div class="aig-who">
+      <b>AI Image Generator</b>
+      <small>Create posters, visuals &amp; school graphics with AI</small>
+    </div>
+  </header>
+
+  <main class="aig-body">
+
+    <!-- ── Prompt card ── -->
+    <div class="aig-card">
+      <h2>
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#2f7a4e" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg>
+        Describe Your Image
+      </h2>
+
+      <label class="aig-label" for="imgPrompt">What would you like to create?</label>
+      <textarea
+        id="imgPrompt"
+        class="aig-textarea"
+        placeholder="e.g. A professional admission poster for Ameenullah School with the motto 'Knowledge and Worship', Islamic geometric patterns, dark green and gold colours, formal and elegant style."
+        maxlength="1000"
+        rows="5"
+      ></textarea>
+      <div class="aig-charcount" id="imgCharCount">0 / 1000</div>
+
+      <!-- Quick suggestion chips -->
+      <div class="aig-suggestions">
+        <p class="aig-suggest-label">✦ Quick suggestions — tap to use:</p>
+        <div class="aig-chips" id="imgChips"></div>
+      </div>
+
+      <button class="aig-btn" id="imgBtn" type="button">✨ Generate Image</button>
+      <p class="aig-hint">Press Ctrl+Enter to generate · DALL-E 3 · Up to 5 images per hour</p>
+
+      <!-- Error -->
+      <div class="aig-error" id="imgError"></div>
+    </div>
+
+    <!-- ── Spinner ── -->
+    <div class="aig-card aig-spinner" id="imgSpinner">
+      <div class="aig-spinner-ring"></div>
+      <p>Generating your image…</p>
+      <small>DALL-E 3 is drawing — this usually takes 10–20 seconds</small>
+    </div>
+
+    <!-- ── Result card ── -->
+    <div class="aig-card aig-result" id="imgResult">
+      <h2>
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#2f7a4e" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+        Generated Image
+      </h2>
+
+      <div class="aig-img-wrap">
+        <img id="imgGenerated" src="" alt="Generated image" loading="lazy">
+      </div>
+
+      <!-- Revised prompt (DALL-E 3 sometimes improves the prompt) -->
+      <div class="aig-revised" id="imgRevisedWrap">
+        <strong>ℹ AI enhanced your description to:</strong>
+        <span id="imgRevisedText"></span>
+      </div>
+
+      <div class="aig-actions">
+        <button class="aig-btn" id="imgDownload" type="button" data-b64="">
+          ⬇ Download PNG
+        </button>
+        <button class="aig-btn aig-btn-secondary" id="imgNew" type="button">
+          🔄 Generate Another
+        </button>
+      </div>
+    </div>
+
+    <!-- ── History card ── -->
+    <div class="aig-card aig-history" id="imgHistoryWrap">
+      <h2>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#2f7a4e" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+        Recent Images
+      </h2>
+      <div class="aig-hist-grid" id="imgHistoryList"></div>
+    </div>
+
+    <!-- ── Tips card ── -->
+    <div class="aig-card">
+      <h2>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#d9a419" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 8v4"/><path d="M12 16h.01"/></svg>
+        Tips for Great Results
+      </h2>
+      <ul class="aig-tips-list">
+        <li>Include the school name and motto: <em>"Ameenullah School — Knowledge and Worship"</em></li>
+        <li>Mention colours: <em>"dark green and gold"</em> to match school branding</li>
+        <li>Specify the style: <em>"professional poster", "Islamic geometric pattern", "watercolour illustration"</em></li>
+        <li>Add the purpose: <em>"admission poster", "graduation certificate border", "newsletter header"</em></li>
+        <li>Be specific about content: <em>"Arabic calligraphy, open Quran, crescent moon"</em></li>
+        <li>The more detail you give, the better the result. You can always generate another!</li>
+      </ul>
+    </div>
+
+  </main>
+
+  <!-- Scripts — csrf.js must be first so fetch is patched before any call -->
+  <script src="js/csrf.js"></script>
+  <script src="js/ui.js"></script>
+  <script src="js/app.js"></script>
+  <script src="js/ai-image-gen.js"></script>
+  <script src="js/pwa.js" defer></script>
+
+  <script>
+  /* ── Pre-fill suggestion chips using school name/motto baked in ── */
+  (function () {
+    var SCHOOL = "Ameenullah School of Arabic and Islamic Studies";
+    var MOTTO  = "Knowledge and Worship";
+    var chips  = [
+      "A professional school admission poster for " + SCHOOL + " with the motto '" + MOTTO + "', dark green and gold, Islamic geometric border, formal elegant style.",
+      "A school graduation ceremony banner for " + SCHOOL + ", Arabic calligraphy and Islamic motifs, green and gold colour scheme.",
+      "A welcome back to school poster for " + SCHOOL + ", cheerful and colourful, with an open book and crescent moon.",
+      "A digital certificate border design, Islamic geometric pattern, green and gold, with space for student name and school seal.",
+      "A school newsletter header illustration for " + SCHOOL + ", mosque silhouette at sunset, elegant and professional.",
+      "A motivational poster with the quote '" + MOTTO + "', Arabic calligraphy style, dark green background, golden text."
+    ];
+    var container = document.getElementById("imgChips");
+    var textarea  = document.getElementById("imgPrompt");
+    if (!container || !textarea) return;
+    chips.forEach(function (text) {
+      var chip = document.createElement("button");
+      chip.className  = "aig-chip";
+      chip.type       = "button";
+      chip.textContent = text.slice(0, 55) + "…";
+      chip.title      = text;
+      chip.addEventListener("click", function () {
+        textarea.value = text;
+        textarea.dispatchEvent(new Event("input"));
+        textarea.focus();
+        textarea.scrollIntoView({ behavior: "smooth", block: "nearest" });
+      });
+      container.appendChild(chip);
+    });
+  })();
+  </script>
+
+</body>
+</html>
