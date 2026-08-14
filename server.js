@@ -12,7 +12,16 @@ process.on("unhandledRejection", (reason, promise) => {
 const express = require("express");
 const path = require("path");
 const multer = require("multer");
-const XLSX = require("xlsx");
+// RAM optimisation for Render free tier: XLSX is ~40 MB when loaded eagerly.
+// Using a lazy getter means it only loads the first time an import/export
+// route is actually called, not on every server start.
+let _XLSX = null;
+const XLSX = new Proxy({}, {
+    get: function(_, prop) {
+        if (!_XLSX) _XLSX = require("xlsx");
+        return _XLSX[prop];
+    }
+});
 const fs = require("fs");
 const session = require("express-session");
 const bcrypt = require("bcryptjs");
@@ -3835,6 +3844,122 @@ app.post("/api/ai/assistant", requireLogin, async (req, res) => {
    silently: if a phone's subscription dies, it is pruned; if push is not
    ready yet, the rest of the system never notices.
    ========================================================================== */
+
+/* ==========================================================================
+   AI IMAGE GENERATOR
+   POST /api/ai/generate-image  (requireLogin — admins and teachers)
+   GET  /ai-image-generator.html
+   Uses OpenAI DALL-E 3. Key stored ONLY in OPENAI_API_KEY env var.
+   Rate limit: 5 images per user per hour (in-memory, resets on restart).
+   ========================================================================== */
+const aiImgHits = Object.create(null);
+setInterval(function () {
+    const now = Date.now();
+    Object.keys(aiImgHits).forEach(function (k) {
+        if (aiImgHits[k].resetAt < now) delete aiImgHits[k];
+    });
+}, 600000).unref();
+
+function openAiGenerateImage(prompt) {
+    return new Promise(function (resolve, reject) {
+        const OPENAI_KEY = String(process.env.OPENAI_API_KEY || "").trim();
+        if (!OPENAI_KEY) return reject(new Error("OPENAI_API_KEY_NOT_SET"));
+
+        const body = JSON.stringify({
+            model: "dall-e-3",
+            prompt: prompt,
+            n: 1,
+            size: "1024x1024",
+            response_format: "b64_json"
+        });
+
+        const https = require("https");
+        const req = https.request({
+            method: "POST",
+            hostname: "api.openai.com",
+            port: 443,
+            path: "/v1/images/generations",
+            headers: {
+                "Content-Type": "application/json",
+                "Authorization": "Bearer " + OPENAI_KEY,
+                "Content-Length": Buffer.byteLength(body)
+            }
+        }, function (apiRes) {
+            let raw = "";
+            apiRes.on("data", function (c) {
+                raw += c;
+                if (raw.length > 8 * 1024 * 1024) req.destroy(new Error("Response too large"));
+            });
+            apiRes.on("end", function () {
+                let data;
+                try { data = JSON.parse(raw); } catch (e) {
+                    return reject(new Error("OpenAI response was not valid JSON"));
+                }
+                if (apiRes.statusCode >= 400) {
+                    const m = data && data.error && data.error.message
+                        ? data.error.message : ("OpenAI error " + apiRes.statusCode);
+                    const err = new Error(m);
+                    err.statusCode = apiRes.statusCode;
+                    return reject(err);
+                }
+                const item = data && data.data && data.data[0];
+                if (!item || !item.b64_json) return reject(new Error("No image returned by API"));
+                resolve({ b64: item.b64_json, revisedPrompt: item.revised_prompt || prompt });
+            });
+        });
+        req.setTimeout(60000, function () {
+            req.destroy(new Error("OpenAI took too long — please try again"));
+        });
+        req.on("error", reject);
+        req.write(body);
+        req.end();
+    });
+}
+
+app.get("/ai-image-generator.html", requireLogin, (req, res) => {
+    res.sendFile(path.join(__dirname, "ai-image-generator.html"));
+});
+
+app.post("/api/ai/generate-image", requireLogin, async (req, res) => {
+    const OPENAI_KEY = String(process.env.OPENAI_API_KEY || "").trim();
+    if (!OPENAI_KEY) {
+        return res.status(503).json({
+            error: "AI Image Generator is not configured. The admin needs to add OPENAI_API_KEY to environment variables."
+        });
+    }
+
+    const who = req.session.username || String(req.session.userId);
+    const now = Date.now();
+    let bucket = aiImgHits[who];
+    if (!bucket || bucket.resetAt < now) bucket = aiImgHits[who] = { count: 0, resetAt: now + 3600000 };
+    if (++bucket.count > 5) {
+        return res.status(429).json({
+            error: "You have generated 5 images this hour. Please wait before generating more."
+        });
+    }
+
+    const prompt = String(req.body.prompt || "").trim();
+    if (!prompt) return res.status(400).json({ error: "Please describe the image you want." });
+    if (prompt.length > 1000) return res.status(400).json({ error: "Description is too long (max 1000 characters)." });
+
+    try {
+        const result = await openAiGenerateImage(prompt);
+        return res.json({ b64: result.b64, revisedPrompt: result.revisedPrompt });
+    } catch (e) {
+        const msg = String(e && e.message || "");
+        console.log("AI image error:", msg);
+        if (msg === "OPENAI_API_KEY_NOT_SET")
+            return res.status(503).json({ error: "Image generation is not configured. Ask the admin to add OPENAI_API_KEY." });
+        if (e.statusCode === 401)
+            return res.status(503).json({ error: "The image API key is invalid. Ask the admin to check OPENAI_API_KEY." });
+        if (e.statusCode === 429)
+            return res.status(429).json({ error: "The image service is busy. Please try again in a moment." });
+        if (/content.policy|safety/i.test(msg))
+            return res.status(400).json({ error: "The description was blocked by safety filters. Please rephrase it." });
+        return res.status(502).json({ error: "Could not generate the image right now. Please try again shortly." });
+    }
+});
+
 const webpush = require("web-push");
 let PUSH_VAPID = null;
 function pushReady() { return !!PUSH_VAPID; }
