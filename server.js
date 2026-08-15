@@ -1264,6 +1264,9 @@ function runPack20Migrations(attempt) {
             "ALTER TABLE signatures ADD COLUMN signature_data LONGBLOB NULL",
             "ALTER TABLE class_teacher_signatures ADD COLUMN signature_data LONGBLOB NULL",
             "ALTER TABLE students ADD COLUMN photo_data LONGBLOB NULL",
+            "ALTER TABLE students ADD COLUMN city VARCHAR(120) NULL",
+            "ALTER TABLE students ADD COLUMN state VARCHAR(120) NULL",
+            "ALTER TABLE students ADD COLUMN country VARCHAR(120) NULL",
             "ALTER TABLE payment_submissions ADD COLUMN evidence_data LONGBLOB NULL",
             "ALTER TABLE fee_payments ADD COLUMN receipt_data LONGBLOB NULL"
         ];
@@ -2817,6 +2820,33 @@ function autoStoreExamToVault(title, class_name, subject, term, session, duratio
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>${title} - ${class_name} - ${subject}</title>
 <link rel="stylesheet" href="/css/exam.css">
+<style>
+/* Inline fallback so the exam renders correctly even if /css/exam.css is unreachable */
+body.exam-body{font-family:'Sakkal Majalla','Traditional Arabic','Amiri',serif;direction:rtl;text-align:right;padding:12mm 18mm;background:#fff;}
+.exam-flow{direction:ltr;}
+.page-one{padding:3mm 24mm 12mm 14mm;display:flex;flex-direction:column;}
+.cover-header{text-align:center;}
+.cover-bismillah{display:block;width:42mm;margin:0 auto 3mm;}
+.cover-logo{display:block;width:40mm;margin:0 auto 2mm;}
+.cover-arabic-name{font-size:30pt;font-weight:700;line-height:1.3;text-align:center;margin:2mm 0 2.5mm;}
+.cover-english-name{font-family:'Times New Roman',serif;font-size:17pt;font-weight:700;text-align:center;margin:0 0 5mm;}
+.cover-divider{height:5mm;background:#000;margin:0 -20mm 6mm -10mm;}
+.cover-address,.cover-tel,.cover-email{font-family:'Times New Roman',serif;font-size:16pt;font-weight:700;text-align:center;margin:0 0 3mm;}
+.cover-motto{display:flex;justify-content:space-between;font-family:'Times New Roman',serif;font-size:18pt;font-weight:700;margin:0 0 4mm;}
+.cover-exam-period{font-size:20pt;font-weight:700;line-height:1.6;text-align:center;margin:0 0 8mm;}
+.cover-info-table{width:100%;border-collapse:collapse;margin:0 0 4mm;}
+.cover-info-table td{font-size:20pt;font-weight:700;line-height:1.8;padding:1.5mm 2px;border:none;text-align:right;}
+.cover-info-table .blank-line{border-bottom:2px solid #000;}
+.cover-info-table .blank-line-short{border-bottom:2px solid #000;width:45mm;}
+.cover-instructions{margin:4mm 0 0;font-size:20pt;font-weight:700;line-height:1.58;}
+.cover-instructions ol{list-style-type:decimal;padding-right:1.4em;margin:0;font-size:20pt;font-weight:700;line-height:1.58;}
+.cover-footer{margin-top:auto;}
+.cover-wish{font-size:10pt;text-align:left;}
+.cover-code{font-size:16pt;font-weight:700;text-align:center;margin:2mm 0 0;}
+p,li{font-size:inherit;line-height:inherit;margin-bottom:10px;}
+@page{size:A4;margin:0;}
+@media print{body{padding:0;margin:0;}}
+</style>
 </head>
 <body class="exam-body">
 <div class="exam-flow">
@@ -3860,25 +3890,68 @@ setInterval(function () {
     });
 }, 600000).unref();
 
-function openAiGenerateImage(prompt) {
+function openAiGenerateImage(prompt, attempt) {
+    attempt = attempt || 1;
     return new Promise(function (resolve, reject) {
         const https = require("https");
+        const seed = Math.floor(Math.random() * 999999);
         const encoded = encodeURIComponent(prompt);
-        const url = "https://image.pollinations.ai/prompt/" + encoded + "?width=1024&height=1024&nologo=true&model=flux";
+        const url = "https://image.pollinations.ai/prompt/" + encoded +
+            "?width=1024&height=1024&nologo=true&model=flux&seed=" + seed;
 
-        https.get(url, function (res) {
+        const req = https.get(url, function (res) {
+            if (res.statusCode === 429 || res.statusCode >= 500) {
+                res.resume();
+                if (attempt < 3) {
+                    setTimeout(function () {
+                        openAiGenerateImage(prompt, attempt + 1).then(resolve).catch(reject);
+                    }, 3000 * attempt);
+                } else {
+                    reject(new Error("Image service is busy — please try again in a moment"));
+                }
+                return;
+            }
             if (res.statusCode !== 200) {
+                res.resume();
                 return reject(new Error("Image service returned error " + res.statusCode));
             }
             const chunks = [];
             res.on("data", function (c) { chunks.push(c); });
             res.on("end", function () {
                 const buffer = Buffer.concat(chunks);
+                if (buffer.length < 1000) {
+                    // Got a tiny response — likely an error page, retry
+                    if (attempt < 3) {
+                        setTimeout(function () {
+                            openAiGenerateImage(prompt, attempt + 1).then(resolve).catch(reject);
+                        }, 3000 * attempt);
+                    } else {
+                        reject(new Error("Image service returned empty image"));
+                    }
+                    return;
+                }
                 resolve({ b64: buffer.toString("base64"), revisedPrompt: prompt });
             });
-        }).setTimeout(60000, function () {
-            reject(new Error("Image service took too long — please try again"));
-        }).on("error", reject);
+        });
+        req.setTimeout(90000, function () {
+            req.destroy();
+            if (attempt < 3) {
+                setTimeout(function () {
+                    openAiGenerateImage(prompt, attempt + 1).then(resolve).catch(reject);
+                }, 2000);
+            } else {
+                reject(new Error("Image service took too long — please try again"));
+            }
+        });
+        req.on("error", function (e) {
+            if (attempt < 3) {
+                setTimeout(function () {
+                    openAiGenerateImage(prompt, attempt + 1).then(resolve).catch(reject);
+                }, 2000);
+            } else {
+                reject(e);
+            }
+        });
     });
 }
 
@@ -4378,14 +4451,17 @@ SELECT
         const parentName  = (req.body.parent_name  || "").trim();
         const parentPhone = (req.body.parent_phone || "").trim();
         const address     = (req.body.address      || "").trim();
+        const stuCity     = (req.body.city          || "").trim();
+        const stuState    = (req.body.state         || "").trim();
+        const stuCountry  = (req.body.country       || "").trim();
         const hasParentData = studentProfileColsReady && (parentName || parentPhone || address);
 
         if (hasParentData) {
             connection.query(
                 `INSERT INTO students
                  (student_id, full_name, gender, class_name, date_of_birth, photo_path,
-                  parent_name, parent_phone, address)
-                 VALUES (?,?,?,?,?,?,?,?,?)
+                  parent_name, parent_phone, address, city, state, country)
+                 VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
                  ON DUPLICATE KEY UPDATE
                    full_name = VALUES(full_name),
                    gender = VALUES(gender),
@@ -4394,9 +4470,13 @@ SELECT
                    photo_path = COALESCE(VALUES(photo_path), photo_path),
                    parent_name = COALESCE(VALUES(parent_name), parent_name),
                    parent_phone = COALESCE(VALUES(parent_phone), parent_phone),
-                   address = COALESCE(VALUES(address), address)`,
+                   address = COALESCE(VALUES(address), address),
+                   city = COALESCE(VALUES(city), city),
+                   state = COALESCE(VALUES(state), state),
+                   country = COALESCE(VALUES(country), country)`,
                 [student_id, full_name, gender, class_name, dobValue, photoPath,
-                 parentName || null, parentPhone || null, address || null],
+                 parentName || null, parentPhone || null, address || null,
+                 stuCity || null, stuState || null, stuCountry || null],
                 (err) => {
                     if (err) {
                         if (err.code === "ER_BAD_FIELD_ERROR") {

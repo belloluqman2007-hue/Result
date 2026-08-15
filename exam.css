@@ -1,0 +1,1331 @@
+/* ==========================================
+   EXAM CREATOR
+   Cover page prints as classic black-on-white
+   letterhead (for cheap bulk photocopying).
+   The editing chrome uses our brand colors.
+========================================== */
+
+@font-face {
+  font-family: 'Sakkal Majalla';
+  src: local('Sakkal Majalla'), local('SakkalMajalla');
+}
+
+.exam-body, .exam-page, .exam-flow, .exam-flow * {
+  font-family: 'Sakkal Majalla', 'SakkalMajalla', 'Traditional Arabic', 'Amiri', serif !important;
+}
+
+/* FIX (pack 83): when Sakkal Majalla is not installed (phones/Mac) fallbacks
+   Amiri/Traditional Arabic render the same pt size visually MUCH larger.
+   JS adds .no-sakkal to <html> when document.fonts.check fails, and we
+   reduce the exam sizes so the paper matches the Windows/Sakkal look. */
+.no-sakkal .exam-body { font-size: 22pt !important; }
+.no-sakkal .exam-body.spacing-compact { font-size: 10pt !important; }
+.no-sakkal .exam-body.spacing-normal { font-size: 12pt !important; }
+.no-sakkal .exam-body.spacing-relaxed { font-size: 13pt !important; }
+.no-sakkal .exam-body.spacing-spacious { font-size: 14pt !important; }
+.no-sakkal .page-one .cover-arabic-name { font-size: 22pt !important; }
+.no-sakkal .page-one .cover-info-table td,
+.no-sakkal .page-one .cover-instructions .instruction-line,
+.no-sakkal .page-one .cover-exam-period { font-size: 15pt !important; }
+
+body{
+  background:var(--parchment-deep);
+}
+
+/* ==========================================================
+   NEW (sidebar layout - user request): all exam tools live in
+   a fixed LEFT SIDEBAR so the exam pages get the whole screen.
+   Desktop: sidebar pinned (330px), pages beside it.
+   Phone/tablet: sidebar slides off-canvas behind "☰ Exam Tools".
+========================================================== */
+.exam-toolbar-outer{
+  position:fixed;
+  top:0;
+  left:0;
+  width:330px;
+  height:100vh;
+  height:100dvh;
+  overflow-y:auto;
+  overflow-x:hidden;
+  z-index:60;
+  background:#fff;
+  border-bottom:none;
+  border-right:5px solid var(--emerald);
+  box-shadow:4px 0 20px rgba(0,0,0,.10);
+  transition:transform .28s cubic-bezier(.22,.61,.36,1);
+}
+
+.exam-main{
+  margin-left:330px;   /* same width as the sidebar - pages get the rest */
+  min-height:100vh;
+}
+
+/* Floating button that re-opens the sidebar (phones/tablets) */
+.exam-side-toggle{
+  display:none;
+  position:fixed;
+  left:14px;
+  bottom:16px;
+  z-index:70;
+  padding:12px 20px;
+  border:none;
+  border-radius:999px;
+  background:linear-gradient(140deg, var(--emerald), #3FB37E);
+  color:#fff;
+  font-size:14px;
+  font-weight:800;
+  font-family:'Cairo', sans-serif;
+  cursor:pointer;
+  box-shadow:0 10px 26px rgba(15,61,46,.35);
+}
+
+/* Dark backdrop behind the open sidebar on small screens */
+.exam-side-scrim{
+  display:none;
+  position:fixed;
+  inset:0;
+  background:rgba(8,32,24,.45);
+  z-index:55;
+}
+
+.exam-side-back{
+  margin:10px 0 0 10px;
+  display:inline-block;
+}
+
+/* Sidebar fields stack vertically - one per row */
+.exam-sidebar .exam-meta-bar{
+  flex-direction:column;
+  align-items:stretch;
+  gap:12px;
+  padding:14px 16px;
+}
+.exam-sidebar .meta-field{
+  min-width:0;
+  width:100%;
+}
+.exam-sidebar .meta-actions{
+  justify-content:stretch;
+}
+.exam-sidebar .meta-actions button{
+  width:100%;
+}
+
+.exam-sidebar .exam-actions-bar{
+  flex-direction:column;
+  padding:0 16px 12px;
+}
+.exam-sidebar .exam-actions-bar button{
+  width:100%;
+  padding:11px 16px;
+}
+.exam-sidebar .exam-back-btn{
+  margin-left:0;
+  width:100%;
+}
+
+.exam-sidebar .exam-step-head{
+  padding:14px 16px 0;
+}
+
+.exam-sidebar .exam-format-toolbar,
+.exam-sidebar .harakat-palette{
+  padding:10px 16px;
+}
+
+.exam-meta-bar{
+  display:flex;
+  flex-wrap:wrap;
+  gap:14px;
+  align-items:flex-end;
+  padding:12px 16px;
+}
+
+.meta-field{
+  display:flex;
+  flex-direction:column;
+  min-width:150px;
+}
+
+.meta-field label{
+  font-size:11px;
+  font-weight:700;
+  color:var(--emerald);
+  margin-bottom:4px;
+  text-transform:uppercase;
+  letter-spacing:.4px;
+}
+
+.meta-field input,
+.meta-field select{
+  padding:8px 10px;
+  border-radius:4px;
+  font-size:13px;
+}
+
+.meta-actions{
+  justify-content:flex-end;
+}
+
+.exam-actions-bar{
+  display:flex;
+  gap:10px;
+  padding:0 16px 12px;
+  flex-wrap:wrap;
+}
+
+.exam-actions-bar button{
+  padding:9px 16px;
+  font-size:12px;
+}
+
+.exam-format-toolbar{
+  display:flex;
+  align-items:center;
+  gap:6px;
+  padding:8px 16px;
+  background:var(--parchment-deep);
+  flex-wrap:wrap;
+  border-top:1px solid var(--line);
+}
+
+.exam-format-toolbar button{
+  padding:6px 10px;
+  font-size:12px;
+  min-width:32px;
+}
+
+.exam-format-toolbar select{
+  padding:6px 8px;
+  font-size:12px;
+  border-radius:4px;
+}
+
+.exam-format-toolbar .divider{
+  width:1px;
+  height:22px;
+  background:var(--line);
+  margin:0 4px;
+}
+
+#voiceBtn.recording{
+  background:var(--brick);
+  border-color:var(--brick);
+  color:#fff;
+  animation:pulse 1.2s infinite;
+}
+
+@keyframes pulse{
+  0%,100%{ opacity:1; }
+  50%{ opacity:.6; }
+}
+
+.harakat-palette{
+  display:flex;
+  align-items:center;
+  gap:4px;
+  padding:8px 16px;
+  background:#fff;
+  border-top:1px solid var(--line);
+  flex-wrap:wrap;
+}
+
+.harakat-label{
+  font-size:11px;
+  font-weight:700;
+  color:var(--emerald);
+  margin-right:6px;
+}
+
+.harakat-palette button{
+  background:var(--parchment-deep);
+  color:var(--emerald);
+  border:1px solid var(--line);
+  font-size:18px;
+  font-family:'Amiri', serif;
+  padding:4px 12px;
+  min-width:36px;
+}
+
+.harakat-palette button:hover{
+  background:var(--gold-pale);
+}
+
+/* ==========================================
+   THE PAGES
+========================================== */
+.exam-pages{
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  gap:24px;
+  padding:30px 16px 60px;
+}
+
+/* ==========================================================
+   NEW (exam wizard chrome - request #6): the Step 1 / Step 2
+   headers and the "Next" / "Back to details" buttons.
+   Screen-only chrome - never printed.
+========================================================== */
+.exam-step-head{
+  display:flex;
+  align-items:center;
+  gap:12px;
+  padding:12px 16px 0;
+  flex-wrap:wrap;
+}
+.exam-step-head strong{
+  display:block;
+  color:var(--emerald);
+  font-size:15px;
+}
+.exam-step-hint{
+  display:block;
+  font-size:12px;
+  color:var(--line);
+  color:#5F6E66;
+  margin-top:1px;
+}
+.exam-step-pill{
+  flex:0 0 auto;
+  font-size:10.5px;
+  font-weight:800;
+  letter-spacing:1px;
+  text-transform:uppercase;
+  color:#fff;
+  padding:6px 12px;
+  border-radius:999px;
+  background:linear-gradient(140deg, var(--emerald), var(--jade-bright, #3FB37E));
+}
+.exam-next-btn{
+  background:linear-gradient(140deg, var(--emerald), var(--jade-bright, #3FB37E)) !important;
+  color:#fff !important;
+  font-weight:800 !important;
+  border:none !important;
+}
+.exam-back-btn{
+  margin-left:auto;
+  background:transparent;
+  color:var(--emerald);
+  border:1.5px solid var(--line);
+  border-radius:8px;
+  padding:8px 14px;
+  font-size:12px;
+  font-weight:700;
+  cursor:pointer;
+}
+.exam-back-btn:hover{ background:var(--parchment-deep); }
+
+/* NEW (request #6): big friendly "Next Page" control under the pages */
+.exam-next-page-wrap{
+  text-align:center;
+  padding:0 16px 60px;
+}
+.exam-next-page-wrap button{
+  padding:14px 34px;
+  font-size:15px;
+  border-radius:14px;
+  cursor:pointer;
+}
+.exam-next-page-wrap p{
+  font-size:12px;
+  color:#5F6E66;
+  max-width:420px;
+  margin:10px auto 0;
+}
+
+/* ==========================================================
+   CHANGED (school paper design): question pages on the school's real
+   exam papers carry NO header at all - page 1 is a pure cover and
+   pages 2+ are plain question pages. exam.js no longer creates these
+   header blocks (and strips legacy ones); this rule hides any stray
+   leftover from very old markup. The .eph-* rules were removed.
+========================================================== */
+.exam-page-header{
+  display:none !important;
+}
+
+/* ==========================================================
+   NEW (auto pagination - request #1): the continuous flow and
+   the compact Page 1. The teacher types in ONE long document;
+   exam.js splits it into real A4 pages automatically.
+========================================================== */
+.exam-flow{
+  cursor:text;
+  /* FIX (true A4 on every screen): the pages are 210mm wide even on a
+     phone, so in an RTL container they would overflow to the LEFT and the
+     zoomed view would show them shifted off-screen. Anchor the flow LTR
+     (zoom math is direction-neutral physical pixels); every page keeps
+     its own RTL text behaviour. */
+  direction:ltr;
+}
+.exam-flow:focus{
+  outline:none;
+}
+
+/* CHANGED (pack 25 - owner: "the sixth page I can't write except just
+   one line"): the old "min-height:0 !important" emptied the tap-target
+   of every fresh question page (0px tall = nothing to click on a phone,
+   so new questions landed on the WRONG page or nowhere). The engine
+   measures BLOCKS, never the zone's own height, so a proper writing
+   area is completely safe - zone sizing now lives in the
+   .exam-flow .page-content / .exam-body rules below. */
+.exam-flow .exam-body{
+  min-height:250mm;
+}
+.exam-flow .page-content{
+  outline:none;
+  /* FIX (pack 25 - owner: "the sixth page I can't write except just one
+     line"): a freshly-added question page has NO blocks yet, so its
+     content zone collapsed to 0px tall - on the phone there was
+     literally NOTHING to tap into, and new questions landed on the wrong
+     page or nowhere (and were then missing from the PDF too). Give every
+     question zone a full A4 writing area; the pagination engine measures
+     each block separately, so this changes nothing about layout math. */
+  min-height:250mm;
+}
+
+/* ==========================================================================
+   CHANGED (school paper design): PAGE 1 = PURE COVER PAGE, rebuilt to
+   match the school's own printed exam papers one-for-one (measured from
+   a real AMSAIS exam PDF):
+   - Sakkal Majalla Bold for all Arabic (ships with Windows/Office, so it
+     prints EXACTLY like the school's papers; phones fall back to Amiri).
+   - Times New Roman Bold for the English lines.
+   - Arabic name 36pt, info rows 20pt, thick full-width black rule,
+     generous line spacing, footer "AMSAIS@2026/1447".
+   - NO border frame, NO questions on page 1.
+   The old compact letterhead and the double border frame were removed.
+========================================================================== */
+/* NOTE: this needs the two-class selector - plain ".page-one" would lose
+   to the later ".exam-page{padding:18mm 16mm}" rule (equal specificity,
+   later wins), which silently broke the paper margins. */
+.exam-page.page-one{
+  position:relative;
+  display:flex;
+  flex-direction:column;
+  /* FIXED: increased top padding and section gaps for better breathing room */
+  padding:8mm 24mm 12mm 14mm; /* top / right / bottom / left */
+}
+.page-one .cover-header{
+  text-align:center;
+}
+.page-one .cover-bismillah{
+  display:block;
+  width:42mm;
+  margin:0 auto 4mm;
+}
+.page-one .cover-logo{
+  display:block;
+  width:40mm;
+  height:auto;
+  object-fit:contain;
+  border-radius:0;
+  margin:0 auto 3mm;
+}
+.page-one .cover-arabic-name{
+  font-family:'Sakkal Majalla','Traditional Arabic','Amiri',serif;
+  /* CHANGED (pack 17 - owner: "arabic school name is too big, reduce
+     small"): 36pt -> 30pt, with a touch more breathing room so it never
+     drops onto the logo above or the English name below. */
+  font-size:30pt;
+  font-weight:700;
+  line-height:1.3;
+  letter-spacing:normal;
+  text-align:center;
+  margin:2mm 0 2.5mm;
+}
+.page-one .cover-english-name{
+  font-family:'Times New Roman',Times,serif;
+  /* CHANGED (pack 17 - owner: "English name big small" = a little
+     bigger): 16pt -> 17pt. */
+  font-size:17pt;
+  font-weight:700;
+  letter-spacing:.4px;
+  line-height:1.35;
+  text-align:center;
+  margin:0 0 5mm;
+}
+/* The thick solid black bar under the school names (bleeds past the text
+   margins to the rule's real position on the paper). */
+.page-one .cover-divider{
+  height:5mm;
+  width:auto;
+  background:#000;
+  /* bleeds past the text margins: ~4mm from each paper edge, like the
+     rule on the school's own papers */
+  margin:0 -20mm 6mm -10mm;
+}
+.page-one .cover-address{
+  font-family:'Times New Roman',Times,serif;
+  font-size:16pt;
+  font-weight:700;
+  /* CHANGED (pack 17 - owner: lines must not "drop on each other"):
+     more air between the address and the lines under it. */
+  line-height:1.4;
+  text-align:center;
+  margin:0 0 3mm;
+}
+.page-one .cover-tel,
+.page-one .cover-email{
+  font-family:'Times New Roman',Times,serif;
+  /* CHANGED (pack 17 - owner: lines piling on each other): 20pt -> 18pt
+     with wider line spacing and a real gap between Tel and E-mail. */
+  font-size:18pt;
+  font-weight:700;
+  line-height:1.35;
+  text-align:center;
+  margin:0 0 2mm;
+}
+.page-one .cover-email a{
+  color:#0563C1;          /* Word-style hyperlink, exactly like the paper */
+  text-decoration:underline;
+}
+.page-one .cover-motto{
+  display:flex;
+  justify-content:space-between;
+  align-items:baseline;
+  font-family:'Times New Roman',Times,serif;
+  font-size:18pt;   /* the paper's motto line mixes 18-20pt - 18 keeps it on one line */
+  font-weight:700;
+  line-height:1.25;
+  margin:0 0 4mm;
+}
+.page-one .cover-motto .motto-ar{
+  font-family:'Sakkal Majalla','Traditional Arabic','Amiri',serif;
+}
+.page-one .cover-exam-period{
+  font-family:'Sakkal Majalla','Traditional Arabic','Amiri',serif;
+  font-size:20pt;
+  font-weight:700;
+  line-height:1.6;
+  text-align:center;
+  margin:0 0 10mm;
+}
+.page-one .cover-info-table{
+  margin:0 0 6mm;
+}
+/* FIX (school paper design): neutralize the app-wide zebra striping from
+   style.css (tr:nth-child(even)/tr:hover) on the cover table only - the
+   printed paper has plain white rows. */
+.page-one .cover-info-table tr:nth-child(even),
+.page-one .cover-info-table tr:hover{
+  background:transparent;
+}
+.page-one .cover-info-table td{
+  font-family:'Sakkal Majalla','Traditional Arabic','Amiri',serif;
+  font-size:20pt;
+  font-weight:700;
+  line-height:1.8;
+  padding:1.5mm 2px;
+  text-align:right;
+  border:none;
+}
+.page-one .cover-info-table .blank-line{
+  border-bottom:2px solid #000;
+}
+.page-one .cover-info-table .blank-line-short{
+  border-bottom:2px solid #000;
+  width:45mm;
+}
+.page-one .cover-instructions{
+  font-family:'Sakkal Majalla','Traditional Arabic','Amiri',serif;
+  margin:8mm 0 0;
+}
+.page-one .instructions-title{
+  font-size:20pt;
+  font-weight:700;
+  line-height:1.35;
+  margin:0 0 3mm;
+}
+/* The paper's numbered rules are plain paragraphs with the number typed
+   INTO the line (١. ٢. ٣. ٤.) - an automatic list number can drift to the
+   wrong edge in some renderers (it did on the phone PDF); typed numbers
+   always stay at the right. (The old <ol> rule below is kept only for
+   covers saved by the previous version.) */
+.page-one .cover-instructions .instruction-line{
+  font-size:20pt;
+  font-weight:700;
+  line-height:1.58;
+  margin:0;
+  text-align:right;
+}
+.page-one .cover-instructions ol{
+  list-style-type:decimal;   /* legacy covers only */
+  padding-right:1.4em;       /* physical (RTL page) - also html2canvas-safe */
+  padding-left:0;
+  margin:0;
+  font-size:20pt;
+  font-weight:700;
+  line-height:1.58;
+}
+/* Footer pinned to the bottom of the sheet like the real paper:
+   tiny Arabic wish at the left edge, bold code centred. */
+.page-one .cover-footer{
+  margin-top:auto;
+}
+.page-one .cover-wish{
+  font-family:'Sakkal Majalla','Traditional Arabic','Amiri',serif;
+  font-size:10pt;
+  font-weight:700;
+  line-height:1.2;
+  text-align:left;
+  margin:0;
+}
+.page-one .cover-code{
+  font-family:'Sakkal Majalla','Times New Roman',serif;
+  font-size:16pt;
+  font-weight:700;
+  line-height:1.3;
+  color:#000;
+  text-align:center;
+  margin:2mm 0 0;
+}
+/* Page 1 now has NO question area - questions live on page 2 and beyond,
+   exactly like the school's printed papers. */
+
+/* NEW (multi-exam in one PDF): small round remove button on every EXTRA
+   cover (never on page 1) that deletes that exam section (cover + its
+   questions). Screen only - never printed, never in the downloaded PDF. */
+.cover-remove{
+  position:absolute;
+  top:4mm;
+  left:4mm;
+  z-index:6;
+  width:26px;
+  height:26px;
+  border-radius:50%;
+  border:1.5px solid #B23A2E;
+  background:#FFF6F5;
+  color:#B23A2E;
+  font-size:16px;
+  font-weight:800;
+  line-height:1;
+  padding:0;
+  cursor:pointer;
+}
+.cover-remove:hover{
+  background:#B23A2E;
+  color:#fff;
+}
+
+/* ----- Word-style forced page break marker (screen only) ----- */
+.manual-page-break{
+  border-top:2px dashed #B9C8BF;
+  margin:16px 0 14px;
+  position:relative;
+  height:0;
+}
+.manual-page-break::after{
+  content:"Page Break";
+  position:absolute;
+  top:-9px;
+  left:50%;
+  transform:translateX(-50%);
+  background:#fff;
+  padding:0 10px;
+  font-family:'Cairo', sans-serif;
+  font-size:10px;
+  font-weight:800;
+  letter-spacing:1px;
+  text-transform:uppercase;
+  color:#8AA398;
+}
+
+/* ----- Images inside the exam (NEW - request #2) ----- */
+.exam-img{
+  max-width:100%;
+  border-radius:4px;
+  cursor:pointer;
+}
+.exam-img.exam-img-selected{
+  outline:3px solid #2F9E6E;
+  outline-offset:2px;
+}
+.img-block{ margin:10px 0; }
+.img-tools{
+  position:absolute;
+  top:-14px;
+  right:0;
+  display:flex;
+  gap:3px;
+  background:#0F3D2E;
+  border-radius:10px;
+  padding:4px 6px;
+  box-shadow:0 6px 16px rgba(0,0,0,.3);
+  z-index:5;
+}
+.img-tools button{
+  background:transparent;
+  border:none;
+  color:#fff;
+  font-size:13px;
+  font-weight:800;
+  padding:3px 7px;
+  cursor:pointer;
+  border-radius:6px;
+}
+.img-tools button:hover{ background:rgba(255,255,255,.18); }
+.img-tools .img-tools-del{ color:#FFB3A3; }
+
+/* ----- Maths symbol palette (NEW - request #2) ----- */
+.math-palette{
+  display:flex;
+  align-items:center;
+  gap:4px;
+  padding:8px 16px;
+  background:#fff;
+  border-top:1px solid var(--line);
+  flex-wrap:wrap;
+}
+.math-palette button{
+  background:var(--parchment-deep);
+  color:var(--emerald);
+  border:1px solid var(--line);
+  font-size:15px;
+  padding:4px 10px;
+  min-width:34px;
+  border-radius:6px;
+  cursor:pointer;
+}
+.math-palette button:hover{ background:var(--gold-pale, #F3E9D2); }
+
+/* ==========================================================
+   NEW (overflow guard - request #2): visual warning (screen
+   only) when a question page holds more than one printed sheet.
+========================================================== */
+.exam-page.page-overfull{
+  outline:3px dashed #C05A3C;
+  outline-offset:-3px;
+}
+.page-warn-chip{
+  margin-top:12px;
+  padding:10px 14px;
+  border-radius:10px;
+  background:#FDF3F1;
+  border:1.5px solid #C05A3C;
+  color:#8C3B2E;
+  font-family:'Cairo', sans-serif;
+  font-size:12.5px;
+  font-weight:700;
+  text-align:center;
+}
+/* The chip, page-break markers and image tools are screen aids -
+   they must never print or enter the PDF */
+.ams-capturing .page-warn-chip,
+.ams-capturing .manual-page-break,
+.ams-capturing .img-tools,
+.ams-capturing .cover-remove{  /* NEW (multi-exam) */
+  display:none !important;
+}
+
+.exam-page{
+  width:210mm;
+  direction:rtl;   /* FIX (true A4 on every screen): see .exam-flow above */
+  min-height:297mm;
+  max-width:100%;
+  background:#fff;
+  box-shadow:0 10px 30px rgba(0,0,0,.15);
+  padding:18mm 16mm;
+  box-sizing:border-box;
+  color:#000;
+  font-family:'Amiri', 'Cairo', serif;
+}
+
+/* ===== Cover page (page 1) ===== */
+.cover-page{
+  display:flex;
+  flex-direction:column;
+  justify-content:space-between;
+  align-items:stretch;
+  text-align:center;
+  position:relative;
+}
+
+.cover-page::before{
+  content:"";
+  position:absolute;
+  top:8mm;
+  left:8mm;
+  right:8mm;
+  bottom:8mm;
+  border:10px double #000;
+  border-radius: 5px;
+  pointer-events:none;
+}
+
+.cover-page > *{
+  width:100%;
+}
+
+.bismillah{
+  font-family:'Amiri', serif;
+  font-size:20px;
+  margin-bottom:10px;
+}
+
+.cover-logo{
+  width:100px;
+  height:100px;
+  object-fit:cover;
+  border-radius:50%;
+  margin-bottom:10px;
+}
+
+.cover-arabic-name{
+  font-family:'Amiri', serif;
+  font-size:35px;
+  font-weight:1000;
+  margin-bottom:4px;
+  /* FIX (broken Arabic, request #1): the old "letter-spacing: 10px"
+     disconnected the cursive Arabic letters, making the school name
+     look broken on every exam paper. Arabic must keep its natural
+     joining - letter-spacing removed. */
+  letter-spacing: normal;
+}
+
+.cover-english-name{
+  font-family:'Cairo', sans-serif;
+  font-size:25px;
+  font-weight:700;
+  letter-spacing:.3px;
+  margin-bottom:12px;
+}
+
+.cover-divider{
+  height:6px;
+  background:#000;
+  margin:10px auto 14px;
+  width:100%;
+}
+
+.cover-address,
+.cover-contact{
+  font-family:'Cairo', sans-serif;
+  font-size:20px;
+  font-weight:700;
+  margin-bottom:4px;
+}
+
+.cover-contact a{
+  color:#000;
+  text-decoration:underline;
+}
+
+.cover-motto{
+  font-family:'Cairo', sans-serif, 'Amiri';
+  font-size:14px;
+  font-weight:700;
+  margin:12px 0;
+}
+
+.cover-exam-period{
+  font-family:'Amiri', serif;
+  font-size:25px;
+  font-weight:700;
+  margin:14px 0 20px;
+}
+
+.cover-info-table{
+  width:100%;
+  border-collapse:collapse;
+  margin-bottom:22px;
+  direction:rtl;
+}
+
+.cover-info-table td{
+  padding:8px 4px;
+  font-size:20px;
+  font-family:'Amiri', serif;
+  font-weight:700;
+  border:none;
+  text-align:right;
+  line-height: 2.5;
+}
+
+.cover-info-table .label{
+  white-space:nowrap;
+  width:1%;
+}
+
+.cover-info-table .value{
+  text-align:right;
+}
+
+.cover-info-table .blank-line{
+  border-bottom:1.5px solid #000;
+}
+
+.cover-info-table .blank-line-short{
+  border-bottom:1.5px solid #000;
+  width:120px;
+}
+
+.cover-instructions{
+  text-align:right;
+  direction:rtl;
+  margin-bottom:26px;
+  font-family:'Amiri', serif;
+  outline:none;
+}
+
+.instructions-title{
+  font-weight:700;
+  font-size:20px;
+  margin-bottom:8px;
+}
+
+.cover-instructions ol{
+  padding-right:22px;
+  font-size:18px;
+  line-height:2.5;
+}
+
+.cover-wish{
+  font-family:'Cairo', sans-serif;
+  font-size:11px;
+  text-align:left;
+  margin-top:30px;
+}
+
+.cover-code{
+  font-family:'Cairo', sans-serif;
+  font-size:11px;
+  text-align:center;
+  margin-top:8px;
+  color:#555;
+}
+
+/* ===== Body pages ===== */
+.body-page{
+  padding:12mm 18mm; /* CHANGED (school paper design): matches the paper's margins */
+}
+
+/* CHANGED (school paper design): the questions are set in Sakkal Majalla
+   Bold at 32pt with wide line spacing, exactly like the school's printed
+   exam papers (Sakkal Majalla is part of Windows/Office, so the teacher's
+   laptop prints identically; phones fall back to Amiri). Numbered lists
+   use Arabic-Indic numerals (١. ٢. ٣.) like the real papers. */
+.exam-body{
+  min-height:250mm;
+  outline:none;
+  font-family:'Sakkal Majalla','Traditional Arabic','Amiri','Cairo',serif;
+  font-weight:700;
+  font-size:32pt;
+  line-height:2;
+}
+
+.exam-body ol{
+  list-style-type:arabic-indic; /* ١. ٢. ٣. like the school's papers */
+}
+.exam-body ol,
+.exam-body ul{
+  padding-right:1.3em;       /* physical (RTL page) - also html2canvas-safe */
+  padding-left:0;
+}
+
+/* FIX (school paper design): the legacy global "p{font-size:16px}" rule
+   in style.css overrode everything inside the exam body (inheritance
+   loses to ANY element rule), silently capping the paper's 32pt style.
+   These two inherit lines let the spacing class on the container decide
+   every paragraph/list item inside it. */
+.exam-body p,
+.exam-body li{
+  font-size:inherit;
+  line-height:inherit;
+  margin-bottom:10px;
+}
+
+/* The spacing selector still works - every step stays in the same
+   paper style, only the density changes. Standardized in Pack 78/80
+   for clean rendering across Windows, Mac, and mobile fallbacks.
+   FIX (pack 83): spacing now controls ONLY line-height/margins so the
+   question-font-size picker (examFontSelect) actually wins. Previously
+   spacing used !important font-size which overrode the picker, making
+   Huge still look small. */
+.exam-body.spacing-compact{
+  line-height:1.4 !important;
+}
+.exam-body.spacing-compact p,
+.exam-body.spacing-compact li{
+  margin-bottom:6px;
+}
+
+.exam-body.spacing-normal{
+  line-height:1.6 !important;
+}
+.exam-body.spacing-normal p,
+.exam-body.spacing-normal li{
+  margin-bottom:8px;
+}
+
+.exam-body.spacing-relaxed{
+  line-height:1.8 !important;
+}
+.exam-body.spacing-relaxed p,
+.exam-body.spacing-relaxed li{
+  margin-bottom:14px;
+}
+
+.exam-body.spacing-spacious{
+  line-height:2.0 !important;
+}
+.exam-body.spacing-spacious p,
+.exam-body.spacing-spacious li{
+  margin-bottom:24px;
+}
+
+.toolbar-label{
+  font-size:11px;
+  font-weight:700;
+  color:var(--emerald);
+}
+
+.exam-body table{
+  width:100%;
+  border-collapse:collapse;
+  margin:14px 0;
+}
+
+.exam-body table td,
+.exam-body table th{
+  border:1px solid #000;
+  padding:8px;
+}
+
+.exam-body[dir="ltr"]{
+  text-align:left;
+}
+
+.exam-body[dir="rtl"]{
+  text-align:right;
+}
+
+.page-break{
+  page-break-before:always;
+  break-before:page;
+  border-top:2px dashed var(--line);
+  margin:30px 0;
+  padding-top:1px;
+}
+
+/* ==========================================
+   LOAD SAVED EXAM PANEL
+========================================== */
+.load-panel-overlay{
+  position:fixed;
+  inset:0;
+  background:rgba(15,61,46,.55);
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  z-index:100;
+}
+
+/* NEW (pack 18): the "open at Step 1 or Step 2?" chooser sits on top of
+   the saved-exams list and reuses its theme. */
+.load-step-overlay{
+  z-index:120;
+}
+.load-step-panel{
+  width:420px;
+  text-align:center;
+}
+.load-step-panel .load-step-name{
+  color:#1C5A42;
+  font-weight:700;
+  margin:2px 0 18px;
+  word-break:break-word;
+}
+.load-step-actions{
+  display:flex;
+  gap:12px;
+  justify-content:center;
+  flex-wrap:wrap;
+  margin-bottom:18px;
+}
+.load-step-actions button{
+  flex:1;
+  min-width:150px;
+}
+
+.load-panel{
+  background:#fff;
+  border-radius:8px;
+  padding:26px;
+  width:600px;
+  max-width:92%;
+  max-height:80vh;
+  overflow-y:auto;
+  position:relative;
+  box-shadow:var(--shadow-lift);
+}
+
+.load-panel h3{
+  margin-bottom:16px;
+}
+
+.load-panel .close-btn{
+  position:absolute;
+  top:20px;
+  right:20px;
+  background:var(--brick);
+  border-color:var(--brick);
+  padding:6px 14px;
+  font-size:11px;
+}
+
+/* ==========================================
+   PRINT
+========================================== */
+@media print{
+  @page{
+    size:A4 portrait;
+    margin:0;
+  }
+
+  *{
+    -webkit-print-color-adjust:exact;
+    print-color-adjust:exact;
+  }
+
+  html, body{
+    background:#fff !important;
+    margin:0 !important;
+    padding:0 !important;
+    height:auto !important;
+  }
+
+  body > *:not(.exam-main){
+    display:none !important;
+  }
+
+  .exam-main{
+    display:block !important;
+    margin:0 !important;
+    padding:0 !important;
+    min-height:0 !important;
+  }
+
+  /* CHANGED (phone print fix): also strip the small-screen view-zoom
+     (updateExamZoom sets a transform + negative margin inline) so it can
+     never leak onto the paper - print is always the true A4 size. */
+  .exam-pages{
+    display:block !important;
+    padding:0 !important;
+    gap:0 !important;
+    transform:none !important;
+    margin-left:0 !important;
+    margin-right:0 !important;
+    margin-bottom:0 !important;
+  }
+
+  .exam-page{
+    display:block !important;
+    box-shadow:none !important;
+    width:210mm !important;
+    /* FIX (print, one page per exam page): the forced 297mm min-height
+       rounded a hair past the A4 sheet and spilled a blank second page.
+       Height now follows the content exactly. */
+    min-height:0 !important;
+    height:auto !important;
+    overflow:hidden;
+    margin:0 !important;
+    page-break-after:always;
+    break-after:page;
+  }
+
+  .exam-page:last-child{
+    page-break-after:auto;
+    break-after:auto;
+  }
+
+  /* CHANGED (school paper design): the printed cover keeps its flex
+     layout and fills the sheet, so "AMSAIS@2026/1447" sits at the very
+     bottom of page 1 exactly like the school's real papers. 296mm stays
+     a hair under the 297mm sheet, so no blank page ever spills. */
+  .exam-page.page-one{
+    display:flex !important;
+    flex-direction:column;
+    min-height:296mm !important;
+    height:296mm !important;
+  }
+
+  .load-panel-overlay{
+    display:none !important;
+  }
+
+  /* NEW (overflow guard): the warning chip and page outline are screen
+     aids only - they must not appear in the printed exam. The same goes
+     for forced-break markers and the image editing tools. */
+  .page-warn-chip,
+  .manual-page-break,
+  .img-tools,
+  .cover-remove{      /* NEW (multi-exam): section delete button - screen only */
+    display:none !important;
+  }
+  .exam-page.page-overfull{
+    outline:none !important;
+  }
+
+  /* NEW (sidebar layout): the "Next Page" button and its note are
+     editing chrome - never part of the printed exam paper. */
+  .exam-next-page-wrap{
+    display:none !important;
+  }
+}
+/* ==================================================================
+   NEW (sidebar layout - screens too narrow for a pinned sidebar):
+   the sidebar slides away off-canvas and is re-opened with the
+   floating "☰ Exam Tools" button, so the exam pages keep the WHOLE
+   screen width even on phones.
+================================================================== */
+@media screen and (max-width: 1100px){
+  .exam-toolbar-outer{
+    transform:translateX(-105%);
+    width:min(330px, 86vw);
+  }
+  .exam-toolbar-outer.exam-side-open{
+    transform:translateX(0);
+  }
+  .exam-side-toggle{
+    display:inline-flex;
+    align-items:center;
+    gap:8px;
+  }
+  .exam-side-scrim.exam-side-open{
+    display:block;
+  }
+  .exam-main{
+    margin-left:0;
+  }
+}
+
+/* ==================================================================
+   NEW (mobile editing - screen only, printing rules untouched):
+   The A4 page (210mm) is much wider than a phone. On small screens the
+   page now shrinks to the phone width with PROPORTIONAL margins, so
+   what you see while writing still matches the final printed exam.
+================================================================== */
+@media screen and (max-width: 820px){
+  .exam-format-toolbar{ gap:6px; flex-wrap:nowrap; overflow-x:auto; }
+  .exam-format-toolbar button,
+  .exam-format-toolbar select{ flex:0 0 auto; }
+
+  .exam-pages{ padding:12px 6px 40px; gap:16px; }
+
+  /* CHANGED (true A4 on every screen): pages now keep their REAL A4 size
+     even on a phone - js/exam.js (updateExamZoom) zooms the VIEW out with
+     one transform, so typing, pagination, the auto font-fit and printing
+     all measure identically on every device. The old per-element
+     proportional font scaling was removed: it made phones paginate
+     differently from the laptop and bloated the cover, which then got
+     squashed in the downloaded phone PDF. */
+  .exam-page{
+    width:210mm !important;
+    max-width:none;
+  }
+
+  .exam-next-page-wrap{ padding:0 10px 90px; } /* room for the floating button */
+  .exam-next-page-wrap button{ width:100%; }
+}
+
+/* ==================================================================
+   NEW (device-proof PDF capture - screen only):
+   Hidden A4 "studio" used by js/exam.js (downloadExamPDF/capturePageAsA4).
+   The cloned page inside is ALWAYS laid out at the real desktop A4 size,
+   whatever the device/viewport, and is cropped exactly at the page edge -
+   so a phone can never again photograph a shrunken/over-tall page and the
+   downloaded PDF can never shrink every page to compensate. The !important
+   width/height overrides the @media (max-width:820px) on-screen zoom rules.
+================================================================== */
+.pdf-capture-stage{
+  position:fixed;
+  left:-10000px;
+  top:0;
+  width:210mm;
+  height:297mm;
+  overflow:hidden;
+  background:#ffffff;
+}
+.pdf-capture-stage .exam-page{
+  width:210mm !important;
+  max-width:none !important;
+  min-height:297mm !important;
+  height:297mm !important;
+  margin:0 !important;
+  box-shadow:none !important;
+  border-radius:0 !important;
+  transform:none !important;
+  overflow:hidden; /* crop exactly at the A4 edge - never grow the page */
+}
+
+/* ==========================================================================
+   NEW (pack 27 - AI): the "AI: Write Questions" button + generator modal.
+   Gold-spark accent to read as "AI" while staying inside the school
+   emerald palette. Mobile-first, sits above everything on the exam page.
+   ========================================================================== */
+.ams-ai-btn{
+  background:linear-gradient(135deg,#c9930a,#e8b822) !important; color:#231a02 !important;
+  font-weight:800 !important;
+}
+.ams-ai-btn:hover{ filter:brightness(1.06); }
+.ams-ai-scrim{
+  position:fixed; inset:0; z-index:9990; background:rgba(10,20,14,.55); backdrop-filter:blur(3px);
+  display:flex; align-items:center; justify-content:center; padding:14px;
+}
+.ams-ai-card{
+  width:100%; max-width:520px; background:#fff; border-radius:18px; overflow:hidden;
+  box-shadow:0 24px 60px rgba(0,0,0,.35); animation:amsAiPop .18s ease;
+}
+@keyframes amsAiPop{ from{ transform:scale(.94) translateY(8px); opacity:0; } to{ transform:none; opacity:1; } }
+.ams-ai-head{
+  display:flex; align-items:center; gap:12px; padding:14px 16px;
+  background:linear-gradient(120deg,#0e3b26,#14532d 55%,#0f6a44); color:#fff;
+}
+.ams-ai-head b{ font-size:16px; display:block; }
+.ams-ai-head small{ font-size:12px; opacity:.88; }
+.ams-ai-spark{
+  width:42px; height:42px; border-radius:12px; flex:0 0 42px; display:flex; align-items:center; justify-content:center;
+  background:linear-gradient(135deg,#f3c94e,#d9a419); box-shadow:0 4px 10px rgba(0,0,0,.28);
+}
+.ams-ai-spark svg{ width:24px; height:24px; }
+.ams-ai-x{
+  margin-left:auto; background:rgba(255,255,255,.14); color:#fff; border:none; width:34px; height:34px;
+  border-radius:10px; font-size:20px; cursor:pointer; line-height:1;
+}
+.ams-ai-x:hover{ background:rgba(255,255,255,.25); }
+.ams-ai-body{ padding:16px; }
+.ams-ai-lbl{ display:block; font-size:12px; font-weight:700; color:#41564a; margin:0 0 4px; }
+.ams-ai-body input[type="text"], .ams-ai-body select{
+  width:100%; padding:10px 12px; border:1px solid #d7e0da; border-radius:10px; font-size:14px;
+  font-family:inherit; background:#fff;
+}
+.ams-ai-row{ display:flex; gap:10px; margin-top:12px; }
+.ams-ai-row > div{ flex:1; min-width:0; }
+.ams-ai-status{ min-height:18px; margin-top:10px; font-size:13px; color:#5B6B62; }
+.ams-ai-status.err{ color:#C0392B; font-weight:700; }
+.ams-ai-status.busy{ color:#8a6d12; font-weight:700; }
+.ams-ai-foot{ display:flex; gap:10px; padding:0 16px 14px; }
+.ams-ai-go{
+  flex:1; border:none; border-radius:11px; padding:12px; font-weight:800; font-size:14px; cursor:pointer;
+  background:linear-gradient(135deg,#c9930a,#e8b822); color:#231a02;
+}
+.ams-ai-go:hover{ filter:brightness(1.06); }
+.ams-ai-go:disabled{ opacity:.55; cursor:default; }
+.ams-ai-cancel{
+  border:1.5px solid #d7e0da; background:#fff; color:#41564a; border-radius:11px; padding:12px 18px;
+  font-weight:700; cursor:pointer;
+}
+.ams-ai-tip{ margin:0; padding:0 16px 14px; font-size:12px; color:#7d8f84; }
+@media print{ .ams-ai-scrim{ display:none !important; } } /* NEW (pack 27): never in the PDF */
+
+/* NEW (pack 28): floating page counter while the exam PDF is being built -
+   "Building PDF... page 3 of 7" so long exams never feel frozen. */
+.ams-pdfprog{
+  position:fixed; left:50%; bottom:18px; transform:translateX(-50%); z-index:9995;
+  background:linear-gradient(120deg,#0e3b26,#14532d); color:#fff; font-weight:800; font-size:13.5px;
+  padding:11px 18px; border-radius:999px; box-shadow:0 10px 26px rgba(10,25,15,.4);
+  pointer-events:none; white-space:nowrap;
+}
+@media print{ .ams-pdfprog{ display:none !important; } }
