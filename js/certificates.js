@@ -112,6 +112,7 @@ function certOpts() {
     customBodyEn: (document.getElementById("certCustomBodyEn") || {}).value || "",
     customBodyAr: (document.getElementById("certCustomBodyAr") || {}).value || "",
     customDate: (document.getElementById("certCustomDate") || {}).value || "",
+    customDateAr: (document.getElementById("certCustomDateAr") || {}).value || "",
     city: (document.getElementById("certCity") || {}).value || "",
     state: (document.getElementById("certState") || {}).value || "",
     grade: (document.getElementById("certGrade") || {}).value || ""
@@ -216,6 +217,7 @@ function certResetWording() {
   var en = document.getElementById("certCustomBodyEn"); if (en) en.value = "";
   var ar = document.getElementById("certCustomBodyAr"); if (ar) ar.value = "";
   var dt = document.getElementById("certCustomDate"); if (dt) dt.value = "";
+  var dtAr = document.getElementById("certCustomDateAr"); if (dtAr) dtAr.value = "";
   certRefresh(true);
 }
 
@@ -316,12 +318,12 @@ function certBuildHtml(stu, posText) {
     ad: '<span class="cert-fill w90">' + certEsc(o.session || "-") + "</span>",
     ahAr: String(ah), adAr: certEsc(o.session || ""), sessionAr: certEsc(o.session || ""),
     cls: '<span class="cert-fill w180">' + certEsc(o.cls || "-") + "</span>",
-    city: fillTxt(o.city, "w90"),
-    state: fillTxt(o.state, "w90"),
-    grade: fillTxt(o.grade, "w90"),
-    cityAr: fillTxt(o.city, "w90"),
-    stateAr: fillTxt(o.state, "w90"),
-    gradeAr: fillTxt(o.grade, "w90")
+    city: fillTxt(o.city, "w120"),
+    state: fillTxt(o.state, "w120"),
+    grade: fillTxt(o.grade, "w120"),
+    cityAr: fillTxt(o.city, "w120"),
+    stateAr: fillTxt(o.state, "w120"),
+    gradeAr: fillTxt(o.grade, "w150")
   };
   var sigT = certSigs.classTeacher ? '<img class="cert-sign-img" src="' + certEsc(certSigs.classTeacher) + '" alt="">' : "";
   var sigP = certSigs.principal ? '<img class="cert-sign-img" src="' + certEsc(certSigs.principal) + '" alt="">' : "";
@@ -330,10 +332,26 @@ function certBuildHtml(stu, posText) {
     : '<span>PASSPORT</span>';
   var dateStr = dt.getDate() + " " + months[dt.getMonth()] + " " + dt.getFullYear();
 
+  // Per-student city/state: use student's address if available, fall back to global fields
+  var stuCity = o.city;
+  var stuState = o.state;
+  if (stu.address && !stuCity) {
+    // Try to parse address into city/state parts
+    var addrParts = String(stu.address).split(",").map(function(s){ return s.trim(); });
+    if (addrParts.length >= 2) { stuCity = addrParts[0]; stuState = addrParts.slice(1).join(", "); }
+    else if (addrParts.length === 1 && addrParts[0]) { stuCity = addrParts[0]; }
+  }
+  // Re-build f with per-student location
+  f.city = fillTxt(stuCity, "w120");
+  f.state = fillTxt(stuState, "w120");
+  f.cityAr = fillTxt(stuCity, "w120");
+  f.stateAr = fillTxt(stuState, "w120");
+
   var titleWord = o.customTitle ? certEsc(o.customTitle.trim().toUpperCase()) : "CERTIFICATE";
   var bodyEnText = o.customBodyEn ? certEsc(o.customBodyEn).replace(/\n/g, "<br>") : t.bodyEn(Object.assign({}, o, { lv: lv, pos: posText }), f);
   var bodyArText = o.customBodyAr ? certEsc(o.customBodyAr).replace(/\n/g, "<br>") : t.bodyAr(Object.assign({}, o, { lv: lv }), f);
   var displayDate = o.customDate ? certEsc(o.customDate.trim()) : dateStr;
+  var displayDateAr = o.customDateAr ? certEsc(o.customDateAr.trim()) : (ah + " هـ");
 
   return '' +
   '<div class="cert-frame ' + th + ' cert-' + certOrient + '">' + art +
@@ -364,7 +382,7 @@ function certBuildHtml(stu, posText) {
       '<div class="cert-b-en">' + bodyEnText + "</div>" +
     "</div>" +
     '<div class="cert-f">' +
-      '<div class="cert-sign"><div style="font-size:11px; font-weight:700; margin-bottom:14px;">' + ah + ' هـ &nbsp;/&nbsp; ' + certEsc(displayDate) + ' م</div><div class="ln"></div><small>DATE · التَّارِيخ</small></div>' +
+      '<div class="cert-sign"><div style="font-size:11px; font-weight:700; margin-bottom:14px;">' + certEsc(displayDateAr) + ' &nbsp;/&nbsp; ' + certEsc(displayDate) + ' م</div><div class="ln"></div><small>DATE · التَّارِيخ</small></div>' +
       '<div class="cert-sign">' + sigT + '<div class="ln"></div><small>THE CLASS TEACHER · الْمُعَلِّم</small></div>' +
       '<div class="cert-rosette"></div>' +
       '<div class="cert-sign">' + sigP + '<div class="ln"></div><small>THE PRINCIPAL · الْعَمِيد</small></div>' +
