@@ -2817,6 +2817,33 @@ function autoStoreExamToVault(title, class_name, subject, term, session, duratio
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>${title} - ${class_name} - ${subject}</title>
 <link rel="stylesheet" href="/css/exam.css">
+<style>
+/* Inline fallback so the exam renders correctly even if /css/exam.css is unreachable */
+body.exam-body{font-family:'Sakkal Majalla','Traditional Arabic','Amiri',serif;direction:rtl;text-align:right;padding:12mm 18mm;background:#fff;}
+.exam-flow{direction:ltr;}
+.page-one{padding:3mm 24mm 12mm 14mm;display:flex;flex-direction:column;}
+.cover-header{text-align:center;}
+.cover-bismillah{display:block;width:42mm;margin:0 auto 3mm;}
+.cover-logo{display:block;width:40mm;margin:0 auto 2mm;}
+.cover-arabic-name{font-size:30pt;font-weight:700;line-height:1.3;text-align:center;margin:2mm 0 2.5mm;}
+.cover-english-name{font-family:'Times New Roman',serif;font-size:17pt;font-weight:700;text-align:center;margin:0 0 5mm;}
+.cover-divider{height:5mm;background:#000;margin:0 -20mm 6mm -10mm;}
+.cover-address,.cover-tel,.cover-email{font-family:'Times New Roman',serif;font-size:16pt;font-weight:700;text-align:center;margin:0 0 3mm;}
+.cover-motto{display:flex;justify-content:space-between;font-family:'Times New Roman',serif;font-size:18pt;font-weight:700;margin:0 0 4mm;}
+.cover-exam-period{font-size:20pt;font-weight:700;line-height:1.6;text-align:center;margin:0 0 8mm;}
+.cover-info-table{width:100%;border-collapse:collapse;margin:0 0 4mm;}
+.cover-info-table td{font-size:20pt;font-weight:700;line-height:1.8;padding:1.5mm 2px;border:none;text-align:right;}
+.cover-info-table .blank-line{border-bottom:2px solid #000;}
+.cover-info-table .blank-line-short{border-bottom:2px solid #000;width:45mm;}
+.cover-instructions{margin:4mm 0 0;font-size:20pt;font-weight:700;line-height:1.58;}
+.cover-instructions ol{list-style-type:decimal;padding-right:1.4em;margin:0;font-size:20pt;font-weight:700;line-height:1.58;}
+.cover-footer{margin-top:auto;}
+.cover-wish{font-size:10pt;text-align:left;}
+.cover-code{font-size:16pt;font-weight:700;text-align:center;margin:2mm 0 0;}
+p,li{font-size:inherit;line-height:inherit;margin-bottom:10px;}
+@page{size:A4;margin:0;}
+@media print{body{padding:0;margin:0;}}
+</style>
 </head>
 <body class="exam-body">
 <div class="exam-flow">
