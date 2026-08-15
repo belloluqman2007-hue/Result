@@ -1919,31 +1919,37 @@ function downloadExamWord() {
     // The paper styling, translated into Word-safe CSS (fonts come with
     // Windows/Office - Sakkal Majalla, Traditional Arabic, Times).
     const css = `
-      body{ direction:rtl; text-align:right; font-family:'Sakkal Majalla','Traditional Arabic','Amiri',serif; font-weight:bold; }
+      body{ direction:rtl; text-align:right; font-family:'Sakkal Majalla','Traditional Arabic','Amiri',serif; font-weight:bold; font-size:32pt; line-height:2; }
       p{ margin:0 0 6px 0; }
       .cover-header{ text-align:center; }
       .cover-bismillah{ display:block; width:42mm; margin:0 auto 3mm; }
       .cover-logo{ display:block; width:40mm; margin:0 auto 2mm; }
-      .cover-arabic-name{ font-size:30pt; font-weight:bold; text-align:center; margin:1mm 0 2mm; }
-      .cover-english-name{ font-family:'Times New Roman',Times,serif; font-size:17pt; font-weight:bold; text-align:center; margin:0 0 5mm; }
+      .cover-arabic-name{ font-size:30pt; font-weight:bold; text-align:center; margin:2mm 0 2.5mm; line-height:1.3; }
+      .cover-english-name{ font-family:'Times New Roman',Times,serif; font-size:17pt; font-weight:bold; text-align:center; margin:0 0 5mm; line-height:1.35; }
       .cover-divider{ height:5mm; background:#000; margin:0 -20mm 6mm -10mm; }
-      .cover-address{ font-family:'Times New Roman',Times,serif; font-size:16pt; font-weight:bold; text-align:center; margin:0 0 3mm; }
-      .cover-tel,.cover-email{ font-family:'Times New Roman',Times,serif; font-size:18pt; font-weight:bold; text-align:center; margin:0 0 2mm; }
+      .cover-address{ font-family:'Times New Roman',Times,serif; font-size:16pt; font-weight:bold; text-align:center; margin:0 0 3mm; line-height:1.4; }
+      .cover-tel,.cover-email{ font-family:'Times New Roman',Times,serif; font-size:18pt; font-weight:bold; text-align:center; margin:0 0 2mm; line-height:1.35; }
       .cover-email a{ color:#0563C1; }
-      .cover-motto{ font-family:'Times New Roman',Times,serif; font-size:16pt; font-weight:bold; text-align:center; margin:0 0 4mm; }
+      .cover-motto{ font-family:'Times New Roman',Times,serif; font-size:18pt; font-weight:bold; display:flex; justify-content:space-between; margin:0 0 4mm; }
       .cover-motto .motto-ar{ font-family:'Sakkal Majalla','Traditional Arabic','Amiri',serif; }
-      .cover-exam-period{ font-size:20pt; font-weight:bold; text-align:center; margin:0 0 5mm; }
-      .cover-info-table{ width:100%; border-collapse:collapse; margin:0 0 1mm; }
-      .cover-info-table td{ font-size:20pt; font-weight:bold; border:none; padding:.5mm 2px; }
+      .cover-exam-period{ font-size:20pt; font-weight:bold; text-align:center; margin:0 0 8mm; line-height:1.6; }
+      .cover-info-table{ width:100%; border-collapse:collapse; margin:0 0 4mm; }
+      .cover-info-table td{ font-size:20pt; font-weight:bold; border:none; padding:1.5mm 2px; line-height:1.8; text-align:right; }
       .blank-line{ border-bottom:2px solid #000; }
       .blank-line-short{ border-bottom:2px solid #000; width:45mm; }
-      .cover-instructions p{ font-size:20pt; font-weight:bold; margin:0; }
-      .cover-footer{ margin-top:12mm; }
-      .cover-footer .cover-wish{ font-size:14pt; text-align:left; }
-      .cover-footer .cover-code{ font-family:'Times New Roman',Times,serif; font-weight:bold; text-align:center; }
+      .cover-instructions{ margin:4mm 0 0; }
+      .cover-instructions p{ font-size:20pt; font-weight:bold; margin:0; line-height:1.58; }
+      .cover-instructions ol{ list-style-type:arabic-indic; padding-right:1.4em; margin:0; font-size:20pt; font-weight:bold; line-height:1.58; }
+      .cover-instructions .instruction-line{ font-size:20pt; font-weight:bold; line-height:1.58; margin:0; text-align:right; }
+      .cover-footer{ margin-top:auto; }
+      .cover-footer .cover-wish{ font-size:10pt; text-align:left; }
+      .cover-footer .cover-code{ font-family:'Times New Roman',Times,serif; font-weight:bold; text-align:center; font-size:16pt; margin:2mm 0 0; }
       ol{ list-style-type:arabic-indic; }
       table{ border-collapse:collapse; }
       td,th{ border:1px solid #000; padding:4px; }
+      .page-content{ outline:none; }
+      .exam-body{ font-size:32pt; line-height:2; }
+      .exam-body p, .exam-body li{ font-size:inherit; line-height:inherit; margin-bottom:10px; }
     `;
 
     const doc =

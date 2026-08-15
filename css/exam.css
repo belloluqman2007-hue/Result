@@ -501,12 +501,12 @@ body{
   font-weight:700;
   /* CHANGED (pack 17 - owner: lines not dropping on each other): roomier
      line height for the voweled Arabic line. */
-  line-height:1.5;
+  line-height:1.6;
   text-align:center;
-  margin:0 0 5mm;
+  margin:0 0 8mm;
 }
 .page-one .cover-info-table{
-  margin:0 0 1mm;
+  margin:0 0 4mm;
 }
 /* FIX (school paper design): neutralize the app-wide zebra striping from
    style.css (tr:nth-child(even)/tr:hover) on the cover table only - the
@@ -519,8 +519,8 @@ body{
   font-family:'Sakkal Majalla','Traditional Arabic','Amiri',serif;
   font-size:20pt;
   font-weight:700;
-  line-height:1.55;
-  padding:.5mm 2px;
+  line-height:1.8;
+  padding:1.5mm 2px;
   text-align:right;
   border:none;
 }
@@ -533,7 +533,7 @@ body{
 }
 .page-one .cover-instructions{
   font-family:'Sakkal Majalla','Traditional Arabic','Amiri',serif;
-  margin:0;
+  margin:4mm 0 0;
 }
 .page-one .instructions-title{
   font-size:20pt;

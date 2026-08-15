@@ -244,30 +244,77 @@
        vertical cut positions in canvas pixels (row bottoms). A page then
        NEVER splits a table row in half - the cut snaps to the nearest
        allowed edge above the ideal page end. Returns the jsPDF instance.
-       FIX (pack 34 - owner: "zip result is not proper, it is longer than
-       one page"): ONE clean page per result whenever the card only
-       overflows a little. If the card is at most ~1.55 pages tall
-       (raised from 1.43 in pack 34b - real cards carry a photo + tall
-       Arabic rows), the whole card is scaled down uniformly and centred
-       on a single A4 page. Only truly huge cards still split across
-       pages, snapped to row edges - never a stray sliver page. */
+       FIX: when the card fits on one page (≤ 1.1x A4 height), scale it
+       down and center on a single page. Otherwise slice across multiple
+       pages at full width. */
     window.amsCanvasToA4Pdf = function (canvas, quality, cutGuide) {
         const pdf = new window.jspdf.jsPDF({ unit: "mm", format: "a4" });
-        const maxWmm = 202; // 202mm content width (leaving 4mm left & right margins)
-        const maxHmm = 289; // 289mm content height (leaving 4mm top & bottom margins)
-        const naturalWmm = 210;
-        const naturalHmm = (canvas.height * naturalWmm) / canvas.width;
-        const scale = Math.min(1.0, maxWmm / naturalWmm, maxHmm / naturalHmm);
-        const wMm = naturalWmm * scale;
-        const hMm = naturalHmm * scale;
-        const xMm = (210 - wMm) / 2;
-        const yMm = Math.max(4, (297 - hMm) / 2);
-        pdf.addImage(
-            canvas.toDataURL("image/jpeg", quality || 0.96), "JPEG",
-            xMm,
-            yMm,
-            wMm, hMm
-        );
+        const pageWmm = 210;
+        const pageHmm = 297;
+        const margin = 4;
+        const contentWmm = pageWmm - 2 * margin;
+        const contentHmm = pageHmm - 2 * margin;
+
+        const canvasW = canvas.width;
+        const canvasH = canvas.height;
+        // Natural size at full A4 width
+        const naturalHmm = (canvasH * contentWmm) / canvasW;
+
+        if (naturalHmm <= contentHmm * 1.1) {
+            // Fits on one page (maybe slightly over, scale down a bit)
+            const scale = Math.min(1.0, contentHmm / naturalHmm);
+            const wMm = contentWmm * scale;
+            const hMm = naturalHmm * scale;
+            const xMm = (pageWmm - wMm) / 2;
+            const yMm = Math.max(margin, (pageHmm - hMm) / 2);
+            pdf.addImage(
+                canvas.toDataURL("image/jpeg", quality || 0.96), "JPEG",
+                xMm, yMm, wMm, hMm
+            );
+            return pdf;
+        }
+
+        // Tall content: slice across multiple pages at full width
+        const pixelsPerMm = canvasW / contentWmm;
+        const pagePixels = Math.floor(contentHmm * pixelsPerMm);
+        let yOffset = 0;
+        let pageNum = 0;
+
+        while (yOffset < canvasH) {
+            let sliceEnd = Math.min(yOffset + pagePixels, canvasH);
+
+            // Snap cut to nearest guide above the ideal end (if guides provided)
+            if (cutGuide && cutGuide.length && sliceEnd < canvasH) {
+                for (let g = cutGuide.length - 1; g >= 0; g--) {
+                    if (cutGuide[g] <= sliceEnd && cutGuide[g] > yOffset) {
+                        sliceEnd = cutGuide[g];
+                        break;
+                    }
+                }
+            }
+
+            const sliceHeight = sliceEnd - yOffset;
+            const sliceHmm = sliceHeight / pixelsPerMm;
+
+            // Create a canvas slice
+            const sliceCanvas = document.createElement("canvas");
+            sliceCanvas.width = canvasW;
+            sliceCanvas.height = sliceHeight;
+            const ctx = sliceCanvas.getContext("2d");
+            ctx.drawImage(canvas, 0, -yOffset);
+
+            if (pageNum > 0) pdf.addPage();
+            const xMm = margin;
+            const yMm = margin;
+            pdf.addImage(
+                sliceCanvas.toDataURL("image/jpeg", quality || 0.96), "JPEG",
+                xMm, yMm, contentWmm, sliceHmm
+            );
+
+            yOffset = sliceEnd;
+            pageNum++;
+        }
+
         return pdf;
     };
 
