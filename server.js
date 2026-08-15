@@ -3849,7 +3849,7 @@ app.post("/api/ai/assistant", requireLogin, async (req, res) => {
    AI IMAGE GENERATOR
    POST /api/ai/generate-image  (requireLogin — admins and teachers)
    GET  /ai-image-generator.html
-   Uses OpenAI DALL-E 3. Key stored ONLY in OPENAI_API_KEY env var.
+   Uses Pollinations AI — completely free, no API key needed.
    Rate limit: 5 images per user per hour (in-memory, resets on restart).
    ========================================================================== */
 const aiImgHits = Object.create(null);
@@ -3862,57 +3862,23 @@ setInterval(function () {
 
 function openAiGenerateImage(prompt) {
     return new Promise(function (resolve, reject) {
-        const OPENAI_KEY = String(process.env.OPENAI_API_KEY || "").trim();
-        if (!OPENAI_KEY) return reject(new Error("OPENAI_API_KEY_NOT_SET"));
-
-        const body = JSON.stringify({
-            model: "dall-e-3",
-            prompt: prompt,
-            n: 1,
-            size: "1024x1024",
-            response_format: "b64_json"
-        });
-
         const https = require("https");
-        const req = https.request({
-            method: "POST",
-            hostname: "api.openai.com",
-            port: 443,
-            path: "/v1/images/generations",
-            headers: {
-                "Content-Type": "application/json",
-                "Authorization": "Bearer " + OPENAI_KEY,
-                "Content-Length": Buffer.byteLength(body)
+        const encoded = encodeURIComponent(prompt);
+        const url = "https://image.pollinations.ai/prompt/" + encoded + "?width=1024&height=1024&nologo=true&model=flux";
+
+        https.get(url, function (res) {
+            if (res.statusCode !== 200) {
+                return reject(new Error("Image service returned error " + res.statusCode));
             }
-        }, function (apiRes) {
-            let raw = "";
-            apiRes.on("data", function (c) {
-                raw += c;
-                if (raw.length > 8 * 1024 * 1024) req.destroy(new Error("Response too large"));
+            const chunks = [];
+            res.on("data", function (c) { chunks.push(c); });
+            res.on("end", function () {
+                const buffer = Buffer.concat(chunks);
+                resolve({ b64: buffer.toString("base64"), revisedPrompt: prompt });
             });
-            apiRes.on("end", function () {
-                let data;
-                try { data = JSON.parse(raw); } catch (e) {
-                    return reject(new Error("OpenAI response was not valid JSON"));
-                }
-                if (apiRes.statusCode >= 400) {
-                    const m = data && data.error && data.error.message
-                        ? data.error.message : ("OpenAI error " + apiRes.statusCode);
-                    const err = new Error(m);
-                    err.statusCode = apiRes.statusCode;
-                    return reject(err);
-                }
-                const item = data && data.data && data.data[0];
-                if (!item || !item.b64_json) return reject(new Error("No image returned by API"));
-                resolve({ b64: item.b64_json, revisedPrompt: item.revised_prompt || prompt });
-            });
-        });
-        req.setTimeout(60000, function () {
-            req.destroy(new Error("OpenAI took too long — please try again"));
-        });
-        req.on("error", reject);
-        req.write(body);
-        req.end();
+        }).setTimeout(60000, function () {
+            reject(new Error("Image service took too long — please try again"));
+        }).on("error", reject);
     });
 }
 
@@ -3921,13 +3887,6 @@ app.get("/ai-image-generator.html", requireLogin, (req, res) => {
 });
 
 app.post("/api/ai/generate-image", requireLogin, async (req, res) => {
-    const OPENAI_KEY = String(process.env.OPENAI_API_KEY || "").trim();
-    if (!OPENAI_KEY) {
-        return res.status(503).json({
-            error: "AI Image Generator is not configured. The admin needs to add OPENAI_API_KEY to environment variables."
-        });
-    }
-
     const who = req.session.username || String(req.session.userId);
     const now = Date.now();
     let bucket = aiImgHits[who];
@@ -3948,14 +3907,6 @@ app.post("/api/ai/generate-image", requireLogin, async (req, res) => {
     } catch (e) {
         const msg = String(e && e.message || "");
         console.log("AI image error:", msg);
-        if (msg === "OPENAI_API_KEY_NOT_SET")
-            return res.status(503).json({ error: "Image generation is not configured. Ask the admin to add OPENAI_API_KEY." });
-        if (e.statusCode === 401)
-            return res.status(503).json({ error: "The image API key is invalid. Ask the admin to check OPENAI_API_KEY." });
-        if (e.statusCode === 429)
-            return res.status(429).json({ error: "The image service is busy. Please try again in a moment." });
-        if (/content.policy|safety/i.test(msg))
-            return res.status(400).json({ error: "The description was blocked by safety filters. Please rephrase it." });
         return res.status(502).json({ error: "Could not generate the image right now. Please try again shortly." });
     }
 });

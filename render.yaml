@@ -11,8 +11,9 @@ services:
         value: production
       - key: PORT
         value: 3000
-      # ── Database (add your db4free.net values in Render dashboard) ──
       - key: DB_HOST
+        sync: false
+      - key: DB_PORT
         sync: false
       - key: DB_USER
         sync: false
@@ -20,12 +21,9 @@ services:
         sync: false
       - key: DB_NAME
         sync: false
-      # ── Session secret (generate a random string) ──
       - key: SESSION_SECRET
         generateValue: true
-      # ── Admin password (set this in Render dashboard) ──
       - key: ADMIN_DEFAULT_PASSWORD
         sync: false
-      # ── AI Image Generator (optional) ──
       - key: OPENAI_API_KEY
         sync: false
