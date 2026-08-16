@@ -185,6 +185,8 @@
       <!-- NEW (pack 25): weekly class timetable - shows only after the school publishes it -->
       <button class="pt-navlink" data-view="classtt" type="button"><span class="pt-nicon">&#128198;</span> Class Timetable</button>
       <button class="pt-navlink" data-view="calendar" type="button"><span class="pt-nicon">&#128197;</span> Calendar</button>
+      <button class="pt-navlink" data-view="attendance" type="button"><span class="pt-nicon">&#128203;</span> Attendance</button>
+      <button class="pt-navlink" data-view="profile" type="button"><span class="pt-nicon">&#128100;</span> My Profile</button>
       <button class="pt-navlink" data-view="settings" type="button"><span class="pt-nicon">&#9881;&#65039;</span> Settings</button>
       <div class="pt-side-foot">
         <a class="pt-navlink" href="index.html"><span class="pt-nicon">&#127760;</span> School Website</a>
@@ -431,6 +433,46 @@
         <!-- NEW (pack 15): calendar sheet renders here (read-only). -->
         <section class="pt-card portal-no-print" id="ptCalWrap" style="display:none; overflow-x:auto; padding:10px;">
           <div id="ptCalHolder"></div>
+        </section>
+      </div>
+
+      <!-- ============ ATTENDANCE (new) ============ -->
+      <div class="pt-view" data-view="attendance">
+        <h1 class="pt-view-title">&#128203; Attendance Record</h1>
+        <section class="pt-card" id="ptAttCard">
+          <p class="pt-hint" style="margin-bottom:12px;">This shows your child's daily attendance for the current school year.</p>
+          <!-- Summary row -->
+          <div id="ptAttSummary" style="display:flex; gap:10px; flex-wrap:wrap; margin-bottom:14px;"></div>
+          <!-- Records table -->
+          <div id="ptAttList" style="font-size:13.5px; color:#5B6B62; text-align:center; padding:12px 0;">Loading attendance...</div>
+        </section>
+      </div>
+
+      <!-- ============ STUDENT PROFILE (new) ============ -->
+      <div class="pt-view" data-view="profile">
+        <h1 class="pt-view-title">&#128100; My Profile</h1>
+        <section class="pt-card" id="ptProfileCard">
+          <div id="ptProfileContent" style="text-align:center; color:#5B6B62; padding:14px;">Loading profile...</div>
+        </section>
+        <section class="pt-card portal-no-print" style="margin-top:12px;">
+          <h3 style="font-size:14px; font-weight:700; color:#14532d; margin:0 0 10px;">Update Contact Details</h3>
+          <p class="pt-hint" style="margin-bottom:10px;">You can update your contact information below. Academic details can only be changed by the school.</p>
+          <div style="display:grid; gap:8px;">
+            <div>
+              <label style="font-size:12px; font-weight:600; color:#3a5441; display:block; margin-bottom:3px;">Parent / Guardian Name</label>
+              <input type="text" id="ptParentName" style="width:100%; padding:9px 11px; border:1.5px solid #c8d6ca; border-radius:8px; font-size:14px; font-family:inherit;" placeholder="Parent name">
+            </div>
+            <div>
+              <label style="font-size:12px; font-weight:600; color:#3a5441; display:block; margin-bottom:3px;">Parent Phone</label>
+              <input type="tel" id="ptParentPhone" style="width:100%; padding:9px 11px; border:1.5px solid #c8d6ca; border-radius:8px; font-size:14px; font-family:inherit;" placeholder="Phone number">
+            </div>
+            <div>
+              <label style="font-size:12px; font-weight:600; color:#3a5441; display:block; margin-bottom:3px;">Home Address</label>
+              <input type="text" id="ptAddress" style="width:100%; padding:9px 11px; border:1.5px solid #c8d6ca; border-radius:8px; font-size:14px; font-family:inherit;" placeholder="Home address">
+            </div>
+            <button type="button" onclick="ptSaveProfile()" style="background:linear-gradient(135deg,#1d4a30,#2f7a4e); color:#fff; border:none; border-radius:9px; padding:11px; font-size:14px; font-weight:700; cursor:pointer; margin-top:4px;">Save Contact Details</button>
+            <div id="ptProfileMsg" style="font-size:13px; text-align:center; min-height:18px;"></div>
+          </div>
         </section>
       </div>
 

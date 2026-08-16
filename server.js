@@ -237,7 +237,7 @@ function requireAdmin(req, res, next) {
    ===================================================================== */
 function checkPublished(className, term, schoolSession, cb) {
     connection.query(
-        "SELECT published FROM result_publish WHERE term = ? AND session = ? AND (class_name = ? OR class_name = '') LIMIT 4",
+        "SELECT published FROM result_publish WHERE TRIM(term) = TRIM(?) AND TRIM(session) = TRIM(?) AND (class_name IS NULL OR TRIM(class_name) = '' OR TRIM(class_name) = TRIM(?)) LIMIT 4",
         [term, schoolSession, className],
         (err, rows) => {
             if (err) return cb(err);
@@ -5217,11 +5217,16 @@ app.get("/portal/published-terms", (req, res) => {
         SELECT DISTINCT r.term, r.session
         FROM results r
         JOIN result_publish p
-          ON p.term = r.term AND p.session = r.session
+          ON TRIM(p.term) = TRIM(r.term)
+         AND TRIM(p.session) = TRIM(r.session)
          AND p.published = 1
-         AND (p.class_name = '' OR p.class_name = r.class_name)
+         AND (
+           p.class_name IS NULL
+           OR TRIM(p.class_name) = ''
+           OR TRIM(p.class_name) = TRIM(r.class_name)
+         )
         WHERE r.student_id = ?
-        ORDER BY r.session, r.term
+        ORDER BY r.session DESC, r.term
     `;
     connection.query(sql, [sid], (err, rows) => {
         if (err) { console.log(err); return res.status(500).json({ message: "Database error" }); }
@@ -5483,6 +5488,41 @@ app.delete("/admission-enquiry/:id", requireLogin, requireAdmin, (req, res) => {
 });
 
 /* ---------- Student attendance -------------------------------------- */
+/* Distinct class names from BOTH classes table AND students table.
+   This fixes the attendance mark register showing empty when class names
+   in students table don't exactly match the classes table entries. */
+app.get("/api/distinct-classes", requireLogin, (req, res) => {
+    connection.query(
+        `SELECT class_name FROM (
+           SELECT class_name FROM classes WHERE class_name IS NOT NULL AND class_name != ''
+           UNION
+           SELECT DISTINCT class_name FROM students WHERE class_name IS NOT NULL AND class_name != ''
+         ) AS combined ORDER BY class_name`,
+        (err, rows) => {
+            if (err) { console.log(err); return res.status(500).json({ message: "Database error" }); }
+            res.json(rows.map(function(r){ return { class_name: r.class_name }; }));
+        }
+    );
+});
+
+/* Portal: attendance for a student (used by parent portal) */
+app.get("/portal/attendance", (req, res) => {
+    const sid = req.session && req.session.portalStudentId;
+    if (!sid) return res.status(401).json({ message: "Not logged in" });
+    connection.query(
+        `SELECT att_date, status, class_name
+         FROM attendance
+         WHERE student_id = ?
+         ORDER BY att_date DESC
+         LIMIT 366`,
+        [sid],
+        (err, rows) => {
+            if (err) { console.log(err); return res.status(500).json({ message: "Database error" }); }
+            res.json(rows);
+        }
+    );
+});
+
 app.get("/attendance/class", requireLogin, (req, res) => {
     const className = (req.query.class_name || "").trim();
     const date = (req.query.date || "").trim();
