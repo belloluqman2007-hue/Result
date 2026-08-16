@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>School Gallery | Admin</title>
+<link rel="stylesheet" href="css/mgmt.css">
+<style>
+.gal-card{background:#fff;border-radius:14px;padding:18px;margin-bottom:14px;box-shadow:0 2px 10px rgba(0,0,0,.07);}
+.gal-btn{background:linear-gradient(135deg,#1d4a30,#2f7a4e);color:#fff;border:none;border-radius:9px;padding:11px 22px;font-size:14px;font-weight:700;cursor:pointer;width:100%;}
+.gal-input{width:100%;padding:9px 12px;border:1.5px solid #c8d6ca;border-radius:9px;font-family:inherit;font-size:14px;margin-bottom:9px;background:#f7faf7;box-sizing:border-box;}
+.gal-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px;}
+.gal-item{border-radius:10px;overflow:hidden;background:#1f2d26;box-shadow:0 2px 8px rgba(0,0,0,.12);}
+.gal-item img{width:100%;aspect-ratio:1;object-fit:cover;display:block;}
+.gal-del{width:100%;background:#9b1c1c;color:#fff;border:none;padding:6px;font-size:12px;font-weight:700;cursor:pointer;}
+</style>
+</head>
+<body>
+<header style="background:linear-gradient(120deg,#14291c,#1d4a30,#276b43);color:#fff;display:flex;align-items:center;gap:10px;padding:11px 14px;">
+  <a href="teacher-dashboard.html" style="color:#fff;text-decoration:none;font-size:20px;font-weight:700;background:rgba(255,255,255,.12);padding:6px 9px;border-radius:9px;">&#8592;</a>
+  <div style="font-size:36px;">📷</div>
+  <div><b style="font-size:16px;">School Gallery</b><br><small style="opacity:.8;">Upload event photos visible to all parents</small></div>
+</header>
+<div style="max-width:700px;margin:16px auto;padding:0 14px;">
+  <div class="gal-card">
+    <h2 style="font-size:15px;font-weight:800;color:#14291c;margin:0 0 12px;">Upload Photo</h2>
+    <input class="gal-input" type="text" id="galTitle" placeholder="Photo title (e.g. Sports Day 2026)">
+    <textarea class="gal-input" id="galCaption" placeholder="Caption (optional)" rows="2" style="resize:vertical;"></textarea>
+    <input type="file" id="galFile" accept="image/*" style="margin-bottom:9px;">
+    <button class="gal-btn" onclick="galUpload()">📷 Upload Photo</button>
+    <div id="galMsg" style="text-align:center;font-size:13px;min-height:18px;margin-top:6px;"></div>
+  </div>
+  <div class="gal-card">
+    <h2 style="font-size:15px;font-weight:800;color:#14291c;margin:0 0 12px;">All Photos</h2>
+    <div id="galGrid" class="gal-grid" style="color:#5B6B62;text-align:center;padding:10px;">Loading...</div>
+  </div>
+</div>
+<script src="js/csrf.js"></script>
+<script>
+function galLoad(){
+  fetch("/api/gallery",{credentials:"same-origin"}).then(r=>r.json()).then(photos=>{
+    var grid=document.getElementById("galGrid");
+    if(!photos.length){grid.innerHTML='<p style="color:#5B6B62;">No photos yet.</p>';grid.style.display="block";return;}
+    grid.style.display="grid";
+    grid.innerHTML=photos.map(p=>'<div class="gal-item">'+
+      '<img src="/api/gallery/image/'+p.id+'" alt="'+p.title+'" loading="lazy">'+
+      '<div style="padding:5px 7px;background:#1f2d26;"><div style="font-size:11px;font-weight:700;color:#eaf3ec;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+(p.title||"Photo")+'</div></div>'+
+      '<button class="gal-del" onclick="galDelete('+p.id+')">🗑 Delete</button></div>').join("");
+  }).catch(()=>{document.getElementById("galGrid").textContent="Error loading.";});
+}
+function galUpload(){
+  var file=document.getElementById("galFile").files[0];
+  var msg=document.getElementById("galMsg");
+  if(!file){msg.textContent="Please select an image.";msg.style.color="#9b1c1c";return;}
+  var fd=new FormData();
+  fd.append("image",file);
+  fd.append("title",document.getElementById("galTitle").value.trim());
+  fd.append("caption",document.getElementById("galCaption").value.trim());
+  msg.textContent="Uploading...";msg.style.color="#3a5441";
+  fetch("/api/gallery",{method:"POST",credentials:"same-origin",body:fd})
+    .then(r=>r.json()).then(d=>{
+      msg.textContent=d.message||"Uploaded!";msg.style.color="#14532d";
+      document.getElementById("galFile").value="";
+      document.getElementById("galTitle").value="";
+      document.getElementById("galCaption").value="";
+      galLoad();setTimeout(()=>{msg.textContent="";},3000);
+    }).catch(()=>{msg.textContent="Upload failed.";msg.style.color="#9b1c1c";});
+}
+function galDelete(id){if(!confirm("Delete this photo?"))return;fetch("/api/gallery/"+id,{method:"DELETE",credentials:"same-origin"}).then(()=>galLoad());}
+galLoad();
+</script>
+</body></html>

@@ -1003,6 +1003,74 @@ const addonTables = [
         file_path VARCHAR(500) NOT NULL DEFAULT '',
         is_folder TINYINT(1) NOT NULL DEFAULT 0,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )`,
+    /* ===== NEW PORTAL FEATURE TABLES (Pack 65) ===== */
+    `CREATE TABLE IF NOT EXISTS homework (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        class_name VARCHAR(100) NOT NULL,
+        subject VARCHAR(120) NOT NULL,
+        title VARCHAR(255) NOT NULL,
+        description TEXT,
+        due_date DATE,
+        posted_by VARCHAR(100),
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )`,
+    `CREATE TABLE IF NOT EXISTS student_health (
+        student_id VARCHAR(64) PRIMARY KEY,
+        blood_group VARCHAR(10) DEFAULT '',
+        allergies TEXT,
+        medical_conditions TEXT,
+        emergency_contact_name VARCHAR(160) DEFAULT '',
+        emergency_contact_phone VARCHAR(60) DEFAULT '',
+        notes TEXT,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    )`,
+    `CREATE TABLE IF NOT EXISTS transport_routes (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        route_name VARCHAR(100) NOT NULL,
+        bus_number VARCHAR(50) DEFAULT '',
+        driver_name VARCHAR(100) DEFAULT '',
+        driver_phone VARCHAR(60) DEFAULT '',
+        pickup_time VARCHAR(50) DEFAULT '',
+        dropoff_time VARCHAR(50) DEFAULT '',
+        notes TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )`,
+    `CREATE TABLE IF NOT EXISTS transport_assignments (
+        student_id VARCHAR(64) PRIMARY KEY,
+        route_id INT,
+        pickup_point VARCHAR(255) DEFAULT '',
+        notes VARCHAR(255) DEFAULT '',
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    )`,
+    `CREATE TABLE IF NOT EXISTS school_gallery (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        title VARCHAR(255) NOT NULL DEFAULT '',
+        caption TEXT,
+        image_data LONGBLOB,
+        image_type VARCHAR(50) DEFAULT 'image/jpeg',
+        uploaded_by VARCHAR(100) DEFAULT '',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )`,
+    `CREATE TABLE IF NOT EXISTS leave_requests (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        student_id VARCHAR(64) NOT NULL,
+        student_name VARCHAR(160) DEFAULT '',
+        class_name VARCHAR(100) DEFAULT '',
+        reason TEXT NOT NULL,
+        from_date DATE NOT NULL,
+        to_date DATE NOT NULL,
+        status VARCHAR(20) DEFAULT 'pending',
+        admin_note TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )`,
+    `CREATE TABLE IF NOT EXISTS broadcasts (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        title VARCHAR(255) NOT NULL,
+        message TEXT NOT NULL,
+        pinned TINYINT(1) DEFAULT 0,
+        posted_by VARCHAR(100) DEFAULT '',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )`
 ];
 
@@ -7281,6 +7349,389 @@ app.get("/api/store/view/:id", requireLogin, (req, res) => {
 app.get("/test", (req, res) => {
     res.send("Server is working");
 });
+
+/* ==========================================================================
+   PACK 65 — NEW PARENT PORTAL FEATURE ROUTES
+   ========================================================================== */
+
+/* ---------- PROGRESS CHART: subject scores across terms ---------- */
+app.get("/portal/progress", (req, res) => {
+    const sid = req.session && req.session.portalStudentId;
+    if (!sid) return res.status(401).json({ message: "Not logged in" });
+    connection.query(
+        `SELECT subject, term, session, total, grade
+         FROM results WHERE student_id = ?
+         ORDER BY session, term, subject`,
+        [sid], (err, rows) => {
+            if (err) return res.status(500).json({ message: "Database error" });
+            res.json(rows);
+        }
+    );
+});
+
+/* ---------- CLASS POSITION per term/session ---------- */
+app.get("/portal/position", (req, res) => {
+    const sid = req.session && req.session.portalStudentId;
+    if (!sid) return res.status(401).json({ message: "Not logged in" });
+    connection.query(
+        `SELECT class_name FROM students WHERE student_id = ? LIMIT 1`, [sid],
+        (err, stuRows) => {
+            if (err || !stuRows.length) return res.status(500).json({ message: "Student not found" });
+            const cls = stuRows[0].class_name;
+            connection.query(
+                `SELECT r.student_id, r.term, r.session,
+                        ROUND(AVG(r.total), 2) AS avg_score
+                 FROM results r
+                 WHERE r.class_name = ?
+                 GROUP BY r.student_id, r.term, r.session`,
+                [cls], (err2, allRows) => {
+                    if (err2) return res.status(500).json({ message: "Database error" });
+                    const grouped = {};
+                    (allRows || []).forEach(r => {
+                        const key = r.term + "|" + r.session;
+                        if (!grouped[key]) grouped[key] = [];
+                        grouped[key].push({ student_id: r.student_id, avg: Number(r.avg_score) });
+                    });
+                    const result = [];
+                    Object.entries(grouped).forEach(([key, students]) => {
+                        const [term, session] = key.split("|");
+                        students.sort((a, b) => b.avg - a.avg);
+                        const pos = students.findIndex(s => s.student_id === sid) + 1;
+                        if (pos > 0) result.push({ term, session, position: pos, total: students.length });
+                    });
+                    result.sort((a, b) => String(b.session).localeCompare(String(a.session)));
+                    res.json(result);
+                }
+            );
+        }
+    );
+});
+
+/* ---------- SUBJECTS LIST for student's class ---------- */
+app.get("/portal/subjects", (req, res) => {
+    const sid = req.session && req.session.portalStudentId;
+    if (!sid) return res.status(401).json({ message: "Not logged in" });
+    connection.query("SELECT class_name FROM students WHERE student_id = ? LIMIT 1", [sid], (err, rows) => {
+        if (err || !rows.length) return res.status(404).json([]);
+        connection.query(
+            "SELECT DISTINCT subject_name FROM subjects WHERE class_name = ? ORDER BY subject_name",
+            [rows[0].class_name], (err2, subs) => {
+                if (err2) return res.status(500).json([]);
+                res.json(subs.map(s => s.subject_name));
+            }
+        );
+    });
+});
+
+/* ---------- HOMEWORK: portal view (read only) ---------- */
+app.get("/portal/homework", (req, res) => {
+    const sid = req.session && req.session.portalStudentId;
+    if (!sid) return res.status(401).json({ message: "Not logged in" });
+    connection.query("SELECT class_name FROM students WHERE student_id = ? LIMIT 1", [sid], (err, rows) => {
+        if (err || !rows.length) return res.json([]);
+        connection.query(
+            `SELECT id, subject, title, description, due_date, posted_by, created_at
+             FROM homework WHERE class_name = ?
+             ORDER BY due_date IS NULL, due_date ASC, created_at DESC
+             LIMIT 30`,
+            [rows[0].class_name], (err2, hw) => {
+                if (err2) return res.status(500).json([]);
+                res.json(hw);
+            }
+        );
+    });
+});
+
+/* ---------- HOMEWORK: admin/teacher management ---------- */
+app.get("/api/homework", requireLogin, (req, res) => {
+    const cls = req.query.class_name;
+    const sql = cls
+        ? "SELECT * FROM homework WHERE class_name = ? ORDER BY created_at DESC LIMIT 100"
+        : "SELECT * FROM homework ORDER BY created_at DESC LIMIT 100";
+    const params = cls ? [cls] : [];
+    connection.query(sql, params, (err, rows) => {
+        if (err) return res.status(500).json({ message: "Database error" });
+        res.json(rows);
+    });
+});
+
+app.post("/api/homework", requireLogin, writeRateLimit, (req, res) => {
+    const { class_name, subject, title, description, due_date } = req.body;
+    if (!class_name || !subject || !title) return res.status(400).json({ message: "Class, subject and title are required." });
+    const postedBy = req.session.username || "Staff";
+    const dd = due_date && /^\d{4}-\d{2}-\d{2}$/.test(due_date) ? due_date : null;
+    connection.query(
+        "INSERT INTO homework (class_name, subject, title, description, due_date, posted_by) VALUES (?,?,?,?,?,?)",
+        [class_name, subject, title, description || null, dd, postedBy],
+        (err) => {
+            if (err) return res.status(500).json({ message: "Database error" });
+            res.json({ message: "Homework posted." });
+        }
+    );
+});
+
+app.delete("/api/homework/:id", requireLogin, (req, res) => {
+    connection.query("DELETE FROM homework WHERE id = ?", [req.params.id], (err) => {
+        if (err) return res.status(500).json({ message: "Database error" });
+        res.json({ message: "Deleted." });
+    });
+});
+
+/* ---------- HEALTH RECORDS ---------- */
+app.get("/portal/health", (req, res) => {
+    const sid = req.session && req.session.portalStudentId;
+    if (!sid) return res.status(401).json({ message: "Not logged in" });
+    connection.query("SELECT * FROM student_health WHERE student_id = ? LIMIT 1", [sid], (err, rows) => {
+        if (err) return res.status(500).json({ message: "Database error" });
+        res.json(rows[0] || {});
+    });
+});
+
+app.get("/api/health/:studentId", requireLogin, (req, res) => {
+    connection.query("SELECT * FROM student_health WHERE student_id = ? LIMIT 1", [req.params.studentId], (err, rows) => {
+        if (err) return res.status(500).json({ message: "Database error" });
+        res.json(rows[0] || {});
+    });
+});
+
+app.post("/api/health/:studentId", requireLogin, writeRateLimit, (req, res) => {
+    const { blood_group, allergies, medical_conditions, emergency_contact_name, emergency_contact_phone, notes } = req.body;
+    const sid = req.params.studentId;
+    connection.query(
+        `INSERT INTO student_health (student_id, blood_group, allergies, medical_conditions, emergency_contact_name, emergency_contact_phone, notes)
+         VALUES (?,?,?,?,?,?,?)
+         ON DUPLICATE KEY UPDATE blood_group=VALUES(blood_group), allergies=VALUES(allergies),
+         medical_conditions=VALUES(medical_conditions), emergency_contact_name=VALUES(emergency_contact_name),
+         emergency_contact_phone=VALUES(emergency_contact_phone), notes=VALUES(notes)`,
+        [sid, blood_group||'', allergies||null, medical_conditions||null, emergency_contact_name||'', emergency_contact_phone||'', notes||null],
+        (err) => {
+            if (err) return res.status(500).json({ message: "Database error" });
+            res.json({ message: "Health record saved." });
+        }
+    );
+});
+
+/* ---------- TRANSPORT ROUTES ---------- */
+app.get("/api/transport/routes", requireLogin, (req, res) => {
+    connection.query("SELECT * FROM transport_routes ORDER BY route_name", (err, rows) => {
+        if (err) return res.status(500).json({ message: "Database error" });
+        res.json(rows);
+    });
+});
+
+app.post("/api/transport/routes", requireLogin, requireAdmin, writeRateLimit, (req, res) => {
+    const { route_name, bus_number, driver_name, driver_phone, pickup_time, dropoff_time, notes } = req.body;
+    if (!route_name) return res.status(400).json({ message: "Route name is required." });
+    connection.query(
+        "INSERT INTO transport_routes (route_name, bus_number, driver_name, driver_phone, pickup_time, dropoff_time, notes) VALUES (?,?,?,?,?,?,?)",
+        [route_name, bus_number||'', driver_name||'', driver_phone||'', pickup_time||'', dropoff_time||'', notes||null],
+        (err, result) => {
+            if (err) return res.status(500).json({ message: "Database error" });
+            res.json({ message: "Route added.", id: result.insertId });
+        }
+    );
+});
+
+app.delete("/api/transport/routes/:id", requireLogin, requireAdmin, (req, res) => {
+    connection.query("DELETE FROM transport_routes WHERE id = ?", [req.params.id], (err) => {
+        if (err) return res.status(500).json({ message: "Database error" });
+        res.json({ message: "Route deleted." });
+    });
+});
+
+app.post("/api/transport/assign", requireLogin, requireAdmin, writeRateLimit, (req, res) => {
+    const { student_id, route_id, pickup_point, notes } = req.body;
+    if (!student_id) return res.status(400).json({ message: "Student ID is required." });
+    connection.query(
+        `INSERT INTO transport_assignments (student_id, route_id, pickup_point, notes)
+         VALUES (?,?,?,?)
+         ON DUPLICATE KEY UPDATE route_id=VALUES(route_id), pickup_point=VALUES(pickup_point), notes=VALUES(notes)`,
+        [student_id, route_id||null, pickup_point||'', notes||''],
+        (err) => {
+            if (err) return res.status(500).json({ message: "Database error" });
+            res.json({ message: "Transport assigned." });
+        }
+    );
+});
+
+app.get("/portal/transport", (req, res) => {
+    const sid = req.session && req.session.portalStudentId;
+    if (!sid) return res.status(401).json({ message: "Not logged in" });
+    connection.query(
+        `SELECT tr.route_name, tr.bus_number, tr.driver_name, tr.driver_phone,
+                tr.pickup_time, tr.dropoff_time, tr.notes AS route_notes,
+                ta.pickup_point, ta.notes AS assignment_notes
+         FROM transport_assignments ta
+         JOIN transport_routes tr ON tr.id = ta.route_id
+         WHERE ta.student_id = ? LIMIT 1`,
+        [sid], (err, rows) => {
+            if (err) return res.status(500).json({ message: "Database error" });
+            res.json(rows[0] || null);
+        }
+    );
+});
+
+/* ---------- GALLERY ---------- */
+app.get("/portal/gallery", (req, res) => {
+    const sid = req.session && req.session.portalStudentId;
+    if (!sid) return res.status(401).json({ message: "Not logged in" });
+    connection.query(
+        "SELECT id, title, caption, image_type, uploaded_by, created_at FROM school_gallery ORDER BY created_at DESC LIMIT 50",
+        (err, rows) => {
+            if (err) return res.status(500).json([]);
+            res.json(rows);
+        }
+    );
+});
+
+app.get("/api/gallery/image/:id", requireLogin, (req, res) => {
+    connection.query("SELECT image_data, image_type FROM school_gallery WHERE id = ? LIMIT 1", [req.params.id], (err, rows) => {
+        if (err || !rows.length || !rows[0].image_data) return res.status(404).end();
+        res.set("Content-Type", rows[0].image_type || "image/jpeg");
+        res.set("Cache-Control", "public, max-age=86400");
+        res.send(rows[0].image_data);
+    });
+});
+
+app.get("/portal/gallery/image/:id", (req, res) => {
+    const sid = req.session && req.session.portalStudentId;
+    if (!sid) return res.status(401).end();
+    connection.query("SELECT image_data, image_type FROM school_gallery WHERE id = ? LIMIT 1", [req.params.id], (err, rows) => {
+        if (err || !rows.length || !rows[0].image_data) return res.status(404).end();
+        res.set("Content-Type", rows[0].image_type || "image/jpeg");
+        res.set("Cache-Control", "public, max-age=86400");
+        res.send(rows[0].image_data);
+    });
+});
+
+app.get("/api/gallery", requireLogin, (req, res) => {
+    connection.query("SELECT id, title, caption, image_type, uploaded_by, created_at FROM school_gallery ORDER BY created_at DESC LIMIT 100", (err, rows) => {
+        if (err) return res.status(500).json([]);
+        res.json(rows);
+    });
+});
+
+const galleryUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024 }, fileFilter: (req, file, cb) => {
+    if (file.mimetype.startsWith("image/")) cb(null, true); else cb(new Error("Images only"));
+}});
+
+app.post("/api/gallery", requireLogin, writeRateLimit, galleryUpload.single("image"), (req, res) => {
+    if (!req.file) return res.status(400).json({ message: "Image file required." });
+    const { title, caption } = req.body;
+    connection.query(
+        "INSERT INTO school_gallery (title, caption, image_data, image_type, uploaded_by) VALUES (?,?,?,?,?)",
+        [title||'', caption||null, req.file.buffer, req.file.mimetype, req.session.username||'Admin'],
+        (err, result) => {
+            if (err) return res.status(500).json({ message: "Database error" });
+            res.json({ message: "Photo uploaded.", id: result.insertId });
+        }
+    );
+});
+
+app.delete("/api/gallery/:id", requireLogin, requireAdmin, (req, res) => {
+    connection.query("DELETE FROM school_gallery WHERE id = ?", [req.params.id], (err) => {
+        if (err) return res.status(500).json({ message: "Database error" });
+        res.json({ message: "Deleted." });
+    });
+});
+
+/* ---------- LEAVE REQUESTS ---------- */
+app.get("/portal/leave", (req, res) => {
+    const sid = req.session && req.session.portalStudentId;
+    if (!sid) return res.status(401).json({ message: "Not logged in" });
+    connection.query("SELECT * FROM leave_requests WHERE student_id = ? ORDER BY created_at DESC LIMIT 20", [sid], (err, rows) => {
+        if (err) return res.status(500).json([]);
+        res.json(rows);
+    });
+});
+
+app.post("/portal/leave", (req, res) => {
+    const sid = req.session && req.session.portalStudentId;
+    if (!sid) return res.status(401).json({ message: "Not logged in" });
+    const { reason, from_date, to_date } = req.body;
+    if (!reason || !from_date || !to_date) return res.status(400).json({ message: "Reason, from date and to date are required." });
+    connection.query("SELECT full_name, class_name FROM students WHERE student_id = ? LIMIT 1", [sid], (err, rows) => {
+        if (err || !rows.length) return res.status(404).json({ message: "Student not found." });
+        connection.query(
+            "INSERT INTO leave_requests (student_id, student_name, class_name, reason, from_date, to_date) VALUES (?,?,?,?,?,?)",
+            [sid, rows[0].full_name, rows[0].class_name, reason, from_date, to_date],
+            (err2) => {
+                if (err2) return res.status(500).json({ message: "Database error" });
+                res.json({ message: "Leave request submitted. The school will review it." });
+            }
+        );
+    });
+});
+
+app.get("/api/leave-requests", requireLogin, (req, res) => {
+    const status = req.query.status;
+    const sql = status
+        ? "SELECT * FROM leave_requests WHERE status = ? ORDER BY created_at DESC LIMIT 100"
+        : "SELECT * FROM leave_requests ORDER BY created_at DESC LIMIT 100";
+    connection.query(sql, status ? [status] : [], (err, rows) => {
+        if (err) return res.status(500).json([]);
+        res.json(rows);
+    });
+});
+
+app.post("/api/leave-requests/:id/status", requireLogin, writeRateLimit, (req, res) => {
+    const { status, admin_note } = req.body;
+    const valid = ["approved", "rejected", "pending"];
+    if (!valid.includes(status)) return res.status(400).json({ message: "Invalid status." });
+    connection.query(
+        "UPDATE leave_requests SET status = ?, admin_note = ? WHERE id = ?",
+        [status, admin_note||null, req.params.id],
+        (err) => {
+            if (err) return res.status(500).json({ message: "Database error" });
+            res.json({ message: "Updated." });
+        }
+    );
+});
+
+/* ---------- BROADCASTS ---------- */
+app.get("/portal/broadcasts", (req, res) => {
+    const sid = req.session && req.session.portalStudentId;
+    if (!sid) return res.status(401).json({ message: "Not logged in" });
+    connection.query("SELECT id, title, message, pinned, posted_by, created_at FROM broadcasts ORDER BY pinned DESC, created_at DESC LIMIT 30", (err, rows) => {
+        if (err) return res.status(500).json([]);
+        res.json(rows);
+    });
+});
+
+app.get("/api/broadcasts", requireLogin, (req, res) => {
+    connection.query("SELECT * FROM broadcasts ORDER BY pinned DESC, created_at DESC LIMIT 100", (err, rows) => {
+        if (err) return res.status(500).json([]);
+        res.json(rows);
+    });
+});
+
+app.post("/api/broadcasts", requireLogin, requireAdmin, writeRateLimit, (req, res) => {
+    const { title, message, pinned } = req.body;
+    if (!title || !message) return res.status(400).json({ message: "Title and message are required." });
+    connection.query(
+        "INSERT INTO broadcasts (title, message, pinned, posted_by) VALUES (?,?,?,?)",
+        [title, message, pinned ? 1 : 0, req.session.username||'Admin'],
+        (err, result) => {
+            if (err) return res.status(500).json({ message: "Database error" });
+            res.json({ message: "Broadcast sent.", id: result.insertId });
+        }
+    );
+});
+
+app.delete("/api/broadcasts/:id", requireLogin, requireAdmin, (req, res) => {
+    connection.query("DELETE FROM broadcasts WHERE id = ?", [req.params.id], (err) => {
+        if (err) return res.status(500).json({ message: "Database error" });
+        res.json({ message: "Deleted." });
+    });
+});
+
+/* Serve new admin pages */
+app.get("/homework.html", requireLogin, (req, res) => res.sendFile(path.join(__dirname, "homework.html")));
+app.get("/gallery.html", requireLogin, (req, res) => res.sendFile(path.join(__dirname, "gallery.html")));
+app.get("/transport.html", requireLogin, (req, res) => res.sendFile(path.join(__dirname, "transport.html")));
+app.get("/leave-requests.html", requireLogin, (req, res) => res.sendFile(path.join(__dirname, "leave-requests.html")));
+app.get("/broadcast.html", requireLogin, requireAdmin, (req, res) => res.sendFile(path.join(__dirname, "broadcast.html")));
+
 
 // Handle multer errors (bad file type, too large, etc.) with a clean response
 app.use((err, req, res, next) => {

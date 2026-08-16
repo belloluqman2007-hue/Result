@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Homework Board | School Admin</title>
+<link rel="stylesheet" href="css/mgmt.css">
+<style>
+.hw-card{background:#fff;border-radius:14px;padding:18px;margin-bottom:14px;box-shadow:0 2px 10px rgba(0,0,0,.07);}
+.hw-form input,.hw-form select,.hw-form textarea{width:100%;padding:9px 12px;border:1.5px solid #c8d6ca;border-radius:9px;font-family:inherit;font-size:14px;margin-bottom:9px;background:#f7faf7;box-sizing:border-box;}
+.hw-form textarea{min-height:80px;resize:vertical;}
+.hw-btn{background:linear-gradient(135deg,#1d4a30,#2f7a4e);color:#fff;border:none;border-radius:9px;padding:11px 22px;font-size:14px;font-weight:700;cursor:pointer;width:100%;}
+.hw-item{background:#f7faf7;border:1.5px solid #d3e8d6;border-radius:10px;padding:12px 14px;margin-bottom:8px;}
+.hw-del{background:none;border:1.5px solid #f0b8b8;color:#9b1c1c;border-radius:7px;padding:4px 10px;font-size:12px;cursor:pointer;float:right;}
+</style>
+</head>
+<body>
+<header style="background:linear-gradient(120deg,#14291c,#1d4a30,#276b43);color:#fff;display:flex;align-items:center;gap:10px;padding:11px 14px;">
+  <a href="teacher-dashboard.html" style="color:#fff;text-decoration:none;font-size:20px;font-weight:700;background:rgba(255,255,255,.12);padding:6px 9px;border-radius:9px;">&#8592;</a>
+  <div style="font-size:36px;">📋</div>
+  <div><b style="font-size:16px;">Homework Board</b><br><small style="opacity:.8;">Post assignments for students and parents</small></div>
+</header>
+<div style="max-width:700px;margin:16px auto;padding:0 14px;">
+  <div class="hw-card">
+    <h2 style="font-size:15px;font-weight:800;color:#14291c;margin:0 0 12px;">Post New Homework</h2>
+    <div class="hw-form">
+      <select id="hwClass"><option value="">Select Class...</option></select>
+      <input type="text" id="hwSubject" placeholder="Subject (e.g. Mathematics)">
+      <input type="text" id="hwTitle" placeholder="Homework title (e.g. Solve page 45, exercises 1–10)">
+      <textarea id="hwDesc" placeholder="Description / instructions (optional)"></textarea>
+      <label style="font-size:12px;font-weight:700;color:#3a5441;display:block;margin-bottom:4px;">Due Date (optional)</label>
+      <input type="date" id="hwDue">
+      <button class="hw-btn" onclick="hwPost()">📋 Post Homework</button>
+      <div id="hwMsg" style="text-align:center;font-size:13px;min-height:18px;margin-top:6px;"></div>
+    </div>
+  </div>
+  <div class="hw-card">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;flex-wrap:wrap;">
+      <h2 style="font-size:15px;font-weight:800;color:#14291c;margin:0;">Existing Homework</h2>
+      <select id="hwFilterClass" onchange="hwLoad()" style="padding:7px 10px;border:1.5px solid #c8d6ca;border-radius:8px;font-size:13px;font-family:inherit;background:#f7faf7;"><option value="">All Classes</option></select>
+    </div>
+    <div id="hwList" style="color:#5B6B62;text-align:center;padding:10px;">Loading...</div>
+  </div>
+</div>
+<script src="js/csrf.js"></script>
+<script>
+function loadClasses(){
+  fetch("/classes",{credentials:"same-origin"}).then(r=>r.json()).then(cls=>{
+    [document.getElementById("hwClass"),document.getElementById("hwFilterClass")].forEach(sel=>{
+      if(!sel)return;
+      var existing=sel.options[0].outerHTML;
+      sel.innerHTML=existing+cls.map(c=>'<option value="'+c.class_name+'">'+c.class_name+'</option>').join("");
+    });
+  });
+}
+function hwLoad(){
+  var cls=document.getElementById("hwFilterClass").value;
+  var url="/api/homework"+(cls?"?class_name="+encodeURIComponent(cls):"");
+  fetch(url,{credentials:"same-origin"}).then(r=>r.json()).then(rows=>{
+    var box=document.getElementById("hwList");
+    if(!rows.length){box.textContent="No homework posted yet.";return;}
+    box.innerHTML=rows.map(h=>'<div class="hw-item">'+
+      '<button class="hw-del" onclick="hwDelete('+h.id+')">Delete</button>'+
+      '<b style="font-size:14px;color:#14291c;">'+h.title+'</b>'+
+      '<div style="font-size:12px;color:#3a5441;font-weight:700;margin:3px 0;">'+h.class_name+' · '+h.subject+(h.due_date?' · Due: '+new Date(h.due_date).toLocaleDateString("en-GB",{day:"numeric",month:"short"}):"")+'</div>'+
+      (h.description?'<p style="font-size:13px;color:#5B6B62;margin:5px 0;">'+h.description+'</p>':'')+
+      '<span style="font-size:11px;color:#99b09e;">Posted by '+h.posted_by+'</span></div>').join("");
+  });
+}
+function hwPost(){
+  var cls=document.getElementById("hwClass").value;
+  var subj=document.getElementById("hwSubject").value.trim();
+  var title=document.getElementById("hwTitle").value.trim();
+  var desc=document.getElementById("hwDesc").value.trim();
+  var due=document.getElementById("hwDue").value;
+  var msg=document.getElementById("hwMsg");
+  if(!cls||!subj||!title){msg.textContent="Class, subject and title required.";msg.style.color="#9b1c1c";return;}
+  fetch("/api/homework",{method:"POST",credentials:"same-origin",headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({class_name:cls,subject:subj,title,description:desc,due_date:due||null})})
+    .then(r=>r.json()).then(d=>{
+      msg.textContent=d.message||"Posted!";msg.style.color="#14532d";
+      document.getElementById("hwSubject").value="";document.getElementById("hwTitle").value="";
+      document.getElementById("hwDesc").value="";document.getElementById("hwDue").value="";
+      hwLoad();setTimeout(()=>{msg.textContent="";},3000);
+    }).catch(()=>{msg.textContent="Error.";msg.style.color="#9b1c1c";});
+}
+function hwDelete(id){if(!confirm("Delete this homework?"))return;fetch("/api/homework/"+id,{method:"DELETE",credentials:"same-origin"}).then(()=>hwLoad());}
+loadClasses();hwLoad();
+</script>
+</body></html>

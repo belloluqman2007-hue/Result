@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Leave Requests | Admin</title>
+<link rel="stylesheet" href="css/mgmt.css">
+<style>
+.lr-card{background:#fff;border-radius:14px;padding:18px;margin-bottom:14px;box-shadow:0 2px 10px rgba(0,0,0,.07);}
+.lr-item{background:#f7faf7;border:1.5px solid #d3e8d6;border-radius:10px;padding:13px 14px;margin-bottom:10px;}
+.lr-pending{border-color:#f3c94e;background:#fffbeb;}
+.lr-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;}
+.lr-approve{background:#14532d;color:#fff;border:none;border-radius:7px;padding:6px 14px;font-size:12px;font-weight:700;cursor:pointer;}
+.lr-reject{background:none;border:1.5px solid #9b1c1c;color:#9b1c1c;border-radius:7px;padding:5px 14px;font-size:12px;font-weight:700;cursor:pointer;}
+.lr-filter{padding:7px 10px;border:1.5px solid #c8d6ca;border-radius:8px;font-size:13px;font-family:inherit;background:#f7faf7;}
+.lr-note{width:100%;padding:7px 10px;border:1.5px solid #c8d6ca;border-radius:7px;font-size:13px;font-family:inherit;margin-top:6px;background:#fff;}
+</style>
+</head>
+<body>
+<header style="background:linear-gradient(120deg,#14291c,#1d4a30,#276b43);color:#fff;display:flex;align-items:center;gap:10px;padding:11px 14px;">
+  <a href="teacher-dashboard.html" style="color:#fff;text-decoration:none;font-size:20px;font-weight:700;background:rgba(255,255,255,.12);padding:6px 9px;border-radius:9px;">&#8592;</a>
+  <div style="font-size:36px;">📝</div>
+  <div><b style="font-size:16px;">Leave Requests</b><br><small style="opacity:.8;">Review and approve student leave applications</small></div>
+</header>
+<div style="max-width:700px;margin:16px auto;padding:0 14px;">
+  <div class="lr-card">
+    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px;">
+      <h2 style="font-size:15px;font-weight:800;color:#14291c;margin:0;">Leave Requests</h2>
+      <select class="lr-filter" id="lrFilter" onchange="lrLoad()">
+        <option value="">All Requests</option>
+        <option value="pending" selected>Pending Only</option>
+        <option value="approved">Approved</option>
+        <option value="rejected">Rejected</option>
+      </select>
+    </div>
+    <div id="lrList" style="color:#5B6B62;text-align:center;padding:10px;">Loading...</div>
+  </div>
+</div>
+<script src="js/csrf.js"></script>
+<script>
+var statusColors={approved:"#14532d",rejected:"#9b1c1c",pending:"#92400e"};
+var statusBg={approved:"#eaf3ec",rejected:"#fef2f2",pending:"#fffbeb"};
+function lrLoad(){
+  var filter=document.getElementById("lrFilter").value;
+  var url="/api/leave-requests"+(filter?"?status="+filter:"");
+  fetch(url,{credentials:"same-origin"}).then(r=>r.json()).then(rows=>{
+    var box=document.getElementById("lrList");
+    if(!rows.length){box.textContent="No requests found.";return;}
+    box.innerHTML=rows.map(r=>{
+      var st=r.status||"pending";
+      var from=new Date(r.from_date).toLocaleDateString("en-GB",{day:"numeric",month:"short",year:"numeric"});
+      var to=new Date(r.to_date).toLocaleDateString("en-GB",{day:"numeric",month:"short",year:"numeric"});
+      return '<div class="lr-item'+(st==="pending"?" lr-pending":"")+'">'+
+        '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;">'+
+        '<div><b style="font-size:14px;color:#14291c;">'+r.student_name+'</b>'+
+        '<span style="font-size:12px;color:#5B6B62;"> · '+r.class_name+'</span></div>'+
+        '<span style="background:'+(statusBg[st]||"#eee")+';color:'+(statusColors[st]||"#333")+';border-radius:6px;padding:2px 9px;font-size:11px;font-weight:800;text-transform:uppercase;">'+st+'</span></div>'+
+        '<p style="font-size:13px;color:#3a5441;margin:6px 0;line-height:1.4;">'+r.reason+'</p>'+
+        '<div style="font-size:12px;color:#7d9488;font-weight:600;">📅 '+from+' → '+to+'</div>'+
+        (r.admin_note?'<p style="font-size:12px;color:#5B6B62;margin:4px 0;font-style:italic;">Note: '+r.admin_note+'</p>':'')+
+        (st==="pending"?'<div class="lr-actions">'+
+          '<input class="lr-note" type="text" id="note_'+r.id+'" placeholder="Optional admin note...">'+
+          '<button class="lr-approve" onclick="lrUpdate('+r.id+',\'approved\')">✅ Approve</button>'+
+          '<button class="lr-reject" onclick="lrUpdate('+r.id+',\'rejected\')">✗ Reject</button>'+
+          '</div>':'')+
+        '</div>';
+    }).join("");
+  }).catch(()=>{document.getElementById("lrList").textContent="Error loading.";});
+}
+function lrUpdate(id,status){
+  var noteEl=document.getElementById("note_"+id);
+  var note=noteEl?noteEl.value.trim():"";
+  fetch("/api/leave-requests/"+id+"/status",{method:"POST",credentials:"same-origin",
+    headers:{"Content-Type":"application/json"},body:JSON.stringify({status,admin_note:note})})
+    .then(()=>lrLoad());
+}
+lrLoad();
+</script>
+</body></html>

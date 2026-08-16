@@ -187,6 +187,16 @@
       <button class="pt-navlink" data-view="calendar" type="button"><span class="pt-nicon">&#128197;</span> Calendar</button>
       <button class="pt-navlink" data-view="attendance" type="button"><span class="pt-nicon">&#128203;</span> Attendance</button>
       <button class="pt-navlink" data-view="profile" type="button"><span class="pt-nicon">&#128100;</span> My Profile</button>
+      <button class="pt-navlink" data-view="progress" type="button"><span class="pt-nicon">&#128200;</span> Progress Chart</button>
+      <button class="pt-navlink" data-view="position" type="button"><span class="pt-nicon">&#127942;</span> Class Position</button>
+      <button class="pt-navlink" data-view="subjects" type="button"><span class="pt-nicon">&#128218;</span> My Subjects</button>
+      <button class="pt-navlink" data-view="homework" type="button"><span class="pt-nicon">&#128221;</span> Homework</button>
+      <button class="pt-navlink" data-view="health" type="button"><span class="pt-nicon">&#127973;</span> Health Record</button>
+      <button class="pt-navlink" data-view="transport" type="button"><span class="pt-nicon">&#128652;</span> Transport</button>
+      <button class="pt-navlink" data-view="gallery" type="button"><span class="pt-nicon">&#128247;</span> School Gallery</button>
+      <button class="pt-navlink" data-view="leave" type="button"><span class="pt-nicon">&#128196;</span> Leave Request</button>
+      <button class="pt-navlink" data-view="broadcasts" type="button"><span class="pt-nicon">&#128226;</span> School News</button>
+      <button class="pt-navlink" data-view="prayer" type="button"><span class="pt-nicon">&#128331;</span> Prayer Times</button>
       <button class="pt-navlink" data-view="settings" type="button"><span class="pt-nicon">&#9881;&#65039;</span> Settings</button>
       <div class="pt-side-foot">
         <a class="pt-navlink" href="index.html"><span class="pt-nicon">&#127760;</span> School Website</a>
@@ -473,6 +483,122 @@
             <button type="button" onclick="ptSaveProfile()" style="background:linear-gradient(135deg,#1d4a30,#2f7a4e); color:#fff; border:none; border-radius:9px; padding:11px; font-size:14px; font-weight:700; cursor:pointer; margin-top:4px;">Save Contact Details</button>
             <div id="ptProfileMsg" style="font-size:13px; text-align:center; min-height:18px;"></div>
           </div>
+        </section>
+      </div>
+
+
+      <!-- ============ PROGRESS CHART ============ -->
+      <div class="pt-view" data-view="progress">
+        <h1 class="pt-view-title">&#128200; Progress Chart</h1>
+        <section class="pt-card" id="ptProgressCard">
+          <div style="margin-bottom:10px; display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+            <label style="font-size:12px; font-weight:700; color:#3a5441;">Subject:</label>
+            <select id="ptProgressSubject" onchange="ptRenderChart()" style="padding:6px 10px; border:1.5px solid #c8d6ca; border-radius:8px; font-size:13px; font-family:inherit; background:#f7faf7;"><option value="">All Subjects</option></select>
+          </div>
+          <canvas id="ptProgressCanvas" style="width:100%; max-height:280px;"></canvas>
+          <div id="ptProgressEmpty" style="text-align:center; color:#5B6B62; padding:20px; display:none;">No result data found yet.</div>
+        </section>
+      </div>
+
+      <!-- ============ CLASS POSITION ============ -->
+      <div class="pt-view" data-view="position">
+        <h1 class="pt-view-title">&#127942; Class Position</h1>
+        <section class="pt-card" id="ptPositionCard">
+          <div id="ptPositionList" style="text-align:center; color:#5B6B62; padding:14px;">Loading...</div>
+        </section>
+      </div>
+
+      <!-- ============ SUBJECTS ============ -->
+      <div class="pt-view" data-view="subjects">
+        <h1 class="pt-view-title">&#128218; My Subjects</h1>
+        <section class="pt-card" id="ptSubjectsCard">
+          <div id="ptSubjectsList" style="text-align:center; color:#5B6B62; padding:14px;">Loading...</div>
+        </section>
+      </div>
+
+      <!-- ============ HOMEWORK ============ -->
+      <div class="pt-view" data-view="homework">
+        <h1 class="pt-view-title">&#128221; Homework</h1>
+        <section class="pt-card" id="ptHomeworkCard">
+          <p class="pt-hint" style="margin-bottom:10px;">Current homework assignments posted by your teachers.</p>
+          <div id="ptHomeworkList" style="text-align:center; color:#5B6B62; padding:14px;">Loading...</div>
+        </section>
+      </div>
+
+      <!-- ============ HEALTH RECORD ============ -->
+      <div class="pt-view" data-view="health">
+        <h1 class="pt-view-title">&#127973; Health Record</h1>
+        <section class="pt-card" id="ptHealthCard">
+          <div id="ptHealthContent" style="text-align:center; color:#5B6B62; padding:14px;">Loading...</div>
+        </section>
+      </div>
+
+      <!-- ============ TRANSPORT ============ -->
+      <div class="pt-view" data-view="transport">
+        <h1 class="pt-view-title">&#128652; Transport Information</h1>
+        <section class="pt-card" id="ptTransportCard">
+          <div id="ptTransportContent" style="text-align:center; color:#5B6B62; padding:14px;">Loading...</div>
+        </section>
+      </div>
+
+      <!-- ============ GALLERY ============ -->
+      <div class="pt-view" data-view="gallery">
+        <h1 class="pt-view-title">&#128247; School Gallery</h1>
+        <section class="pt-card" id="ptGalleryCard">
+          <div id="ptGalleryGrid" style="text-align:center; color:#5B6B62; padding:14px;">Loading...</div>
+        </section>
+        <!-- Lightbox -->
+        <div id="ptLightbox" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,.92); z-index:9999; align-items:center; justify-content:center; flex-direction:column; padding:16px;" onclick="document.getElementById('ptLightbox').style.display='none'">
+          <img id="ptLightboxImg" src="" style="max-width:100%; max-height:80vh; border-radius:10px; object-fit:contain;">
+          <p id="ptLightboxCaption" style="color:#fff; margin-top:12px; font-size:14px; text-align:center;"></p>
+        </div>
+      </div>
+
+      <!-- ============ LEAVE REQUEST ============ -->
+      <div class="pt-view" data-view="leave">
+        <h1 class="pt-view-title">&#128196; Leave Request</h1>
+        <section class="pt-card portal-no-print" style="margin-bottom:14px;">
+          <h3 style="font-size:14px; font-weight:700; color:#14532d; margin:0 0 12px;">Apply for Leave</h3>
+          <div style="display:grid; gap:10px;">
+            <div>
+              <label style="font-size:12px; font-weight:700; color:#3a5441; display:block; margin-bottom:3px;">Reason for Leave</label>
+              <textarea id="ptLeaveReason" rows="3" placeholder="Explain the reason..." style="width:100%; padding:9px 11px; border:1.5px solid #c8d6ca; border-radius:8px; font-size:14px; font-family:inherit; resize:vertical;"></textarea>
+            </div>
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+              <div>
+                <label style="font-size:12px; font-weight:700; color:#3a5441; display:block; margin-bottom:3px;">From Date</label>
+                <input type="date" id="ptLeaveFrom" style="width:100%; padding:9px 11px; border:1.5px solid #c8d6ca; border-radius:8px; font-size:14px; font-family:inherit;">
+              </div>
+              <div>
+                <label style="font-size:12px; font-weight:700; color:#3a5441; display:block; margin-bottom:3px;">To Date</label>
+                <input type="date" id="ptLeaveTo" style="width:100%; padding:9px 11px; border:1.5px solid #c8d6ca; border-radius:8px; font-size:14px; font-family:inherit;">
+              </div>
+            </div>
+            <button type="button" onclick="ptSubmitLeave()" style="background:linear-gradient(135deg,#1d4a30,#2f7a4e); color:#fff; border:none; border-radius:9px; padding:11px; font-size:14px; font-weight:700; cursor:pointer;">Submit Leave Request</button>
+            <div id="ptLeaveMsg" style="font-size:13px; text-align:center; min-height:18px;"></div>
+          </div>
+        </section>
+        <section class="pt-card">
+          <h3 style="font-size:14px; font-weight:700; color:#14532d; margin:0 0 10px;">Previous Requests</h3>
+          <div id="ptLeaveHistory" style="text-align:center; color:#5B6B62; padding:10px;">Loading...</div>
+        </section>
+      </div>
+
+      <!-- ============ BROADCASTS / SCHOOL NEWS ============ -->
+      <div class="pt-view" data-view="broadcasts">
+        <h1 class="pt-view-title">&#128226; School News</h1>
+        <section class="pt-card" id="ptBroadcastsCard">
+          <div id="ptBroadcastsList" style="text-align:center; color:#5B6B62; padding:14px;">Loading...</div>
+        </section>
+      </div>
+
+      <!-- ============ PRAYER TIMES ============ -->
+      <div class="pt-view" data-view="prayer">
+        <h1 class="pt-view-title">&#128331; Prayer Times</h1>
+        <section class="pt-card" id="ptPrayerCard">
+          <p class="pt-hint" style="margin-bottom:12px;">Daily prayer times for <b>Ijebu-Ode, Nigeria</b>.</p>
+          <div id="ptPrayerTimes" style="text-align:center; color:#5B6B62; padding:14px;">Loading...</div>
+          <div id="ptPrayerDate" style="text-align:center; font-size:12px; color:#99b09e; margin-top:8px;"></div>
         </section>
       </div>
 
