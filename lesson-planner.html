@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lesson Planner | Ameenullah School of Arabic and Islamic Studies</title>
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/modern-ui.css">
+  <link rel="stylesheet" href="css/manage.css">
+  <link rel="stylesheet" href="css/school.css">
+
+  <link rel="manifest" href="manifest.webmanifest">
+  <meta name="theme-color" content="#2f5021">
+  <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+</head>
+<body onload="checkAuth(); initPlanner();">
+  <div class="mng-page">
+
+    <div class="mng-head">
+      <a class="mng-back" href="teacher-dashboard.html">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5"/><path d="m12 19-7-7 7-7"/></svg>
+        Dashboard
+      </a>
+      <div class="mng-head-text">
+        <h1>&#128214; Lesson Planner</h1>
+        <p>Plan lessons per subject, week by week. Your plans are visible to the school admin.</p>
+      </div>
+    </div>
+
+    <div class="mg-cards">
+
+      <!-- New plan -->
+      <div class="mg-card">
+        <h3>&#10133; New Lesson Plan</h3>
+        <div class="mg-toolbar">
+          <div class="mg-field">
+            <label for="lpSubject">Subject <span style="color:#B3261E;">*</span></label>
+            <input type="text" id="lpSubject" list="lpSubjectList" placeholder="e.g. Mathematics" autocomplete="off">
+            <datalist id="lpSubjectList"></datalist>
+          </div>
+          <div class="mg-field">
+            <label for="lpClass">Class</label>
+            <select id="lpClass"><option value="">Select Class</option></select>
+          </div>
+          <div class="mg-field">
+            <label for="lpWeek">Week Starting <span style="color:#B3261E;">*</span></label>
+            <input type="date" id="lpWeek">
+          </div>
+        </div>
+        <div class="mg-field" style="margin:8px 0;">
+          <label for="lpTopic">Topic <span style="color:#B3261E;">*</span></label>
+          <input type="text" id="lpTopic" placeholder="e.g. Fractions — addition and subtraction" autocomplete="off">
+        </div>
+        <div class="mg-field">
+          <label for="lpObjectives">Learning Objectives</label>
+          <textarea id="lpObjectives" rows="2" placeholder="What the students should be able to do by the end of the week..." style="width:100%; padding:9px 11px; border:1.5px solid #c8d6ca; border-radius:8px; font-size:14px; font-family:inherit; resize:vertical;"></textarea>
+        </div>
+        <div class="mg-field">
+          <label for="lpActivities">Class Activities</label>
+          <textarea id="lpActivities" rows="2" placeholder="Activities, examples, assignments..." style="width:100%; padding:9px 11px; border:1.5px solid #c8d6ca; border-radius:8px; font-size:14px; font-family:inherit; resize:vertical;"></textarea>
+        </div>
+        <div class="mg-field">
+          <label for="lpNotes">Notes / Materials</label>
+          <textarea id="lpNotes" rows="2" placeholder="Materials, homework, remarks..." style="width:100%; padding:9px 11px; border:1.5px solid #c8d6ca; border-radius:8px; font-size:14px; font-family:inherit; resize:vertical;"></textarea>
+        </div>
+        <button class="mg-btn" type="button" onclick="savePlan()" style="margin-top:10px;">&#128190; Save Plan</button>
+      </div>
+
+      <!-- Plans list -->
+      <div class="mg-card">
+        <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+          <h3 style="margin:0;">&#128203; Plans</h3>
+          <span style="margin-left:auto; display:flex; gap:8px; align-items:center;">
+            <select id="lpTeacherFilter" onchange="loadPlans()" style="padding:8px 11px; border:1.5px solid #c8d6ca; border-radius:8px; font-family:inherit; font-size:13px;">
+              <option value="">All Teachers</option>
+            </select>
+            <button class="mg-btn-light" type="button" onclick="document.getElementById('lpTeacherFilter').value=''; loadPlans();">&#10006; Clear</button>
+          </span>
+        </div>
+        <div id="lpList" style="margin-top:10px;"></div>
+      </div>
+    </div>
+
+    <div class="mg-msg" id="lpMsg"></div>
+  </div>
+
+  <script src="js/csrf.js"></script>
+  <script src="js/ui.js"></script>
+  <script src="js/app.js"></script>
+  <script src="js/lesson-planner.js"></script>
+  <script src="js/pwa.js" defer></script>
+</body>
+</html>

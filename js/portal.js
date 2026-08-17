@@ -1212,6 +1212,30 @@ function ptLoadProfile() {
         ptProfileRow("Address", stu.address) +
         "</div>";
 
+      // NEW (feature 4): load the child's discipline / conduct record.
+      var discBox = document.getElementById("ptDiscipline");
+      if (discBox) {
+        fetch("/portal/discipline", { credentials: "same-origin" })
+          .then(function (r2) { return r2.ok ? r2.json() : []; })
+          .then(function (recs) {
+            recs = Array.isArray(recs) ? recs : [];
+            if (!recs.length) { discBox.textContent = "No discipline records."; return; }
+            discBox.innerHTML = recs.map(function (r) {
+              var badge = r.type === "commendation"
+                ? '<span style="color:#157347;font-weight:700;">Commendation</span>'
+                : r.type === "suspension"
+                  ? '<span style="color:#B3261E;font-weight:700;">Suspension</span>'
+                  : '<span style="color:#8a6a08;font-weight:700;">Warning</span>';
+              var dt = r.record_date ? String(r.record_date).slice(0, 10) : "";
+              return '<div style="border:1px solid #e1e9e3; border-radius:8px; padding:8px 10px; margin-bottom:6px;">' +
+                '<div>' + badge + (dt ? ' <span style="color:#93a19a;">· ' + dt + "</span>" : "") + "</div>" +
+                (r.title ? '<div style="font-weight:700;color:#14291c;">' + r.title + "</div>" : "") +
+                '<div>' + (r.description || "") + "</div></div>";
+            }).join("");
+          })
+          .catch(function () { discBox.textContent = "Could not load records."; });
+      }
+
       // Pre-fill contact form
       var pn = document.getElementById("ptParentName");
       var pp = document.getElementById("ptParentPhone");

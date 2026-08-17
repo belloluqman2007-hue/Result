@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Bulk Result Import | Ameenullah School of Arabic and Islamic Studies</title>
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/modern-ui.css">
+  <link rel="stylesheet" href="css/manage.css">
+  <link rel="stylesheet" href="css/school.css">
+
+  <link rel="manifest" href="manifest.webmanifest">
+  <meta name="theme-color" content="#2f5021">
+  <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+</head>
+<body onload="checkAuth(); initBulk();">
+  <div class="mng-page">
+
+    <div class="mng-head">
+      <a class="mng-back" href="teacher-dashboard.html">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5"/><path d="m12 19-7-7 7-7"/></svg>
+        Dashboard
+      </a>
+      <div class="mng-head-text">
+        <h1>&#128230; Bulk Result Import</h1>
+        <p>Upload an Excel file to import scores for a whole class at once. Total and grade are calculated automatically when left blank.</p>
+      </div>
+    </div>
+
+    <div class="mg-cards">
+
+      <!-- Template guide -->
+      <div class="mg-card">
+        <h3>&#128196; File Format</h3>
+        <p class="mg-note" style="margin-top:0;">Your spreadsheet needs these columns (header row first):</p>
+        <div class="mg-table-wrap" style="margin-top:8px;">
+          <table class="mg-table">
+            <thead><tr><th>Column</th><th>Required?</th><th>Example</th></tr></thead>
+            <tbody>
+              <tr><td><b>Student ID</b></td><td>Yes</td><td>AM/24/001</td></tr>
+              <tr><td><b>Subject</b></td><td>Yes</td><td>Mathematics</td></tr>
+              <tr><td>Class</td><td>No (uses the class picked below)</td><td>Primary Two</td></tr>
+              <tr><td>First Test</td><td>No (max 10)</td><td>8</td></tr>
+              <tr><td>Second Test</td><td>No (max 10)</td><td>9</td></tr>
+              <tr><td>Note</td><td>No (max 10)</td><td>10</td></tr>
+              <tr><td>Attendance</td><td>No (max 10)</td><td>9</td></tr>
+              <tr><td>CA</td><td>No (auto = First+Second+Note+Attendance)</td><td>36</td></tr>
+              <tr><td>Exam</td><td>No (max 60)</td><td>48</td></tr>
+              <tr><td>Total</td><td>No (auto = CA + Exam)</td><td>84</td></tr>
+              <tr><td>Grade</td><td>No (auto-computed)</td><td>A</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <button class="mg-btn-light" type="button" onclick="downloadBulkTemplate()" style="margin-top:10px;">&#11015; Download Template (CSV)</button>
+      </div>
+
+      <!-- Upload -->
+      <div class="mg-card">
+        <h3>&#128229; Upload Results</h3>
+        <div class="mg-toolbar">
+          <div class="mg-field">
+            <label for="brClass">Class</label>
+            <select id="brClass"><option value="">Loading classes...</option></select>
+          </div>
+          <div class="mg-field">
+            <label for="brSession">Session</label>
+            <select id="brSession">
+              <option value="">Select Session</option>
+              <option>2025/2026</option>
+              <option>2026/2027</option>
+              <option>2027/2028</option>
+              <option>2028/2029</option>
+              <option>2029/2030</option>
+            </select>
+          </div>
+          <div class="mg-field">
+            <label for="brTerm">Term</label>
+            <select id="brTerm">
+              <option value="">Select Term</option>
+              <option>1st Term</option>
+              <option>2nd Term</option>
+              <option>3rd Term</option>
+            </select>
+          </div>
+        </div>
+        <div class="mg-toolbar">
+          <div class="mg-field">
+            <label for="brFile">Excel file (.xlsx / .xls / .csv)</label>
+            <input type="file" id="brFile" accept=".xlsx,.xls,.csv">
+          </div>
+          <button class="mg-btn" type="button" onclick="importBulk()">&#128230; Import Results</button>
+        </div>
+        <div id="brResult" style="margin-top:12px;"></div>
+      </div>
+    </div>
+
+    <div class="mg-msg" id="brMsg"></div>
+  </div>
+
+  <script src="js/csrf.js"></script>
+  <script src="js/ui.js"></script>
+  <script src="js/app.js"></script>
+  <script src="js/bulk-results.js"></script>
+  <script src="js/pwa.js" defer></script>
+</body>
+</html>

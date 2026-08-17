@@ -503,6 +503,19 @@ app.get("/class-results.html", requireLogin, (req, res) => {
     res.sendFile(path.join(__dirname, "class-results.html"));
 });
 
+// NEW (bulk results / discipline / lesson planner pages).
+app.get("/bulk-results.html", requireLogin, (req, res) => {
+    res.sendFile(path.join(__dirname, "bulk-results.html"));
+});
+
+app.get("/discipline.html", requireLogin, (req, res) => {
+    res.sendFile(path.join(__dirname, "discipline.html"));
+});
+
+app.get("/lesson-planner.html", requireLogin, (req, res) => {
+    res.sendFile(path.join(__dirname, "lesson-planner.html"));
+});
+
 // ----------------------------------------------------------------
 // NEW (PWA conversion): serve the app manifest with the correct
 // content type so every browser accepts it. ADDITIVE ONLY - no
@@ -798,6 +811,30 @@ function ensureCoreTablesAndDefaultAdmin() {
             paid_by VARCHAR(100) DEFAULT '',
             paid_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             KEY idx_payroll_staff (staff_id)
+        ) DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
+        `CREATE TABLE IF NOT EXISTS discipline (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            student_id VARCHAR(64) NOT NULL,
+            type VARCHAR(20) NOT NULL DEFAULT 'warning',
+            title VARCHAR(160) DEFAULT '',
+            description TEXT,
+            record_date DATE NOT NULL,
+            recorded_by VARCHAR(100) DEFAULT '',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            KEY idx_discipline_student (student_id)
+        ) DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
+        `CREATE TABLE IF NOT EXISTS lesson_plans (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            teacher VARCHAR(100) DEFAULT '',
+            subject VARCHAR(120) DEFAULT '',
+            class_name VARCHAR(100) DEFAULT '',
+            week_start DATE NOT NULL,
+            topic VARCHAR(255) DEFAULT '',
+            objectives TEXT,
+            activities TEXT,
+            notes TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            KEY idx_lessonplans_teacher (teacher)
         ) DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`
     ];
 
@@ -6436,6 +6473,240 @@ app.delete("/payroll/:id", requireLogin, requireAdmin, (req, res) => {
     connection.query("DELETE FROM payroll WHERE id = ?", [Number(req.params.id)], (err) => {
         if (err) { console.log(err); return res.status(500).json({ message: "Database error" }); }
         res.json({ message: "Payroll entry deleted" });
+    });
+});
+
+
+/* =====================================================================
+   NEW (feature 3 - bulk result import): upload an Excel file to import
+   scores for a whole class for a given term/session. Uses the same
+   uploadExcel multer + XLSX parsing as /bulk-add-students. Total and
+   grade are auto-computed when left blank.
+   ===================================================================== */
+
+function gradeForTotal(total) {
+    const t = Number(total) || 0;
+    if (t >= 70) return "A";
+    if (t >= 60) return "B";
+    if (t >= 50) return "C";
+    if (t >= 45) return "D";
+    if (t >= 40) return "E";
+    return "F";
+}
+
+function numOr(v) {
+    const n = Number(v);
+    return isNaN(n) ? 0 : n;
+}
+
+app.post("/bulk-import-results", requireLogin, writeRateLimit, uploadExcel.single("file"), (req, res) => {
+    if (!req.file) return res.status(400).json({ message: "No file uploaded." });
+
+    const term = (req.body.term || "").trim();
+    const session = (req.body.session || "").trim();
+    const defaultClass = (req.body.class_name || "").trim();
+    if (!term || !session) return res.status(400).json({ message: "Term and session are required." });
+
+    let rows;
+    try {
+        const workbook = XLSX.read(req.file.buffer, { type: "buffer" });
+        const sheet = workbook.Sheets[workbook.SheetNames[0]];
+        rows = XLSX.utils.sheet_to_json(sheet, { defval: "" });
+    } catch (err) {
+        console.log(err);
+        return res.status(400).json({ message: "Could not read the uploaded file. Make sure it's a valid .xlsx, .xls, or .csv file." });
+    }
+    if (!rows.length) return res.status(400).json({ message: "The file has no result rows in it." });
+
+    connection.query("SELECT student_id, full_name, class_name FROM students", (err, students) => {
+        if (err) { console.log(err); return res.status(500).json({ message: "Database error while loading students." }); }
+        const stuMap = {};
+        (students || []).forEach(function (s) { stuMap[s.student_id] = s; });
+
+        const results = { inserted: 0, errors: [] };
+        let index = 0;
+
+        function processNext() {
+            if (index >= rows.length) {
+                return res.json({
+                    message: results.inserted + " of " + rows.length + " result row(s) imported successfully.",
+                    inserted: results.inserted,
+                    total: rows.length,
+                    errors: results.errors
+                });
+            }
+            const row = rows[index];
+            const rowNum = index + 2;
+            index++;
+
+            const studentId = String(row["Student ID"] || "").trim();
+            const subject = String(row["Subject"] || "").trim();
+            if (!studentId || !subject) {
+                results.errors.push("Row " + rowNum + ": Student ID and Subject are required.");
+                return processNext();
+            }
+
+            const stu = stuMap[studentId];
+            const studentName = stu ? stu.full_name : studentId;
+            const className = (row["Class"] ? String(row["Class"]).trim() : "") || (stu ? stu.class_name : "") || defaultClass;
+
+            const firstTest = numOr(row["First Test"]);
+            const secondTest = numOr(row["Second Test"]);
+            const noteScore = numOr(row["Note"]);
+            const attendanceScore = numOr(row["Attendance"]);
+            const examScore = numOr(row["Exam"]);
+
+            const hasCa = String(row["CA"] || "").trim() !== "";
+            const caScore = hasCa ? numOr(row["CA"]) : (firstTest + secondTest + noteScore + attendanceScore);
+
+            const hasTotal = String(row["Total"] || "").trim() !== "";
+            const total = hasTotal ? numOr(row["Total"]) : (caScore + examScore);
+
+            const gradeRaw = String(row["Grade"] || "").trim();
+            const grade = gradeRaw || gradeForTotal(total);
+
+            connection.query(
+                `INSERT INTO results
+                    (student_id, student_name, class_name, term, session, subject,
+                     first_test, second_test, note_score, attendance_score,
+                     ca_score, exam_score, total, grade)
+                 VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+                [studentId, studentName, className, term, session, subject,
+                 firstTest, secondTest, noteScore, attendanceScore,
+                 caScore, examScore, total, grade],
+                (err2) => {
+                    if (err2) {
+                        console.log(err2);
+                        results.errors.push("Row " + rowNum + ": Database error saving this row.");
+                    } else {
+                        results.inserted++;
+                    }
+                    processNext();
+                }
+            );
+        }
+
+        processNext();
+    });
+});
+
+
+/* =====================================================================
+   NEW (feature 4 - discipline records): log warnings, suspensions and
+   commendations per student. Staff log them; parents see their child's
+   records in the portal. Uses the new `discipline` table.
+   ===================================================================== */
+
+app.get("/discipline", requireLogin, (req, res) => {
+    const sid = (req.query.student_id || "").trim();
+    let sql = "SELECT d.*, s.full_name, s.class_name FROM discipline d LEFT JOIN students s ON s.student_id = d.student_id";
+    const params = [];
+    if (sid) { sql += " WHERE d.student_id = ?"; params.push(sid); }
+    sql += " ORDER BY d.record_date DESC, d.id DESC LIMIT 500";
+    connection.query(sql, params, (err, rows) => {
+        if (err) { console.log(err); return res.status(500).json({ message: "Database error" }); }
+        res.json(Array.isArray(rows) ? rows : []);
+    });
+});
+
+app.post("/discipline", requireLogin, writeRateLimit, (req, res) => {
+    const studentId = (req.body.student_id || "").trim();
+    const type = (req.body.type || "warning").trim().toLowerCase();
+    const title = (req.body.title || "").trim();
+    const description = (req.body.description || "").trim();
+    const recordDate = (req.body.record_date || "").trim() || new Date().toISOString().slice(0, 10);
+    if (!studentId || !description) {
+        return res.status(400).json({ message: "Student and a description are required." });
+    }
+    if (["warning", "suspension", "commendation"].indexOf(type) === -1) {
+        return res.status(400).json({ message: "Type must be warning, suspension or commendation." });
+    }
+    connection.query(
+        `INSERT INTO discipline (student_id, type, title, description, record_date, recorded_by)
+         VALUES (?,?,?,?,?,?)`,
+        [studentId, type, title, description, recordDate, req.session.username || null],
+        (err, result) => {
+            if (err) { console.log(err); return res.status(500).json({ message: "Database error" }); }
+            res.json({ message: "Record saved", id: result.insertId });
+        }
+    );
+});
+
+app.delete("/discipline/:id", requireLogin, requireAdmin, (req, res) => {
+    connection.query("DELETE FROM discipline WHERE id = ?", [Number(req.params.id)], (err) => {
+        if (err) { console.log(err); return res.status(500).json({ message: "Database error" }); }
+        res.json({ message: "Record deleted" });
+    });
+});
+
+/* Portal: parents/students see their child's discipline record (read-only). */
+app.get("/portal/discipline", (req, res) => {
+    const sid = req.session && req.session.portalStudentId;
+    if (!sid) return res.json([]);
+    connection.query(
+        `SELECT type, title, description, record_date FROM discipline
+         WHERE student_id = ? ORDER BY record_date DESC LIMIT 100`,
+        [sid],
+        (err, rows) => {
+            if (err) { console.log(err); return res.json([]); }
+            res.json(Array.isArray(rows) ? rows : []);
+        }
+    );
+});
+
+
+/* =====================================================================
+   NEW (feature 5 - lesson planner): teachers plan lessons per subject
+   per week; visible to admin. Uses the new `lesson_plans` table.
+   ===================================================================== */
+
+app.get("/lesson-plans", requireLogin, (req, res) => {
+    const teacher = (req.query.teacher || "").trim();
+    let sql = "SELECT * FROM lesson_plans";
+    const params = [];
+    if (teacher) { sql += " WHERE teacher = ?"; params.push(teacher); }
+    sql += " ORDER BY week_start DESC, class_name ASC, subject ASC LIMIT 500";
+    connection.query(sql, params, (err, rows) => {
+        if (err) { console.log(err); return res.status(500).json({ message: "Database error" }); }
+        res.json(Array.isArray(rows) ? rows : []);
+    });
+});
+
+app.post("/lesson-plans", requireLogin, writeRateLimit, (req, res) => {
+    const subject = (req.body.subject || "").trim();
+    const className = (req.body.class_name || "").trim();
+    const weekStart = (req.body.week_start || "").trim();
+    const topic = (req.body.topic || "").trim();
+    if (!subject || !weekStart || !topic) {
+        return res.status(400).json({ message: "Subject, week and topic are required." });
+    }
+    const teacher = (req.body.teacher || "").trim() || req.session.username || "";
+    const objectives = (req.body.objectives || "").trim();
+    const activities = (req.body.activities || "").trim();
+    const notes = (req.body.notes || "").trim();
+    connection.query(
+        `INSERT INTO lesson_plans (teacher, subject, class_name, week_start, topic, objectives, activities, notes)
+         VALUES (?,?,?,?,?,?,?,?)`,
+        [teacher, subject, className, weekStart, topic, objectives, activities, notes],
+        (err, result) => {
+            if (err) { console.log(err); return res.status(500).json({ message: "Database error" }); }
+            res.json({ message: "Lesson plan saved", id: result.insertId });
+        }
+    );
+});
+
+app.delete("/lesson-plans/:id", requireLogin, (req, res) => {
+    const id = Number(req.params.id);
+    const username = req.session.username || "";
+    const isAdmin = req.session.role === "admin";
+    const where = isAdmin ? "id = ?" : "id = ? AND teacher = ?";
+    const params = isAdmin ? [id] : [id, username];
+    connection.query("DELETE FROM lesson_plans WHERE " + where, params, (err, result) => {
+        if (err) { console.log(err); return res.status(500).json({ message: "Database error" }); }
+        if (result.affectedRows === 0) {
+            return res.status(403).json({ message: "You can only delete your own lesson plans." });
+        }
+        res.json({ message: "Lesson plan deleted" });
     });
 });
 

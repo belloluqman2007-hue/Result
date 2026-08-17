@@ -246,6 +246,7 @@
                 '<div class="ams-profile-row"><span>Parent Phone</span><span class="pv-phone"></span></div>' +
                 '<div class="ams-profile-row"><span>Address</span><span class="pv-address"></span></div>' +
             "</div>" +
+            '<div class="ams-disc-wrap" id="amsDiscWrap" style="margin:12px 0; text-align:left;"><b style="font-size:13px;color:#14532d;">Discipline / Conduct</b><div id="amsDiscList" style="margin-top:6px; font-size:12.5px; color:#5B6B62;">Loading...</div></div>' +
             '<div class="ams-modal-actions">' +
                 '<button type="button" class="m-btn-ghost" onclick="amsProfileClose()">Close</button>' +
                 '<a href="student-result.html"><button type="button">Open Result Checker</button></a>' +
@@ -270,6 +271,30 @@
         box.querySelector(".pv-parent").textContent = s.parent_name || "-";
         box.querySelector(".pv-phone").textContent = s.parent_phone || "-";
         box.querySelector(".pv-address").textContent = s.address || "-";
+
+        /* ---------- NEW (feature 4): discipline / conduct records ---------- */
+        var discList = box.querySelector("#amsDiscList");
+        if (discList) {
+            fetch("/discipline?student_id=" + encodeURIComponent(s.student_id), { credentials: "same-origin" })
+                .then(function (r) { return r.ok ? r.json() : []; })
+                .then(function (recs) {
+                    recs = Array.isArray(recs) ? recs : [];
+                    if (!recs.length) { discList.textContent = "No records."; return; }
+                    discList.innerHTML = recs.map(function (r) {
+                        var badge = r.type === "commendation"
+                            ? '<span style="color:#157347;font-weight:700;">Commendation</span>'
+                            : r.type === "suspension"
+                                ? '<span style="color:#B3261E;font-weight:700;">Suspension</span>'
+                                : '<span style="color:#8a6a08;font-weight:700;">Warning</span>';
+                        var dt = r.record_date ? String(r.record_date).slice(0, 10) : "";
+                        return '<div style="border:1px solid #e1e9e3; border-radius:8px; padding:7px 10px; margin-bottom:6px;">' +
+                            '<div>' + badge + (dt ? ' <span style="color:#93a19a;">· ' + dt + "</span>" : "") + "</div>" +
+                            (r.title ? "<div style=\"font-weight:700;color:#14291c;\">" + (r.title) + "</div>" : "") +
+                            '<div>' + (r.description || "") + "</div></div>";
+                    }).join("");
+                })
+                .catch(function () { discList.textContent = "Could not load records."; });
+        }
 
         /* ---------- NEW (request #4): Edit Profile (admin only) ---------- */
         var editBtn = box.querySelector("#amsEditBtn");
