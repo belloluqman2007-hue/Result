@@ -122,6 +122,12 @@
               <option>Male</option>
               <option>Female</option>
             </select>
+            <select id="amsDirStatus" onchange="amsDirRefresh(1)" style="padding:11px 13px; font-family:'Cairo',sans-serif;">
+              <option value="">All Statuses</option>
+              <option value="active">Active</option>
+              <option value="withdrawn">Withdrawn</option>
+              <option value="graduated">Graduated</option>
+            </select>
             <span class="ams-table-count" id="amsDirCount"></span>
             <button type="button" class="m-btn-ghost m-btn-sm" onclick="amsDirConfirmPDF()" title="Print/post a register for students to confirm their details">⭳ Confirm Details (PDF)</button>
             <button type="button" class="m-btn-ghost m-btn-sm" onclick="amsDirExport()" style="margin-left:auto;">⭳ Export to Excel (CSV)</button>
@@ -176,6 +182,14 @@
         <div class="mng-field mng-span2">
           <label for="amsEditClass">Class <span class="mng-req">*</span></label>
           <select id="amsEditClass"></select>
+        </div>
+        <div class="mng-field">
+          <label for="amsEditStatus">Status</label>
+          <select id="amsEditStatus">
+            <option value="active">Active</option>
+            <option value="withdrawn">Withdrawn</option>
+            <option value="graduated">Graduated</option>
+          </select>
         </div>
         <div class="mng-field">
           <label for="amsEditParentName">Parent / Guardian Name</label>

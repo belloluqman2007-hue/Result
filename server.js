@@ -642,6 +642,8 @@ function ensureCoreTablesAndDefaultAdmin() {
             parent_name VARCHAR(160) DEFAULT '',
             parent_phone VARCHAR(60) DEFAULT '',
             address VARCHAR(255) DEFAULT '',
+            status VARCHAR(20) NOT NULL DEFAULT 'active',
+            status_date DATE NULL,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         ) DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
         `CREATE TABLE IF NOT EXISTS results (
@@ -1250,6 +1252,74 @@ function profileColsRetry(attempt, err) {
 }
 
 ensureStudentProfileColumns(1);
+
+/* ------------------------------------------------------------------
+   NEW (feature 2 - student status): Active / Withdrawn / Graduated.
+   Same guarded information_schema pattern as the student-profile
+   columns above: adds `status` (default 'active') and `status_date`
+   to the students table once, never errors on re-boots, and the app
+   keeps working (status editing just stays off) if ALTER is denied.
+------------------------------------------------------------------ */
+let studentStatusColsReady = false;
+
+function ensureStudentStatusColumns(attempt) {
+    const conn = addonConnection();
+    conn.connect((err) => {
+        if (err) {
+            conn.destroy();
+            return statusColsRetry(attempt, err);
+        }
+        conn.query(
+            `SELECT COUNT(*) AS c
+             FROM information_schema.COLUMNS
+             WHERE TABLE_SCHEMA = DATABASE()
+               AND TABLE_NAME = 'students'
+               AND COLUMN_NAME IN ('status', 'status_date')`,
+            (qErr, rows) => {
+                if (qErr) {
+                    conn.end();
+                    return statusColsRetry(attempt, qErr);
+                }
+                if (rows && rows[0] && Number(rows[0].c) === 2) {
+                    conn.end();
+                    studentStatusColsReady = true;
+                    console.log("Student status columns ready (status, status_date).");
+                    return;
+                }
+                conn.query(
+                    `ALTER TABLE students
+                        ADD COLUMN status VARCHAR(20) NOT NULL DEFAULT 'active',
+                        ADD COLUMN status_date DATE NULL`,
+                    (aErr) => {
+                        conn.end();
+                        if (aErr) {
+                            if (aErr.code === "ER_DUP_FIELDNAME") {
+                                studentStatusColsReady = true;
+                                return;
+                            }
+                            return statusColsRetry(attempt, aErr);
+                        }
+                        studentStatusColsReady = true;
+                        console.log("Student status columns added (status, status_date).");
+                    }
+                );
+            }
+        );
+    });
+}
+
+function statusColsRetry(attempt, err) {
+    const reason = err.code || err.message || err;
+    if (attempt >= 3) {
+        console.log("Student status setup warning: could not add status columns. Reason:", reason);
+        console.log("  -> Everything keeps working; only Active/Withdrawn/Graduated stays off.");
+        return;
+    }
+    console.log(`Student status setup: attempt ${attempt} failed (${reason}); retrying in 4s...`);
+    setTimeout(() => ensureStudentStatusColumns(attempt + 1), 4000);
+}
+
+ensureStudentStatusColumns(1);
 
 /* ==================================================================
    NEW (pack 15 - finance v2): safe, guarded migrations +
@@ -4746,6 +4816,36 @@ SELECT
     // The client must send the "student_id" FormData field BEFORE the
     // file, because multer uses it to name the saved file.
     // ----------------------------------------------------------------
+    // ----------------------------------------------------------------
+    // NEW (feature 2 - student status): mark a student Active /
+    // Withdrawn / Graduated. When leaving, status_date records today;
+    // reactivating clears it. Admin only. Guards on the status columns
+    // so older DBs that rejected the ALTER still respond cleanly.
+    // ----------------------------------------------------------------
+    app.post("/student-status", requireLogin, requireAdmin, writeRateLimit, (req, res) => {
+        const studentId = (req.body.student_id || "").trim();
+        const status   = (req.body.status || "").trim().toLowerCase();
+        const valid    = ["active", "withdrawn", "graduated"];
+        if (!studentId || valid.indexOf(status) === -1) {
+            return res.status(400).json({ message: "A valid student_id and status (active / withdrawn / graduated) are required." });
+        }
+        if (!studentStatusColsReady) {
+            return res.status(503).json({ message: "Student status is not available on this database yet." });
+        }
+        const statusDate = status === "active" ? null : new Date().toISOString().slice(0, 10);
+        connection.query(
+            "UPDATE students SET status = ?, status_date = ? WHERE student_id = ?",
+            [status, statusDate, studentId],
+            (err, result) => {
+                if (err) { console.log(err); return res.status(500).json({ message: "Database error while updating status." }); }
+                if (result.affectedRows === 0) {
+                    return res.status(404).json({ message: "No student found with that Admission Number." });
+                }
+                res.json({ message: "Student marked as " + status + ".", status: status });
+            }
+        );
+    });
+
     app.post("/update-student-photo", requireLogin, writeRateLimit, upload.single("photo"), (req, res) => {
         if (!req.file) {
             return res.status(400).json({ message: "No photo uploaded." });
@@ -5635,6 +5735,7 @@ app.get("/attendance/class", requireLogin, (req, res) => {
          FROM students s
          LEFT JOIN attendance a ON a.student_id = s.student_id AND a.att_date = ?
          WHERE LOWER(TRIM(s.class_name)) = LOWER(TRIM(?))
+           AND (s.status IS NULL OR s.status = 'active')
          ORDER BY s.full_name`,
         [date, className],
         (err, rows) => {

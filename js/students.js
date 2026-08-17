@@ -78,10 +78,15 @@
         var q = document.getElementById("amsDirSearch").value.trim().toLowerCase();
         var cls = document.getElementById("amsDirClass").value;
         var gen = document.getElementById("amsDirGender").value;
+        var st = document.getElementById("amsDirStatus").value;
 
         filtered = allStudents.filter(function (s) {
             if (cls && s.class_name !== cls) return false;
             if (gen && s.gender !== gen) return false;
+            if (st) {
+                var sst = (s.status || "active").toLowerCase();
+                if (sst !== st) return false;
+            }
             if (q) {
                 var hay = (String(s.student_id) + " " + String(s.full_name)).toLowerCase();
                 if (hay.indexOf(q) === -1) return false;
@@ -137,6 +142,8 @@
             info.appendChild(h);
             info.appendChild(meta);
             info.appendChild(idBadge);
+            var stChip = statusChip(s.status);
+            if (stChip) info.appendChild(stChip);
             card.appendChild(img);
             card.appendChild(info);
 
@@ -180,6 +187,35 @@
         btn("&rsaquo;", currentPage + 1, { disabled: currentPage === pages });
     }
 
+    /* ---------- status chip helper ---------- */
+    function statusChip(status) {
+        var st = (status || "active").toLowerCase();
+        if (st === "withdrawn") {
+            var w = document.createElement("span");
+            w.className = "ams-student-id";
+            w.style.background = "#FDF3D7";
+            w.style.color = "#8a6a08";
+            w.textContent = "Withdrawn";
+            return w;
+        }
+        if (st === "graduated") {
+            var g = document.createElement("span");
+            g.className = "ams-student-id";
+            g.style.background = "#E2F4EA";
+            g.style.color = "#157347";
+            g.textContent = "Graduated";
+            return g;
+        }
+        return null; // active needs no chip
+    }
+
+    function statusLabel(status) {
+        var st = (status || "active").toLowerCase();
+        if (st === "withdrawn") return "Withdrawn";
+        if (st === "graduated") return "Graduated";
+        return "Active";
+    }
+
     /* ---------- profile modal (read-only) ---------- */
     function openProfile(s) {
         var overlay = document.getElementById("amsProfileOverlay");
@@ -202,6 +238,7 @@
             '<div class="ams-profile-rows">' +
                 '<div class="ams-profile-row"><span>Student ID</span><span class="pv-id"></span></div>' +
                 '<div class="ams-profile-row"><span>Class</span><span class="pv-class"></span></div>' +
+                '<div class="ams-profile-row"><span>Status</span><span class="pv-status"></span></div>' +
                 '<div class="ams-profile-row"><span>Gender</span><span class="pv-gender"></span></div>' +
                 '<div class="ams-profile-row"><span>Date of Birth</span><span class="pv-dob"></span></div>' +
                 /* NEW (request #4): parent/guardian details on the profile */
@@ -225,6 +262,8 @@
         box.querySelector(".ams-student-id").textContent = s.student_id;
         box.querySelector(".pv-id").textContent = s.student_id;
         box.querySelector(".pv-class").textContent = s.class_name || "-";
+        box.querySelector(".pv-status").textContent = statusLabel(s.status) +
+            (s.status && s.status !== "active" && s.status_date ? " (" + String(s.status_date).slice(0, 10) + ")" : "");
         box.querySelector(".pv-gender").textContent = s.gender || "-";
         box.querySelector(".pv-dob").textContent = dob;
         /* NEW (request #4): parent fields may be missing on older rows */
@@ -347,6 +386,8 @@
         }
         document.getElementById("amsEditDob").value = dobVal;
 
+        document.getElementById("amsEditStatus").value = (s.status || "active").toLowerCase() || "active";
+
         document.getElementById("amsEditParentName").value = s.parent_name || "";
         document.getElementById("amsEditParentPhone").value = s.parent_phone || "";
         document.getElementById("amsEditAddress").value = s.address || "";
@@ -445,6 +486,17 @@
                     window.amsToast(out.j.message || "Could not save changes.", "error", 5000);
                     return;
                 }
+                // persist a status change separately (feature 2)
+                var newStatus = document.getElementById("amsEditStatus").value;
+                var oldStatus = (editingStudent.status || "active").toLowerCase();
+                if (newStatus && newStatus !== oldStatus) {
+                    fetch("/student-status", {
+                        method: "POST",
+                        credentials: "same-origin",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ student_id: editingStudent.student_id, status: newStatus })
+                    }).catch(function () {});
+                }
                 window.amsToast("Profile updated \u2713", "success");
                 window.amsEditClose();
                 window.amsProfileClose(); /* close stale profile view too */
@@ -468,11 +520,17 @@
 
     /* ---------- export current (filtered) view to CSV ---------- */
     window.amsDirExport = function () {
-        window.amsExportObjectsCSV(filtered, [
+        window.amsExportObjectsCSV(filtered.map(function (s) {
+            var copy = {};
+            for (var k in s) copy[k] = s[k];
+            copy.status = statusLabel(s.status);
+            return copy;
+        }), [
             { key: "student_id", label: "Student ID" },
             { key: "full_name", label: "Full Name" },
             { key: "gender", label: "Gender" },
             { key: "class_name", label: "Class" },
+            { key: "status", label: "Status" },
             { key: "date_of_birth", label: "Date of Birth" }
         ], "students-directory.csv");
     };
