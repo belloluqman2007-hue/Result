@@ -962,13 +962,24 @@ function ensureCoreTablesAndDefaultAdmin() {
 ensureCoreTablesAndDefaultAdmin();
 
 // ONE-TIME: fix collation mismatch
-connection.query(`ALTER TABLE students CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`, () => {});
-connection.query(`ALTER TABLE results CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`, () => {});
-connection.query(`ALTER TABLE result_publish CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`, () => {});
-connection.query(`ALTER TABLE fee_structure2 CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`, () => {});
-connection.query(`ALTER TABLE fee_payments CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`, () => {});
-connection.query(`ALTER TABLE payment_submissions CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`, () => {});
-connection.query(`ALTER TABLE users CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`, () => {});
+// NOTE (pack 85): the health / library / remarks tables were created without an
+// explicit collation, so on MySQL 8 databases they inherit utf8mb4_0900_ai_ci.
+// Joining them to `students` (utf8mb4_unicode_ci) raises "Illegal mix of
+// collations" -> 500 -> the student list was EMPTY in Student Health and in
+// Teacher Comments. Converting every student-keyed table to the same collation
+// as `students` heals existing databases; the CREATE TABLE statements below
+// also pin the collation for fresh installs.
+const COLLATION_FIX_TABLES = [
+    "students", "results", "result_publish", "fee_structure2", "fee_payments",
+    "payment_submissions", "users",
+    // Pack 65/84 add-on tables (student-facing portal + clinic/library/remarks)
+    "homework", "student_health", "transport_routes", "transport_assignments",
+    "school_gallery", "leave_requests", "broadcasts", "clinic_visits",
+    "vaccinations", "library_books", "library_loans", "term_remarks"
+];
+COLLATION_FIX_TABLES.forEach(function (tbl) {
+    connection.query(`ALTER TABLE ${tbl} CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`, () => {});
+});
 const addonTables = [
     // Notice board / school news for the dashboard
     `CREATE TABLE IF NOT EXISTS announcements (
@@ -1181,7 +1192,7 @@ const addonTables = [
         due_date DATE,
         posted_by VARCHAR(100),
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-    )`,
+    ) DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
     `CREATE TABLE IF NOT EXISTS student_health (
         student_id VARCHAR(64) PRIMARY KEY,
         blood_group VARCHAR(10) DEFAULT '',
@@ -1190,8 +1201,18 @@ const addonTables = [
         emergency_contact_name VARCHAR(160) DEFAULT '',
         emergency_contact_phone VARCHAR(60) DEFAULT '',
         notes TEXT,
+        height_cm DECIMAL(5,2) NULL,
+        weight_kg DECIMAL(5,2) NULL,
+        bmi DECIMAL(4,1) NULL,
+        genotype VARCHAR(10) DEFAULT '',
+        doctor_name VARCHAR(160) DEFAULT '',
+        doctor_phone VARCHAR(60) DEFAULT '',
+        insurance_no VARCHAR(120) DEFAULT '',
+        current_medications TEXT,
+        last_checkup DATE NULL,
+        special_needs TEXT,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-    )`,
+    ) DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
     `CREATE TABLE IF NOT EXISTS transport_routes (
         id INT AUTO_INCREMENT PRIMARY KEY,
         route_name VARCHAR(100) NOT NULL,
@@ -1202,14 +1223,14 @@ const addonTables = [
         dropoff_time VARCHAR(50) DEFAULT '',
         notes TEXT,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-    )`,
+    ) DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
     `CREATE TABLE IF NOT EXISTS transport_assignments (
         student_id VARCHAR(64) PRIMARY KEY,
         route_id INT,
         pickup_point VARCHAR(255) DEFAULT '',
         notes VARCHAR(255) DEFAULT '',
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-    )`,
+    ) DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
     `CREATE TABLE IF NOT EXISTS school_gallery (
         id INT AUTO_INCREMENT PRIMARY KEY,
         title VARCHAR(255) NOT NULL DEFAULT '',
@@ -1218,7 +1239,7 @@ const addonTables = [
         image_type VARCHAR(50) DEFAULT 'image/jpeg',
         uploaded_by VARCHAR(100) DEFAULT '',
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-    )`,
+    ) DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
     `CREATE TABLE IF NOT EXISTS leave_requests (
         id INT AUTO_INCREMENT PRIMARY KEY,
         student_id VARCHAR(64) NOT NULL,
@@ -1230,7 +1251,7 @@ const addonTables = [
         status VARCHAR(20) DEFAULT 'pending',
         admin_note TEXT,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-    )`,
+    ) DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
     `CREATE TABLE IF NOT EXISTS broadcasts (
         id INT AUTO_INCREMENT PRIMARY KEY,
         title VARCHAR(255) NOT NULL,
@@ -1238,7 +1259,7 @@ const addonTables = [
         pinned TINYINT(1) DEFAULT 0,
         posted_by VARCHAR(100) DEFAULT '',
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-    )`,
+    ) DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
     `CREATE TABLE IF NOT EXISTS clinic_visits (
         id INT AUTO_INCREMENT PRIMARY KEY,
         student_id VARCHAR(64) NOT NULL,
@@ -1248,7 +1269,7 @@ const addonTables = [
         recorded_by VARCHAR(100) DEFAULT '',
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         KEY idx_clinic_student (student_id)
-    )`,
+    ) DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
     `CREATE TABLE IF NOT EXISTS vaccinations (
         id INT AUTO_INCREMENT PRIMARY KEY,
         student_id VARCHAR(64) NOT NULL,
@@ -1258,7 +1279,7 @@ const addonTables = [
         recorded_by VARCHAR(100) DEFAULT '',
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         KEY idx_vax_student (student_id)
-    )`,
+    ) DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
     `CREATE TABLE IF NOT EXISTS library_books (
         id INT AUTO_INCREMENT PRIMARY KEY,
         title VARCHAR(255) NOT NULL,
@@ -1267,7 +1288,7 @@ const addonTables = [
         copies INT NOT NULL DEFAULT 1,
         available INT NOT NULL DEFAULT 1,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-    )`,
+    ) DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
     `CREATE TABLE IF NOT EXISTS library_loans (
         id INT AUTO_INCREMENT PRIMARY KEY,
         book_id INT NOT NULL,
@@ -1279,7 +1300,7 @@ const addonTables = [
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         KEY idx_loan_student (student_id),
         KEY idx_loan_book (book_id)
-    )`,
+    ) DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
     `CREATE TABLE IF NOT EXISTS term_remarks (
         id INT AUTO_INCREMENT PRIMARY KEY,
         student_id VARCHAR(64) NOT NULL,
@@ -1290,7 +1311,7 @@ const addonTables = [
         recorded_by VARCHAR(100) DEFAULT '',
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
         UNIQUE KEY uniq_remark (student_id, term, session)
-    )`
+    ) DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`
 ];
 
 // Provisions ONLY the two add-on tables. Deliberately uses its own
@@ -1652,6 +1673,59 @@ function pack20Retry(attempt, err) {
     setTimeout(() => runPack20Migrations(attempt + 1), 4000);
 }
 runPack20Migrations(1);
+
+/* ------------------------------------------------------------------
+   PACK 85 — Student Health Clinic upgrade:
+   adds many medical fields (height, weight, BMI, genotype, family
+   doctor, NHIS/insurance, current medications, last check-up, special
+   needs) to the student_health table on EXISTING databases. Fresh
+   installs already get them from the CREATE TABLE above. Uses the same
+   guarded/idempotent ADD COLUMN pattern (ER_DUP_FIELDNAME swallowed),
+   retried a few times in case the add-on tables are still being made.
+------------------------------------------------------------------ */
+function runPack85Migrations(attempt) {
+    const conn = addonConnection();
+    conn.connect((err) => {
+        if (err) { conn.destroy(); return pack85Retry(attempt, err); }
+        const alters = [
+            "ALTER TABLE student_health ADD COLUMN height_cm DECIMAL(5,2) NULL",
+            "ALTER TABLE student_health ADD COLUMN weight_kg DECIMAL(5,2) NULL",
+            "ALTER TABLE student_health ADD COLUMN bmi DECIMAL(4,1) NULL",
+            "ALTER TABLE student_health ADD COLUMN genotype VARCHAR(10) DEFAULT ''",
+            "ALTER TABLE student_health ADD COLUMN doctor_name VARCHAR(160) DEFAULT ''",
+            "ALTER TABLE student_health ADD COLUMN doctor_phone VARCHAR(60) DEFAULT ''",
+            "ALTER TABLE student_health ADD COLUMN insurance_no VARCHAR(120) DEFAULT ''",
+            "ALTER TABLE student_health ADD COLUMN current_medications TEXT",
+            "ALTER TABLE student_health ADD COLUMN last_checkup DATE NULL",
+            "ALTER TABLE student_health ADD COLUMN special_needs TEXT"
+        ];
+        let missingTable = false;
+        let i = 0;
+        (function nextAlter() {
+            if (i >= alters.length) {
+                conn.end();
+                console.log("Pack 85 setup ready (health record medical fields).");
+                return;
+            }
+            conn.query(alters[i++], (qErr) => {
+                if (qErr && qErr.code !== "ER_DUP_FIELDNAME") {
+                    console.log("Pack 85 migration notice:", qErr.code || qErr.message);
+                    if (qErr.code === "ER_NO_SUCH_TABLE") missingTable = true;
+                }
+                if (missingTable) { conn.destroy(); return pack85Retry(attempt, { code: "ER_NO_SUCH_TABLE" }); }
+                nextAlter();
+            });
+        })();
+    });
+}
+function pack85Retry(attempt, err) {
+    if (attempt >= 6) {
+        console.log("Pack 85 setup warning:", err.code || err.message || err);
+        return;
+    }
+    setTimeout(() => runPack85Migrations(attempt + 1), 4000);
+}
+runPack85Migrations(1);
 
 /* ==================================================================
    NEW (pack 28 - owner: "Allow voice note ... also different chat for
@@ -8468,15 +8542,26 @@ app.get("/api/health/:studentId", requireLogin, (req, res) => {
 });
 
 app.post("/api/health/:studentId", requireLogin, writeRateLimit, (req, res) => {
-    const { blood_group, allergies, medical_conditions, emergency_contact_name, emergency_contact_phone, notes } = req.body;
+    const { blood_group, allergies, medical_conditions, emergency_contact_name, emergency_contact_phone, notes,
+            height_cm, weight_kg, bmi, genotype, doctor_name, doctor_phone, insurance_no,
+            current_medications, last_checkup, special_needs } = req.body;
     const sid = req.params.studentId;
     connection.query(
-        `INSERT INTO student_health (student_id, blood_group, allergies, medical_conditions, emergency_contact_name, emergency_contact_phone, notes)
-         VALUES (?,?,?,?,?,?,?)
-         ON DUPLICATE KEY UPDATE blood_group=VALUES(blood_group), allergies=VALUES(allergies),
-         medical_conditions=VALUES(medical_conditions), emergency_contact_name=VALUES(emergency_contact_name),
-         emergency_contact_phone=VALUES(emergency_contact_phone), notes=VALUES(notes)`,
-        [sid, blood_group||'', allergies||null, medical_conditions||null, emergency_contact_name||'', emergency_contact_phone||'', notes||null],
+        `INSERT INTO student_health (student_id, blood_group, allergies, medical_conditions, emergency_contact_name, emergency_contact_phone, notes,
+             height_cm, weight_kg, bmi, genotype, doctor_name, doctor_phone, insurance_no,
+             current_medications, last_checkup, special_needs)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+         ON DUPLICATE KEY UPDATE
+             blood_group=VALUES(blood_group), allergies=VALUES(allergies),
+             medical_conditions=VALUES(medical_conditions), emergency_contact_name=VALUES(emergency_contact_name),
+             emergency_contact_phone=VALUES(emergency_contact_phone), notes=VALUES(notes),
+             height_cm=VALUES(height_cm), weight_kg=VALUES(weight_kg), bmi=VALUES(bmi),
+             genotype=VALUES(genotype), doctor_name=VALUES(doctor_name), doctor_phone=VALUES(doctor_phone),
+             insurance_no=VALUES(insurance_no), current_medications=VALUES(current_medications),
+             last_checkup=VALUES(last_checkup), special_needs=VALUES(special_needs)`,
+        [sid, blood_group||'', allergies||null, medical_conditions||null, emergency_contact_name||'', emergency_contact_phone||'', notes||null,
+         height_cm||null, weight_kg||null, bmi||null, genotype||'', doctor_name||'', doctor_phone||'', insurance_no||'',
+         current_medications||null, last_checkup||null, special_needs||null],
         (err) => {
             if (err) return res.status(500).json({ message: "Database error" });
             res.json({ message: "Health record saved." });
@@ -8715,11 +8800,18 @@ app.get("/remarks.html", requireLogin, (req, res) => res.sendFile(path.join(__di
 
 app.get("/api/health-records", requireLogin, (req, res) => {
     const cls = (req.query.class_name || "").trim();
+    // COLLATE hint: student_health may still carry the database-default
+    // collation on old installs; forcing utf8mb4_unicode_ci makes the JOIN
+    // with students immune to "Illegal mix of collations" -> empty list.
     let sql = `SELECT s.student_id, s.full_name, s.class_name, s.gender,
                       h.blood_group, h.allergies, h.medical_conditions,
-                      h.emergency_contact_name, h.emergency_contact_phone, h.notes, h.updated_at
+                      h.emergency_contact_name, h.emergency_contact_phone, h.notes,
+                      h.height_cm, h.weight_kg, h.bmi, h.genotype,
+                      h.doctor_name, h.doctor_phone, h.insurance_no,
+                      h.current_medications, h.last_checkup, h.special_needs,
+                      h.updated_at
                FROM students s
-               LEFT JOIN student_health h ON h.student_id = s.student_id`;
+               LEFT JOIN student_health h ON h.student_id = s.student_id COLLATE utf8mb4_unicode_ci`;
     const params = [];
     if (cls) { sql += " WHERE s.class_name = ?"; params.push(cls); }
     sql += " ORDER BY s.class_name, s.full_name LIMIT 800";
@@ -8844,13 +8936,13 @@ app.get("/api/library/loans", requireLogin, (req, res) => {
         ? `SELECT l.*, b.title, b.author, s.full_name, s.class_name
            FROM library_loans l
            JOIN library_books b ON b.id = l.book_id
-           LEFT JOIN students s ON s.student_id = l.student_id
+           LEFT JOIN students s ON s.student_id = l.student_id COLLATE utf8mb4_unicode_ci
            WHERE l.returned_at IS NULL
            ORDER BY l.issued_at DESC LIMIT 300`
         : `SELECT l.*, b.title, b.author, s.full_name, s.class_name
            FROM library_loans l
            JOIN library_books b ON b.id = l.book_id
-           LEFT JOIN students s ON s.student_id = l.student_id
+           LEFT JOIN students s ON s.student_id = l.student_id COLLATE utf8mb4_unicode_ci
            ORDER BY l.issued_at DESC LIMIT 300`;
     connection.query(sql, (err, rows) => {
         if (err) { if (err.code === "ER_NO_SUCH_TABLE") return res.json([]); return res.status(500).json({ message: "Database error" }); }
@@ -8916,7 +9008,8 @@ app.get("/api/remarks", requireLogin, (req, res) => {
                       r.teacher_remark, r.principal_remark, r.updated_at
                FROM students s
                LEFT JOIN term_remarks r
-                 ON r.student_id = s.student_id AND r.term = ? AND r.session = ?
+                 ON r.student_id = s.student_id COLLATE utf8mb4_unicode_ci
+                    AND r.term = ? AND r.session = ?
                ${cls ? "WHERE s.class_name = ?" : ""}
                ORDER BY s.full_name LIMIT 500`;
     const p = cls ? [term, session, cls] : [term, session];

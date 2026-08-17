@@ -48,15 +48,42 @@
         <h2 style="font-size:15px;font-weight:800;color:#14291c;margin:0 0 4px;">Health record</h2>
         <p id="hWho" style="margin:0 0 12px;color:#3a5441;font-weight:700;"></p>
         <div class="hw-form">
-          <select id="hBlood">
-            <option value="">Blood group</option>
-            <option>A+</option><option>A-</option><option>B+</option><option>B-</option>
-            <option>AB+</option><option>AB-</option><option>O+</option><option>O-</option>
-          </select>
+          <div style="font-size:12px;font-weight:800;color:#7d9488;text-transform:uppercase;letter-spacing:.04em;margin:2px 0 4px;">Basic &amp; identity</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;">
+            <select id="hBlood">
+              <option value="">Blood group</option>
+              <option>A+</option><option>A-</option><option>B+</option><option>B-</option>
+              <option>AB+</option><option>AB-</option><option>O+</option><option>O-</option>
+            </select>
+            <select id="hGenotype">
+              <option value="">Genotype</option>
+              <option>AA</option><option>AS</option><option>SS</option><option>AC</option><option>CC</option><option>Unknown</option>
+            </select>
+            <input id="hInsurance" placeholder="NHIS / insurance no.">
+          </div>
+          <div style="font-size:12px;font-weight:800;color:#7d9488;text-transform:uppercase;letter-spacing:.04em;margin:6px 0 4px;">Body measurements</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;">
+            <input id="hHeight" type="number" step="0.1" min="0" placeholder="Height (cm)" oninput="hCalcBmi()">
+            <input id="hWeight" type="number" step="0.1" min="0" placeholder="Weight (kg)" oninput="hCalcBmi()">
+            <input id="hBmi" readonly placeholder="BMI (auto)" title="Body Mass Index - calculated from height and weight" style="background:#eef4ef;font-weight:700;">
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+            <input type="date" id="hCheckup" title="Last medical check-up">
+            <input id="hMedications" placeholder="Current medications (comma separated)">
+          </div>
+          <div style="font-size:12px;font-weight:800;color:#7d9488;text-transform:uppercase;letter-spacing:.04em;margin:6px 0 4px;">Allergies, conditions &amp; care</div>
           <textarea id="hAllergies" placeholder="Allergies (e.g. peanuts, penicillin)"></textarea>
-          <textarea id="hConditions" placeholder="Medical conditions"></textarea>
-          <input id="hEmName" placeholder="Emergency contact name">
-          <input id="hEmPhone" placeholder="Emergency contact phone">
+          <textarea id="hConditions" placeholder="Medical conditions (e.g. asthma, sickle cell, epilepsy)"></textarea>
+          <textarea id="hSpecialNeeds" placeholder="Special needs / disability / care instructions"></textarea>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+            <input id="hDoctorName" placeholder="Family doctor name">
+            <input id="hDoctorPhone" placeholder="Family doctor phone">
+          </div>
+          <div style="font-size:12px;font-weight:800;color:#7d9488;text-transform:uppercase;letter-spacing:.04em;margin:6px 0 4px;">Emergency contact</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+            <input id="hEmName" placeholder="Emergency contact name">
+            <input id="hEmPhone" placeholder="Emergency contact phone">
+          </div>
           <textarea id="hNotes" placeholder="Clinic notes"></textarea>
           <button class="hw-btn" type="button" onclick="hSave()">💾 Save health record</button>
           <div id="hMsg" style="text-align:center;font-size:13px;min-height:18px;margin-top:6px;"></div>
@@ -99,7 +126,12 @@ function loadClasses(){
 function hLoadList(){
   var cls=document.getElementById("hClass").value;
   fetch("/api/health-records"+(cls?"?class_name="+encodeURIComponent(cls):""),{credentials:"same-origin"})
-    .then(r=>r.json()).then(rows=>{ hRows=rows||[]; hFilter(); });
+    .then(function(r){ return r.json().then(function(d){ return {ok:r.ok, d:d}; }); })
+    .then(function(res){
+      if(!res.ok){ document.getElementById("hList").textContent="Could not load students ("+(res.d&&res.d.message||"error")+")."; return; }
+      hRows=res.d||[]; hFilter();
+    })
+    .catch(function(){ document.getElementById("hList").textContent="Could not load students. Check your connection."; });
 }
 function hFilter(){
   var q=(document.getElementById("hSearch").value||"").toLowerCase();
@@ -110,10 +142,20 @@ function hFilter(){
   if(!rows.length){box.textContent="No students found.";return;}
   box.innerHTML=rows.map(function(s){
     var flag=(s.allergies||s.medical_conditions)?'<span class="flag">⚠ medical</span>':"";
+    var chips="";
+    if(s.blood_group) chips+='<span style="background:#eef4ef;border-radius:6px;padding:1px 7px;font-size:11px;font-weight:700;color:#2f7a4e;margin-left:6px;">🩸 '+esc(s.blood_group)+'</span>';
+    if(s.genotype) chips+='<span style="background:#eef4ef;border-radius:6px;padding:1px 7px;font-size:11px;font-weight:700;color:#2f7a4e;margin-left:6px;">🧬 '+esc(s.genotype)+'</span>';
+    if(s.height_cm&&s.weight_kg) chips+='<span style="background:#eef4ef;border-radius:6px;padding:1px 7px;font-size:11px;font-weight:700;color:#2f7a4e;margin-left:6px;">📏 '+esc(s.height_cm)+'cm / '+esc(s.weight_kg)+'kg</span>';
     return '<div class="hw-item'+(hSid===s.student_id?" active":"")+'" onclick="hPick(\''+String(s.student_id).replace(/'/g,"\\'")+'\')">'
-      +'<b style="color:#14291c;">'+esc(s.full_name)+'</b> '+flag
-      +'<div style="font-size:12px;color:#5B6B62;">'+esc(s.student_id)+' · '+esc(s.class_name||"-")+(s.blood_group?" · "+esc(s.blood_group):"")+'</div></div>';
+      +'<b style="color:#14291c;">'+esc(s.full_name)+'</b> '+flag+chips
+      +'<div style="font-size:12px;color:#5B6B62;">'+esc(s.student_id)+' · '+esc(s.class_name||"-")+'</div></div>';
   }).join("");
+}
+function hCalcBmi(){
+  var h=parseFloat(document.getElementById("hHeight").value), w=parseFloat(document.getElementById("hWeight").value);
+  var out=document.getElementById("hBmi");
+  if(h>0&&w>0){ var bmi=w/((h/100)*(h/100)); out.value=bmi.toFixed(1); }
+  else out.value="";
 }
 function hPick(sid){
   hSid=sid;
@@ -124,8 +166,18 @@ function hPick(sid){
   document.getElementById("hVaxCard").style.display="block";
   document.getElementById("hWho").textContent=hName+" · "+(s.student_id||"");
   document.getElementById("hBlood").value=s.blood_group||"";
+  document.getElementById("hGenotype").value=s.genotype||"";
+  document.getElementById("hInsurance").value=s.insurance_no||"";
+  document.getElementById("hHeight").value=s.height_cm||"";
+  document.getElementById("hWeight").value=s.weight_kg||"";
+  document.getElementById("hBmi").value=s.bmi||"";
+  document.getElementById("hCheckup").value=String(s.last_checkup||"").slice(0,10);
+  document.getElementById("hMedications").value=s.current_medications||"";
   document.getElementById("hAllergies").value=s.allergies||"";
   document.getElementById("hConditions").value=s.medical_conditions||"";
+  document.getElementById("hSpecialNeeds").value=s.special_needs||"";
+  document.getElementById("hDoctorName").value=s.doctor_name||"";
+  document.getElementById("hDoctorPhone").value=s.doctor_phone||"";
   document.getElementById("hEmName").value=s.emergency_contact_name||"";
   document.getElementById("hEmPhone").value=s.emergency_contact_phone||"";
   document.getElementById("hNotes").value=s.notes||"";
@@ -137,13 +189,23 @@ function hSave(){
   fetch("/api/health/"+encodeURIComponent(hSid),{method:"POST",credentials:"same-origin",headers:{"Content-Type":"application/json"},
     body:JSON.stringify({
       blood_group:document.getElementById("hBlood").value,
+      genotype:document.getElementById("hGenotype").value,
+      insurance_no:document.getElementById("hInsurance").value,
+      height_cm:document.getElementById("hHeight").value,
+      weight_kg:document.getElementById("hWeight").value,
+      bmi:document.getElementById("hBmi").value,
+      last_checkup:document.getElementById("hCheckup").value,
+      current_medications:document.getElementById("hMedications").value,
       allergies:document.getElementById("hAllergies").value,
       medical_conditions:document.getElementById("hConditions").value,
+      special_needs:document.getElementById("hSpecialNeeds").value,
+      doctor_name:document.getElementById("hDoctorName").value,
+      doctor_phone:document.getElementById("hDoctorPhone").value,
       emergency_contact_name:document.getElementById("hEmName").value,
       emergency_contact_phone:document.getElementById("hEmPhone").value,
       notes:document.getElementById("hNotes").value
-    })}).then(r=>r.json()).then(d=>{
-      var m=document.getElementById("hMsg"); m.textContent=d.message||"Saved."; m.style.color="#14532d";
+    })}).then(function(r){return r.json().then(function(d){return {ok:r.ok,d:d};});}).then(function(res){
+      var m=document.getElementById("hMsg"); m.textContent=(res.d&&res.d.message)||(res.ok?"Saved.":"Could not save."); m.style.color=res.ok?"#14532d":"#9b1c1c";
       hLoadList();
     }).catch(function(){document.getElementById("hMsg").textContent="Could not save.";});
 }

@@ -1,5 +1,28 @@
 # UI Modernization — Change Log
 
+## Pack 85 — 2026-08-17
+
+Owner: "The student doesn't have library and student are not displaying in the health for admin and add some many medical related things to the section. And in teacher comments is not displaying student. And merge it"
+
+| File | What happened |
+|---|---|
+| `server.js` | **Root-cause fix for empty student lists in Student Health + Teacher Comments:** the Pack 84 tables (`student_health`, `clinic_visits`, `vaccinations`, `library_books`, `library_loans`, `term_remarks`, plus the Pack 65 portal tables) were created without an explicit collation, so on MySQL 8 they inherited `utf8mb4_0900_ai_ci` while `students` is `utf8mb4_unicode_ci`. Joining them raised "Illegal mix of collations" → 500 → the student list showed nothing. Now: (1) every student-keyed table is converted to `utf8mb4_unicode_ci` at boot (same one-time fix block as the older tables), (2) the `CREATE TABLE` statements pin the collation for fresh installs, and (3) the `health-records`, `remarks` and `library/loans` JOINs carry an explicit `COLLATE utf8mb4_unicode_ci` hint so they can never break again. |
+| `server.js` — `student_health` | **Many more medical fields:** added `height_cm`, `weight_kg`, `bmi`, `genotype`, `doctor_name`, `doctor_phone`, `insurance_no`, `current_medications`, `last_checkup`, `special_needs`. Fresh installs get them from the CREATE TABLE; existing databases get a guarded/idempotent `runPack85Migrations` (ADD COLUMN, `ER_DUP_FIELDNAME` swallowed, retried) exactly like the Pack 20 pattern. `POST /api/health/:studentId` saves all of them; `/api/health-records` returns them; `GET /portal/health` reads them automatically. |
+| `health.html` | **Student Health Clinic upgraded:** the record form is now grouped (Basic & identity / Body measurements / Allergies, conditions & care / Emergency contact) with genotype, NHIS-insurance no., height (cm), weight (kg), auto-computed BMI (recalculated live while typing), last check-up date, current medications, special needs / disability, and family doctor name + phone. The student list shows quick chips (🩸 blood group, 🧬 genotype, 📏 height/weight) and surfaces real API errors instead of hanging on "Loading…". |
+| `portal.html` + `js/portal.js` | **Students now have Library and Teacher Comments:** the sidebar previously had no buttons for the existing `library` and `remarks` views (they were unreachable) and no JS loaders. Added "📚 Library" and "💬 Teacher Comments" nav buttons, `ptLoadLibrary()` (books issued to the child with on-loan / returned / ⚠️ overdue status chips) and `ptLoadRemarks()` (class-teacher + principal comments per term/session). Both wired into the view router and lazy-load flags. Portal Health Record now also shows genotype, measurements/BMI, check-up, medications, doctor, NHIS and special needs. |
+| `library.html` | **Issue form now has a student picker:** a "Select student…" dropdown loads the full roster (name · ID · class) and auto-fills the Student ID box, so staff no longer have to type IDs by hand. |
+| `remarks.html` | Teacher Comments now reports real API errors instead of silently showing "No students found." |
+| `sw.js` | Cache `v44 → v45`. |
+
+Result calculations, grading, positions and the frozen report-card design: untouched.
+
+---
+
+
+**Project:** Ameenullah School — Result Management System
+
+---
+
 ## Pack 84 — 2026-08-17
 
 Owner: "Result is not showing for students after been published / no place in admin for students health / let add new features"

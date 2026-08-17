@@ -50,7 +50,9 @@ function rmLoad(){
   var cls=document.getElementById("rmClass").value, term=document.getElementById("rmTerm").value, sess=document.getElementById("rmSession").value.trim();
   if(!term||!sess){document.getElementById("rmBox").textContent="Term and session are required.";return;}
   var url="/api/remarks?term="+encodeURIComponent(term)+"&session="+encodeURIComponent(sess)+(cls?"&class_name="+encodeURIComponent(cls):"");
-  fetch(url,{credentials:"same-origin"}).then(r=>r.json()).then(rows=>{
+  fetch(url,{credentials:"same-origin"}).then(r=>r.json().then(d=>({ok:r.ok,d:d}))).then(res=>{
+    if(!res.ok){document.getElementById("rmBox").textContent="Could not load students ("+(res.d&&res.d.message||"error")+").";return;}
+    var rows=res.d||[];
     if(!rows.length){document.getElementById("rmBox").textContent="No students found.";return;}
     document.getElementById("rmBox").innerHTML='<table class="rm"><thead><tr><th>Student</th><th>Teacher remark</th><th>Principal remark</th><th></th></tr></thead><tbody>'
       +rows.map(function(s,i){
