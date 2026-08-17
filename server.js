@@ -5576,7 +5576,7 @@ app.get("/api/distinct-classes", requireLogin, (req, res) => {
 /* Portal: attendance for a student (used by parent portal) */
 app.get("/portal/attendance", (req, res) => {
     const sid = req.session && req.session.portalStudentId;
-    if (!sid) return res.status(401).json({ message: "Not logged in" });
+    if (!sid) return res.json([]); // return empty array (not 401) so portal handles gracefully
     connection.query(
         `SELECT att_date, status, class_name
          FROM attendance
@@ -5585,8 +5585,8 @@ app.get("/portal/attendance", (req, res) => {
          LIMIT 366`,
         [sid],
         (err, rows) => {
-            if (err) { console.log(err); return res.status(500).json({ message: "Database error" }); }
-            res.json(rows);
+            if (err) { console.log(err); return res.json([]); }
+            res.json(rows || []);
         }
     );
 });
@@ -5599,7 +5599,7 @@ app.get("/attendance/class", requireLogin, (req, res) => {
         `SELECT s.student_id, s.full_name, s.gender, a.status
          FROM students s
          LEFT JOIN attendance a ON a.student_id = s.student_id AND a.att_date = ?
-         WHERE s.class_name = ?
+         WHERE LOWER(TRIM(s.class_name)) = LOWER(TRIM(?))
          ORDER BY s.full_name`,
         [date, className],
         (err, rows) => {
@@ -7357,7 +7357,7 @@ app.get("/test", (req, res) => {
 /* ---------- PROGRESS CHART: subject scores across terms ---------- */
 app.get("/portal/progress", (req, res) => {
     const sid = req.session && req.session.portalStudentId;
-    if (!sid) return res.status(401).json({ message: "Not logged in" });
+    if (!sid) return res.json([]);
     connection.query(
         `SELECT subject, term, session, total, grade
          FROM results WHERE student_id = ?
@@ -7372,7 +7372,7 @@ app.get("/portal/progress", (req, res) => {
 /* ---------- CLASS POSITION per term/session ---------- */
 app.get("/portal/position", (req, res) => {
     const sid = req.session && req.session.portalStudentId;
-    if (!sid) return res.status(401).json({ message: "Not logged in" });
+    if (!sid) return res.json([]);
     connection.query(
         `SELECT class_name FROM students WHERE student_id = ? LIMIT 1`, [sid],
         (err, stuRows) => {
@@ -7410,7 +7410,7 @@ app.get("/portal/position", (req, res) => {
 /* ---------- SUBJECTS LIST for student's class ---------- */
 app.get("/portal/subjects", (req, res) => {
     const sid = req.session && req.session.portalStudentId;
-    if (!sid) return res.status(401).json({ message: "Not logged in" });
+    if (!sid) return res.json([]);
     connection.query("SELECT class_name FROM students WHERE student_id = ? LIMIT 1", [sid], (err, rows) => {
         if (err || !rows.length) return res.status(404).json([]);
         connection.query(
@@ -7426,7 +7426,7 @@ app.get("/portal/subjects", (req, res) => {
 /* ---------- HOMEWORK: portal view (read only) ---------- */
 app.get("/portal/homework", (req, res) => {
     const sid = req.session && req.session.portalStudentId;
-    if (!sid) return res.status(401).json({ message: "Not logged in" });
+    if (!sid) return res.json([]);
     connection.query("SELECT class_name FROM students WHERE student_id = ? LIMIT 1", [sid], (err, rows) => {
         if (err || !rows.length) return res.json([]);
         connection.query(
@@ -7480,7 +7480,7 @@ app.delete("/api/homework/:id", requireLogin, (req, res) => {
 /* ---------- HEALTH RECORDS ---------- */
 app.get("/portal/health", (req, res) => {
     const sid = req.session && req.session.portalStudentId;
-    if (!sid) return res.status(401).json({ message: "Not logged in" });
+    if (!sid) return res.json({});
     connection.query("SELECT * FROM student_health WHERE student_id = ? LIMIT 1", [sid], (err, rows) => {
         if (err) return res.status(500).json({ message: "Database error" });
         res.json(rows[0] || {});
@@ -7556,7 +7556,7 @@ app.post("/api/transport/assign", requireLogin, requireAdmin, writeRateLimit, (r
 
 app.get("/portal/transport", (req, res) => {
     const sid = req.session && req.session.portalStudentId;
-    if (!sid) return res.status(401).json({ message: "Not logged in" });
+    if (!sid) return res.json(null);
     connection.query(
         `SELECT tr.route_name, tr.bus_number, tr.driver_name, tr.driver_phone,
                 tr.pickup_time, tr.dropoff_time, tr.notes AS route_notes,
@@ -7574,7 +7574,7 @@ app.get("/portal/transport", (req, res) => {
 /* ---------- GALLERY ---------- */
 app.get("/portal/gallery", (req, res) => {
     const sid = req.session && req.session.portalStudentId;
-    if (!sid) return res.status(401).json({ message: "Not logged in" });
+    if (!sid) return res.json([]);
     connection.query(
         "SELECT id, title, caption, image_type, uploaded_by, created_at FROM school_gallery ORDER BY created_at DESC LIMIT 50",
         (err, rows) => {
@@ -7638,7 +7638,7 @@ app.delete("/api/gallery/:id", requireLogin, requireAdmin, (req, res) => {
 /* ---------- LEAVE REQUESTS ---------- */
 app.get("/portal/leave", (req, res) => {
     const sid = req.session && req.session.portalStudentId;
-    if (!sid) return res.status(401).json({ message: "Not logged in" });
+    if (!sid) return res.json([]);
     connection.query("SELECT * FROM leave_requests WHERE student_id = ? ORDER BY created_at DESC LIMIT 20", [sid], (err, rows) => {
         if (err) return res.status(500).json([]);
         res.json(rows);
@@ -7691,7 +7691,7 @@ app.post("/api/leave-requests/:id/status", requireLogin, writeRateLimit, (req, r
 /* ---------- BROADCASTS ---------- */
 app.get("/portal/broadcasts", (req, res) => {
     const sid = req.session && req.session.portalStudentId;
-    if (!sid) return res.status(401).json({ message: "Not logged in" });
+    if (!sid) return res.json([]);
     connection.query("SELECT id, title, message, pinned, posted_by, created_at FROM broadcasts ORDER BY pinned DESC, created_at DESC LIMIT 30", (err, rows) => {
         if (err) return res.status(500).json([]);
         res.json(rows);
@@ -7740,6 +7740,15 @@ app.use((err, req, res, next) => {
     }
     next(err);
 });
+
+/* Keepalive: ping the DB every 4 minutes so Aiven free tier never powers
+   off while the server is running. (UptimeRobot keeps the server awake;
+   this keeps the database connection alive.) */
+setInterval(function () {
+    connection.query("SELECT 1", function (err) {
+        if (err) console.log("[keepalive] DB ping error:", err.message);
+    });
+}, 240000);
 
 const PORT = process.env.PORT || 3000;
 

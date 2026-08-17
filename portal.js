@@ -790,17 +790,17 @@ function ptShowView(name) {
   if (name === "classtt") loadPortalTimetable("class");
   if (name === "attendance") ptLoadAttendance();
   if (name === "profile") ptLoadProfile();
-  /* Pack 65 new features */
-  if (name === "progress")   { if(!ptProgressLoaded)   { ptProgressLoaded=true;   ptLoadProgress();   } }
-  if (name === "position")   { if(!ptPositionLoaded)   { ptPositionLoaded=true;   ptLoadPosition();   } }
-  if (name === "subjects")   { if(!ptSubjectsLoaded)   { ptSubjectsLoaded=true;   ptLoadSubjects();   } }
-  if (name === "homework")   { if(!ptHomeworkLoaded)   { ptHomeworkLoaded=true;   ptLoadHomework();   } }
-  if (name === "health")     { if(!ptHealthLoaded)     { ptHealthLoaded=true;     ptLoadHealth();     } }
-  if (name === "transport")  { if(!ptTransportLoaded)  { ptTransportLoaded=true;  ptLoadTransport();  } }
-  if (name === "gallery")    { if(!ptGalleryLoaded)    { ptGalleryLoaded=true;    ptLoadGallery();    } }
-  if (name === "leave")      { if(!ptLeaveLoaded)      { ptLeaveLoaded=true;      ptLoadLeave();      } }
-  if (name === "broadcasts") { if(!ptBroadcastsLoaded) { ptBroadcastsLoaded=true; ptLoadBroadcasts(); } }
-  if (name === "prayer")     { if(!ptPrayerLoaded)     { ptPrayerLoaded=true;     ptLoadPrayer();     } }
+  /* Pack 65 new features — flags managed inside each function */
+  if (name === "progress")   ptLoadProgress();
+  if (name === "position")   ptLoadPosition();
+  if (name === "subjects")   ptLoadSubjects();
+  if (name === "homework")   ptLoadHomework();
+  if (name === "health")     ptLoadHealth();
+  if (name === "transport")  ptLoadTransport();
+  if (name === "gallery")    ptLoadGallery();
+  if (name === "leave")      ptLoadLeave();
+  if (name === "broadcasts") ptLoadBroadcasts();
+  if (name === "prayer")     ptLoadPrayer();
 }
 
 /* Build the OPay-style list: unread replies, school notices & events,
@@ -1097,13 +1097,22 @@ var ptAttLoaded = false;
 
 function ptLoadAttendance() {
   if (ptAttLoaded) return;
-  ptAttLoaded = true;
   var list = document.getElementById("ptAttList");
   var summary = document.getElementById("ptAttSummary");
   if (!list) return;
+  ptAttLoaded = true;
+
+  var timer = setTimeout(function () {
+    ptAttLoaded = false; // allow retry
+    if (list) list.innerHTML = '<span style="color:#9b1c1c;">⚠️ Loading took too long. Tap Attendance again to retry.</span>';
+  }, 15000);
 
   fetch("/portal/attendance", { credentials: "same-origin" })
-    .then(function (r) { return r.json(); })
+    .then(function (r) {
+      clearTimeout(timer);
+      if (!r.ok) throw new Error("HTTP " + r.status);
+      return r.json();
+    })
     .then(function (rows) {
       rows = Array.isArray(rows) ? rows : [];
       if (!rows.length) {
@@ -1157,7 +1166,9 @@ function ptLoadAttendance() {
       list.innerHTML = html + "</tbody></table>";
     })
     .catch(function () {
-      if (list) list.textContent = "Could not load attendance. Please try again.";
+      clearTimeout(timer);
+      ptAttLoaded = false; // reset so user can retry
+      if (list) list.innerHTML = '<span style="color:#9b1c1c;">⚠️ Could not load attendance. Tap Attendance again to retry.</span>';
     });
 }
 
@@ -1168,15 +1179,23 @@ var ptProfileLoaded = false;
 
 function ptLoadProfile() {
   if (ptProfileLoaded) return;
-  ptProfileLoaded = true;
   var content = document.getElementById("ptProfileContent");
   if (!content) return;
+  ptProfileLoaded = true;
 
-  // Load student data from the me endpoint used by overview
+  var timer = setTimeout(function () {
+    ptProfileLoaded = false;
+    if (content) content.innerHTML = '<span style="color:#9b1c1c;">⚠️ Loading too slow. Tap My Profile again to retry.</span>';
+  }, 15000);
+
   fetch("/portal/me", { credentials: "same-origin" })
-    .then(function (r) { return r.ok ? r.json() : null; })
+    .then(function (r) { clearTimeout(timer); return r.ok ? r.json() : null; })
     .then(function (d) {
-      if (!d) { content.textContent = "Could not load profile."; return; }
+      if (!d || !d.loggedIn) {
+        ptProfileLoaded = false;
+        if (content) content.innerHTML = '<span style="color:#9b1c1c;">⚠️ Session expired. Please log out and log in again.</span>';
+        return;
+      }
       var stu = d.student || d;
       var photoSrc = stu.photo_path ? "/" + stu.photo_path : "images/default.png";
       content.innerHTML =
@@ -1202,7 +1221,9 @@ function ptLoadProfile() {
       if (pa) pa.value = stu.address || "";
     })
     .catch(function () {
-      if (content) content.textContent = "Could not load profile.";
+      clearTimeout(timer);
+      ptProfileLoaded = false;
+      if (content) content.innerHTML = '<span style="color:#9b1c1c;">⚠️ Could not load profile. Tap My Profile again to retry.</span>';
     });
 }
 
@@ -1249,16 +1270,18 @@ var ptProgressLoaded=false, ptPositionLoaded=false, ptSubjectsLoaded=false,
 /* ── hook into ptShowView ── already patched above, add remaining views ── */
 var _ptShowViewOrig = window.ptShowViewExtra || function(){};
 window.ptShowViewExtra = function(name) {
-  if (name==="progress")   { if(!ptProgressLoaded)  { ptProgressLoaded=true;  ptLoadProgress();   } }
-  if (name==="position")   { if(!ptPositionLoaded)  { ptPositionLoaded=true;  ptLoadPosition();   } }
-  if (name==="subjects")   { if(!ptSubjectsLoaded)  { ptSubjectsLoaded=true;  ptLoadSubjects();   } }
-  if (name==="homework")   { if(!ptHomeworkLoaded)  { ptHomeworkLoaded=true;  ptLoadHomework();   } }
-  if (name==="health")     { if(!ptHealthLoaded)    { ptHealthLoaded=true;    ptLoadHealth();     } }
-  if (name==="transport")  { if(!ptTransportLoaded) { ptTransportLoaded=true; ptLoadTransport();  } }
-  if (name==="gallery")    { if(!ptGalleryLoaded)   { ptGalleryLoaded=true;   ptLoadGallery();    } }
-  if (name==="leave")      { if(!ptLeaveLoaded)     { ptLeaveLoaded=true;     ptLoadLeave();      } }
-  if (name==="broadcasts") { if(!ptBroadcastsLoaded){ ptBroadcastsLoaded=true;ptLoadBroadcasts(); } }
-  if (name==="prayer")     { if(!ptPrayerLoaded)    { ptPrayerLoaded=true;    ptLoadPrayer();     } }
+  /* flags are managed inside each function — call unconditionally,
+     each loader decides whether it needs to run */
+  if (name==="progress")   ptLoadProgress();
+  if (name==="position")   ptLoadPosition();
+  if (name==="subjects")   ptLoadSubjects();
+  if (name==="homework")   ptLoadHomework();
+  if (name==="health")     ptLoadHealth();
+  if (name==="transport")  ptLoadTransport();
+  if (name==="gallery")    ptLoadGallery();
+  if (name==="leave")      ptLoadLeave();
+  if (name==="broadcasts") ptLoadBroadcasts();
+  if (name==="prayer")     ptLoadPrayer();
   _ptShowViewOrig(name);
 };
 
@@ -1274,6 +1297,7 @@ window.ptShowViewExtra = function(name) {
 var ptProgressData = [];
 
 function ptLoadProgress() {
+  if (ptProgressLoaded) return; ptProgressLoaded = true;
   fetch("/portal/progress", { credentials:"same-origin" })
     .then(function(r){ return r.json(); })
     .then(function(rows) {
@@ -1374,6 +1398,7 @@ function ptRenderChart() {
    CLASS POSITION
    ==================================================================== */
 function ptLoadPosition() {
+  if (ptPositionLoaded) return; ptPositionLoaded = true;
   var box = document.getElementById("ptPositionList");
   if (!box) return;
   fetch("/portal/position", { credentials:"same-origin" })
@@ -1403,6 +1428,7 @@ function ptLoadPosition() {
    SUBJECTS LIST
    ==================================================================== */
 function ptLoadSubjects() {
+  if (ptSubjectsLoaded) return; ptSubjectsLoaded = true;
   var box = document.getElementById("ptSubjectsList");
   if (!box) return;
   fetch("/portal/subjects", { credentials:"same-origin" })
@@ -1424,6 +1450,7 @@ function ptLoadSubjects() {
    HOMEWORK
    ==================================================================== */
 function ptLoadHomework() {
+  if (ptHomeworkLoaded) return; ptHomeworkLoaded = true;
   var box = document.getElementById("ptHomeworkList");
   if (!box) return;
   fetch("/portal/homework", { credentials:"same-origin" })
@@ -1453,6 +1480,7 @@ function ptLoadHomework() {
    HEALTH RECORD
    ==================================================================== */
 function ptLoadHealth() {
+  if (ptHealthLoaded) return; ptHealthLoaded = true;
   var box = document.getElementById("ptHealthContent");
   if (!box) return;
   fetch("/portal/health", { credentials:"same-origin" })
@@ -1486,6 +1514,7 @@ function ptLoadHealth() {
    TRANSPORT
    ==================================================================== */
 function ptLoadTransport() {
+  if (ptTransportLoaded) return; ptTransportLoaded = true;
   var box = document.getElementById("ptTransportContent");
   if (!box) return;
   fetch("/portal/transport", { credentials:"same-origin" })
@@ -1520,6 +1549,7 @@ function ptLoadTransport() {
    GALLERY
    ==================================================================== */
 function ptLoadGallery() {
+  if (ptGalleryLoaded) return; ptGalleryLoaded = true;
   var grid = document.getElementById("ptGalleryGrid");
   if (!grid) return;
   fetch("/portal/gallery", { credentials:"same-origin" })
@@ -1601,6 +1631,7 @@ function ptSubmitLeave() {
    BROADCASTS
    ==================================================================== */
 function ptLoadBroadcasts() {
+  if (ptBroadcastsLoaded) return; ptBroadcastsLoaded = true;
   var box = document.getElementById("ptBroadcastsList");
   if (!box) return;
   fetch("/portal/broadcasts", { credentials:"same-origin" })
@@ -1623,6 +1654,7 @@ function ptLoadBroadcasts() {
    PRAYER TIMES (Aladhan API — free, no key)
    ==================================================================== */
 function ptLoadPrayer() {
+  if (ptPrayerLoaded) return; ptPrayerLoaded = true;
   var box = document.getElementById("ptPrayerTimes");
   var dateBox = document.getElementById("ptPrayerDate");
   if (!box) return;
