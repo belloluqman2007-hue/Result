@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Online Quizzes | Ameenullah School of Arabic and Islamic Studies</title>
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/modern-ui.css">
+  <link rel="stylesheet" href="css/manage.css">
+  <link rel="stylesheet" href="css/school.css">
+
+  <link rel="manifest" href="manifest.webmanifest">
+  <meta name="theme-color" content="#2f5021">
+  <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+</head>
+<body onload="checkAuth(); initQuizzes();">
+  <div class="mng-page">
+
+    <div class="mng-head">
+      <a class="mng-back" href="teacher-dashboard.html">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5"/><path d="m12 19-7-7 7-7"/></svg>
+        Dashboard
+      </a>
+      <div class="mng-head-text">
+        <h1>&#128214; Online Quizzes</h1>
+        <p>Create a quiz and students answer it from their parent portal - scores are graded automatically.</p>
+      </div>
+    </div>
+
+    <div class="mg-cards">
+
+      <!-- Create quiz -->
+      <div class="mg-card">
+        <h3>&#10133; Create Quiz</h3>
+        <div class="mg-toolbar">
+          <div class="mg-field">
+            <label for="qzTitle">Title <span style="color:#B3261E;">*</span></label>
+            <input type="text" id="qzTitle" placeholder="e.g. Mathematics — Fractions" autocomplete="off">
+          </div>
+          <div class="mg-field">
+            <label for="qzClass">Class</label>
+            <select id="qzClass"><option value="">All classes</option></select>
+          </div>
+          <div class="mg-field">
+            <label for="qzSubject">Subject</label>
+            <input type="text" id="qzSubject" placeholder="e.g. Mathematics" autocomplete="off">
+          </div>
+          <div class="mg-field">
+            <label for="qzDue">Due date (optional)</label>
+            <input type="date" id="qzDue">
+          </div>
+        </div>
+
+        <div id="qzQuestions"></div>
+        <div class="mg-toolbar" style="margin-top:10px;">
+          <button class="mg-btn-light" type="button" onclick="addQuestion()">&#10133; Add Question</button>
+          <button class="mg-btn" type="button" onclick="saveQuiz()">&#128190; Save Quiz</button>
+        </div>
+      </div>
+
+      <!-- Quiz list -->
+      <div class="mg-card">
+        <h3>&#128203; Quizzes</h3>
+        <div class="mg-table-wrap">
+          <table class="mg-table" id="qzTable">
+            <thead><tr><th>Title</th><th>Class</th><th>Subject</th><th>Questions</th><th>Due</th><th>Attempts</th><th></th></tr></thead>
+            <tbody><tr><td colspan="7" style="text-align:center; color:#5B6B62;">Loading...</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- attempts modal -->
+    <div class="mng-modal-overlay" id="qzAttemptsOverlay" style="display:none;" onclick="if(event.target===this)qzCloseAttempts()">
+      <div class="mng-modal">
+        <h3>Quiz Attempts</h3>
+        <p class="mng-modal-sub" id="qzAttemptsTitle"></p>
+        <div class="mg-table-wrap">
+          <table class="mg-table">
+            <thead><tr><th>Student</th><th>Score</th><th>Submitted</th></tr></thead>
+            <tbody id="qzAttemptsBody"></tbody>
+          </table>
+        </div>
+        <div class="mng-actions">
+          <button type="button" class="mng-btn mng-btn-ghost" onclick="qzCloseAttempts()">Close</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="mg-msg" id="qzMsg"></div>
+  </div>
+
+  <script src="js/csrf.js"></script>
+  <script src="js/ui.js"></script>
+  <script src="js/app.js"></script>
+  <script src="js/quizzes.js"></script>
+  <script src="js/pwa.js" defer></script>
+</body>
+</html>

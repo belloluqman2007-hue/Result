@@ -195,6 +195,8 @@
       <button class="pt-navlink" data-view="transport" type="button"><span class="pt-nicon">&#128652;</span> Transport</button>
       <button class="pt-navlink" data-view="gallery" type="button"><span class="pt-nicon">&#128247;</span> School Gallery</button>
       <button class="pt-navlink" data-view="leave" type="button"><span class="pt-nicon">&#128196;</span> Leave Request</button>
+      <button class="pt-navlink" data-view="quiz" type="button"><span class="pt-nicon">&#128214;</span> Quizzes</button>
+      <button class="pt-navlink" data-view="appointment" type="button"><span class="pt-nicon">&#128197;</span> Appointments</button>
       <button class="pt-navlink" data-view="broadcasts" type="button"><span class="pt-nicon">&#128226;</span> School News</button>
       <button class="pt-navlink" data-view="prayer" type="button"><span class="pt-nicon">&#128331;</span> Prayer Times</button>
       <button class="pt-navlink" data-view="settings" type="button"><span class="pt-nicon">&#9881;&#65039;</span> Settings</button>
@@ -585,6 +587,51 @@
         <section class="pt-card">
           <h3 style="font-size:14px; font-weight:700; color:#14532d; margin:0 0 10px;">Previous Requests</h3>
           <div id="ptLeaveHistory" style="text-align:center; color:#5B6B62; padding:10px;">Loading...</div>
+        </section>
+      </div>
+
+      <!-- ============ QUIZZES ============ -->
+      <div class="pt-view" data-view="quiz">
+        <h1 class="pt-view-title">&#128214; Quizzes</h1>
+        <section class="pt-card" id="ptQuizListCard">
+          <div id="ptQuizList" style="text-align:center; color:#5B6B62; padding:14px;">Loading...</div>
+        </section>
+        <section class="pt-card" id="ptQuizTakeCard" style="display:none;">
+          <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:12px;">
+            <h2 style="margin:0; font-size:16px; color:#14532d;" id="ptQuizTitle">Quiz</h2>
+            <button class="mg-btn-light" type="button" style="margin-left:auto;" onclick="ptQuizBack()">&#8592; Back to list</button>
+          </div>
+          <div id="ptQuizQuestions"></div>
+          <button class="mg-btn" type="button" id="ptQuizSubmitBtn" onclick="ptSubmitQuiz()" style="margin-top:12px;">&#128204; Submit Answers</button>
+          <div id="ptQuizResult" style="margin-top:10px; font-size:14px; font-weight:700; color:#14532d;"></div>
+        </section>
+      </div>
+
+      <!-- ============ APPOINTMENTS ============ -->
+      <div class="pt-view" data-view="appointment">
+        <h1 class="pt-view-title">&#128197; Appointments</h1>
+        <section class="pt-card portal-no-print" style="margin-bottom:14px;">
+          <h3 style="font-size:14px; font-weight:700; color:#14532d; margin:0 0 12px;">Request a Meeting</h3>
+          <div style="display:grid; gap:10px;">
+            <div>
+              <label style="font-size:12px; font-weight:700; color:#3a5441; display:block; margin-bottom:3px;">Preferred Date</label>
+              <input type="date" id="ptAptDate" style="width:100%; padding:9px 11px; border:1.5px solid #c8d6ca; border-radius:8px; font-size:14px; font-family:inherit;">
+            </div>
+            <div>
+              <label style="font-size:12px; font-weight:700; color:#3a5441; display:block; margin-bottom:3px;">Preferred Time</label>
+              <input type="time" id="ptAptTime" style="width:100%; padding:9px 11px; border:1.5px solid #c8d6ca; border-radius:8px; font-size:14px; font-family:inherit;">
+            </div>
+            <div>
+              <label style="font-size:12px; font-weight:700; color:#3a5441; display:block; margin-bottom:3px;">Reason</label>
+              <textarea id="ptAptReason" rows="3" placeholder="What would you like to discuss?" style="width:100%; padding:9px 11px; border:1.5px solid #c8d6ca; border-radius:8px; font-size:14px; font-family:inherit; resize:vertical;"></textarea>
+            </div>
+            <button type="button" onclick="ptSubmitAppointment()" style="background:linear-gradient(135deg,#1d4a30,#2f7a4e); color:#fff; border:none; border-radius:9px; padding:11px; font-size:14px; font-weight:700; cursor:pointer;">Request Appointment</button>
+            <div id="ptAptMsg" style="font-size:13px; text-align:center; min-height:18px;"></div>
+          </div>
+        </section>
+        <section class="pt-card">
+          <h3 style="font-size:14px; font-weight:700; color:#14532d; margin:0 0 10px;">My Requests</h3>
+          <div id="ptAptHistory" style="text-align:center; color:#5B6B62; padding:10px;">Loading...</div>
         </section>
       </div>
 

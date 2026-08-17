@@ -662,4 +662,47 @@
 
     return d;
   };
+
+  /* ---------------- OUTSTANDING FEES REPORT ----------------
+     NEW: a printable per-student "who owes what" report for a term/session.
+     Uses the same debtors data as the Finance debtors board. */
+  window.amsDebtorsPDF = function (o) {
+    o = o || {};
+    var d = doc();
+    var debtors = Array.isArray(o.debtors) ? o.debtors : [];
+    var y = header(d, "OUTSTANDING FEES REPORT", [
+      "Term: " + (o.term || "-") + "      Session: " + (o.session || "-"),
+      "Students owing: " + (o.owing_count != null ? o.owing_count : debtors.length) +
+      "      Total outstanding: N" + (Number(o.outstanding_total || 0).toLocaleString(undefined, { maximumFractionDigits: 0 }))
+    ]);
+
+    var rows = debtors.map(function (c, i) {
+      return [
+        String(i + 1),
+        c.full_name || "-",
+        c.student_id || "-",
+        c.class_name || "-",
+        "N" + (Number(c.owed || 0).toLocaleString(undefined, { maximumFractionDigits: 0 }))
+      ];
+    });
+
+    y = table(d, y, [
+      { title: "#", w: 8, align: "center" },
+      { title: "Student Name", w: 42 },
+      { title: "Admission No.", w: 26 },
+      { title: "Class", w: 26 },
+      { title: "Amount Owed", w: 20, align: "right" }
+    ], rows, 9.5);
+
+    if (!rows.length) {
+      d.setFont("helvetica", "normal");
+      d.setFontSize(10);
+      d.setTextColor(90, 110, 100);
+      d.text("Nobody is owing for this term & session - every student has cleared.", M + 10, y + 10);
+      y += 20;
+    }
+
+    footer(d, y + 20);
+    return d;
+  };
 })();

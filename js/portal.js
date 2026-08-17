@@ -799,6 +799,8 @@ function ptShowView(name) {
   if (name === "transport")  ptLoadTransport();
   if (name === "gallery")    ptLoadGallery();
   if (name === "leave")      ptLoadLeave();
+  if (name === "quiz")       ptLoadQuizzes();
+  if (name === "appointment") ptLoadAppointments();
   if (name === "broadcasts") ptLoadBroadcasts();
   if (name === "prayer")     ptLoadPrayer();
 }
@@ -1289,7 +1291,7 @@ function ptSaveProfile() {
 var ptProgressLoaded=false, ptPositionLoaded=false, ptSubjectsLoaded=false,
     ptHomeworkLoaded=false, ptHealthLoaded=false, ptTransportLoaded=false,
     ptGalleryLoaded=false, ptLeaveLoaded=false, ptBroadcastsLoaded=false,
-    ptPrayerLoaded=false;
+    ptPrayerLoaded=false, ptQuizLoaded=false, ptAppointmentLoaded=false;
 
 /* ── hook into ptShowView ── already patched above, add remaining views ── */
 var _ptShowViewOrig = window.ptShowViewExtra || function(){};
@@ -1304,6 +1306,8 @@ window.ptShowViewExtra = function(name) {
   if (name==="transport")  ptLoadTransport();
   if (name==="gallery")    ptLoadGallery();
   if (name==="leave")      ptLoadLeave();
+  if (name==="quiz")       ptLoadQuizzes();
+  if (name==="appointment") ptLoadAppointments();
   if (name==="broadcasts") ptLoadBroadcasts();
   if (name==="prayer")     ptLoadPrayer();
   _ptShowViewOrig(name);
@@ -1724,4 +1728,143 @@ function ptLoadPrayer() {
     .catch(function(){
       if(box) box.innerHTML='<div style="text-align:center;padding:16px;color:#5B6B62;"><div style="font-size:32px;margin-bottom:8px;">🕌</div>Could not load prayer times. Check your connection.</div>';
     });
+}
+
+/* ====================================================================
+   QUIZZES (feature 6)
+   ==================================================================== */
+var ptQuizList = [];      // last quiz list
+var ptQuizCurrent = null; // quiz being taken { id, title, questions }
+
+function ptLoadQuizzes() {
+  if (ptQuizLoaded) return; ptQuizLoaded = true;
+  var box = document.getElementById("ptQuizList");
+  if (!box) return;
+  fetch("/portal/quizzes", { credentials: "same-origin" })
+    .then(function (r) { return r.ok ? r.json() : []; })
+    .then(function (rows) {
+      ptQuizList = Array.isArray(rows) ? rows : [];
+      if (!ptQuizList.length) {
+        box.innerHTML = '<p style="color:#5B6B62;text-align:center;">No quizzes have been posted for your class yet.</p>';
+        return;
+      }
+      box.innerHTML = ptQuizList.map(function (q) {
+        var best = (q.best != null) ? ('<div style="font-size:12px;color:#157347;font-weight:700;margin-top:3px;">Best score: ' + q.best + '</div>') : '';
+        return '<div style="background:#f7faf7;border:1.5px solid #d3e8d6;border-radius:10px;padding:12px 14px;margin-bottom:8px;display:flex;gap:10px;align-items:center;">' +
+          '<div style="flex:1;">' +
+            '<div style="font-size:14px;font-weight:700;color:#14291c;">' + (q.title || "-") + '</div>' +
+            '<div style="font-size:12px;color:#5B6B62;">' + (q.subject || "") + (q.class_name ? " · " + q.class_name : "") + '</div>' +
+            best +
+          '</div>' +
+          '<button class="mg-btn-light" type="button" onclick="ptTakeQuiz(' + q.id + ')">' + (q.best != null ? "Retake" : "Start") + '</button>' +
+        '</div>';
+      }).join("");
+    })
+    .catch(function () { box.textContent = "Could not load quizzes."; });
+}
+
+function ptTakeQuiz(id) {
+  fetch("/portal/quiz/" + id, { credentials: "same-origin" })
+    .then(function (r) { return r.ok ? r.json() : null; })
+    .then(function (q) {
+      if (!q || !q.questions) { alert("Could not load this quiz."); return; }
+      ptQuizCurrent = q;
+      document.getElementById("ptQuizListCard").style.display = "none";
+      document.getElementById("ptQuizTakeCard").style.display = "block";
+      document.getElementById("ptQuizTitle").textContent = q.title || "Quiz";
+      document.getElementById("ptQuizResult").textContent = "";
+      var box = document.getElementById("ptQuizQuestions");
+      box.innerHTML = q.questions.map(function (qq, i) {
+        return '<div style="background:#f7faf7;border:1.5px solid #d3e8d6;border-radius:10px;padding:12px 14px;margin-bottom:10px;">' +
+          '<div style="font-size:14px;font-weight:700;color:#14291c;margin-bottom:8px;">' + (i + 1) + ". " + (qq.q || "") + '</div>' +
+          (qq.options || []).map(function (opt, oi) {
+            return '<label style="display:flex;gap:8px;align-items:center;padding:6px 0;font-size:13.5px;color:#3a5441;cursor:pointer;">' +
+              '<input type="radio" name="ptQuizQ' + i + '" value="' + oi + '"> ' + opt + '</label>';
+          }).join("") +
+        '</div>';
+      }).join("");
+    })
+    .catch(function () { alert("Could not load this quiz."); });
+}
+
+function ptQuizBack() {
+  document.getElementById("ptQuizTakeCard").style.display = "none";
+  document.getElementById("ptQuizListCard").style.display = "block";
+  ptQuizCurrent = null;
+}
+
+function ptSubmitQuiz() {
+  if (!ptQuizCurrent) return;
+  var answers = {};
+  var answered = true;
+  (ptQuizCurrent.questions || []).forEach(function (q, i) {
+    var checked = document.querySelector('input[name="ptQuizQ' + i + '"]:checked');
+    if (checked) answers[String(i)] = checked.value; else answered = false;
+  });
+  if (!answered && !confirm("Some questions are unanswered. Submit anyway?")) return;
+  fetch("/portal/quiz/" + ptQuizCurrent.id + "/submit", {
+    method: "POST", credentials: "same-origin",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ answers: answers })
+  })
+    .then(function (r) { return r.json(); })
+    .then(function (d) {
+      document.getElementById("ptQuizResult").textContent = "Score: " + d.score + "/" + d.total;
+      ptQuizLoaded = false; ptLoadQuizzes();
+    })
+    .catch(function () { document.getElementById("ptQuizResult").textContent = "Network error."; });
+}
+
+/* ====================================================================
+   APPOINTMENTS (feature 8)
+   ==================================================================== */
+function ptLoadAppointments() {
+  if (ptAppointmentLoaded) return; ptAppointmentLoaded = true;
+  var box = document.getElementById("ptAptHistory");
+  if (!box) return;
+  var today = new Date().toISOString().slice(0, 10);
+  var dEl = document.getElementById("ptAptDate");
+  if (dEl && !dEl.value) dEl.value = today;
+
+  fetch("/portal/appointments", { credentials: "same-origin" })
+    .then(function (r) { return r.json(); })
+    .then(function (rows) {
+      rows = Array.isArray(rows) ? rows : [];
+      if (!rows.length) { box.innerHTML = '<p style="color:#5B6B62;text-align:center;">No appointments requested yet.</p>'; return; }
+      var statusColors = { approved: "#14532d", rejected: "#9b1c1c", pending: "#92400e" };
+      var statusBg = { approved: "#eaf3ec", rejected: "#fef2f2", pending: "#fffbeb" };
+      box.innerHTML = rows.map(function (r) {
+        var st = r.status || "pending";
+        return '<div style="background:#f7faf7;border:1.5px solid #d3e8d6;border-radius:10px;padding:12px 14px;margin-bottom:8px;">' +
+          '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">' +
+          '<div style="font-size:13px;font-weight:700;color:#14291c;">' + String(r.requested_date).slice(0, 10) + (r.requested_time ? " · " + r.requested_time : "") + '</div>' +
+          '<span style="background:' + (statusBg[st] || "#eee") + ';color:' + (statusColors[st] || "#333") + ';border-radius:6px;padding:2px 9px;font-size:11px;font-weight:800;text-transform:uppercase;">' + st + '</span></div>' +
+          '<p style="font-size:13px;color:#3a5441;margin:6px 0 0;line-height:1.4;">' + (r.reason || "") + '</p>' +
+          (r.admin_note ? '<p style="font-size:12px;color:#5B6B62;margin:4px 0 0;font-style:italic;">School note: ' + r.admin_note + '</p>' : '') +
+          '</div>';
+      }).join("");
+    })
+    .catch(function () { box.textContent = "Could not load appointments."; });
+}
+
+function ptSubmitAppointment() {
+  var date = document.getElementById("ptAptDate").value;
+  var time = document.getElementById("ptAptTime").value;
+  var reason = document.getElementById("ptAptReason").value.trim();
+  var msg = document.getElementById("ptAptMsg");
+  if (!date || !reason) { if (msg) { msg.textContent = "Please pick a date and write a reason."; msg.style.color = "#9b1c1c"; } return; }
+  fetch("/portal/appointments", {
+    method: "POST", credentials: "same-origin",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ requested_date: date, requested_time: time, reason: reason })
+  })
+    .then(function (r) { return r.json(); })
+    .then(function (d) {
+      if (msg) { msg.textContent = d.message || "Requested."; msg.style.color = "#14532d"; }
+      document.getElementById("ptAptReason").value = "";
+      document.getElementById("ptAptTime").value = "";
+      ptAppointmentLoaded = false; ptLoadAppointments();
+      setTimeout(function () { if (msg) msg.textContent = ""; }, 4000);
+    })
+    .catch(function () { if (msg) { msg.textContent = "Network error."; msg.style.color = "#9b1c1c"; } });
 }

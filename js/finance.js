@@ -1116,6 +1116,21 @@ function debPostRemind(ids, done) {
     .catch(function () { done(false, { message: "Network error - try again." }); });
 }
 
+function debDownloadPDF() {
+  if (!window.amsDebtorsPDF) { finNotify("PDF engine not ready. Reload the page and try again."); return; }
+  if (!debRows.length) { finNotify("No debtors to print."); return; }
+  var ts = finTermSession();
+  var d = window.amsDebtorsPDF({
+    term: ts.term,
+    session: ts.session,
+    debtors: debRows,
+    owing_count: debMeta ? debMeta.owing_count : debRows.length,
+    outstanding_total: debMeta ? debMeta.outstanding_total : 0
+  });
+  d.save("outstanding-fees-" + ts.term.replace(/\s+/g, "") + ".pdf");
+  finNotify("Outstanding fees report downloaded.", true);
+}
+
 function debRemind(btn) {
   var sid = btn.getAttribute("data-sid");
   btn.disabled = true; btn.textContent = "Sending...";

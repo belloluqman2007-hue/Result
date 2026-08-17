@@ -516,6 +516,19 @@ app.get("/lesson-planner.html", requireLogin, (req, res) => {
     res.sendFile(path.join(__dirname, "lesson-planner.html"));
 });
 
+// NEW (quizzes / notify parents / appointments pages).
+app.get("/quizzes.html", requireLogin, (req, res) => {
+    res.sendFile(path.join(__dirname, "quizzes.html"));
+});
+
+app.get("/notify-parents.html", requireLogin, requireAdmin, (req, res) => {
+    res.sendFile(path.join(__dirname, "notify-parents.html"));
+});
+
+app.get("/appointments.html", requireLogin, (req, res) => {
+    res.sendFile(path.join(__dirname, "appointments.html"));
+});
+
 // ----------------------------------------------------------------
 // NEW (PWA conversion): serve the app manifest with the correct
 // content type so every browser accepts it. ADDITIVE ONLY - no
@@ -835,6 +848,42 @@ function ensureCoreTablesAndDefaultAdmin() {
             notes TEXT,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             KEY idx_lessonplans_teacher (teacher)
+        ) DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
+        `CREATE TABLE IF NOT EXISTS quizzes (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            title VARCHAR(255) NOT NULL,
+            class_name VARCHAR(100) DEFAULT '',
+            subject VARCHAR(120) DEFAULT '',
+            questions LONGTEXT NOT NULL,
+            due_date DATE NULL,
+            created_by VARCHAR(100) DEFAULT '',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        ) DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
+        `CREATE TABLE IF NOT EXISTS quiz_attempts (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            quiz_id INT NOT NULL,
+            student_id VARCHAR(64) NOT NULL,
+            student_name VARCHAR(160) DEFAULT '',
+            score INT NOT NULL DEFAULT 0,
+            total INT NOT NULL DEFAULT 0,
+            answers LONGTEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            KEY idx_quizattempts_quiz (quiz_id),
+            KEY idx_quizattempts_student (student_id)
+        ) DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
+        `CREATE TABLE IF NOT EXISTS appointments (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            student_id VARCHAR(64) NOT NULL,
+            student_name VARCHAR(160) DEFAULT '',
+            class_name VARCHAR(100) DEFAULT '',
+            parent_name VARCHAR(160) DEFAULT '',
+            requested_date DATE NOT NULL,
+            requested_time VARCHAR(20) DEFAULT '',
+            reason TEXT,
+            status VARCHAR(20) NOT NULL DEFAULT 'pending',
+            admin_note TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            KEY idx_appointments_student (student_id)
         ) DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`
     ];
 
@@ -6707,6 +6756,271 @@ app.delete("/lesson-plans/:id", requireLogin, (req, res) => {
             return res.status(403).json({ message: "You can only delete your own lesson plans." });
         }
         res.json({ message: "Lesson plan deleted" });
+    });
+});
+
+
+/* =====================================================================
+   NEW (feature 6 - online quizzes): staff create quizzes (title, class,
+   subject, questions with 4 options + correct answer); students answer
+   them from the parent portal and get an instant auto-graded score.
+   ===================================================================== */
+
+app.get("/quizzes", requireLogin, (req, res) => {
+    connection.query(
+        "SELECT id, title, class_name, subject, questions, due_date, created_by, created_at FROM quizzes ORDER BY created_at DESC LIMIT 200",
+        (err, rows) => {
+            if (err) { console.log(err); return res.status(500).json({ message: "Database error" }); }
+            res.json(Array.isArray(rows) ? rows : []);
+        }
+    );
+});
+
+app.post("/quizzes", requireLogin, writeRateLimit, (req, res) => {
+    const title = (req.body.title || "").trim();
+    const class_name = (req.body.class_name || "").trim();
+    const subject = (req.body.subject || "").trim();
+    const due_date = (req.body.due_date || "").trim() || null;
+    let questions = req.body.questions;
+    if (Array.isArray(questions)) questions = JSON.stringify(questions);
+    if (!title || typeof questions !== "string") {
+        return res.status(400).json({ message: "Title and questions are required." });
+    }
+    connection.query(
+        `INSERT INTO quizzes (title, class_name, subject, questions, due_date, created_by)
+         VALUES (?,?,?,?,?,?)`,
+        [title, class_name, subject, questions, due_date, req.session.username || null],
+        (err, result) => {
+            if (err) { console.log(err); return res.status(500).json({ message: "Database error" }); }
+            res.json({ message: "Quiz saved", id: result.insertId });
+        }
+    );
+});
+
+app.delete("/quizzes/:id", requireLogin, requireAdmin, (req, res) => {
+    connection.query("DELETE FROM quizzes WHERE id = ?", [Number(req.params.id)], (err) => {
+        if (err) { console.log(err); return res.status(500).json({ message: "Database error" }); }
+        connection.query("DELETE FROM quiz_attempts WHERE quiz_id = ?", [Number(req.params.id)], () => {});
+        res.json({ message: "Quiz deleted" });
+    });
+});
+
+/* attempts for a quiz (staff review) */
+app.get("/quizzes/:id/attempts", requireLogin, (req, res) => {
+    connection.query(
+        `SELECT a.id, a.student_id, a.student_name, a.score, a.total, a.created_at
+         FROM quiz_attempts a WHERE a.quiz_id = ? ORDER BY a.created_at DESC LIMIT 500`,
+        [Number(req.params.id)],
+        (err, rows) => {
+            if (err) { console.log(err); return res.status(500).json({ message: "Database error" }); }
+            res.json(Array.isArray(rows) ? rows : []);
+        }
+    );
+});
+
+/* -------- portal side -------- */
+
+function safeQuizQuestions(quiz) {
+    /* strip the answer index before sending to a student */
+    let qs = [];
+    try { qs = JSON.parse(quiz.questions || "[]"); } catch (e) { qs = []; }
+    if (!Array.isArray(qs)) qs = [];
+    return qs.map(function (q) {
+        return { q: q.q, options: q.options || [] };
+    });
+}
+
+app.get("/portal/quizzes", (req, res) => {
+    const sid = req.session && req.session.portalStudentId;
+    if (!sid) return res.json([]);
+    connection.query("SELECT class_name FROM students WHERE student_id = ? LIMIT 1", [sid], (err, rows) => {
+        if (err || !rows.length) return res.json([]);
+        const cls = rows[0].class_name || "";
+        const sql = cls
+            ? "SELECT id, title, class_name, subject, due_date, created_at FROM quizzes WHERE class_name = ? OR class_name = '' ORDER BY created_at DESC LIMIT 50"
+            : "SELECT id, title, class_name, subject, due_date, created_at FROM quizzes ORDER BY created_at DESC LIMIT 50";
+        connection.query(sql, cls ? [cls] : [], (e2, quizzes) => {
+            if (e2) { console.log(e2); return res.json([]); }
+            connection.query("SELECT quiz_id, score, total, created_at FROM quiz_attempts WHERE student_id = ?", [sid], (e3, attempts) => {
+                if (e3) { console.log(e3); return res.json([]); }
+                const done = {};
+                (attempts || []).forEach(function (a) {
+                    if (!done[a.quiz_id] || a.score > done[a.quiz_id]) done[a.quiz_id] = a.score;
+                });
+                res.json((quizzes || []).map(function (q) {
+                    return { id: q.id, title: q.title, subject: q.subject, class_name: q.class_name, due_date: q.due_date, best: done[q.id] !== undefined ? done[q.id] : null };
+                }));
+            });
+        });
+    });
+});
+
+app.get("/portal/quiz/:id", (req, res) => {
+    const sid = req.session && req.session.portalStudentId;
+    if (!sid) return res.status(401).json({ message: "Not logged in" });
+    connection.query("SELECT * FROM quizzes WHERE id = ? LIMIT 1", [Number(req.params.id)], (err, rows) => {
+        if (err) { console.log(err); return res.status(500).json({ message: "Database error" }); }
+        if (!rows.length) return res.status(404).json({ message: "Quiz not found" });
+        res.json({ id: rows[0].id, title: rows[0].title, subject: rows[0].subject, due_date: rows[0].due_date, questions: safeQuizQuestions(rows[0]) });
+    });
+});
+
+app.post("/portal/quiz/:id/submit", (req, res) => {
+    const sid = req.session && req.session.portalStudentId;
+    if (!sid) return res.status(401).json({ message: "Not logged in" });
+    const quizId = Number(req.params.id);
+    const answers = req.body && req.body.answers; // { "0": index, "1": index }
+    connection.query("SELECT * FROM quizzes WHERE id = ? LIMIT 1", [quizId], (err, rows) => {
+        if (err) { console.log(err); return res.status(500).json({ message: "Database error" }); }
+        if (!rows.length) return res.status(404).json({ message: "Quiz not found" });
+        let qs = [];
+        try { qs = JSON.parse(rows[0].questions || "[]"); } catch (e) { qs = []; }
+        if (!Array.isArray(qs) || !qs.length) return res.status(400).json({ message: "This quiz has no questions." });
+        let score = 0;
+        qs.forEach(function (q, i) {
+            const got = answers ? answers[String(i)] : null;
+            if (got != null && String(got) === String(q.answer)) score++;
+        });
+        connection.query("SELECT full_name FROM students WHERE student_id = ? LIMIT 1", [sid], (e2, stu) => {
+            const name = (stu && stu.length && stu[0].full_name) || sid;
+            connection.query(
+                "INSERT INTO quiz_attempts (quiz_id, student_id, student_name, score, total, answers) VALUES (?,?,?,?,?,?)",
+                [quizId, sid, name, score, qs.length, JSON.stringify(answers || {})],
+                (e3) => {
+                    if (e3) { console.log(e3); return res.status(500).json({ message: "Database error" }); }
+                    res.json({ message: "Submitted!", score: score, total: qs.length });
+                }
+            );
+        });
+    });
+});
+
+
+/* =====================================================================
+   NEW (feature 7 - WhatsApp/SMS notification): a bulk parent-notification
+   tool. Picks an audience (all active students / one class / debtors),
+   fires a phone push to every parent AND returns ready-made WhatsApp +
+   SMS deep links so the school can forward the message manually (no paid
+   gateway needed). Also adds WhatsApp links to the debtors board.
+   ===================================================================== */
+
+app.post("/bulk-notify", requireLogin, requireAdmin, writeRateLimit, (req, res) => {
+    const audience = (req.body.audience || "all").trim(); // all | class | debtors
+    const className = (req.body.class_name || "").trim();
+    const term = (req.body.term || "").trim();
+    const session = (req.body.session || "").trim();
+    const message = (req.body.message || "").trim();
+    if (!message) return res.status(400).json({ message: "Type a message first." });
+
+    function finish(students) {
+        const uniq = Array.from(new Set((students || []).map(s => s.student_id).filter(Boolean)));
+        amsPushSend("portal", uniq, {
+            title: "\u{1F4E2} Message from school",
+            body: message.slice(0, 160),
+            url: "/portal.html",
+            tag: "bulk-" + Date.now()
+        });
+        const links = (students || []).map(function (s) {
+            const phone = (s.parent_phone || "").replace(/[^\d]/g, "");
+            return {
+                student_id: s.student_id,
+                full_name: s.full_name,
+                parent_phone: s.parent_phone || "",
+                whatsapp: phone ? "https://wa.me/" + phone + "?text=" + encodeURIComponent(message) : null,
+                sms: phone ? "sms:" + phone + "?body=" + encodeURIComponent(message) : null
+            };
+        });
+        res.json({ message: "Notification sent to " + uniq.length + " parent(s).", count: uniq.length, links: links });
+    }
+
+    if (audience === "class") {
+        if (!className) return res.status(400).json({ message: "Pick a class." });
+        connection.query("SELECT student_id, full_name, parent_phone FROM students WHERE class_name = ? AND (status IS NULL OR status = 'active')", [className], (err, rows) => {
+            if (err) { console.log(err); return res.status(500).json({ message: "Database error" }); }
+            finish(rows || []);
+        });
+    } else if (audience === "debtors") {
+        if (!term || !session) return res.status(400).json({ message: "Term and session are required for debtors." });
+        amsFeeBalanceRows(term, session, className, null, (err, rows) => {
+            if (err || !rows) return res.json({ message: "No debtors found.", count: 0, links: [] });
+            const debtors = amsDebtorsAggregate(rows).filter(c => c.owed > 0);
+            const ids = debtors.map(c => c.student_id);
+            if (!ids.length) return res.json({ message: "No debtors found.", count: 0, links: [] });
+            connection.query("SELECT student_id, full_name, parent_phone FROM students WHERE student_id IN (" + ids.map(() => "?").join(",") + ")", ids, (e2, rows2) => {
+                if (e2) { console.log(e2); return res.status(500).json({ message: "Database error" }); }
+                finish(rows2 || []);
+            });
+        });
+    } else {
+        connection.query("SELECT student_id, full_name, parent_phone FROM students WHERE (status IS NULL OR status = 'active') ORDER BY class_name, full_name", (err, rows) => {
+            if (err) { console.log(err); return res.status(500).json({ message: "Database error" }); }
+            finish(rows || []);
+        });
+    }
+});
+
+
+/* =====================================================================
+   NEW (feature 8 - parent-teacher appointments): parents book a meeting
+   from the portal; staff review, approve or reject it.
+   ===================================================================== */
+
+app.get("/portal/appointments", (req, res) => {
+    const sid = req.session && req.session.portalStudentId;
+    if (!sid) return res.json([]);
+    connection.query("SELECT * FROM appointments WHERE student_id = ? ORDER BY created_at DESC LIMIT 30", [sid], (err, rows) => {
+        if (err) { console.log(err); return res.json([]); }
+        res.json(rows);
+    });
+});
+
+app.post("/portal/appointments", (req, res) => {
+    const sid = req.session && req.session.portalStudentId;
+    if (!sid) return res.status(401).json({ message: "Not logged in" });
+    const requested_date = (req.body.requested_date || "").trim();
+    const requested_time = (req.body.requested_time || "").trim();
+    const reason = (req.body.reason || "").trim();
+    if (!requested_date || !reason) return res.status(400).json({ message: "Date and reason are required." });
+    connection.query("SELECT full_name, class_name, parent_name FROM students WHERE student_id = ? LIMIT 1", [sid], (err, rows) => {
+        if (err || !rows.length) return res.status(404).json({ message: "Student not found." });
+        connection.query(
+            "INSERT INTO appointments (student_id, student_name, class_name, parent_name, requested_date, requested_time, reason) VALUES (?,?,?,?,?,?,?)",
+            [sid, rows[0].full_name, rows[0].class_name, rows[0].parent_name || "", requested_date, requested_time, reason],
+            (e2) => {
+                if (e2) { console.log(e2); return res.status(500).json({ message: "Database error" }); }
+                res.json({ message: "Appointment requested. The school will confirm it." });
+            }
+        );
+    });
+});
+
+app.get("/api/appointments", requireLogin, (req, res) => {
+    const status = req.query.status;
+    const sql = status
+        ? "SELECT * FROM appointments WHERE status = ? ORDER BY created_at DESC LIMIT 200"
+        : "SELECT * FROM appointments ORDER BY created_at DESC LIMIT 200";
+    connection.query(sql, status ? [status] : [], (err, rows) => {
+        if (err) { console.log(err); return res.status(500).json({ message: "Database error" }); }
+        res.json(rows);
+    });
+});
+
+app.post("/api/appointments/:id/status", requireLogin, writeRateLimit, (req, res) => {
+    const status = req.body.status;
+    const note = (req.body.admin_note || "").trim() || null;
+    if (["approved", "rejected", "pending"].indexOf(status) === -1) {
+        return res.status(400).json({ message: "Invalid status." });
+    }
+    connection.query("UPDATE appointments SET status = ?, admin_note = ? WHERE id = ?", [status, note, Number(req.params.id)], (err) => {
+        if (err) { console.log(err); return res.status(500).json({ message: "Database error" }); }
+        res.json({ message: "Updated." });
+    });
+});
+
+app.delete("/api/appointments/:id", requireLogin, requireAdmin, (req, res) => {
+    connection.query("DELETE FROM appointments WHERE id = ?", [Number(req.params.id)], (err) => {
+        if (err) { console.log(err); return res.status(500).json({ message: "Database error" }); }
+        res.json({ message: "Appointment deleted" });
     });
 });
 
