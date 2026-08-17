@@ -123,6 +123,7 @@
               <option>Female</option>
             </select>
             <span class="ams-table-count" id="amsDirCount"></span>
+            <button type="button" class="m-btn-ghost m-btn-sm" onclick="amsDirConfirmPDF()" title="Print/post a register for students to confirm their details">⭳ Confirm Details (PDF)</button>
             <button type="button" class="m-btn-ghost m-btn-sm" onclick="amsDirExport()" style="margin-left:auto;">⭳ Export to Excel (CSV)</button>
           </div>
         </div>
@@ -217,6 +218,9 @@
        js/app.js, but this page never loaded it - Logout silently did
        nothing here. Loaded now. -->
   <script src="js/app.js"></script>
+  <!-- NEW (student info confirmation PDF): jsPDF + shared PDF makers -->
+  <script src="js/vendor/jspdf.umd.min.js"></script>
+  <script src="js/ams-pdf.js"></script>
   <script src="js/students.js"></script>
 
   <!-- NEW (PWA conversion): registers the service worker + install button. Additive only. -->

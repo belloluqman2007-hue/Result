@@ -477,6 +477,35 @@
         ], "students-directory.csv");
     };
 
+    /* ---------- Student Information Confirmation Register (PDF) ----------
+       A beautiful printable register (grouped by class) listing every
+       student's NAME, ADMISSION NO and CLASS with a blank signature column,
+       so the school can post it for students to confirm their details. */
+    window.amsDirConfirmPDF = function () {
+        if (!window.amsStudentInfoConfirmPDF) {
+            window.amsToast("PDF engine not ready. Reload the page and try again.", "error");
+            return;
+        }
+        var list = filtered && filtered.length ? filtered : allStudents;
+        if (!list.length) {
+            window.amsToast("No students to print.", "error");
+            return;
+        }
+        var d = window.amsStudentInfoConfirmPDF({
+            students: list,
+            session: sessionLabel(),
+            term: "All Terms"
+        });
+        d.save("student-information-confirmation.pdf");
+        window.amsToast("Student confirmation register downloaded.", "success");
+    };
+
+    function sessionLabel() {
+        var now = new Date();
+        var yr = now.getFullYear();
+        return yr + "/" + (yr + 1);
+    }
+
     /* close the profile modal with Escape */
     document.addEventListener("keydown", function (e) {
         if (e.key === "Escape") {

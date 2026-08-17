@@ -436,4 +436,196 @@
     footer(d, y + 26);
     return d;
   };
+
+  /* ---------------- STUDENT INFORMATION CONFIRMATION REGISTER ----------------
+     NEW: a beautiful one-glance register the school can print and post so
+     every student confirms their NAME, ADMISSION NO and CLASS. Grouped by
+     class with green section bands, a summary strip, zebra rows and a blank
+     signature column for students to sign. Handles Arabic names/classes via
+     amsText. Returns the jsPDF doc (download path stays with the caller). */
+  window.amsStudentInfoConfirmPDF = function (o) {
+    o = o || {};
+    var d = doc();
+    var students = Array.isArray(o.students) ? o.students : [];
+    var session = o.session || "—";
+    var term = o.term || "—";
+
+    function today() {
+      var now = new Date();
+      var m = ["January","February","March","April","May","June","July","August","September","October","November","December"][now.getMonth()];
+      return now.getDate() + " " + m + " " + now.getFullYear();
+    }
+
+    /* ---- group by class, sort classes + names ---- */
+    var groups = {}, order = [];
+    students.forEach(function (s) {
+      var c = String(s.class_name || "").trim() || "Unassigned";
+      if (!groups[c]) { groups[c] = []; order.push(c); }
+      groups[c].push(s);
+    });
+    order.sort(function (a, b) { return a.localeCompare(b); });
+    order.forEach(function (c) {
+      groups[c].sort(function (a, b) { return String(a.full_name || "").localeCompare(String(b.full_name || "")); });
+    });
+    var males = students.filter(function (s) { return String(s.gender || "").toLowerCase() === "male"; }).length;
+    var females = students.filter(function (s) { return String(s.gender || "").toLowerCase() === "female"; }).length;
+
+    var y = header(d, "STUDENT INFORMATION CONFIRMATION REGISTER", [
+      "Academic Session: " + session + "      Term: " + term + "      Generated: " + today(),
+      "Please confirm your details below and report any correction to the school office."
+    ]);
+
+    /* ---- summary strip (4 stat chips) ---- */
+    function chip(x, w, val, label) {
+      d.setFillColor(244, 249, 246);
+      d.setDrawColor(203, 219, 209);
+      d.setLineWidth(0.7);
+      d.roundedRect(x, y, w, 30, 4, 4, "FD");
+      d.setFont("helvetica", "bold");
+      d.setFontSize(13);
+      d.setTextColor(21, 83, 45);
+      d.text(String(val), x + w / 2, y + 13, { align: "center" });
+      d.setFont("helvetica", "normal");
+      d.setFontSize(7.5);
+      d.setTextColor(95, 110, 100);
+      d.text(label, x + w / 2, y + 23, { align: "center" });
+    }
+    var cw = (W - 2 * M - 24) / 4;
+    var chips = [
+      { v: students.length, l: "STUDENTS" },
+      { v: order.length, l: "CLASSES" },
+      { v: males, l: "MALE" },
+      { v: females, l: "FEMALE" }
+    ];
+    chips.forEach(function (c, i) { chip(M + i * (cw + 8), cw, c.v, c.l); });
+    y += 40;
+
+    /* ---- column geometry ---- */
+    var cols = [
+      { title: "S/N", w: 22, align: "center" },
+      { title: "Full Name", w: 175, align: "left" },
+      { title: "Admission No.", w: 100, align: "left" },
+      { title: "Gender", w: 48, align: "center" },
+      { title: "Class", w: 84, align: "left" },
+      { title: "Confirmed (Sign)", w: 82, align: "center" }
+    ];
+    var totalW = cols.reduce(function (a, c) { return a + c.w; }, 0);
+    var scale = (W - 2 * M) / totalW;
+    var colX = [];
+    var acc = M;
+    cols.forEach(function (c) { colX.push(acc); acc += c.w * scale; });
+    var rowH = 16;
+
+    function classBand(cls, count, isCont) {
+      if (y + 40 > H - M - 26) { d.addPage(); y = M; }
+      d.setFillColor(21, 83, 45);
+      d.roundedRect(M, y, W - 2 * M, 22, 3, 3, "F");
+      d.setFont("helvetica", "bold");
+      d.setFontSize(10.5);
+      d.setTextColor(255, 255, 255);
+      amsText(d, (isCont ? "Continued - " : "") + "CLASS:  " + cls, M + 10, y + 15, { color: "#FFFFFF" });
+      d.setFont("helvetica", "normal");
+      d.setFontSize(8.5);
+      d.text(count + " student" + (count === 1 ? "" : "s"), W - M - 10, y + 15, { align: "right" });
+      y += 28;
+      return y;
+    }
+
+    function colHeader() {
+      if (y + 26 > H - M - 20) { d.addPage(); y = M; }
+      d.setFillColor(236, 245, 239);
+      d.setDrawColor(203, 219, 209);
+      d.setLineWidth(0.6);
+      d.rect(M, y, W - 2 * M, 20, "FD");
+      d.setFont("helvetica", "bold");
+      d.setFontSize(8.5);
+      d.setTextColor(21, 83, 45);
+      cols.forEach(function (c, i) {
+        var cx = c.align === "center" ? colX[i] + (c.w * scale) / 2
+               : c.align === "right"  ? colX[i] + c.w * scale - 4
+               : colX[i] + 4;
+        amsText(d, c.title, cx, y + 13.5, { align: c.align, color: "#15532D" });
+      });
+      y += 20;
+      return y;
+    }
+
+    function bodyRow(s, n) {
+      if (y + rowH > H - M - 26) {
+        d.addPage(); y = M;
+        /* re-draw the class band + column header so continuation pages
+           stay self-explanatory when a class runs past one page */
+        if (currentClass) { y = classBand(currentClass, currentCount, true); y = colHeader(); }
+      }
+      if (n % 2 === 0) {
+        d.setFillColor(248, 251, 249);
+        d.rect(M, y, W - 2 * M, rowH, "F");
+      }
+      var cells = [
+        { t: String(n), align: "center" },
+        { t: s.full_name, align: "left" },
+        { t: s.student_id, align: "left" },
+        { t: s.gender, align: "center" },
+        { t: s.class_name, align: "left" },
+        { t: "", align: "center" }
+      ];
+      d.setFont("helvetica", "normal");
+      d.setFontSize(9);
+      d.setTextColor(30, 40, 34);
+      cells.forEach(function (c, i) {
+        if (c.t) {
+          var cx = c.align === "center" ? colX[i] + (cols[i].w * scale) / 2
+                 : c.align === "right"  ? colX[i] + cols[i].w * scale - 4
+                 : colX[i] + 4;
+          amsText(d, c.t, cx, y + rowH - 5, { align: c.align, color: "#1E2822" });
+        }
+      });
+      /* dashed signature line in the last column */
+      var sx = colX[5] + 6, ex = colX[5] + cols[5].w * scale - 6;
+      d.setDrawColor(180, 195, 185);
+      d.setLineWidth(0.5);
+      d.setLineDashPattern([2, 2], 0);
+      d.line(sx, y + rowH - 4, ex, y + rowH - 4);
+      d.setLineDashPattern([], 0);
+      /* faint row separators */
+      d.setDrawColor(226, 234, 229);
+      d.setLineWidth(0.4);
+      d.line(M, y + rowH, W - M, y + rowH);
+      y += rowH;
+      return y;
+    }
+
+    var n = 0, currentClass = "", currentCount = 0;
+    order.forEach(function (cls) {
+      currentClass = cls;
+      currentCount = groups[cls].length;
+      y = classBand(cls, currentCount);
+      y = colHeader();
+      groups[cls].forEach(function (s) {
+        n++;
+        y = bodyRow(s, n);
+      });
+      y += 6;
+    });
+
+    /* ---- closing note + signatures ---- */
+    if (y + 70 > H - M - 30) { d.addPage(); y = M + 20; }
+    y += 12;
+    d.setFillColor(244, 249, 246);
+    d.setDrawColor(203, 219, 209);
+    d.setLineWidth(0.7);
+    d.roundedRect(M, y, W - 2 * M, 34, 4, 4, "FD");
+    d.setFont("helvetica", "bold");
+    d.setFontSize(9.5);
+    d.setTextColor(21, 83, 45);
+    d.text("Kindly confirm your Name, Admission Number and Class above.", M + 12, y + 14);
+    d.setFont("helvetica", "normal");
+    d.setFontSize(8.5);
+    d.setTextColor(95, 110, 100);
+    d.text("If any detail is wrong, please report it to the school office for correction. Thank you.", M + 12, y + 25);
+    y += 46;
+    footer(d, y);
+
+    return d;
+  };
 })();
