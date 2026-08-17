@@ -463,9 +463,14 @@
       if (!groups[c]) { groups[c] = []; order.push(c); }
       groups[c].push(s);
     });
-    order.sort(function (a, b) { return a.localeCompare(b); });
+    /* natural (numeric-aware) sort so classes order sensibly, e.g.
+       "Primary 1" before "Primary 10", and grouped class-by-class */
+    function naturalCmp(a, b) {
+      return String(a).localeCompare(String(b), undefined, { numeric: true, sensitivity: "base" });
+    }
+    order.sort(naturalCmp);
     order.forEach(function (c) {
-      groups[c].sort(function (a, b) { return String(a.full_name || "").localeCompare(String(b.full_name || "")); });
+      groups[c].sort(function (a, b) { return naturalCmp(a.full_name || "", b.full_name || ""); });
     });
     var males = students.filter(function (s) { return String(s.gender || "").toLowerCase() === "male"; }).length;
     var females = students.filter(function (s) { return String(s.gender || "").toLowerCase() === "female"; }).length;
@@ -502,12 +507,12 @@
 
     /* ---- column geometry ---- */
     var cols = [
-      { title: "S/N", w: 22, align: "center" },
-      { title: "Full Name", w: 175, align: "left" },
-      { title: "Admission No.", w: 100, align: "left" },
-      { title: "Gender", w: 48, align: "center" },
-      { title: "Class", w: 84, align: "left" },
-      { title: "Confirmed (Sign)", w: 82, align: "center" }
+      { title: "S/N", w: 20, align: "center" },
+      { title: "Full Name", w: 158, align: "left" },
+      { title: "Admission No.", w: 122, align: "left" },
+      { title: "Gender", w: 40, align: "center" },
+      { title: "Class", w: 95, align: "left" },
+      { title: "Confirmed (Sign)", w: 76, align: "center" }
     ];
     var totalW = cols.reduce(function (a, c) { return a + c.w; }, 0);
     var scale = (W - 2 * M) / totalW;
