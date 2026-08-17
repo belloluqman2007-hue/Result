@@ -79,24 +79,51 @@
     var size = d.getFontSize();
     var bold = (d.getFont().fontStyle || "").indexOf("bold") >= 0 ? "bold " : "";
     var px = Math.ceil(size * 2.2); // 2.2x for crisp output
+    var font = bold + px + "px 'Amiri', 'Cairo', Arial, sans-serif";
     var cv = document.createElement("canvas");
     var c0 = cv.getContext("2d");
-    c0.font = bold + px + "px 'Amiri', Arial, sans-serif";
-    var w = Math.ceil(c0.measureText(s).width) + 10;
-    var h = Math.ceil(px * 1.45);
+    c0.font = font;
+    var w = Math.ceil(c0.measureText(s).width) + 12;
+    var h = Math.ceil(px * 1.9); // extra headroom for Arabic vowel marks
     cv.width = w; cv.height = h;
     var ctx = cv.getContext("2d");
-    ctx.font = bold + px + "px 'Amiri', Arial, sans-serif";
+    ctx.font = font;
     ctx.fillStyle = opts.color || "#000000";
+    /* FIX (Arabic clipped to "ا"): the old code set direction="rtl" but left
+       textAlign at "start" (which is RIGHT in RTL), so fillText(x=5) drew the
+       whole word off the left edge - only the first letter survived. Anchor
+       LEFT and keep direction ltr; the canvas still shapes the Arabic run
+       correctly (Unicode bidi), it just no longer clips. */
+    ctx.textAlign = "left";
     ctx.textBaseline = "middle";
-    ctx.direction = /[\u0600-\u06FF]/.test(s) ? "rtl" : "ltr";
-    ctx.fillText(s, 5, h / 2);
+    ctx.direction = "ltr";
+    ctx.fillText(s, 6, h / 2);
     var url = cv.toDataURL("image/png");
     var wPt = w / 2.2, hPt = h / 2.2;
     var ax = x;
     if (opts.align === "center") ax = x - wPt / 2;
     else if (opts.align === "right") ax = x - wPt;
-    d.addImage(url, "PNG", ax, y - hPt * 0.72, wPt, hPt);
+    d.addImage(url, "PNG", ax, y - hPt * 0.62, wPt, hPt);
+  }
+
+  /* Truncate a string with "..." so it never overflows its column and
+     overlaps the next one. Measures with the same canvas font amsText uses,
+     so it is accurate for both Latin and Arabic names. */
+  function fitWidth(s, maxPt) {
+    s = String(s == null ? "" : s);
+    if (!s) return s;
+    var cv = document.createElement("canvas");
+    var c = cv.getContext("2d");
+    c.font = "20px 'Amiri', 'Cairo', Arial, sans-serif"; // matches 9pt body (px = 9*2.2 ≈ 20)
+    var w = function (t) { return c.measureText(t).width / 2.2; };
+    if (w(s) <= maxPt) return s;
+    if (w("...") > maxPt) return "";
+    var lo = 0, hi = s.length;
+    while (lo < hi) {
+      var mid = Math.ceil((lo + hi) / 2);
+      if (w(s.slice(0, mid) + "...") <= maxPt) lo = mid; else hi = mid - 1;
+    }
+    return s.slice(0, lo) + "...";
   }
 
   function header(d, title, subLines) {
@@ -505,14 +532,16 @@
     chips.forEach(function (c, i) { chip(M + i * (cw + 8), cw, c.v, c.l); });
     y += 40;
 
-    /* ---- column geometry ---- */
+    /* ---- column geometry ----
+       The class name lives in the green band above each group, so there is
+       no Class column here - that frees width for the Admission No. to sit
+       clearly apart from the name (no more overlap). */
     var cols = [
-      { title: "S/N", w: 20, align: "center" },
-      { title: "Full Name", w: 158, align: "left" },
-      { title: "Admission No.", w: 122, align: "left" },
-      { title: "Gender", w: 40, align: "center" },
-      { title: "Class", w: 95, align: "left" },
-      { title: "Confirmed (Sign)", w: 76, align: "center" }
+      { title: "S/N", w: 22, align: "center" },
+      { title: "Full Name", w: 205, align: "left" },
+      { title: "Admission No.", w: 145, align: "left" },
+      { title: "Gender", w: 44, align: "center" },
+      { title: "Confirmed (Sign)", w: 95, align: "center" }
     ];
     var totalW = cols.reduce(function (a, c) { return a + c.w; }, 0);
     var scale = (W - 2 * M) / totalW;
@@ -568,10 +597,9 @@
       }
       var cells = [
         { t: String(n), align: "center" },
-        { t: s.full_name, align: "left" },
+        { t: fitWidth(s.full_name, 205), align: "left" },
         { t: s.student_id, align: "left" },
         { t: s.gender, align: "center" },
-        { t: s.class_name, align: "left" },
         { t: "", align: "center" }
       ];
       d.setFont("helvetica", "normal");
@@ -586,7 +614,8 @@
         }
       });
       /* dashed signature line in the last column */
-      var sx = colX[5] + 6, ex = colX[5] + cols[5].w * scale - 6;
+      var lastI = cols.length - 1;
+      var sx = colX[lastI] + 6, ex = colX[lastI] + cols[lastI].w * scale - 6;
       d.setDrawColor(180, 195, 185);
       d.setLineWidth(0.5);
       d.setLineDashPattern([2, 2], 0);
