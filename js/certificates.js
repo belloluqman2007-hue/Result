@@ -323,7 +323,7 @@ function certBuildHtml(stu, posText) {
     grade: fillTxt(o.grade, "w120"),
     cityAr: fillTxt(o.city, "w120"),
     stateAr: fillTxt(o.state, "w120"),
-    gradeAr: fillTxt(o.grade, "w150")
+    gradeAr: fillTxt(o.grade, "w200")
   };
   var sigT = certSigs.classTeacher ? '<img class="cert-sign-img" src="' + certEsc(certSigs.classTeacher) + '" alt="">' : "";
   var sigP = certSigs.principal ? '<img class="cert-sign-img" src="' + certEsc(certSigs.principal) + '" alt="">' : "";
@@ -332,20 +332,34 @@ function certBuildHtml(stu, posText) {
     : '<span>PASSPORT</span>';
   var dateStr = dt.getDate() + " " + months[dt.getMonth()] + " " + dt.getFullYear();
 
-  // Per-student city/state: use student's address if available, fall back to global fields
-  var stuCity = o.city;
-  var stuState = o.state;
-  if (stu.address && !stuCity) {
-    // Try to parse address into city/state parts
+  /* Per-student city/state/country:
+     Priority 1 — student's own city/state/country columns (added in this pack).
+     Priority 2 — parse from student's address field.
+     Priority 3 — fall back to global certificate fields (o.city / o.state).
+     This means filling the global fields is only a FALLBACK, never overriding
+     individual student data. */
+  var stuCity    = (stu.city    || "").trim();
+  var stuState   = (stu.state   || "").trim();
+  var stuCountry = (stu.country || "").trim();
+
+  if (!stuCity && !stuState && stu.address) {
     var addrParts = String(stu.address).split(",").map(function(s){ return s.trim(); });
-    if (addrParts.length >= 2) { stuCity = addrParts[0]; stuState = addrParts.slice(1).join(", "); }
-    else if (addrParts.length === 1 && addrParts[0]) { stuCity = addrParts[0]; }
+    if (addrParts.length >= 2) {
+      stuCity  = addrParts[addrParts.length - 2] || "";
+      stuState = addrParts[addrParts.length - 1] || "";
+    } else if (addrParts.length === 1 && addrParts[0]) {
+      stuCity = addrParts[0];
+    }
   }
-  // Re-build f with per-student location
-  f.city = fillTxt(stuCity, "w120");
-  f.state = fillTxt(stuState, "w120");
-  f.cityAr = fillTxt(stuCity, "w120");
-  f.stateAr = fillTxt(stuState, "w120");
+  if (!stuCity)    stuCity    = o.city    || "";
+  if (!stuState)   stuState   = o.state   || "";
+  if (!stuCountry) stuCountry = "";
+
+  f.city    = fillTxt(stuCity,    "w120");
+  f.state   = fillTxt(stuState,   "w120");
+  f.cityAr  = fillTxt(stuCity,    "w120");
+  f.stateAr = fillTxt(stuState,   "w120");
+  f.country = fillTxt(stuCountry, "w120");
 
   var titleWord = o.customTitle ? certEsc(o.customTitle.trim().toUpperCase()) : "CERTIFICATE";
   var bodyEnText = o.customBodyEn ? certEsc(o.customBodyEn).replace(/\n/g, "<br>") : t.bodyEn(Object.assign({}, o, { lv: lv, pos: posText }), f);

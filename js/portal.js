@@ -784,10 +784,23 @@ function ptShowView(name) {
   document.body.classList.remove("pt-nav-open");
   window.scrollTo({ top: 0 });
   // lazy loaders: only touch the network when the parent actually opens it
-  if (name === "chat") loadPortalMessages();           // shows + marks read -> bell clears
+  if (name === "chat") loadPortalMessages();
   if (name === "notifications") loadPortalNotifications();
-  if (name === "exams") loadPortalTimetable("exam");    // NEW (pack 25): published exam schedule
-  if (name === "classtt") loadPortalTimetable("class"); // NEW (pack 25): published weekly timetable
+  if (name === "exams") loadPortalTimetable("exam");
+  if (name === "classtt") loadPortalTimetable("class");
+  if (name === "attendance") ptLoadAttendance();
+  if (name === "profile") ptLoadProfile();
+  /* Pack 65 new features — flags managed inside each function */
+  if (name === "progress")   ptLoadProgress();
+  if (name === "position")   ptLoadPosition();
+  if (name === "subjects")   ptLoadSubjects();
+  if (name === "homework")   ptLoadHomework();
+  if (name === "health")     ptLoadHealth();
+  if (name === "transport")  ptLoadTransport();
+  if (name === "gallery")    ptLoadGallery();
+  if (name === "leave")      ptLoadLeave();
+  if (name === "broadcasts") ptLoadBroadcasts();
+  if (name === "prayer")     ptLoadPrayer();
 }
 
 /* Build the OPay-style list: unread replies, school notices & events,
@@ -1075,4 +1088,616 @@ function ptInitAlerts() {
       });
     });
   }).catch(function () { /* stay hidden */ });
+}
+
+/* ==========================================================================
+   NEW: Attendance view for parent portal
+   ========================================================================== */
+var ptAttLoaded = false;
+
+function ptLoadAttendance() {
+  if (ptAttLoaded) return;
+  var list = document.getElementById("ptAttList");
+  var summary = document.getElementById("ptAttSummary");
+  if (!list) return;
+  ptAttLoaded = true;
+
+  var timer = setTimeout(function () {
+    ptAttLoaded = false; // allow retry
+    if (list) list.innerHTML = '<span style="color:#9b1c1c;">⚠️ Loading took too long. Tap Attendance again to retry.</span>';
+  }, 15000);
+
+  fetch("/portal/attendance", { credentials: "same-origin" })
+    .then(function (r) {
+      clearTimeout(timer);
+      if (!r.ok) throw new Error("HTTP " + r.status);
+      return r.json();
+    })
+    .then(function (rows) {
+      rows = Array.isArray(rows) ? rows : [];
+      if (!rows.length) {
+        list.textContent = "No attendance records found yet.";
+        return;
+      }
+
+      // Summary counts
+      var counts = { present: 0, absent: 0, late: 0 };
+      rows.forEach(function (r) { if (counts[r.status] !== undefined) counts[r.status]++; });
+      var total = counts.present + counts.absent + counts.late;
+      var pct = total ? Math.round((counts.present / total) * 100) : 0;
+
+      if (summary) {
+        summary.innerHTML = [
+          { label: "Present", val: counts.present, color: "#14532d", bg: "#eaf3ec" },
+          { label: "Absent",  val: counts.absent,  color: "#9b1c1c", bg: "#fef2f2" },
+          { label: "Late",    val: counts.late,    color: "#92400e", bg: "#fffbeb" },
+          { label: "Rate",    val: pct + "%",      color: "#1d4a30", bg: "#f0fdf4" }
+        ].map(function (s) {
+          return '<div style="flex:1; min-width:70px; background:' + s.bg + '; border-radius:10px; padding:10px 8px; text-align:center;">' +
+            '<div style="font-size:20px; font-weight:800; color:' + s.color + ';">' + s.val + '</div>' +
+            '<div style="font-size:11px; color:#5B6B62; font-weight:600;">' + s.label + '</div></div>';
+        }).join("");
+      }
+
+      // Table
+      var months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+      var html = '<table style="width:100%; border-collapse:collapse; font-size:13px;">' +
+        '<thead><tr style="background:#f0fdf4;">' +
+        '<th style="padding:7px 8px; text-align:left; color:#14532d; font-weight:700;">Date</th>' +
+        '<th style="padding:7px 8px; text-align:left; color:#14532d; font-weight:700;">Status</th>' +
+        '<th style="padding:7px 8px; text-align:left; color:#14532d; font-weight:700;">Class</th>' +
+        '</tr></thead><tbody>';
+
+      var statusColor = { present: "#14532d", absent: "#9b1c1c", late: "#92400e" };
+      var statusBg    = { present: "#eaf3ec", absent: "#fef2f2", late: "#fffbeb" };
+      var statusLabel = { present: "✓ Present", absent: "✗ Absent", late: "⏰ Late" };
+
+      rows.forEach(function (r, i) {
+        var d = new Date(r.att_date);
+        var dateStr = d.getDate() + " " + months[d.getMonth()] + " " + d.getFullYear();
+        var st = r.status || "present";
+        html += '<tr style="background:' + (i % 2 === 0 ? "#fff" : "#fafafa") + ';">' +
+          '<td style="padding:7px 8px;">' + dateStr + '</td>' +
+          '<td style="padding:7px 8px;"><span style="background:' + (statusBg[st] || "#eee") + '; color:' + (statusColor[st] || "#333") + '; border-radius:6px; padding:2px 8px; font-size:12px; font-weight:700;">' + (statusLabel[st] || st) + '</span></td>' +
+          '<td style="padding:7px 8px; color:#5B6B62;">' + (r.class_name || "-") + '</td>' +
+          '</tr>';
+      });
+
+      list.innerHTML = html + "</tbody></table>";
+    })
+    .catch(function () {
+      clearTimeout(timer);
+      ptAttLoaded = false; // reset so user can retry
+      if (list) list.innerHTML = '<span style="color:#9b1c1c;">⚠️ Could not load attendance. Tap Attendance again to retry.</span>';
+    });
+}
+
+/* ==========================================================================
+   NEW: Student profile view for parent portal
+   ========================================================================== */
+var ptProfileLoaded = false;
+
+function ptLoadProfile() {
+  if (ptProfileLoaded) return;
+  var content = document.getElementById("ptProfileContent");
+  if (!content) return;
+  ptProfileLoaded = true;
+
+  var timer = setTimeout(function () {
+    ptProfileLoaded = false;
+    if (content) content.innerHTML = '<span style="color:#9b1c1c;">⚠️ Loading too slow. Tap My Profile again to retry.</span>';
+  }, 15000);
+
+  fetch("/portal/me", { credentials: "same-origin" })
+    .then(function (r) { clearTimeout(timer); return r.ok ? r.json() : null; })
+    .then(function (d) {
+      if (!d || !d.loggedIn) {
+        ptProfileLoaded = false;
+        if (content) content.innerHTML = '<span style="color:#9b1c1c;">⚠️ Session expired. Please log out and log in again.</span>';
+        return;
+      }
+      var stu = d.student || d;
+      var photoSrc = stu.photo_path ? "/" + stu.photo_path : "images/default.png";
+      content.innerHTML =
+        '<img src="' + photoSrc + '" onerror="this.src=\'images/default.png\'" ' +
+        'style="width:90px; height:90px; border-radius:50%; object-fit:cover; border:3px solid #14532d; margin-bottom:12px;">' +
+        '<h2 style="font-size:18px; font-weight:800; color:#14291c; margin:0 0 4px;">' + (stu.full_name || "-") + '</h2>' +
+        '<p style="color:#5B6B62; font-size:13px; margin:0 0 14px;">Admission No: <b>' + (stu.student_id || "-") + '</b></p>' +
+        '<div style="display:grid; gap:8px; text-align:left;">' +
+        ptProfileRow("Class", stu.class_name) +
+        ptProfileRow("Gender", stu.gender) +
+        ptProfileRow("Date of Birth", stu.date_of_birth ? new Date(stu.date_of_birth).toLocaleDateString("en-GB", { day:"numeric", month:"long", year:"numeric" }) : "-") +
+        ptProfileRow("Parent / Guardian", stu.parent_name) +
+        ptProfileRow("Parent Phone", stu.parent_phone) +
+        ptProfileRow("Address", stu.address) +
+        "</div>";
+
+      // Pre-fill contact form
+      var pn = document.getElementById("ptParentName");
+      var pp = document.getElementById("ptParentPhone");
+      var pa = document.getElementById("ptAddress");
+      if (pn) pn.value = stu.parent_name || "";
+      if (pp) pp.value = stu.parent_phone || "";
+      if (pa) pa.value = stu.address || "";
+    })
+    .catch(function () {
+      clearTimeout(timer);
+      ptProfileLoaded = false;
+      if (content) content.innerHTML = '<span style="color:#9b1c1c;">⚠️ Could not load profile. Tap My Profile again to retry.</span>';
+    });
+}
+
+function ptProfileRow(label, value) {
+  if (!value) return "";
+  return '<div style="background:#f7faf7; border-radius:8px; padding:8px 11px;">' +
+    '<span style="font-size:11px; font-weight:700; color:#3a5441; text-transform:uppercase; letter-spacing:.04em;">' + label + '</span>' +
+    '<div style="font-size:14px; color:#14291c; font-weight:600; margin-top:2px;">' + value + '</div>' +
+    '</div>';
+}
+
+function ptSaveProfile() {
+  var pn = (document.getElementById("ptParentName")  || {}).value || "";
+  var pp = (document.getElementById("ptParentPhone") || {}).value || "";
+  var pa = (document.getElementById("ptAddress")     || {}).value || "";
+  var msg = document.getElementById("ptProfileMsg");
+
+  fetch("/portal/profile", {
+    method: "POST",
+    credentials: "same-origin",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ parent_name: pn, parent_phone: pp, address: pa })
+  })
+    .then(function (r) { return r.json(); })
+    .then(function (d) {
+      if (msg) { msg.textContent = d.message || "Saved!"; msg.style.color = "#14532d"; }
+      setTimeout(function () { if (msg) msg.textContent = ""; }, 3000);
+    })
+    .catch(function () {
+      if (msg) { msg.textContent = "Could not save. Check your connection."; msg.style.color = "#9b1c1c"; }
+    });
+}
+
+/* ==========================================================================
+   PACK 65 — ALL NEW PORTAL FEATURES
+   ========================================================================== */
+
+/* ── lazy-load flags ── */
+var ptProgressLoaded=false, ptPositionLoaded=false, ptSubjectsLoaded=false,
+    ptHomeworkLoaded=false, ptHealthLoaded=false, ptTransportLoaded=false,
+    ptGalleryLoaded=false, ptLeaveLoaded=false, ptBroadcastsLoaded=false,
+    ptPrayerLoaded=false;
+
+/* ── hook into ptShowView ── already patched above, add remaining views ── */
+var _ptShowViewOrig = window.ptShowViewExtra || function(){};
+window.ptShowViewExtra = function(name) {
+  /* flags are managed inside each function — call unconditionally,
+     each loader decides whether it needs to run */
+  if (name==="progress")   ptLoadProgress();
+  if (name==="position")   ptLoadPosition();
+  if (name==="subjects")   ptLoadSubjects();
+  if (name==="homework")   ptLoadHomework();
+  if (name==="health")     ptLoadHealth();
+  if (name==="transport")  ptLoadTransport();
+  if (name==="gallery")    ptLoadGallery();
+  if (name==="leave")      ptLoadLeave();
+  if (name==="broadcasts") ptLoadBroadcasts();
+  if (name==="prayer")     ptLoadPrayer();
+  _ptShowViewOrig(name);
+};
+
+/* ── patch ptShowView to call extra ── */
+(function(){
+  var orig = window.ptShowView;
+  if (orig) window.ptShowView = function(name) { orig(name); window.ptShowViewExtra(name); };
+})();
+
+/* ====================================================================
+   PROGRESS CHART
+   ==================================================================== */
+var ptProgressData = [];
+
+function ptLoadProgress() {
+  if (ptProgressLoaded) return; ptProgressLoaded = true;
+  fetch("/portal/progress", { credentials:"same-origin" })
+    .then(function(r){ return r.json(); })
+    .then(function(rows) {
+      ptProgressData = rows || [];
+      // Populate subject dropdown
+      var sel = document.getElementById("ptProgressSubject");
+      if (sel) {
+        var subjects = [...new Set(rows.map(function(r){ return r.subject; }))].sort();
+        sel.innerHTML = '<option value="">All Subjects</option>' +
+          subjects.map(function(s){ return '<option value="'+s+'">'+s+'</option>'; }).join("");
+      }
+      ptRenderChart();
+    })
+    .catch(function(){ document.getElementById("ptProgressEmpty").style.display="block"; });
+}
+
+function ptRenderChart() {
+  var canvas = document.getElementById("ptProgressCanvas");
+  var empty  = document.getElementById("ptProgressEmpty");
+  var sel    = document.getElementById("ptProgressSubject");
+  if (!canvas) return;
+  var filter = sel ? sel.value : "";
+  var rows = filter ? ptProgressData.filter(function(r){ return r.subject===filter; }) : ptProgressData;
+  if (!rows.length) { canvas.style.display="none"; if(empty) empty.style.display="block"; return; }
+  canvas.style.display="block"; if(empty) empty.style.display="none";
+
+  // Group by term+session label
+  var labels = [], dataMap = {};
+  rows.forEach(function(r) {
+    var lbl = r.term + " " + r.session;
+    if (!labels.includes(lbl)) labels.push(lbl);
+    if (!dataMap[r.subject]) dataMap[r.subject] = {};
+    var prev = dataMap[r.subject][lbl];
+    dataMap[r.subject][lbl] = prev ? Math.max(prev, Number(r.total)) : Number(r.total);
+  });
+
+  var subjects = Object.keys(dataMap);
+  var colors = ["#2f7a4e","#d9a419","#1d4a30","#a0522d","#4a7c59","#8b6914","#3a5441","#c75"];
+  var ctx = canvas.getContext("2d");
+  var W = canvas.offsetWidth || 340;
+  canvas.width = W; canvas.height = Math.min(260, W * 0.7);
+  var H = canvas.height;
+  var padL=38, padR=14, padT=16, padB=40;
+  var chartW = W-padL-padR, chartH = H-padT-padB;
+  ctx.clearRect(0,0,W,H);
+
+  // Find max
+  var maxVal = 100;
+  subjects.forEach(function(s){ labels.forEach(function(l){ var v=dataMap[s][l]; if(v && v>maxVal) maxVal=v; }); });
+  maxVal = Math.ceil(maxVal/10)*10;
+
+  // Grid lines
+  ctx.strokeStyle="#e8f0e9"; ctx.lineWidth=1;
+  for (var gi=0; gi<=5; gi++) {
+    var gy = padT + chartH - (gi/5)*chartH;
+    ctx.beginPath(); ctx.moveTo(padL,gy); ctx.lineTo(padL+chartW,gy); ctx.stroke();
+    ctx.fillStyle="#7d9488"; ctx.font="10px sans-serif"; ctx.textAlign="right";
+    ctx.fillText(Math.round(gi/5*maxVal), padL-4, gy+3);
+  }
+
+  // Bars (grouped)
+  var barGroup = chartW / Math.max(labels.length, 1);
+  var barW = Math.max(6, barGroup / Math.max(subjects.length,1) - 2);
+
+  labels.forEach(function(lbl, li) {
+    var gx = padL + li * barGroup;
+    subjects.forEach(function(subj, si) {
+      var val = dataMap[subj][lbl] || 0;
+      var bh = (val/maxVal)*chartH;
+      var bx = gx + si*(barW+2) + (barGroup - subjects.length*(barW+2))/2;
+      var by = padT + chartH - bh;
+      ctx.fillStyle = colors[si % colors.length];
+      ctx.beginPath();
+      ctx.roundRect ? ctx.roundRect(bx,by,barW,bh,2) : ctx.rect(bx,by,barW,bh);
+      ctx.fill();
+    });
+    // X label
+    ctx.fillStyle="#3a5441"; ctx.font="9px sans-serif"; ctx.textAlign="center";
+    var shortLbl = lbl.length>14 ? lbl.slice(0,13)+"…" : lbl;
+    ctx.fillText(shortLbl, gx+barGroup/2, H-padB+14);
+  });
+
+  // Legend (small)
+  if (subjects.length>1) {
+    var lx=padL, ly=H-padB+26;
+    subjects.forEach(function(s,i){
+      ctx.fillStyle=colors[i%colors.length];
+      ctx.fillRect(lx,ly-7,10,8);
+      ctx.fillStyle="#1f2d26"; ctx.font="9px sans-serif"; ctx.textAlign="left";
+      var tw = ctx.measureText(s).width;
+      ctx.fillText(s,lx+13,ly); lx+=tw+22;
+      if(lx>W-40){ lx=padL; ly+=14; }
+    });
+  }
+}
+
+/* ====================================================================
+   CLASS POSITION
+   ==================================================================== */
+function ptLoadPosition() {
+  if (ptPositionLoaded) return; ptPositionLoaded = true;
+  var box = document.getElementById("ptPositionList");
+  if (!box) return;
+  fetch("/portal/position", { credentials:"same-origin" })
+    .then(function(r){ return r.json(); })
+    .then(function(rows) {
+      if (!rows.length) { box.innerHTML='<p style="color:#5B6B62;">No position data yet.</p>'; return; }
+      var medals = ["🥇","🥈","🥉"];
+      box.innerHTML = rows.map(function(r) {
+        var medal = r.position<=3 ? medals[r.position-1] : "🏅";
+        var suffix = r.position===1?"st":r.position===2?"nd":r.position===3?"rd":"th";
+        var pct = Math.round((1-r.position/r.total)*100);
+        var color = r.position===1?"#d9a419":r.position<=3?"#2f7a4e":"#3a5441";
+        return '<div style="background:#f7faf7;border:1.5px solid #d3e8d6;border-radius:12px;padding:14px 16px;margin-bottom:10px;">' +
+          '<div style="font-size:12px;color:#7d9488;font-weight:600;">' + r.term + ' — ' + r.session + '</div>' +
+          '<div style="display:flex;align-items:center;gap:12px;margin-top:8px;">' +
+          '<span style="font-size:36px;">' + medal + '</span>' +
+          '<div>' +
+          '<div style="font-size:24px;font-weight:900;color:'+color+';">' + r.position + '<sup>'+suffix+'</sup></div>' +
+          '<div style="font-size:12px;color:#5B6B62;">out of ' + r.total + ' students · top ' + pct + '%</div>' +
+          '</div></div></div>';
+      }).join("");
+    })
+    .catch(function(){ if(box) box.textContent="Could not load position data."; });
+}
+
+/* ====================================================================
+   SUBJECTS LIST
+   ==================================================================== */
+function ptLoadSubjects() {
+  if (ptSubjectsLoaded) return; ptSubjectsLoaded = true;
+  var box = document.getElementById("ptSubjectsList");
+  if (!box) return;
+  fetch("/portal/subjects", { credentials:"same-origin" })
+    .then(function(r){ return r.json(); })
+    .then(function(subs) {
+      if (!subs.length) { box.textContent="No subjects found for your class."; return; }
+      box.innerHTML = '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:8px;">' +
+        subs.map(function(s,i) {
+          var emojis=["📖","✏️","🔢","🌍","🔬","🕌","🌿","🎨","📐","🧪","📝","🌙"];
+          return '<div style="background:linear-gradient(135deg,#eaf3ec,#f7faf7);border:1.5px solid #d3e8d6;border-radius:10px;padding:12px;text-align:center;">' +
+            '<div style="font-size:22px;margin-bottom:4px;">' + (emojis[i%emojis.length]) + '</div>' +
+            '<div style="font-size:13px;font-weight:700;color:#14291c;">' + s + '</div></div>';
+        }).join("") + '</div>';
+    })
+    .catch(function(){ if(box) box.textContent="Could not load subjects."; });
+}
+
+/* ====================================================================
+   HOMEWORK
+   ==================================================================== */
+function ptLoadHomework() {
+  if (ptHomeworkLoaded) return; ptHomeworkLoaded = true;
+  var box = document.getElementById("ptHomeworkList");
+  if (!box) return;
+  fetch("/portal/homework", { credentials:"same-origin" })
+    .then(function(r){ return r.json(); })
+    .then(function(rows) {
+      if (!rows.length) { box.innerHTML='<p style="color:#5B6B62;text-align:center;padding:12px;">No homework assigned yet. &#127881;</p>'; return; }
+      var now = new Date();
+      box.innerHTML = rows.map(function(hw) {
+        var due = hw.due_date ? new Date(hw.due_date) : null;
+        var overdue = due && due < now;
+        var dueStr = due ? due.toLocaleDateString("en-GB",{day:"numeric",month:"short",year:"numeric"}) : "No due date";
+        var dueColor = overdue ? "#9b1c1c" : due ? "#92400e" : "#7d9488";
+        return '<div style="background:#f7faf7;border:1.5px solid #d3e8d6;border-radius:11px;padding:13px 14px;margin-bottom:10px;">' +
+          '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;">' +
+          '<div><div style="font-size:14px;font-weight:800;color:#14291c;">' + hw.title + '</div>' +
+          '<div style="font-size:12px;color:#3a5441;font-weight:600;margin-top:2px;">📚 ' + hw.subject + '</div></div>' +
+          '<span style="font-size:11px;background:#eaf3ec;color:'+dueColor+';border-radius:6px;padding:3px 8px;font-weight:700;white-space:nowrap;">' +
+          (overdue?"⚠️ ":"📅 ")+dueStr+'</span></div>' +
+          (hw.description ? '<p style="font-size:13px;color:#3a5441;margin:8px 0 0;line-height:1.5;">' + hw.description + '</p>' : '') +
+          '<div style="font-size:11px;color:#99b09e;margin-top:6px;">Posted by ' + (hw.posted_by||"School") + '</div></div>';
+      }).join("");
+    })
+    .catch(function(){ if(box) box.textContent="Could not load homework."; });
+}
+
+/* ====================================================================
+   HEALTH RECORD
+   ==================================================================== */
+function ptLoadHealth() {
+  if (ptHealthLoaded) return; ptHealthLoaded = true;
+  var box = document.getElementById("ptHealthContent");
+  if (!box) return;
+  fetch("/portal/health", { credentials:"same-origin" })
+    .then(function(r){ return r.json(); })
+    .then(function(h) {
+      var hasData = h.blood_group||h.allergies||h.medical_conditions||h.emergency_contact_name||h.emergency_contact_phone;
+      if (!hasData) {
+        box.innerHTML='<p style="color:#5B6B62;text-align:center;">No health record on file. Contact the school to add your child\'s medical information.</p>';
+        return;
+      }
+      var rows = [
+        {icon:"🩸",label:"Blood Group",val:h.blood_group},
+        {icon:"⚠️",label:"Allergies",val:h.allergies},
+        {icon:"💊",label:"Medical Conditions",val:h.medical_conditions},
+        {icon:"🚨",label:"Emergency Contact",val:h.emergency_contact_name},
+        {icon:"📞",label:"Emergency Phone",val:h.emergency_contact_phone},
+        {icon:"📋",label:"Notes",val:h.notes}
+      ].filter(function(r){ return r.val; });
+      box.innerHTML='<div style="display:grid;gap:9px;">'+
+        rows.map(function(r){
+          return '<div style="background:#f7faf7;border:1.5px solid #d3e8d6;border-radius:9px;padding:10px 13px;display:flex;gap:10px;align-items:flex-start;">' +
+            '<span style="font-size:20px;flex:0 0 auto;">' + r.icon + '</span>' +
+            '<div><div style="font-size:11px;font-weight:700;color:#7d9488;text-transform:uppercase;letter-spacing:.04em;">' + r.label + '</div>' +
+            '<div style="font-size:14px;color:#14291c;font-weight:600;margin-top:2px;">' + r.val + '</div></div></div>';
+        }).join("") + '</div>';
+    })
+    .catch(function(){ if(box) box.textContent="Could not load health record."; });
+}
+
+/* ====================================================================
+   TRANSPORT
+   ==================================================================== */
+function ptLoadTransport() {
+  if (ptTransportLoaded) return; ptTransportLoaded = true;
+  var box = document.getElementById("ptTransportContent");
+  if (!box) return;
+  fetch("/portal/transport", { credentials:"same-origin" })
+    .then(function(r){ return r.json(); })
+    .then(function(t) {
+      if (!t) {
+        box.innerHTML='<div style="text-align:center;padding:14px;"><div style="font-size:48px;margin-bottom:8px;">🚶</div><p style="color:#5B6B62;">No transport assigned. Contact school if your child uses the school bus.</p></div>';
+        return;
+      }
+      var fields=[
+        {icon:"🚌",label:"Route",val:t.route_name},
+        {icon:"🔢",label:"Bus Number",val:t.bus_number},
+        {icon:"👨‍✈️",label:"Driver Name",val:t.driver_name},
+        {icon:"📞",label:"Driver Phone",val:t.driver_phone},
+        {icon:"🌅",label:"Morning Pick-up",val:t.pickup_time},
+        {icon:"🌆",label:"Afternoon Drop-off",val:t.dropoff_time},
+        {icon:"📍",label:"Your Pick-up Point",val:t.pickup_point},
+        {icon:"📋",label:"Notes",val:t.route_notes||t.assignment_notes}
+      ].filter(function(f){ return f.val; });
+      box.innerHTML='<div style="display:grid;gap:9px;">'+
+        fields.map(function(f){
+          return '<div style="background:#f7faf7;border:1.5px solid #d3e8d6;border-radius:9px;padding:10px 13px;display:flex;gap:10px;align-items:center;">' +
+            '<span style="font-size:22px;flex:0 0 auto;">' + f.icon + '</span>' +
+            '<div><div style="font-size:11px;font-weight:700;color:#7d9488;text-transform:uppercase;">' + f.label + '</div>' +
+            '<div style="font-size:14px;font-weight:700;color:#14291c;">' + f.val + '</div></div></div>';
+        }).join("") + '</div>';
+    })
+    .catch(function(){ if(box) box.textContent="Could not load transport info."; });
+}
+
+/* ====================================================================
+   GALLERY
+   ==================================================================== */
+function ptLoadGallery() {
+  if (ptGalleryLoaded) return; ptGalleryLoaded = true;
+  var grid = document.getElementById("ptGalleryGrid");
+  if (!grid) return;
+  fetch("/portal/gallery", { credentials:"same-origin" })
+    .then(function(r){ return r.json(); })
+    .then(function(photos) {
+      if (!photos.length) {
+        grid.innerHTML='<div style="text-align:center;padding:20px;"><div style="font-size:48px;margin-bottom:8px;">📷</div><p style="color:#5B6B62;">No photos uploaded yet.</p></div>';
+        return;
+      }
+      grid.innerHTML='<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:10px;">'+
+        photos.map(function(p){
+          return '<div style="border-radius:10px;overflow:hidden;background:#1f2d26;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,.12);" onclick="ptOpenLightbox('+p.id+',\''+encodeURIComponent(p.title||'')+'\',\''+encodeURIComponent(p.caption||'')+'\')">'+
+            '<img src="/portal/gallery/image/'+p.id+'" alt="'+p.title+'" style="width:100%;aspect-ratio:1;object-fit:cover;display:block;" loading="lazy">'+
+            '<div style="padding:5px 7px;"><div style="font-size:11px;font-weight:700;color:#eaf3ec;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+(p.title||'Photo')+'</div></div></div>';
+        }).join("") + '</div>';
+    })
+    .catch(function(){ if(grid) grid.textContent="Could not load gallery."; });
+}
+
+function ptOpenLightbox(id, title, caption) {
+  var lb = document.getElementById("ptLightbox");
+  var img = document.getElementById("ptLightboxImg");
+  var cap = document.getElementById("ptLightboxCaption");
+  if (!lb||!img) return;
+  img.src="/portal/gallery/image/"+id;
+  if(cap) cap.textContent=decodeURIComponent(caption)||decodeURIComponent(title)||"";
+  lb.style.display="flex";
+}
+
+/* ====================================================================
+   LEAVE REQUEST
+   ==================================================================== */
+function ptLoadLeave() {
+  var box = document.getElementById("ptLeaveHistory");
+  if (!box) return;
+  var today = new Date().toISOString().slice(0,10);
+  var fromEl=document.getElementById("ptLeaveFrom"), toEl=document.getElementById("ptLeaveTo");
+  if(fromEl && !fromEl.value) fromEl.value=today;
+  if(toEl && !toEl.value) toEl.value=today;
+
+  fetch("/portal/leave", { credentials:"same-origin" })
+    .then(function(r){ return r.json(); })
+    .then(function(rows) {
+      if (!rows.length) { box.innerHTML='<p style="color:#5B6B62;text-align:center;">No leave requests yet.</p>'; return; }
+      var statusColors={approved:"#14532d",rejected:"#9b1c1c",pending:"#92400e"};
+      var statusBg={approved:"#eaf3ec",rejected:"#fef2f2",pending:"#fffbeb"};
+      box.innerHTML=rows.map(function(r){
+        var st=r.status||"pending";
+        return '<div style="background:#f7faf7;border:1.5px solid #d3e8d6;border-radius:10px;padding:12px 14px;margin-bottom:8px;">'+
+          '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">'+
+          '<div style="font-size:13px;font-weight:700;color:#14291c;">'+new Date(r.from_date).toLocaleDateString("en-GB",{day:"numeric",month:"short"})+" — "+new Date(r.to_date).toLocaleDateString("en-GB",{day:"numeric",month:"short",year:"numeric"})+'</div>'+
+          '<span style="background:'+(statusBg[st]||"#eee")+';color:'+(statusColors[st]||"#333")+';border-radius:6px;padding:2px 9px;font-size:11px;font-weight:800;text-transform:uppercase;">'+st+'</span></div>'+
+          '<p style="font-size:13px;color:#3a5441;margin:6px 0 0;line-height:1.4;">'+r.reason+'</p>'+
+          (r.admin_note?'<p style="font-size:12px;color:#5B6B62;margin:4px 0 0;font-style:italic;">School note: '+r.admin_note+'</p>':'')+
+          '</div>';
+      }).join("");
+    })
+    .catch(function(){ if(box) box.textContent="Could not load requests."; });
+}
+
+function ptSubmitLeave() {
+  var reason=document.getElementById("ptLeaveReason").value.trim();
+  var from=document.getElementById("ptLeaveFrom").value;
+  var to=document.getElementById("ptLeaveTo").value;
+  var msg=document.getElementById("ptLeaveMsg");
+  if(!reason||!from||!to){if(msg){msg.textContent="Please fill in all fields.";msg.style.color="#9b1c1c";}return;}
+  fetch("/portal/leave",{method:"POST",credentials:"same-origin",headers:{"Content-Type":"application/json"},body:JSON.stringify({reason:reason,from_date:from,to_date:to})})
+    .then(function(r){return r.json();})
+    .then(function(d){
+      if(msg){msg.textContent=d.message||"Submitted.";msg.style.color="#14532d";}
+      document.getElementById("ptLeaveReason").value="";
+      ptLeaveLoaded=false; ptLoadLeave();
+      setTimeout(function(){if(msg)msg.textContent="";},4000);
+    })
+    .catch(function(){if(msg){msg.textContent="Network error.";msg.style.color="#9b1c1c";}});
+}
+
+/* ====================================================================
+   BROADCASTS
+   ==================================================================== */
+function ptLoadBroadcasts() {
+  if (ptBroadcastsLoaded) return; ptBroadcastsLoaded = true;
+  var box = document.getElementById("ptBroadcastsList");
+  if (!box) return;
+  fetch("/portal/broadcasts", { credentials:"same-origin" })
+    .then(function(r){ return r.json(); })
+    .then(function(rows) {
+      if (!rows.length) { box.innerHTML='<div style="text-align:center;padding:16px;"><div style="font-size:40px;margin-bottom:8px;">📭</div><p style="color:#5B6B62;">No announcements yet.</p></div>'; return; }
+      box.innerHTML=rows.map(function(b){
+        var dt=new Date(b.created_at).toLocaleDateString("en-GB",{day:"numeric",month:"long",year:"numeric"});
+        return '<div style="background:'+(b.pinned?"#fffbeb":"#f7faf7")+';border:1.5px solid '+(b.pinned?"#f3c94e":"#d3e8d6")+';border-radius:11px;padding:14px;margin-bottom:10px;">'+
+          (b.pinned?'<div style="font-size:11px;font-weight:800;color:#92400e;margin-bottom:4px;">📌 PINNED</div>':'')+
+          '<div style="font-size:15px;font-weight:800;color:#14291c;margin-bottom:6px;">'+b.title+'</div>'+
+          '<p style="font-size:13.5px;color:#3a5441;line-height:1.55;margin:0 0 8px;">'+b.message+'</p>'+
+          '<div style="font-size:11px;color:#99b09e;">'+dt+' · '+b.posted_by+'</div></div>';
+      }).join("");
+    })
+    .catch(function(){ if(box) box.textContent="Could not load announcements."; });
+}
+
+/* ====================================================================
+   PRAYER TIMES (Aladhan API — free, no key)
+   ==================================================================== */
+function ptLoadPrayer() {
+  if (ptPrayerLoaded) return; ptPrayerLoaded = true;
+  var box = document.getElementById("ptPrayerTimes");
+  var dateBox = document.getElementById("ptPrayerDate");
+  if (!box) return;
+  var today = new Date();
+  var url = "https://api.aladhan.com/v1/timingsByCity?city=Ijebu-Ode&country=Nigeria&method=2&date=" +
+    today.getDate()+"-"+(today.getMonth()+1)+"-"+today.getFullYear();
+  fetch(url)
+    .then(function(r){ return r.json(); })
+    .then(function(d) {
+      var t = d.data && d.data.timings;
+      if (!t) throw new Error("No data");
+      var hijri = d.data.date && d.data.date.hijri;
+      if (dateBox && hijri) {
+        dateBox.textContent = today.toLocaleDateString("en-GB",{weekday:"long",day:"numeric",month:"long",year:"numeric"}) +
+          " | " + hijri.day + " " + (hijri.month&&hijri.month.en||"") + " " + hijri.year + " AH";
+      }
+      var prayers = [
+        {name:"Fajr",time:t.Fajr,icon:"🌙"},
+        {name:"Sunrise",time:t.Sunrise,icon:"🌅"},
+        {name:"Dhuhr",time:t.Dhuhr,icon:"☀️"},
+        {name:"Asr",time:t.Asr,icon:"🌤"},
+        {name:"Maghrib",time:t.Maghrib,icon:"🌆"},
+        {name:"Isha",time:t.Isha,icon:"🌙"}
+      ];
+      var nowH=today.getHours(), nowM=today.getMinutes(), nowMins=nowH*60+nowM;
+      var nextPrayer = null;
+      prayers.forEach(function(p){
+        var parts=(p.time||"00:00").split(":"); var pm=parseInt(parts[0])*60+parseInt(parts[1]);
+        p.mins=pm; if(!nextPrayer && pm>nowMins) nextPrayer=p.name;
+      });
+      box.innerHTML='<div style="display:grid;gap:8px;">'+
+        prayers.map(function(p){
+          var isNext=p.name===nextPrayer;
+          return '<div style="background:'+(isNext?"linear-gradient(135deg,#1d4a30,#2f7a4e)":"#f7faf7")+';border:1.5px solid '+(isNext?"#1d4a30":"#d3e8d6")+';border-radius:10px;padding:12px 15px;display:flex;justify-content:space-between;align-items:center;">'+
+            '<div style="display:flex;align-items:center;gap:10px;">'+
+            '<span style="font-size:22px;">'+p.icon+'</span>'+
+            '<div><div style="font-size:14px;font-weight:800;color:'+(isNext?"#fff":"#14291c")+';">'+p.name+'</div>'+
+            (isNext?'<div style="font-size:10px;color:#a8d5b5;font-weight:700;">NEXT PRAYER</div>':'')+
+            '</div></div>'+
+            '<div style="font-size:18px;font-weight:900;color:'+(isNext?"#f3c94e":"#14532d")+';">'+p.time+'</div></div>';
+        }).join("")+'</div>';
+    })
+    .catch(function(){
+      if(box) box.innerHTML='<div style="text-align:center;padding:16px;color:#5B6B62;"><div style="font-size:32px;margin-bottom:8px;">🕌</div>Could not load prayer times. Check your connection.</div>';
+    });
 }

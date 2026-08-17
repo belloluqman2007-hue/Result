@@ -35,7 +35,10 @@ function initAttendance() {
   document.getElementById("attRepFrom").value = todayStr().slice(0, 8) + "01";
   document.getElementById("attRepTo").value = todayStr();
 
-  fetch("/classes")
+  /* Load classes from BOTH the classes table and students table merged,
+     so the dropdown always shows classes that have actual students even
+     if the classes table doesn't match exactly. */
+  fetch("/api/distinct-classes")
     .then(function (r) { return r.json(); })
     .then(function (classes) {
       var sel = document.getElementById("attClass");

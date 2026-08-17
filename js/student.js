@@ -66,9 +66,15 @@ function saveStudent() {
     const parentNameEl = document.getElementById("parentName");
     const parentPhoneEl = document.getElementById("parentPhone");
     const addressEl = document.getElementById("address");
+    const cityEl    = document.getElementById("city");
+    const stateEl   = document.getElementById("state");
+    const countryEl = document.getElementById("country");
     if (parentNameEl) formData.append("parent_name", parentNameEl.value.trim());
     if (parentPhoneEl) formData.append("parent_phone", parentPhoneEl.value.trim());
     if (addressEl) formData.append("address", addressEl.value.trim());
+    if (cityEl)    formData.append("city",    cityEl.value.trim());
+    if (stateEl)   formData.append("state",   stateEl.value.trim());
+    if (countryEl) formData.append("country", countryEl.value.trim());
 
     // Photo must come AFTER the text fields: multer names the saved
     // file using the student_id field it already received.

@@ -7,6 +7,19 @@
 var storeCurrentFolder = "/";
 var storeItems = [];
 
+/* Files that browsers can display inline — everything else gets Download only */
+function storeCanPreview(mimeType, fileName) {
+  var mime = (mimeType || "").toLowerCase();
+  var name = (fileName || "").toLowerCase();
+  var ext  = name.split(".").pop();
+  // Previewable: images, PDFs, plain text
+  if (/^image\//.test(mime)) return true;
+  if (mime === "application/pdf" || ext === "pdf") return true;
+  if (/^text\//.test(mime) || ext === "txt" || ext === "csv") return true;
+  // NOT previewable: Word docs, Excel, zip, etc.
+  return false;
+}
+
 function storeInit() {
   storeLoad();
 }
@@ -106,7 +119,9 @@ function storeRender() {
       '<td style="text-align:right; white-space:nowrap;">' +
       (isFolder
         ? '<button type="button" class="mg-btn-sm mg-btn-light" onclick="storeNavigate(\'' + nextFolder.replace(/'/g, "\\'") + '\')">Open</button> '
-        : '<a href="/api/store/view/' + item.id + '" target="_blank" class="mg-btn-sm mg-btn-light" style="text-decoration:none; display:inline-block; margin-right:4px;">👁️ Preview</a> ' +
+        : (storeCanPreview(item.file_type, item.original_name || item.file_name)
+            ? '<a href="/api/store/view/' + item.id + '" target="_blank" class="mg-btn-sm mg-btn-light" style="text-decoration:none; display:inline-block; margin-right:4px;">👁️ Preview</a> '
+            : '') +
           '<a href="/api/store/download/' + item.id + '" class="mg-btn-sm mg-btn" style="text-decoration:none; display:inline-block; margin-right:4px;">⬇️ Download</a> ') +
       '<button type="button" class="mg-btn-sm mg-btn-light" style="color:#B91C1C;" onclick="storeDeleteItem(' + item.id + ', \'' + storeEsc(item.file_name || item.original_name).replace(/'/g, "\\'") + '\')">🗑️ Delete</button>' +
       "</td>" +

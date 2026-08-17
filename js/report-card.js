@@ -260,8 +260,8 @@
         // Natural size at full A4 width
         const naturalHmm = (canvasH * contentWmm) / canvasW;
 
-        if (naturalHmm <= contentHmm * 1.1) {
-            // Fits on one page (maybe slightly over, scale down a bit)
+        if (naturalHmm <= contentHmm * 1.5) {
+            // Fits on one page — scale to fit exactly (never overflow)
             const scale = Math.min(1.0, contentHmm / naturalHmm);
             const wMm = contentWmm * scale;
             const hMm = naturalHmm * scale;
