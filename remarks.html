@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Teacher Comments | Ameenullah School</title>
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="css/modern-ui.css">
+<link rel="stylesheet" href="css/manage.css">
+<link rel="stylesheet" href="css/school.css">
+<style>
+.hw-card{background:#fff;border-radius:14px;padding:18px;margin-bottom:14px;box-shadow:0 2px 10px rgba(0,0,0,.07);}
+.hw-form input,.hw-form select,.hw-form textarea{width:100%;padding:9px 12px;border:1.5px solid #c8d6ca;border-radius:9px;font-family:inherit;font-size:14px;margin-bottom:9px;background:#f7faf7;box-sizing:border-box;}
+.hw-btn{background:linear-gradient(135deg,#1d4a30,#2f7a4e);color:#fff;border:none;border-radius:9px;padding:8px 14px;font-size:13px;font-weight:700;cursor:pointer;}
+table.rm{width:100%;border-collapse:collapse;font-size:13px;}
+table.rm th,table.rm td{border-bottom:1px solid #e1e9e3;padding:8px;text-align:left;vertical-align:top;}
+table.rm textarea{min-height:52px;margin:0;}
+</style>
+</head>
+<body>
+<header style="background:linear-gradient(120deg,#14291c,#1d4a30,#276b43);color:#fff;display:flex;align-items:center;gap:10px;padding:11px 14px;">
+  <a href="teacher-dashboard.html" style="color:#fff;text-decoration:none;font-size:20px;font-weight:700;background:rgba(255,255,255,.12);padding:6px 9px;border-radius:9px;">&#8592;</a>
+  <div style="font-size:32px;">💬</div>
+  <div><b style="font-size:16px;">Teacher Comments</b><br><small style="opacity:.8;">Term remarks parents can read in their portal</small></div>
+</header>
+<div style="max-width:980px;margin:16px auto;padding:0 14px;">
+  <div class="hw-card">
+    <div class="hw-form" style="display:grid;grid-template-columns:1.4fr 1fr 1fr auto;gap:8px;align-items:end;">
+      <div><label style="font-size:12px;font-weight:700;">Class</label><select id="rmClass"><option value="">All classes</option></select></div>
+      <div><label style="font-size:12px;font-weight:700;">Term</label>
+        <select id="rmTerm"><option>1st Term</option><option>2nd Term</option><option>3rd Term</option></select></div>
+      <div><label style="font-size:12px;font-weight:700;">Session</label><input id="rmSession" placeholder="e.g. 2025/2026"></div>
+      <button class="hw-btn" type="button" onclick="rmLoad()">Load</button>
+    </div>
+  </div>
+  <div class="hw-card">
+    <div id="rmBox" style="color:#5B6B62;">Pick a term and session, then Load.</div>
+  </div>
+</div>
+<script src="js/csrf.js"></script>
+<script>
+function esc(s){return String(s==null?"":s).replace(/&/g,"&amp;").replace(/</g,"&lt;");}
+fetch("/classes",{credentials:"same-origin"}).then(r=>r.json()).then(cls=>{
+  document.getElementById("rmClass").innerHTML='<option value="">All classes</option>'+(cls||[]).map(c=>'<option>'+esc(c.class_name)+'</option>').join("");
+});
+fetch("/sessions",{credentials:"same-origin"}).then(r=>r.json()).then(rows=>{
+  var cur=(rows||[]).find(function(x){return Number(x.is_current)===1;})||(rows||[])[(rows||[]).length-1];
+  if(cur) document.getElementById("rmSession").value=cur.session;
+});
+function rmLoad(){
+  var cls=document.getElementById("rmClass").value, term=document.getElementById("rmTerm").value, sess=document.getElementById("rmSession").value.trim();
+  if(!term||!sess){document.getElementById("rmBox").textContent="Term and session are required.";return;}
+  var url="/api/remarks?term="+encodeURIComponent(term)+"&session="+encodeURIComponent(sess)+(cls?"&class_name="+encodeURIComponent(cls):"");
+  fetch(url,{credentials:"same-origin"}).then(r=>r.json()).then(rows=>{
+    if(!rows.length){document.getElementById("rmBox").textContent="No students found.";return;}
+    document.getElementById("rmBox").innerHTML='<table class="rm"><thead><tr><th>Student</th><th>Teacher remark</th><th>Principal remark</th><th></th></tr></thead><tbody>'
+      +rows.map(function(s,i){
+        return '<tr><td><b>'+esc(s.full_name)+'</b><br><small>'+esc(s.student_id)+'</small></td>'
+          +'<td><textarea id="tr'+i+'">'+esc(s.teacher_remark||"")+'</textarea></td>'
+          +'<td><textarea id="pr'+i+'">'+esc(s.principal_remark||"")+'</textarea></td>'
+          +'<td><button class="hw-btn" type="button" onclick="rmSave(\''+String(s.student_id).replace(/'/g,"\\'")+'\','+i+')">Save</button></td></tr>';
+      }).join("")+"</tbody></table>";
+  });
+}
+function rmSave(sid,i){
+  fetch("/api/remarks/"+encodeURIComponent(sid),{method:"POST",credentials:"same-origin",headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({term:document.getElementById("rmTerm").value,session:document.getElementById("rmSession").value.trim(),
+      teacher_remark:document.getElementById("tr"+i).value,principal_remark:document.getElementById("pr"+i).value})})
+    .then(r=>r.json()).then(d=>alert(d.message||"Saved"));
+}
+</script>
+<script src="js/pwa.js" defer></script>
+</body>
+</html>

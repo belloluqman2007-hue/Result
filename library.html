@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>School Library | Ameenullah School</title>
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="css/modern-ui.css">
+<link rel="stylesheet" href="css/manage.css">
+<link rel="stylesheet" href="css/school.css">
+<style>
+.hw-card{background:#fff;border-radius:14px;padding:18px;margin-bottom:14px;box-shadow:0 2px 10px rgba(0,0,0,.07);}
+.hw-form input,.hw-form select{width:100%;padding:9px 12px;border:1.5px solid #c8d6ca;border-radius:9px;font-family:inherit;font-size:14px;margin-bottom:9px;background:#f7faf7;box-sizing:border-box;}
+.hw-btn{background:linear-gradient(135deg,#1d4a30,#2f7a4e);color:#fff;border:none;border-radius:9px;padding:11px 22px;font-size:14px;font-weight:700;cursor:pointer;}
+.hw-item{background:#f7faf7;border:1.5px solid #d3e8d6;border-radius:10px;padding:12px 14px;margin-bottom:8px;}
+.hw-del{background:none;border:1.5px solid #f0b8b8;color:#9b1c1c;border-radius:7px;padding:3px 8px;font-size:12px;cursor:pointer;float:right;}
+</style>
+</head>
+<body>
+<header style="background:linear-gradient(120deg,#14291c,#1d4a30,#276b43);color:#fff;display:flex;align-items:center;gap:10px;padding:11px 14px;">
+  <a href="teacher-dashboard.html" style="color:#fff;text-decoration:none;font-size:20px;font-weight:700;background:rgba(255,255,255,.12);padding:6px 9px;border-radius:9px;">&#8592;</a>
+  <div style="font-size:32px;">📚</div>
+  <div><b style="font-size:16px;">School Library</b><br><small style="opacity:.8;">Add books, issue to students, mark returns</small></div>
+</header>
+<div style="max-width:900px;margin:16px auto;padding:0 14px;">
+  <div class="hw-card">
+    <h2 style="font-size:15px;font-weight:800;color:#14291c;margin:0 0 12px;">Add a book</h2>
+    <div class="hw-form" style="display:grid;grid-template-columns:2fr 1.4fr 1fr 80px;gap:8px;">
+      <input id="lbTitle" placeholder="Title">
+      <input id="lbAuthor" placeholder="Author">
+      <input id="lbIsbn" placeholder="ISBN (optional)">
+      <input id="lbCopies" type="number" min="1" value="1" title="Copies">
+    </div>
+    <button class="hw-btn" type="button" onclick="lbAdd()">➕ Add book</button>
+    <div id="lbMsg" style="font-size:13px;margin-top:8px;"></div>
+  </div>
+  <div class="hw-card">
+    <h2 style="font-size:15px;font-weight:800;color:#14291c;margin:0 0 12px;">Issue a book</h2>
+    <div class="hw-form" style="display:grid;grid-template-columns:1.4fr 1fr 1fr;gap:8px;">
+      <select id="lbBook"><option value="">Select book...</option></select>
+      <input id="lbStudent" placeholder="Student ID">
+      <input id="lbDue" type="date">
+    </div>
+    <button class="hw-btn" type="button" onclick="lbIssue()">📤 Issue to student</button>
+  </div>
+  <div class="hw-card">
+    <h2 style="font-size:15px;font-weight:800;color:#14291c;margin:0 0 10px;">Catalogue</h2>
+    <div id="lbBooks">Loading...</div>
+  </div>
+  <div class="hw-card">
+    <h2 style="font-size:15px;font-weight:800;color:#14291c;margin:0 0 10px;">Open loans</h2>
+    <div id="lbLoans">Loading...</div>
+  </div>
+</div>
+<script src="js/csrf.js"></script>
+<script>
+function esc(s){return String(s==null?"":s).replace(/&/g,"&amp;").replace(/</g,"&lt;");}
+function lbLoad(){
+  fetch("/api/library/books",{credentials:"same-origin"}).then(r=>r.json()).then(rows=>{
+    var sel=document.getElementById("lbBook");
+    sel.innerHTML='<option value="">Select book...</option>'+(rows||[]).filter(b=>Number(b.available)>0).map(b=>'<option value="'+b.id+'">'+esc(b.title)+' ('+b.available+' left)</option>').join("");
+    var box=document.getElementById("lbBooks");
+    if(!rows.length){box.textContent="No books yet.";return;}
+    box.innerHTML=rows.map(b=>'<div class="hw-item"><button class="hw-del" onclick="lbDel('+b.id+')">Delete</button>'
+      +'<b>'+esc(b.title)+'</b><div style="font-size:12px;color:#5B6B62;">'+esc(b.author||"-")+' · '+b.available+' / '+b.copies+' available</div></div>').join("");
+  });
+  fetch("/api/library/loans?open=1",{credentials:"same-origin"}).then(r=>r.json()).then(rows=>{
+    var box=document.getElementById("lbLoans");
+    if(!rows.length){box.textContent="No open loans.";return;}
+    box.innerHTML=rows.map(l=>'<div class="hw-item"><button class="hw-btn" style="float:right;padding:6px 10px;font-size:12px;" onclick="lbReturn('+l.id+')">Return</button>'
+      +'<b>'+esc(l.title)+'</b><div style="font-size:12px;color:#5B6B62;">'+esc(l.full_name||l.student_id)+' · issued '+esc(String(l.issued_at||"").slice(0,10))
+      +(l.due_date?' · due '+esc(String(l.due_date).slice(0,10)):"")+'</div></div>').join("");
+  });
+}
+function lbAdd(){
+  fetch("/api/library/books",{method:"POST",credentials:"same-origin",headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({title:document.getElementById("lbTitle").value,author:document.getElementById("lbAuthor").value,isbn:document.getElementById("lbIsbn").value,copies:document.getElementById("lbCopies").value})})
+    .then(r=>r.json()).then(d=>{document.getElementById("lbMsg").textContent=d.message||"Added.";document.getElementById("lbTitle").value="";lbLoad();});
+}
+function lbDel(id){if(!confirm("Delete this book?"))return;fetch("/api/library/books/"+id,{method:"DELETE",credentials:"same-origin"}).then(function(){lbLoad();});}
+function lbIssue(){
+  fetch("/api/library/issue",{method:"POST",credentials:"same-origin",headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({book_id:document.getElementById("lbBook").value,student_id:document.getElementById("lbStudent").value,due_date:document.getElementById("lbDue").value})})
+    .then(r=>r.json()).then(d=>{alert(d.message||"Issued");lbLoad();});
+}
+function lbReturn(id){fetch("/api/library/return/"+id,{method:"POST",credentials:"same-origin"}).then(function(){lbLoad();});}
+var d=new Date(); d.setDate(d.getDate()+14); document.getElementById("lbDue").value=d.toISOString().slice(0,10);
+lbLoad();
+</script>
+<script src="js/pwa.js" defer></script>
+</body>
+</html>
