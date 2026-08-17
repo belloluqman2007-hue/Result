@@ -37,22 +37,38 @@ function initAttendance() {
 
   /* Load classes from BOTH the classes table and students table merged,
      so the dropdown always shows classes that have actual students even
-     if the classes table doesn't match exactly. */
-  fetch("/api/distinct-classes")
-    .then(function (r) { return r.json(); })
-    .then(function (classes) {
-      var sel = document.getElementById("attClass");
-      sel.innerHTML = '<option value="">Select Class</option>';
-      (classes || []).forEach(function (c) {
-        var opt = document.createElement("option");
-        opt.value = c.class_name;
-        opt.textContent = c.class_name;
-        sel.appendChild(opt);
-      });
-    })
-    .catch(function () {
-      document.getElementById("attClass").innerHTML = '<option value="">Could not load classes</option>';
+     if the classes table doesn't match exactly. If that endpoint fails or
+     comes back empty (older DB / collation issue), fall back to the plain
+     classes table so the register can still be loaded. */
+  function attFillClassSelect(list) {
+    var sel = document.getElementById("attClass");
+    if (!sel) return;
+    sel.innerHTML = '<option value="">Select Class</option>';
+    (Array.isArray(list) ? list : []).forEach(function (c) {
+      var opt = document.createElement("option");
+      opt.value = c.class_name;
+      opt.textContent = c.class_name;
+      sel.appendChild(opt);
     });
+  }
+  function attLoadClasses() {
+    var sel = document.getElementById("attClass");
+    fetch("/api/distinct-classes")
+      .then(function (r) { return r.ok ? r.json() : []; })
+      .then(function (classes) {
+        if (classes && classes.length) { attFillClassSelect(classes); return null; }
+        return fetch("/classes")
+          .then(function (r2) { return r2.ok ? r2.json() : []; })
+          .then(function (classes2) { attFillClassSelect(classes2); });
+      })
+      .catch(function () {
+        fetch("/classes")
+          .then(function (r2) { return r2.ok ? r2.json() : []; })
+          .then(function (classes2) { attFillClassSelect(classes2); })
+          .catch(function () { sel.innerHTML = '<option value="">Could not load classes</option>'; });
+      });
+  }
+  attLoadClasses();
 
   /* NEW (pack 17 - owner request): the moment a class AND a date are
      picked, the register loads BY ITSELF and, if that date was marked

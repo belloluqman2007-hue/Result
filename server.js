@@ -5560,11 +5560,17 @@ app.delete("/admission-enquiry/:id", requireLogin, requireAdmin, (req, res) => {
    This fixes the attendance mark register showing empty when class names
    in students table don't exactly match the classes table entries. */
 app.get("/api/distinct-classes", requireLogin, (req, res) => {
+    /* FIX: cast both sides of the UNION to one charset/collation so older
+       databases (where the `classes` table was created latin1 but `students`
+       was later converted to utf8mb4) do NOT throw "Illegal mix of
+       collations" and leave the register class dropdown empty. */
     connection.query(
         `SELECT class_name FROM (
-           SELECT class_name FROM classes WHERE class_name IS NOT NULL AND class_name != ''
+           SELECT CONVERT(class_name USING utf8mb4) COLLATE utf8mb4_unicode_ci AS class_name
+             FROM classes WHERE class_name IS NOT NULL AND class_name != ''
            UNION
-           SELECT DISTINCT class_name FROM students WHERE class_name IS NOT NULL AND class_name != ''
+           SELECT DISTINCT CONVERT(class_name USING utf8mb4) COLLATE utf8mb4_unicode_ci
+             FROM students WHERE class_name IS NOT NULL AND class_name != ''
          ) AS combined ORDER BY class_name`,
         (err, rows) => {
             if (err) { console.log(err); return res.status(500).json({ message: "Database error" }); }

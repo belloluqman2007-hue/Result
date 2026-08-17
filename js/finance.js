@@ -702,36 +702,54 @@ function finStudentMeta() {
   };
 }
 
+/* Authoritative student lookup for a payment row's OWN student_id.
+   Checks the loaded roster first, then falls back to a direct /students
+   fetch. This guarantees the receipt prints the correct name + class even
+   when the /fee-payments LEFT JOIN returned NULLs (student_id mismatch in
+   the join) or the class dropdown changed since the row was listed. */
+function finResolveStudent(sid, cb) {
+  var hit = (finStudents || []).find(function (s) { return s.student_id === sid; });
+  if (hit) { cb(hit); return; }
+  fetch("/students")
+    .then(function (r) { return r.ok ? r.json() : []; })
+    .then(function (list) {
+      list = Array.isArray(list) ? list : [];
+      var st = list.find(function (s) { return s.student_id === sid; }) || {};
+      if (st.student_id && !(finStudents || []).some(function (s) { return s.student_id === sid; })) {
+        finStudents.push(st);
+      }
+      cb(st);
+    })
+    .catch(function () { cb({}); });
+}
+
 function downloadReceipt(row) {
   var ts = finTermSession();
-  var meta = finStudentMeta();
-  /* FIX (pack 83): robust CLASS resolution - server JOIN may fallback to plain
-     SELECT without class_name when students table is warming up, and meta may
-     be empty if the class dropdown changed. Try row, then meta, then the
-     loaded roster finStudents, then the student's stored class. */
-  var resolvedClass = row.class_name || row.className || meta.className || "";
-  if (!resolvedClass || resolvedClass === "-") {
-    var rosterMatch = (finStudents || []).find(function(s){ return s.student_id === row.student_id; });
-    if (rosterMatch && rosterMatch.class_name) resolvedClass = rosterMatch.class_name;
-  }
-  // final fallback: keep the picked class dropdown value or dash, but never blank
-  if (!resolvedClass) resolvedClass = (document.getElementById("payClass") && document.getElementById("payClass").value) || "-";
-  var d = window.amsReceiptPDF({
-    receiptNo: "RCP-" + String(row.id).padStart(5, "0"),
-    date: row.paid_at ? String(row.paid_at).slice(0, 10) : "-",
-    studentName: row.student_name || row.studentName || meta.studentName,
-    studentId: row.student_id || meta.studentId,
-    className: resolvedClass,
-    purpose: row.fee_type || row.purpose || "School Fee",
-    feeType: row.fee_type || "School Fee",
-    term: ts.term,
-    session: ts.session,
-    amount: row.amount,
-    method: row.method,
-    receivedBy: row.received_by,
-    note: row.note
+  var sid = row.student_id || (document.getElementById("payStudent") && document.getElementById("payStudent").value) || "";
+  var classFallback = (document.getElementById("payClass") && document.getElementById("payClass").value) || "";
+  finResolveStudent(sid, function (st) {
+    /* FIX: resolve CLASS + NAME from the payment row's OWN student_id
+       (not the possibly-changed dropdown). Order: server JOIN fields ->
+       authoritative /students record -> selected class dropdown. Never blank. */
+    var className = row.class_name || row.className || st.class_name || classFallback || "";
+    var studentName = row.student_name || row.studentName || st.full_name || sid;
+    var d = window.amsReceiptPDF({
+      receiptNo: "RCP-" + String(row.id).padStart(5, "0"),
+      date: row.paid_at ? String(row.paid_at).slice(0, 10) : "-",
+      studentName: studentName,
+      studentId: sid,
+      className: className,
+      purpose: row.fee_type || row.purpose || "School Fee",
+      feeType: row.fee_type || "School Fee",
+      term: ts.term,
+      session: ts.session,
+      amount: row.amount,
+      method: row.method,
+      receivedBy: row.received_by,
+      note: row.note
+    });
+    d.save("receipt-" + row.id + ".pdf");
   });
-  d.save("receipt-" + row.id + ".pdf");
 }
 
 function deletePayment(row) {
