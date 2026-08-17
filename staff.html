@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Staff &amp; Payroll | Ameenullah School of Arabic and Islamic Studies</title>
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/modern-ui.css">
+  <link rel="stylesheet" href="css/manage.css">
+  <link rel="stylesheet" href="css/school.css">
+
+  <link rel="manifest" href="manifest.webmanifest">
+  <meta name="theme-color" content="#2f5021">
+  <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+</head>
+<body onload="checkAuth(); initStaff();">
+  <!-- NEW: staff profiles (qualifications, salary, bank details) + payroll. -->
+  <div class="mng-page">
+
+    <div class="mng-head">
+      <a class="mng-back" href="teacher-dashboard.html">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5"/><path d="m12 19-7-7 7-7"/></svg>
+        Dashboard
+      </a>
+      <div class="mng-head-text">
+        <h1>&#128188; Staff &amp; Payroll</h1>
+        <p>Admin only. Store each staff member's qualification, monthly salary and bank details, then record salary payments month by month.</p>
+      </div>
+    </div>
+
+    <div class="mg-cards">
+
+      <!-- Add / edit staff -->
+      <div class="mg-card">
+        <h3 id="staffFormTitle">&#10133; Add Staff Member</h3>
+        <input type="hidden" id="staffEditId" value="">
+        <div class="mg-toolbar">
+          <div class="mg-field">
+            <label for="stfName">Full Name <span style="color:#B3261E;">*</span></label>
+            <input type="text" id="stfName" placeholder="e.g. Ustadh Ahmad Bello" autocomplete="off">
+          </div>
+          <div class="mg-field">
+            <label for="stfSubject">Subject / Role</label>
+            <input type="text" id="stfSubject" placeholder="e.g. Quran, Mathematics" autocomplete="off">
+          </div>
+          <div class="mg-field">
+            <label for="stfQualification">Qualification</label>
+            <input type="text" id="stfQualification" placeholder="e.g. B.Sc. Ed." autocomplete="off">
+          </div>
+          <div class="mg-field">
+            <label for="stfPhone">Phone</label>
+            <input type="tel" id="stfPhone" placeholder="e.g. 0803 000 0000" autocomplete="off">
+          </div>
+        </div>
+        <div class="mg-toolbar">
+          <div class="mg-field">
+            <label for="stfSalary">Monthly Salary (&#8358;)</label>
+            <input type="number" id="stfSalary" min="0" placeholder="e.g. 80000">
+          </div>
+          <div class="mg-field">
+            <label for="stfStatus">Status</label>
+            <select id="stfStatus">
+              <option value="active">Active</option>
+              <option value="inactive">Inactive</option>
+            </select>
+          </div>
+        </div>
+
+        <h4 style="font-size:13px; font-weight:700; color:#14532d; margin:14px 0 8px;">&#127974; Bank Details (for salary payment)</h4>
+        <div class="mg-toolbar">
+          <div class="mg-field">
+            <label for="stfBankName">Bank Name</label>
+            <input type="text" id="stfBankName" placeholder="e.g. GTBank" autocomplete="off">
+          </div>
+          <div class="mg-field">
+            <label for="stfAccountName">Account Name</label>
+            <input type="text" id="stfAccountName" placeholder="e.g. Ahmad Bello" autocomplete="off">
+          </div>
+          <div class="mg-field">
+            <label for="stfAccountNumber">Account Number</label>
+            <input type="text" id="stfAccountNumber" placeholder="e.g. 0123456789" autocomplete="off">
+          </div>
+        </div>
+
+        <div class="mg-toolbar" style="margin-top:12px;">
+          <button class="mg-btn" type="button" onclick="saveStaff()">&#128190; Save Staff Member</button>
+          <button class="mg-btn-light" type="button" id="stfCancelEdit" style="display:none;" onclick="stfResetForm()">&#10006; Cancel Edit</button>
+        </div>
+      </div>
+
+      <!-- Staff directory -->
+      <div class="mg-card">
+        <h3>&#128203; Staff Directory</h3>
+        <div class="mg-table-wrap">
+          <table class="mg-table" id="staffTable">
+            <thead><tr><th>Name</th><th>Subject</th><th>Qualification</th><th>Phone</th><th>Salary</th><th>Status</th><th>Actions</th></tr></thead>
+            <tbody><tr><td colspan="7" style="text-align:center; color:#5B6B62;">Loading...</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Record payment -->
+      <div class="mg-card">
+        <h3>&#128184; Record Salary Payment</h3>
+        <div class="mg-toolbar">
+          <div class="mg-field">
+            <label for="payStaff">Staff Member</label>
+            <select id="payStaff"><option value="">Loading staff...</option></select>
+          </div>
+          <div class="mg-field">
+            <label for="payMonth">Month</label>
+            <input type="month" id="payMonth">
+          </div>
+          <div class="mg-field">
+            <label for="payAmount">Amount (&#8358;)</label>
+            <input type="number" id="payAmount" min="1" placeholder="e.g. 80000">
+          </div>
+          <div class="mg-field">
+            <label for="payMethod">Method</label>
+            <select id="payMethod">
+              <option>Bank Transfer</option>
+              <option>Cash</option>
+              <option>Cheque</option>
+              <option>Other</option>
+            </select>
+          </div>
+        </div>
+        <div class="mg-toolbar">
+          <div class="mg-field">
+            <label for="payNote">Note (optional)</label>
+            <input type="text" id="payNote" placeholder="e.g. August salary">
+          </div>
+          <button class="mg-btn" type="button" onclick="recordPayroll()">&#128190; Record Payment</button>
+        </div>
+        <p class="mg-note">When you pick a staff member, their monthly salary auto-fills the amount. Record one payment per month.</p>
+      </div>
+
+      <!-- Payroll ledger -->
+      <div class="mg-card">
+        <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+          <h3 style="margin:0;">&#128221; Payroll Ledger</h3>
+          <span style="margin-left:auto; display:flex; gap:8px; align-items:center;">
+            <input type="month" id="payFilterMonth" onchange="loadPayroll()">
+            <button class="mg-btn-light" type="button" onclick="document.getElementById('payFilterMonth').value=''; loadPayroll();">&#10006; Clear</button>
+          </span>
+        </div>
+        <div class="mg-table-wrap">
+          <table class="mg-table" id="payrollTable">
+            <thead><tr><th>Date</th><th>Staff</th><th>Month</th><th>Amount</th><th>Method</th><th>Note</th><th>Paid By</th><th></th></tr></thead>
+            <tbody><tr><td colspan="8" style="text-align:center; color:#5B6B62;">Loading...</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <div class="mg-msg" id="stfMsg"></div>
+  </div>
+
+  <script src="js/csrf.js"></script>
+  <script src="js/ui.js"></script>
+  <script src="js/app.js"></script>
+  <script src="js/staff.js"></script>
+  <script src="js/pwa.js" defer></script>
+</body>
+</html>

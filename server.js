@@ -473,6 +473,11 @@ app.get("/manage-users.html", requireAdminPage, (req, res) => {
     res.sendFile(path.join(__dirname, "manage-users.html"));
 });
 
+// NEW (staff profiles & payroll): admin-only page.
+app.get("/staff.html", requireAdminPage, (req, res) => {
+    res.sendFile(path.join(__dirname, "staff.html"));
+});
+
 app.get("/school-settings.html", requireAdminPage, (req, res) => {
     res.sendFile(path.join(__dirname, "school-settings.html"));
 });
@@ -767,6 +772,30 @@ function ensureCoreTablesAndDefaultAdmin() {
             pay_instructions TEXT NULL,
             portal_pay_enabled TINYINT(1) NOT NULL DEFAULT 0,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+        ) DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
+        `CREATE TABLE IF NOT EXISTS staff (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            full_name VARCHAR(160) NOT NULL,
+            subject VARCHAR(120) DEFAULT '',
+            qualification VARCHAR(160) DEFAULT '',
+            phone VARCHAR(60) DEFAULT '',
+            salary DECIMAL(12,2) DEFAULT 0,
+            bank_name VARCHAR(120) DEFAULT '',
+            account_name VARCHAR(160) DEFAULT '',
+            account_number VARCHAR(60) DEFAULT '',
+            status VARCHAR(20) NOT NULL DEFAULT 'active',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        ) DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
+        `CREATE TABLE IF NOT EXISTS payroll (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            staff_id INT NOT NULL,
+            pay_month VARCHAR(20) NOT NULL,
+            amount DECIMAL(12,2) NOT NULL,
+            method VARCHAR(60) DEFAULT '',
+            note VARCHAR(255) DEFAULT '',
+            paid_by VARCHAR(100) DEFAULT '',
+            paid_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            KEY idx_payroll_staff (staff_id)
         ) DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`
     ];
 
@@ -6183,6 +6212,129 @@ app.delete("/user/:id", requireLogin, requireAdmin, (req, res) => {
     connection.query("DELETE FROM users WHERE id = ?", [userId], (err) => {
         if (err) { console.log(err); return res.status(500).json({ message: "Database error" }); }
         res.json({ message: "User deleted" });
+    });
+});
+
+
+/* =====================================================================
+   NEW (staff profiles & payroll) - staff directory with qualifications,
+   salary and bank details, plus a payroll ledger of monthly salary
+   payments. Fully additive; uses the new `staff` and `payroll` tables
+   created in the startup block above.
+   ===================================================================== */
+
+/* ---------- list staff (with last-paid + total paid this term) ------- */
+app.get("/staff", requireLogin, requireAdmin, (req, res) => {
+    connection.query(
+        `SELECT s.*,
+                (SELECT MAX(p.pay_month) FROM payroll p WHERE p.staff_id = s.id) AS last_pay_month,
+                (SELECT SUM(p.amount) FROM payroll p WHERE p.staff_id = s.id) AS total_paid
+         FROM staff s
+         ORDER BY s.status ASC, s.full_name ASC`,
+        (err, rows) => {
+            if (err) { console.log(err); return res.status(500).json({ message: "Database error" }); }
+            res.json(Array.isArray(rows) ? rows : []);
+        }
+    );
+});
+
+/* ---------- create a staff member ---------- */
+app.post("/staff", requireLogin, requireAdmin, writeRateLimit, (req, res) => {
+    const fullName = (req.body.full_name || "").trim();
+    if (!fullName) return res.status(400).json({ message: "Staff full name is required." });
+    const subject      = (req.body.subject || "").trim();
+    const qualification = (req.body.qualification || "").trim();
+    const phone        = (req.body.phone || "").trim();
+    const salary       = Number(req.body.salary) || 0;
+    const bankName     = (req.body.bank_name || "").trim();
+    const accountName  = (req.body.account_name || "").trim();
+    const accountNumber = (req.body.account_number || "").trim();
+    const status       = (req.body.status || "active").trim().toLowerCase();
+    connection.query(
+        `INSERT INTO staff (full_name, subject, qualification, phone, salary, bank_name, account_name, account_number, status)
+         VALUES (?,?,?,?,?,?,?,?,?)`,
+        [fullName, subject, qualification, phone, salary, bankName, accountName, accountNumber, status === "inactive" ? "inactive" : "active"],
+        (err, result) => {
+            if (err) { console.log(err); return res.status(500).json({ message: "Database error" }); }
+            res.json({ message: "Staff member added", id: result.insertId });
+        }
+    );
+});
+
+/* ---------- update a staff member ---------- */
+app.put("/staff/:id", requireLogin, requireAdmin, writeRateLimit, (req, res) => {
+    const id = Number(req.params.id);
+    const fullName = (req.body.full_name || "").trim();
+    if (!id || !fullName) return res.status(400).json({ message: "Staff full name is required." });
+    const subject      = (req.body.subject || "").trim();
+    const qualification = (req.body.qualification || "").trim();
+    const phone        = (req.body.phone || "").trim();
+    const salary       = Number(req.body.salary) || 0;
+    const bankName     = (req.body.bank_name || "").trim();
+    const accountName  = (req.body.account_name || "").trim();
+    const accountNumber = (req.body.account_number || "").trim();
+    const status       = (req.body.status || "active").trim().toLowerCase();
+    connection.query(
+        `UPDATE staff SET full_name=?, subject=?, qualification=?, phone=?, salary=?, bank_name=?, account_name=?, account_number=?, status=? WHERE id=?`,
+        [fullName, subject, qualification, phone, salary, bankName, accountName, accountNumber, status === "inactive" ? "inactive" : "active", id],
+        (err) => {
+            if (err) { console.log(err); return res.status(500).json({ message: "Database error" }); }
+            res.json({ message: "Staff member updated" });
+        }
+    );
+});
+
+/* ---------- delete a staff member (and their payroll history) -------- */
+app.delete("/staff/:id", requireLogin, requireAdmin, (req, res) => {
+    const id = Number(req.params.id);
+    connection.query("DELETE FROM staff WHERE id = ?", [id], (err) => {
+        if (err) { console.log(err); return res.status(500).json({ message: "Database error" }); }
+        connection.query("DELETE FROM payroll WHERE staff_id = ?", [id], () => {});
+        res.json({ message: "Staff member deleted" });
+    });
+});
+
+/* ---------- payroll ledger (optionally filtered by month) ------------ */
+app.get("/payroll", requireLogin, requireAdmin, (req, res) => {
+    const month = (req.query.month || "").trim();
+    let sql = `SELECT p.*, s.full_name, s.salary, s.subject
+               FROM payroll p
+               JOIN staff s ON s.id = p.staff_id`;
+    const params = [];
+    if (month) { sql += " WHERE p.pay_month = ?"; params.push(month); }
+    sql += " ORDER BY p.paid_at DESC LIMIT 500";
+    connection.query(sql, params, (err, rows) => {
+        if (err) { console.log(err); return res.status(500).json({ message: "Database error" }); }
+        res.json(Array.isArray(rows) ? rows : []);
+    });
+});
+
+/* ---------- record a salary payment ---------- */
+app.post("/payroll", requireLogin, requireAdmin, writeRateLimit, (req, res) => {
+    const staffId = Number(req.body.staff_id);
+    const month   = (req.body.pay_month || "").trim();
+    const amount  = Number(req.body.amount);
+    if (!staffId || !month || !(amount > 0)) {
+        return res.status(400).json({ message: "staff_id, pay_month and an amount above 0 are required." });
+    }
+    const method = (req.body.method || "").trim();
+    const note   = (req.body.note || "").trim();
+    connection.query(
+        `INSERT INTO payroll (staff_id, pay_month, amount, method, note, paid_by)
+         VALUES (?,?,?,?,?,?)`,
+        [staffId, month, amount, method, note, req.session.username || null],
+        (err, result) => {
+            if (err) { console.log(err); return res.status(500).json({ message: "Database error" }); }
+            res.json({ message: "Salary payment recorded", id: result.insertId });
+        }
+    );
+});
+
+/* ---------- delete a payroll entry ---------- */
+app.delete("/payroll/:id", requireLogin, requireAdmin, (req, res) => {
+    connection.query("DELETE FROM payroll WHERE id = ?", [Number(req.params.id)], (err) => {
+        if (err) { console.log(err); return res.status(500).json({ message: "Database error" }); }
+        res.json({ message: "Payroll entry deleted" });
     });
 });
 
