@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Student Health Clinic | Ameenullah School</title>
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="css/modern-ui.css">
+<link rel="stylesheet" href="css/manage.css">
+<link rel="stylesheet" href="css/school.css">
+<style>
+.hw-card{background:#fff;border-radius:14px;padding:18px;margin-bottom:14px;box-shadow:0 2px 10px rgba(0,0,0,.07);}
+.hw-form input,.hw-form select,.hw-form textarea{width:100%;padding:9px 12px;border:1.5px solid #c8d6ca;border-radius:9px;font-family:inherit;font-size:14px;margin-bottom:9px;background:#f7faf7;box-sizing:border-box;}
+.hw-form textarea{min-height:70px;resize:vertical;}
+.hw-btn{background:linear-gradient(135deg,#1d4a30,#2f7a4e);color:#fff;border:none;border-radius:9px;padding:11px 22px;font-size:14px;font-weight:700;cursor:pointer;}
+.hw-item{background:#f7faf7;border:1.5px solid #d3e8d6;border-radius:10px;padding:12px 14px;margin-bottom:8px;cursor:pointer;}
+.hw-item:hover{border-color:#2f7a4e;}
+.hw-item.active{border-color:#1d4a30;box-shadow:0 0 0 2px rgba(29,74,48,.15);}
+.flag{display:inline-block;background:#fff3cd;color:#7a5b00;border-radius:6px;padding:1px 7px;font-size:11px;font-weight:700;margin-left:6px;}
+.hw-del{background:none;border:1.5px solid #f0b8b8;color:#9b1c1c;border-radius:7px;padding:3px 8px;font-size:12px;cursor:pointer;float:right;}
+</style>
+</head>
+<body>
+<header style="background:linear-gradient(120deg,#14291c,#1d4a30,#276b43);color:#fff;display:flex;align-items:center;gap:10px;padding:11px 14px;">
+  <a href="teacher-dashboard.html" style="color:#fff;text-decoration:none;font-size:20px;font-weight:700;background:rgba(255,255,255,.12);padding:6px 9px;border-radius:9px;">&#8592;</a>
+  <div style="font-size:32px;">🏥</div>
+  <div><b style="font-size:16px;">Student Health Clinic</b><br><small style="opacity:.8;">Medical records, clinic visits and vaccinations</small></div>
+</header>
+<div style="max-width:980px;margin:16px auto;padding:0 14px;">
+  <div class="hw-card">
+    <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:end;">
+      <div style="flex:1;min-width:180px;">
+        <label style="font-size:12px;font-weight:700;color:#3a5441;">Class</label>
+        <select id="hClass" onchange="hLoadList()" style="width:100%;padding:9px 12px;border:1.5px solid #c8d6ca;border-radius:9px;background:#f7faf7;font-family:inherit;"><option value="">All classes</option></select>
+      </div>
+      <div style="flex:1;min-width:180px;">
+        <label style="font-size:12px;font-weight:700;color:#3a5441;">Search student</label>
+        <input id="hSearch" oninput="hFilter()" placeholder="Name or ID" style="width:100%;padding:9px 12px;border:1.5px solid #c8d6ca;border-radius:9px;background:#f7faf7;font-family:inherit;box-sizing:border-box;">
+      </div>
+    </div>
+  </div>
+  <div style="display:grid;grid-template-columns:1fr 1.1fr;gap:14px;" class="h-grid">
+    <div class="hw-card">
+      <h2 style="font-size:15px;font-weight:800;color:#14291c;margin:0 0 10px;">Students</h2>
+      <div id="hList" style="color:#5B6B62;max-height:70vh;overflow:auto;">Loading...</div>
+    </div>
+    <div>
+      <div class="hw-card" id="hFormCard" style="display:none;">
+        <h2 style="font-size:15px;font-weight:800;color:#14291c;margin:0 0 4px;">Health record</h2>
+        <p id="hWho" style="margin:0 0 12px;color:#3a5441;font-weight:700;"></p>
+        <div class="hw-form">
+          <select id="hBlood">
+            <option value="">Blood group</option>
+            <option>A+</option><option>A-</option><option>B+</option><option>B-</option>
+            <option>AB+</option><option>AB-</option><option>O+</option><option>O-</option>
+          </select>
+          <textarea id="hAllergies" placeholder="Allergies (e.g. peanuts, penicillin)"></textarea>
+          <textarea id="hConditions" placeholder="Medical conditions"></textarea>
+          <input id="hEmName" placeholder="Emergency contact name">
+          <input id="hEmPhone" placeholder="Emergency contact phone">
+          <textarea id="hNotes" placeholder="Clinic notes"></textarea>
+          <button class="hw-btn" type="button" onclick="hSave()">💾 Save health record</button>
+          <div id="hMsg" style="text-align:center;font-size:13px;min-height:18px;margin-top:6px;"></div>
+        </div>
+      </div>
+      <div class="hw-card" id="hVisitCard" style="display:none;">
+        <h2 style="font-size:15px;font-weight:800;color:#14291c;margin:0 0 10px;">Clinic visits</h2>
+        <div class="hw-form">
+          <input type="date" id="hVisitDate">
+          <input id="hComplaint" placeholder="Complaint / reason">
+          <input id="hTreatment" placeholder="Treatment given">
+          <button class="hw-btn" type="button" onclick="hAddVisit()">➕ Log visit</button>
+        </div>
+        <div id="hVisits" style="margin-top:10px;"></div>
+      </div>
+      <div class="hw-card" id="hVaxCard" style="display:none;">
+        <h2 style="font-size:15px;font-weight:800;color:#14291c;margin:0 0 10px;">Vaccinations</h2>
+        <div class="hw-form">
+          <input id="hVaxName" placeholder="Vaccine name (e.g. Measles)">
+          <input type="date" id="hVaxDate">
+          <input id="hVaxNotes" placeholder="Notes (optional)">
+          <button class="hw-btn" type="button" onclick="hAddVax()">➕ Add vaccination</button>
+        </div>
+        <div id="hVax" style="margin-top:10px;"></div>
+      </div>
+    </div>
+  </div>
+</div>
+<style>@media(max-width:800px){.h-grid{grid-template-columns:1fr !important;}}</style>
+<script src="js/csrf.js"></script>
+<script>
+var hRows=[], hSid=null, hName="";
+function esc(s){return String(s==null?"":s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");}
+function loadClasses(){
+  fetch("/classes",{credentials:"same-origin"}).then(r=>r.json()).then(cls=>{
+    var sel=document.getElementById("hClass");
+    sel.innerHTML='<option value="">All classes</option>'+(cls||[]).map(c=>'<option value="'+esc(c.class_name)+'">'+esc(c.class_name)+'</option>').join("");
+  }).catch(function(){});
+}
+function hLoadList(){
+  var cls=document.getElementById("hClass").value;
+  fetch("/api/health-records"+(cls?"?class_name="+encodeURIComponent(cls):""),{credentials:"same-origin"})
+    .then(r=>r.json()).then(rows=>{ hRows=rows||[]; hFilter(); });
+}
+function hFilter(){
+  var q=(document.getElementById("hSearch").value||"").toLowerCase();
+  var box=document.getElementById("hList");
+  var rows=hRows.filter(function(s){
+    return !q || String(s.full_name||"").toLowerCase().indexOf(q)>=0 || String(s.student_id||"").toLowerCase().indexOf(q)>=0;
+  });
+  if(!rows.length){box.textContent="No students found.";return;}
+  box.innerHTML=rows.map(function(s){
+    var flag=(s.allergies||s.medical_conditions)?'<span class="flag">⚠ medical</span>':"";
+    return '<div class="hw-item'+(hSid===s.student_id?" active":"")+'" onclick="hPick(\''+String(s.student_id).replace(/'/g,"\\'")+'\')">'
+      +'<b style="color:#14291c;">'+esc(s.full_name)+'</b> '+flag
+      +'<div style="font-size:12px;color:#5B6B62;">'+esc(s.student_id)+' · '+esc(s.class_name||"-")+(s.blood_group?" · "+esc(s.blood_group):"")+'</div></div>';
+  }).join("");
+}
+function hPick(sid){
+  hSid=sid;
+  var s=hRows.find(function(r){return r.student_id===sid;})||{};
+  hName=s.full_name||sid;
+  document.getElementById("hFormCard").style.display="block";
+  document.getElementById("hVisitCard").style.display="block";
+  document.getElementById("hVaxCard").style.display="block";
+  document.getElementById("hWho").textContent=hName+" · "+(s.student_id||"");
+  document.getElementById("hBlood").value=s.blood_group||"";
+  document.getElementById("hAllergies").value=s.allergies||"";
+  document.getElementById("hConditions").value=s.medical_conditions||"";
+  document.getElementById("hEmName").value=s.emergency_contact_name||"";
+  document.getElementById("hEmPhone").value=s.emergency_contact_phone||"";
+  document.getElementById("hNotes").value=s.notes||"";
+  document.getElementById("hVisitDate").value=new Date().toISOString().slice(0,10);
+  hFilter(); hLoadVisits(); hLoadVax();
+}
+function hSave(){
+  if(!hSid)return;
+  fetch("/api/health/"+encodeURIComponent(hSid),{method:"POST",credentials:"same-origin",headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({
+      blood_group:document.getElementById("hBlood").value,
+      allergies:document.getElementById("hAllergies").value,
+      medical_conditions:document.getElementById("hConditions").value,
+      emergency_contact_name:document.getElementById("hEmName").value,
+      emergency_contact_phone:document.getElementById("hEmPhone").value,
+      notes:document.getElementById("hNotes").value
+    })}).then(r=>r.json()).then(d=>{
+      var m=document.getElementById("hMsg"); m.textContent=d.message||"Saved."; m.style.color="#14532d";
+      hLoadList();
+    }).catch(function(){document.getElementById("hMsg").textContent="Could not save.";});
+}
+function hLoadVisits(){
+  fetch("/api/clinic-visits/"+encodeURIComponent(hSid),{credentials:"same-origin"}).then(r=>r.json()).then(rows=>{
+    var box=document.getElementById("hVisits");
+    if(!rows.length){box.innerHTML='<p style="color:#5B6B62;font-size:13px;">No visits yet.</p>';return;}
+    box.innerHTML=rows.map(v=>'<div class="hw-item"><button class="hw-del" onclick="event.stopPropagation();hDelVisit('+v.id+')">Delete</button>'
+      +'<b>'+esc(String(v.visit_date||"").slice(0,10))+'</b><div style="font-size:13px;">'+esc(v.complaint||"")+'</div>'
+      +(v.treatment?'<div style="font-size:12px;color:#3a5441;">Rx: '+esc(v.treatment)+'</div>':'')+'</div>').join("");
+  });
+}
+function hAddVisit(){
+  fetch("/api/clinic-visits/"+encodeURIComponent(hSid),{method:"POST",credentials:"same-origin",headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({visit_date:document.getElementById("hVisitDate").value,complaint:document.getElementById("hComplaint").value,treatment:document.getElementById("hTreatment").value})})
+    .then(r=>r.json()).then(function(){document.getElementById("hComplaint").value="";document.getElementById("hTreatment").value="";hLoadVisits();});
+}
+function hDelVisit(id){if(!confirm("Delete this visit?"))return;fetch("/api/clinic-visits/"+id,{method:"DELETE",credentials:"same-origin"}).then(function(){hLoadVisits();});}
+function hLoadVax(){
+  fetch("/api/vaccinations/"+encodeURIComponent(hSid),{credentials:"same-origin"}).then(r=>r.json()).then(rows=>{
+    var box=document.getElementById("hVax");
+    if(!rows.length){box.innerHTML='<p style="color:#5B6B62;font-size:13px;">No vaccinations recorded.</p>';return;}
+    box.innerHTML=rows.map(v=>'<div class="hw-item"><button class="hw-del" onclick="event.stopPropagation();hDelVax('+v.id+')">Delete</button>'
+      +'<b>'+esc(v.vaccine_name)+'</b> <span style="font-size:12px;color:#5B6B62;">'+esc(String(v.given_date||"").slice(0,10))+'</span></div>').join("");
+  });
+}
+function hAddVax(){
+  fetch("/api/vaccinations/"+encodeURIComponent(hSid),{method:"POST",credentials:"same-origin",headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({vaccine_name:document.getElementById("hVaxName").value,given_date:document.getElementById("hVaxDate").value,notes:document.getElementById("hVaxNotes").value})})
+    .then(r=>r.json()).then(function(){document.getElementById("hVaxName").value="";document.getElementById("hVaxNotes").value="";hLoadVax();});
+}
+function hDelVax(id){if(!confirm("Delete this vaccination?"))return;fetch("/api/vaccinations/"+id,{method:"DELETE",credentials:"same-origin"}).then(function(){hLoadVax();});}
+loadClasses();hLoadList();
+</script>
+<script src="js/pwa.js" defer></script>
+</body>
+</html>

@@ -1,5 +1,24 @@
 # UI Modernization — Change Log
 
+## Pack 84 — 2026-08-17
+
+Owner: "Result is not showing for students after been published / no place in admin for students health / let add new features"
+
+| File | What happened |
+|---|---|
+| `server.js` | **Published results fix:** listing no longer JOINs `results` to `result_publish` (collation clash returned 500 → empty portal). Match is now in JS, case/tashkeel/space-insensitive, and accepts **whole-term publish OR the class on the score row OR the student's current class** (so promotion no longer hides old terms). Search-result IDs are case-insensitive. Signatures readable by portal users. **New:** clinic visits, vaccinations, library issue/return, term remarks. |
+| `health.html` | **NEW admin Student Health Clinic** — pick a class/student, save blood group / allergies / conditions / emergency contact, log clinic visits, record vaccinations. |
+| `library.html` | **NEW School Library** — catalogue, issue to Student ID, return, copies tracking. |
+| `remarks.html` | **NEW Teacher Comments** — per student/term/session remarks parents can read. |
+| `portal.html` + `js/portal.js` | Portal Health shows visits/vaccines; new Library and Teacher Comments pages. Published-results loader reports real errors instead of a blank list. |
+| `teacher-dashboard.html` | Sidebar links: Student Health, Teacher Comments, School Library. |
+| `sw.js` | Cache `v43 → v44`. |
+
+Result calculations, grading, positions and the frozen report-card design: untouched.
+
+---
+
+
 **Project:** Ameenullah School — Result Management System
 
 ---

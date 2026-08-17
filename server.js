@@ -235,13 +235,48 @@ function requireAdmin(req, res, next) {
    Everyone else must log in with Student ID + surname, may view ONLY
    their own child, and ONLY terms an admin has published.
    ===================================================================== */
+/* FIX (pack 84): published results were invisible to students after
+   admin published them. Causes:
+     1) JOIN collation clash (results vs result_publish) -> 500 -> empty list
+     2) class on the RESULT (when scores were entered) != current class
+        after promotion, so the gate / list missed the row
+     3) Arabic tashkeel / extra spaces on class names
+   Matching is now done in JS against ALL published rows (no JOIN),
+   and ANY of: whole-term publish, result class, current class. */
+function normalizeClassName(s) {
+    return String(s || "")
+        .trim()
+        .toLowerCase()
+        .replace(/[\u064B-\u065F\u0670\u06D6-\u06ED\u0640]/g, "")
+        .replace(/\s+/g, " ");
+}
+function classNamesMatch(a, b) {
+    return normalizeClassName(a) === normalizeClassName(b);
+}
+function isTermPublished(pubRows, term, session, className) {
+    const nt = String(term || "").trim().toLowerCase();
+    const ns = String(session || "").trim().toLowerCase();
+    return (pubRows || []).some((r) => {
+        if (Number(r.published) !== 1) return false;
+        if (String(r.term || "").trim().toLowerCase() !== nt) return false;
+        if (String(r.session || "").trim().toLowerCase() !== ns) return false;
+        const cn = String(r.class_name || "").trim();
+        if (!cn) return true; // whole-term switch
+        return classNamesMatch(cn, className);
+    });
+}
 function checkPublished(className, term, schoolSession, cb) {
+    checkPublishedAny([className], term, schoolSession, cb);
+}
+function checkPublishedAny(classNames, term, schoolSession, cb) {
     connection.query(
-        "SELECT published FROM result_publish WHERE TRIM(term) = TRIM(?) AND TRIM(session) = TRIM(?) AND (class_name IS NULL OR TRIM(class_name) = '' OR TRIM(class_name) = TRIM(?)) LIMIT 4",
-        [term, schoolSession, className],
+        "SELECT class_name, term, session, published FROM result_publish WHERE published = 1",
         (err, rows) => {
             if (err) return cb(err);
-            cb(null, (rows || []).some(r => Number(r.published) === 1));
+            const list = (classNames || []).filter((c) => String(c || "").trim());
+            const ok = isTermPublished(rows, term, schoolSession, "")
+                || list.some((cn) => isTermPublished(rows, term, schoolSession, cn));
+            cb(null, ok);
         }
     );
 }
@@ -273,16 +308,29 @@ function publishResultGate(req, res, next) {
     if (!term || !schoolSession) {
         return res.status(403).json({ message: "Pick a published term and session." });
     }
-    connection.query("SELECT class_name FROM students WHERE student_id = ?", [sid], (err, rows) => {
-        if (err || !rows.length) return res.status(403).json({ message: "Student record not found." });
-        checkPublished(rows[0].class_name, term, schoolSession, (err2, published) => {
-            if (err2) { console.log(err2); return res.status(500).json({ message: "Database error" }); }
-            if (!published) {
-                return res.status(403).json({ message: "This result has not been published by the school yet. Please check back later." });
-            }
-            next();
-        });
-    });
+    connection.query(
+        "SELECT class_name FROM students WHERE TRIM(student_id) = TRIM(?) OR LOWER(TRIM(student_id)) = LOWER(TRIM(?)) LIMIT 1",
+        [sid, sid],
+        (err, rows) => {
+            if (err || !rows.length) return res.status(403).json({ message: "Student record not found." });
+            const currentClass = rows[0].class_name;
+            connection.query(
+                "SELECT DISTINCT class_name FROM results WHERE (TRIM(student_id) = TRIM(?) OR LOWER(TRIM(student_id)) = LOWER(TRIM(?))) AND TRIM(term) = TRIM(?) AND TRIM(session) = TRIM(?)",
+                [sid, sid, term, schoolSession],
+                (err2, rrows) => {
+                    const classes = [currentClass];
+                    (rrows || []).forEach((r) => { if (r.class_name) classes.push(r.class_name); });
+                    checkPublishedAny(classes, term, schoolSession, (err3, published) => {
+                        if (err3) { console.log(err3); return res.status(500).json({ message: "Database error" }); }
+                        if (!published) {
+                            return res.status(403).json({ message: "This result has not been published by the school yet. Please check back later." });
+                        }
+                        next();
+                    });
+                }
+            );
+        }
+    );
 }
 
 
@@ -915,6 +963,8 @@ ensureCoreTablesAndDefaultAdmin();
 
 // ONE-TIME: fix collation mismatch
 connection.query(`ALTER TABLE students CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`, () => {});
+connection.query(`ALTER TABLE results CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`, () => {});
+connection.query(`ALTER TABLE result_publish CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`, () => {});
 connection.query(`ALTER TABLE fee_structure2 CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`, () => {});
 connection.query(`ALTER TABLE fee_payments CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`, () => {});
 connection.query(`ALTER TABLE payment_submissions CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`, () => {});
@@ -1188,6 +1238,58 @@ const addonTables = [
         pinned TINYINT(1) DEFAULT 0,
         posted_by VARCHAR(100) DEFAULT '',
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )`,
+    `CREATE TABLE IF NOT EXISTS clinic_visits (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        student_id VARCHAR(64) NOT NULL,
+        visit_date DATE NOT NULL,
+        complaint TEXT,
+        treatment TEXT,
+        recorded_by VARCHAR(100) DEFAULT '',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        KEY idx_clinic_student (student_id)
+    )`,
+    `CREATE TABLE IF NOT EXISTS vaccinations (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        student_id VARCHAR(64) NOT NULL,
+        vaccine_name VARCHAR(160) NOT NULL,
+        given_date DATE NULL,
+        notes VARCHAR(255) DEFAULT '',
+        recorded_by VARCHAR(100) DEFAULT '',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        KEY idx_vax_student (student_id)
+    )`,
+    `CREATE TABLE IF NOT EXISTS library_books (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        title VARCHAR(255) NOT NULL,
+        author VARCHAR(160) DEFAULT '',
+        isbn VARCHAR(60) DEFAULT '',
+        copies INT NOT NULL DEFAULT 1,
+        available INT NOT NULL DEFAULT 1,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )`,
+    `CREATE TABLE IF NOT EXISTS library_loans (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        book_id INT NOT NULL,
+        student_id VARCHAR(64) NOT NULL,
+        issued_at DATE NOT NULL,
+        due_date DATE NULL,
+        returned_at DATE NULL,
+        issued_by VARCHAR(100) DEFAULT '',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        KEY idx_loan_student (student_id),
+        KEY idx_loan_book (book_id)
+    )`,
+    `CREATE TABLE IF NOT EXISTS term_remarks (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        student_id VARCHAR(64) NOT NULL,
+        term VARCHAR(50) NOT NULL,
+        session VARCHAR(50) NOT NULL,
+        teacher_remark TEXT,
+        principal_remark TEXT,
+        recorded_by VARCHAR(100) DEFAULT '',
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        UNIQUE KEY uniq_remark (student_id, term, session)
     )`
 ];
 
@@ -2696,10 +2798,10 @@ app.get("/search-result/:studentId", publishResultGate, (req, res) => { // CHANG
     // cumulative-average enrichment below); the teacher dashboard "Student
     // Scores" loader sends neither because it wants EVERY saved row for the
     // student - requiring them turned its call into a 400 error.
-    let sql = "SELECT * FROM results WHERE student_id = ?";
-    const params = [studentId];
-    if (term) { sql += " AND term = ?"; params.push(term); }
-    if (session) { sql += " AND session = ?"; params.push(session); }
+    let sql = "SELECT * FROM results WHERE (TRIM(student_id) = TRIM(?) OR LOWER(TRIM(student_id)) = LOWER(TRIM(?)))";
+    const params = [studentId, studentId];
+    if (term) { sql += " AND TRIM(term) = TRIM(?)"; params.push(term); }
+    if (session) { sql += " AND TRIM(session) = TRIM(?)"; params.push(session); }
 
     connection.query(sql, params, (err, currentTermResults) => {
         if (err) {
@@ -2900,7 +3002,10 @@ app.get("/student/:studentId", portalOwnerGate, (req, res) => { // CHANGED (pack
 // returns role labels + signature image file paths (no financial or
 // personal data), so it is deliberately left open. If report cards ever
 // move fully behind a login, add requireLogin here.
-app.get("/signatures", requireLogin, (req, res) => {
+app.get("/signatures", (req, res) => {
+    const isStaff = !!(req.session && req.session.userId);
+    const isPortal = !!(req.session && req.session.portalStudentId);
+    if (!isStaff && !isPortal) return res.status(401).json({ message: "Not logged in" });
     connection.query("SELECT role, signature_path FROM signatures", (err, rows) => {
         if (err) {
             console.log(err);
@@ -2985,7 +3090,10 @@ app.delete("/delete-signature/:role", requireLogin, (req, res) => {
    open on purpose. Writes (save/delete below) remain behind requireLogin.
 ================================================================== */
 
-app.get("/class-signatures", requireLogin, (req, res) => {
+app.get("/class-signatures", (req, res) => {
+    const isStaff = !!(req.session && req.session.userId);
+    const isPortal = !!(req.session && req.session.portalStudentId);
+    if (!isStaff && !isPortal) return res.status(401).json({ message: "Not logged in" });
     connection.query(
         "SELECT class_name, signature_path FROM class_teacher_signatures ORDER BY class_name",
         (err, rows) => {
@@ -5492,29 +5600,50 @@ app.post("/portal/logout", (req, res) => {
 });
 
 /* Terms/sessions that (a) the student actually has results for AND
-   (b) admin has PUBLISHED (per-class row or whole-term row). */
+   (b) admin has PUBLISHED (per-class row or whole-term row).
+   FIX (pack 84): no SQL JOIN (collation-safe) + match current class
+   OR the class stored on the result row (promotion-safe). */
 app.get("/portal/published-terms", (req, res) => {
     const sid = req.session && req.session.portalStudentId;
     if (!sid) return res.status(401).json({ message: "Not logged in" });
-    const sql = `
-        SELECT DISTINCT r.term, r.session
-        FROM results r
-        JOIN result_publish p
-          ON TRIM(p.term) = TRIM(r.term)
-         AND TRIM(p.session) = TRIM(r.session)
-         AND p.published = 1
-         AND (
-           p.class_name IS NULL
-           OR TRIM(p.class_name) = ''
-           OR TRIM(p.class_name) = TRIM(r.class_name)
-         )
-        WHERE r.student_id = ?
-        ORDER BY r.session DESC, r.term
-    `;
-    connection.query(sql, [sid], (err, rows) => {
-        if (err) { console.log(err); return res.status(500).json({ message: "Database error" }); }
-        res.json(rows);
-    });
+    connection.query(
+        `SELECT DISTINCT r.term, r.session, r.class_name
+         FROM results r
+         WHERE TRIM(r.student_id) = TRIM(?) OR LOWER(TRIM(r.student_id)) = LOWER(TRIM(?))`,
+        [sid, sid],
+        (err, resultRows) => {
+            if (err) { console.log(err); return res.status(500).json({ message: "Database error" }); }
+            if (!resultRows || !resultRows.length) return res.json([]);
+            connection.query(
+                "SELECT class_name, term, session, published FROM result_publish WHERE published = 1",
+                (err2, pubs) => {
+                    if (err2) { console.log(err2); return res.status(500).json({ message: "Database error" }); }
+                    connection.query(
+                        "SELECT class_name FROM students WHERE TRIM(student_id) = TRIM(?) OR LOWER(TRIM(student_id)) = LOWER(TRIM(?)) LIMIT 1",
+                        [sid, sid],
+                        (err3, stu) => {
+                            const currentClass = (stu && stu[0] && stu[0].class_name) || "";
+                            const seen = Object.create(null);
+                            const out = [];
+                            (resultRows || []).forEach((r) => {
+                                const key = String(r.term || "") + "|" + String(r.session || "");
+                                if (seen[key]) return;
+                                const ok = isTermPublished(pubs, r.term, r.session, r.class_name)
+                                    || isTermPublished(pubs, r.term, r.session, currentClass)
+                                    || isTermPublished(pubs, r.term, r.session, "");
+                                if (ok) {
+                                    seen[key] = true;
+                                    out.push({ term: r.term, session: r.session });
+                                }
+                            });
+                            out.sort((a, b) => String(b.session).localeCompare(String(a.session)) || String(a.term).localeCompare(String(b.term)));
+                            res.json(out);
+                        }
+                    );
+                }
+            );
+        }
+    );
 });
 
 /* ---------- Admin: publish / unpublish results ---------------------- */
@@ -8576,6 +8705,258 @@ app.get("/transport.html", requireLogin, (req, res) => res.sendFile(path.join(__
 app.get("/leave-requests.html", requireLogin, (req, res) => res.sendFile(path.join(__dirname, "leave-requests.html")));
 app.get("/broadcast.html", requireLogin, requireAdmin, (req, res) => res.sendFile(path.join(__dirname, "broadcast.html")));
 
+app.get("/health.html", requireLogin, (req, res) => res.sendFile(path.join(__dirname, "health.html")));
+app.get("/library.html", requireLogin, (req, res) => res.sendFile(path.join(__dirname, "library.html")));
+app.get("/remarks.html", requireLogin, (req, res) => res.sendFile(path.join(__dirname, "remarks.html")));
+
+/* =====================================================================
+   PACK 84 — Health clinic, library, term remarks
+   ===================================================================== */
+
+app.get("/api/health-records", requireLogin, (req, res) => {
+    const cls = (req.query.class_name || "").trim();
+    let sql = `SELECT s.student_id, s.full_name, s.class_name, s.gender,
+                      h.blood_group, h.allergies, h.medical_conditions,
+                      h.emergency_contact_name, h.emergency_contact_phone, h.notes, h.updated_at
+               FROM students s
+               LEFT JOIN student_health h ON h.student_id = s.student_id`;
+    const params = [];
+    if (cls) { sql += " WHERE s.class_name = ?"; params.push(cls); }
+    sql += " ORDER BY s.class_name, s.full_name LIMIT 800";
+    connection.query(sql, params, (err, rows) => {
+        if (err) { console.log(err); return res.status(500).json({ message: "Database error" }); }
+        res.json(rows || []);
+    });
+});
+
+app.get("/api/clinic-visits/:studentId", requireLogin, (req, res) => {
+    connection.query(
+        "SELECT * FROM clinic_visits WHERE student_id = ? ORDER BY visit_date DESC, id DESC LIMIT 80",
+        [req.params.studentId],
+        (err, rows) => {
+            if (err) { if (err.code === "ER_NO_SUCH_TABLE") return res.json([]); return res.status(500).json({ message: "Database error" }); }
+            res.json(rows || []);
+        }
+    );
+});
+
+app.post("/api/clinic-visits/:studentId", requireLogin, writeRateLimit, (req, res) => {
+    const sid = req.params.studentId;
+    const visit_date = (req.body.visit_date || "").trim() || new Date().toISOString().slice(0, 10);
+    const complaint = (req.body.complaint || "").trim();
+    const treatment = (req.body.treatment || "").trim();
+    if (!complaint) return res.status(400).json({ message: "Write the complaint / reason for visit." });
+    connection.query(
+        "INSERT INTO clinic_visits (student_id, visit_date, complaint, treatment, recorded_by) VALUES (?,?,?,?,?)",
+        [sid, visit_date, complaint, treatment, req.session.username || ""],
+        (err, result) => {
+            if (err) { console.log(err); return res.status(500).json({ message: "Database error" }); }
+            res.json({ message: "Clinic visit saved.", id: result.insertId });
+        }
+    );
+});
+
+app.delete("/api/clinic-visits/:id", requireLogin, (req, res) => {
+    connection.query("DELETE FROM clinic_visits WHERE id = ?", [req.params.id], (err) => {
+        if (err) return res.status(500).json({ message: "Database error" });
+        res.json({ message: "Deleted." });
+    });
+});
+
+app.get("/api/vaccinations/:studentId", requireLogin, (req, res) => {
+    connection.query(
+        "SELECT * FROM vaccinations WHERE student_id = ? ORDER BY given_date DESC, id DESC LIMIT 80",
+        [req.params.studentId],
+        (err, rows) => {
+            if (err) { if (err.code === "ER_NO_SUCH_TABLE") return res.json([]); return res.status(500).json({ message: "Database error" }); }
+            res.json(rows || []);
+        }
+    );
+});
+
+app.post("/api/vaccinations/:studentId", requireLogin, writeRateLimit, (req, res) => {
+    const sid = req.params.studentId;
+    const vaccine_name = (req.body.vaccine_name || "").trim();
+    const given_date = (req.body.given_date || "").trim() || null;
+    const notes = (req.body.notes || "").trim();
+    if (!vaccine_name) return res.status(400).json({ message: "Vaccine name is required." });
+    connection.query(
+        "INSERT INTO vaccinations (student_id, vaccine_name, given_date, notes, recorded_by) VALUES (?,?,?,?,?)",
+        [sid, vaccine_name, given_date, notes, req.session.username || ""],
+        (err, result) => {
+            if (err) { console.log(err); return res.status(500).json({ message: "Database error" }); }
+            res.json({ message: "Vaccination saved.", id: result.insertId });
+        }
+    );
+});
+
+app.delete("/api/vaccinations/:id", requireLogin, (req, res) => {
+    connection.query("DELETE FROM vaccinations WHERE id = ?", [req.params.id], (err) => {
+        if (err) return res.status(500).json({ message: "Database error" });
+        res.json({ message: "Deleted." });
+    });
+});
+
+app.get("/portal/health-extra", (req, res) => {
+    const sid = req.session && req.session.portalStudentId;
+    if (!sid) return res.json({ visits: [], vaccinations: [] });
+    connection.query("SELECT visit_date, complaint, treatment FROM clinic_visits WHERE student_id = ? ORDER BY visit_date DESC LIMIT 20", [sid], (err, visits) => {
+        connection.query("SELECT vaccine_name, given_date, notes FROM vaccinations WHERE student_id = ? ORDER BY given_date DESC LIMIT 20", [sid], (err2, vax) => {
+            res.json({ visits: visits || [], vaccinations: vax || [] });
+        });
+    });
+});
+
+app.get("/api/library/books", requireLogin, (req, res) => {
+    connection.query("SELECT * FROM library_books ORDER BY title LIMIT 400", (err, rows) => {
+        if (err) { if (err.code === "ER_NO_SUCH_TABLE") return res.json([]); return res.status(500).json({ message: "Database error" }); }
+        res.json(rows || []);
+    });
+});
+
+app.post("/api/library/books", requireLogin, writeRateLimit, (req, res) => {
+    const title = (req.body.title || "").trim();
+    const author = (req.body.author || "").trim();
+    const isbn = (req.body.isbn || "").trim();
+    const copies = Math.max(1, parseInt(req.body.copies, 10) || 1);
+    if (!title) return res.status(400).json({ message: "Book title is required." });
+    connection.query(
+        "INSERT INTO library_books (title, author, isbn, copies, available) VALUES (?,?,?,?,?)",
+        [title, author, isbn, copies, copies],
+        (err, result) => {
+            if (err) { console.log(err); return res.status(500).json({ message: "Database error" }); }
+            res.json({ message: "Book added.", id: result.insertId });
+        }
+    );
+});
+
+app.delete("/api/library/books/:id", requireLogin, requireAdmin, (req, res) => {
+    connection.query("DELETE FROM library_books WHERE id = ?", [req.params.id], (err) => {
+        if (err) return res.status(500).json({ message: "Database error" });
+        connection.query("DELETE FROM library_loans WHERE book_id = ? AND returned_at IS NULL", [req.params.id], () => {});
+        res.json({ message: "Book deleted." });
+    });
+});
+
+app.get("/api/library/loans", requireLogin, (req, res) => {
+    const open = String(req.query.open || "") === "1";
+    const sql = open
+        ? `SELECT l.*, b.title, b.author, s.full_name, s.class_name
+           FROM library_loans l
+           JOIN library_books b ON b.id = l.book_id
+           LEFT JOIN students s ON s.student_id = l.student_id
+           WHERE l.returned_at IS NULL
+           ORDER BY l.issued_at DESC LIMIT 300`
+        : `SELECT l.*, b.title, b.author, s.full_name, s.class_name
+           FROM library_loans l
+           JOIN library_books b ON b.id = l.book_id
+           LEFT JOIN students s ON s.student_id = l.student_id
+           ORDER BY l.issued_at DESC LIMIT 300`;
+    connection.query(sql, (err, rows) => {
+        if (err) { if (err.code === "ER_NO_SUCH_TABLE") return res.json([]); return res.status(500).json({ message: "Database error" }); }
+        res.json(rows || []);
+    });
+});
+
+app.post("/api/library/issue", requireLogin, writeRateLimit, (req, res) => {
+    const bookId = Number(req.body.book_id);
+    const studentId = (req.body.student_id || "").trim();
+    const due = (req.body.due_date || "").trim() || null;
+    if (!bookId || !studentId) return res.status(400).json({ message: "Book and student are required." });
+    connection.query("SELECT available FROM library_books WHERE id = ?", [bookId], (err, rows) => {
+        if (err || !rows.length) return res.status(404).json({ message: "Book not found." });
+        if (Number(rows[0].available) < 1) return res.status(400).json({ message: "No copies available." });
+        const issued = new Date().toISOString().slice(0, 10);
+        connection.query(
+            "INSERT INTO library_loans (book_id, student_id, issued_at, due_date, issued_by) VALUES (?,?,?,?,?)",
+            [bookId, studentId, issued, due, req.session.username || ""],
+            (err2) => {
+                if (err2) { console.log(err2); return res.status(500).json({ message: "Database error" }); }
+                connection.query("UPDATE library_books SET available = GREATEST(available - 1, 0) WHERE id = ?", [bookId], () => {});
+                res.json({ message: "Book issued." });
+            }
+        );
+    });
+});
+
+app.post("/api/library/return/:id", requireLogin, writeRateLimit, (req, res) => {
+    const id = Number(req.params.id);
+    connection.query("SELECT book_id, returned_at FROM library_loans WHERE id = ?", [id], (err, rows) => {
+        if (err || !rows.length) return res.status(404).json({ message: "Loan not found." });
+        if (rows[0].returned_at) return res.status(400).json({ message: "Already returned." });
+        const today = new Date().toISOString().slice(0, 10);
+        connection.query("UPDATE library_loans SET returned_at = ? WHERE id = ?", [today, id], (err2) => {
+            if (err2) return res.status(500).json({ message: "Database error" });
+            connection.query("UPDATE library_books SET available = LEAST(available + 1, copies) WHERE id = ?", [rows[0].book_id], () => {});
+            res.json({ message: "Book returned." });
+        });
+    });
+});
+
+app.get("/portal/library", (req, res) => {
+    const sid = req.session && req.session.portalStudentId;
+    if (!sid) return res.json([]);
+    connection.query(
+        `SELECT l.id, l.issued_at, l.due_date, l.returned_at, b.title, b.author
+         FROM library_loans l JOIN library_books b ON b.id = l.book_id
+         WHERE l.student_id = ? ORDER BY l.issued_at DESC LIMIT 40`,
+        [sid],
+        (err, rows) => {
+            if (err) return res.json([]);
+            res.json(rows || []);
+        }
+    );
+});
+
+app.get("/api/remarks", requireLogin, (req, res) => {
+    const cls = (req.query.class_name || "").trim();
+    const term = (req.query.term || "").trim();
+    const session = (req.query.session || "").trim();
+    const q = `SELECT s.student_id, s.full_name, s.class_name,
+                      r.teacher_remark, r.principal_remark, r.updated_at
+               FROM students s
+               LEFT JOIN term_remarks r
+                 ON r.student_id = s.student_id AND r.term = ? AND r.session = ?
+               ${cls ? "WHERE s.class_name = ?" : ""}
+               ORDER BY s.full_name LIMIT 500`;
+    const p = cls ? [term, session, cls] : [term, session];
+    connection.query(q, p, (err, rows) => {
+        if (err) { console.log(err); return res.status(500).json({ message: "Database error" }); }
+        res.json(rows || []);
+    });
+});
+
+app.post("/api/remarks/:studentId", requireLogin, writeRateLimit, (req, res) => {
+    const sid = req.params.studentId;
+    const term = (req.body.term || "").trim();
+    const session = (req.body.session || "").trim();
+    const teacher_remark = (req.body.teacher_remark || "").trim();
+    const principal_remark = (req.body.principal_remark || "").trim();
+    if (!term || !session) return res.status(400).json({ message: "Term and session are required." });
+    connection.query(
+        `INSERT INTO term_remarks (student_id, term, session, teacher_remark, principal_remark, recorded_by)
+         VALUES (?,?,?,?,?,?)
+         ON DUPLICATE KEY UPDATE teacher_remark = VALUES(teacher_remark), principal_remark = VALUES(principal_remark), recorded_by = VALUES(recorded_by)`,
+        [sid, term, session, teacher_remark, principal_remark, req.session.username || ""],
+        (err) => {
+            if (err) { console.log(err); return res.status(500).json({ message: "Database error" }); }
+            res.json({ message: "Remark saved." });
+        }
+    );
+});
+
+app.get("/portal/remarks", (req, res) => {
+    const sid = req.session && req.session.portalStudentId;
+    if (!sid) return res.json([]);
+    connection.query(
+        "SELECT term, session, teacher_remark, principal_remark, updated_at FROM term_remarks WHERE student_id = ? ORDER BY session DESC, term DESC LIMIT 20",
+        [sid],
+        (err, rows) => {
+            if (err) return res.json([]);
+            res.json(rows || []);
+        }
+    );
+});
 
 // Handle multer errors (bad file type, too large, etc.) with a clean response
 app.use((err, req, res, next) => {

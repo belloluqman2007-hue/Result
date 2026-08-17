@@ -66,8 +66,12 @@
   function loadPublished() {
     var box = document.getElementById("ptTerms");
     fetch("/portal/published-terms")
-      .then(function (r) { return r.ok ? r.json() : []; })
+      .then(function (r) {
+        if (!r.ok) throw new Error("HTTP " + r.status);
+        return r.json();
+      })
       .then(function (rows) {
+        rows = Array.isArray(rows) ? rows : [];
         if (!rows.length) {
           box.innerHTML =
             '<div class="pt-empty"><span class="big">&#128197;</span>' +
@@ -796,6 +800,8 @@ function ptShowView(name) {
   if (name === "subjects")   ptLoadSubjects();
   if (name === "homework")   ptLoadHomework();
   if (name === "health")     ptLoadHealth();
+  if (name === "library")    ptLoadLibrary();
+  if (name === "remarks")    ptLoadRemarks();
   if (name === "transport")  ptLoadTransport();
   if (name === "gallery")    ptLoadGallery();
   if (name === "leave")      ptLoadLeave();
@@ -1303,6 +1309,8 @@ window.ptShowViewExtra = function(name) {
   if (name==="subjects")   ptLoadSubjects();
   if (name==="homework")   ptLoadHomework();
   if (name==="health")     ptLoadHealth();
+  if (name==="library")    ptLoadLibrary();
+  if (name==="remarks")    ptLoadRemarks();
   if (name==="transport")  ptLoadTransport();
   if (name==="gallery")    ptLoadGallery();
   if (name==="leave")      ptLoadLeave();
@@ -1517,8 +1525,7 @@ function ptLoadHealth() {
       var hasData = h.blood_group||h.allergies||h.medical_conditions||h.emergency_contact_name||h.emergency_contact_phone;
       if (!hasData) {
         box.innerHTML='<p style="color:#5B6B62;text-align:center;">No health record on file. Contact the school to add your child\'s medical information.</p>';
-        return;
-      }
+      } else {
       var rows = [
         {icon:"🩸",label:"Blood Group",val:h.blood_group},
         {icon:"⚠️",label:"Allergies",val:h.allergies},
@@ -1527,15 +1534,80 @@ function ptLoadHealth() {
         {icon:"📞",label:"Emergency Phone",val:h.emergency_contact_phone},
         {icon:"📋",label:"Notes",val:h.notes}
       ].filter(function(r){ return r.val; });
-      box.innerHTML='<div style="display:grid;gap:9px;">'+
+        box.innerHTML='<div style="display:grid;gap:9px;">'+
         rows.map(function(r){
           return '<div style="background:#f7faf7;border:1.5px solid #d3e8d6;border-radius:9px;padding:10px 13px;display:flex;gap:10px;align-items:flex-start;">' +
             '<span style="font-size:20px;flex:0 0 auto;">' + r.icon + '</span>' +
             '<div><div style="font-size:11px;font-weight:700;color:#7d9488;text-transform:uppercase;letter-spacing:.04em;">' + r.label + '</div>' +
             '<div style="font-size:14px;color:#14291c;font-weight:600;margin-top:2px;">' + r.val + '</div></div></div>';
         }).join("") + '</div>';
+      }
+      fetch("/portal/health-extra", { credentials:"same-origin" })
+        .then(function(r2){ return r2.ok ? r2.json() : {visits:[],vaccinations:[]}; })
+        .then(function(ex){
+          var extra = "";
+          if (ex.visits && ex.visits.length) {
+            extra += '<h3 style="margin:16px 0 8px;font-size:14px;color:#14532d;">Clinic visits</h3>' +
+              ex.visits.map(function(v){
+                return '<div style="background:#f7faf7;border:1.5px solid #d3e8d6;border-radius:9px;padding:10px 13px;margin-bottom:6px;text-align:left;">' +
+                  '<b>' + String(v.visit_date||"").slice(0,10) + '</b> · ' + (v.complaint||"") +
+                  (v.treatment ? '<div style="font-size:12px;color:#5B6B62;">Treatment: ' + v.treatment + '</div>' : '') + '</div>';
+              }).join("");
+          }
+          if (ex.vaccinations && ex.vaccinations.length) {
+            extra += '<h3 style="margin:16px 0 8px;font-size:14px;color:#14532d;">Vaccinations</h3>' +
+              ex.vaccinations.map(function(v){
+                return '<div style="background:#f7faf7;border:1.5px solid #d3e8d6;border-radius:9px;padding:10px 13px;margin-bottom:6px;text-align:left;">' +
+                  '<b>' + (v.vaccine_name||"") + '</b> · ' + String(v.given_date||"").slice(0,10) + '</div>';
+              }).join("");
+          }
+          if (extra) box.insertAdjacentHTML("beforeend", extra);
+        }).catch(function(){});
     })
     .catch(function(){ if(box) box.textContent="Could not load health record."; });
+}
+
+var ptLibraryLoaded=false, ptRemarksLoaded=false;
+function ptLoadLibrary() {
+  if (ptLibraryLoaded) return; ptLibraryLoaded = true;
+  var box = document.getElementById("ptLibraryList");
+  if (!box) return;
+  fetch("/portal/library", { credentials:"same-origin" })
+    .then(function(r){ return r.json(); })
+    .then(function(rows){
+      rows = Array.isArray(rows) ? rows : [];
+      if (!rows.length) { box.innerHTML='<p style="color:#5B6B62;">No library books issued yet.</p>'; return; }
+      box.innerHTML = rows.map(function(b){
+        var open = !b.returned_at;
+        return '<div style="background:#f7faf7;border:1.5px solid #d3e8d6;border-radius:10px;padding:12px 14px;margin-bottom:8px;text-align:left;">' +
+          '<b style="color:#14291c;">' + (b.title||"Book") + '</b>' +
+          (b.author ? ' <span style="color:#5B6B62;">· ' + b.author + '</span>' : '') +
+          '<div style="font-size:12px;color:#5B6B62;margin-top:4px;">Issued ' + String(b.issued_at||"").slice(0,10) +
+          (b.due_date ? ' · Due ' + String(b.due_date).slice(0,10) : '') +
+          (open ? ' · <b style="color:#92400e;">OUT</b>' : ' · Returned ' + String(b.returned_at).slice(0,10)) +
+          '</div></div>';
+      }).join("");
+    })
+    .catch(function(){ box.textContent = "Could not load library."; });
+}
+function ptLoadRemarks() {
+  if (ptRemarksLoaded) return; ptRemarksLoaded = true;
+  var box = document.getElementById("ptRemarksList");
+  if (!box) return;
+  fetch("/portal/remarks", { credentials:"same-origin" })
+    .then(function(r){ return r.json(); })
+    .then(function(rows){
+      rows = Array.isArray(rows) ? rows : [];
+      if (!rows.length) { box.innerHTML='<p style="color:#5B6B62;">No teacher comments yet.</p>'; return; }
+      box.innerHTML = rows.map(function(r){
+        return '<div style="background:#f7faf7;border:1.5px solid #d3e8d6;border-radius:10px;padding:12px 14px;margin-bottom:8px;text-align:left;">' +
+          '<div style="font-size:12px;color:#7d9488;font-weight:700;">' + (r.term||"") + ' — ' + (r.session||"") + '</div>' +
+          (r.teacher_remark ? '<p style="margin:6px 0 0;"><b>Teacher:</b> ' + r.teacher_remark + '</p>' : '') +
+          (r.principal_remark ? '<p style="margin:6px 0 0;"><b>Principal:</b> ' + r.principal_remark + '</p>' : '') +
+          '</div>';
+      }).join("");
+    })
+    .catch(function(){ box.textContent = "Could not load comments."; });
 }
 
 /* ====================================================================
