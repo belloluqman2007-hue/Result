@@ -796,6 +796,8 @@ function ptShowView(name) {
   if (name === "subjects")   ptLoadSubjects();
   if (name === "homework")   ptLoadHomework();
   if (name === "health")     ptLoadHealth();
+  if (name === "library")    ptLoadLibrary();
+  if (name === "remarks")    ptLoadRemarks();
   if (name === "transport")  ptLoadTransport();
   if (name === "gallery")    ptLoadGallery();
   if (name === "leave")      ptLoadLeave();
@@ -1263,7 +1265,8 @@ function ptSaveProfile() {
 
 /* ── lazy-load flags ── */
 var ptProgressLoaded=false, ptPositionLoaded=false, ptSubjectsLoaded=false,
-    ptHomeworkLoaded=false, ptHealthLoaded=false, ptTransportLoaded=false,
+    ptHomeworkLoaded=false, ptHealthLoaded=false, ptLibraryLoaded=false,
+    ptRemarksLoaded=false, ptTransportLoaded=false,
     ptGalleryLoaded=false, ptLeaveLoaded=false, ptBroadcastsLoaded=false,
     ptPrayerLoaded=false;
 
@@ -1277,6 +1280,8 @@ window.ptShowViewExtra = function(name) {
   if (name==="subjects")   ptLoadSubjects();
   if (name==="homework")   ptLoadHomework();
   if (name==="health")     ptLoadHealth();
+  if (name==="library")    ptLoadLibrary();
+  if (name==="remarks")    ptLoadRemarks();
   if (name==="transport")  ptLoadTransport();
   if (name==="gallery")    ptLoadGallery();
   if (name==="leave")      ptLoadLeave();
@@ -1486,15 +1491,26 @@ function ptLoadHealth() {
   fetch("/portal/health", { credentials:"same-origin" })
     .then(function(r){ return r.json(); })
     .then(function(h) {
-      var hasData = h.blood_group||h.allergies||h.medical_conditions||h.emergency_contact_name||h.emergency_contact_phone;
+      var hasData = h.blood_group||h.genotype||h.height_cm||h.weight_kg||h.allergies||h.medical_conditions||h.current_medications||h.emergency_contact_name||h.emergency_contact_phone||h.doctor_name||h.insurance_no||h.special_needs||h.notes||h.last_checkup;
       if (!hasData) {
         box.innerHTML='<p style="color:#5B6B62;text-align:center;">No health record on file. Contact the school to add your child\'s medical information.</p>';
         return;
       }
+      var measurements=[];
+      if (h.height_cm) measurements.push(esc(h.height_cm)+" cm");
+      if (h.weight_kg) measurements.push(esc(h.weight_kg)+" kg");
+      if (h.bmi) measurements.push("BMI "+esc(h.bmi));
       var rows = [
         {icon:"🩸",label:"Blood Group",val:h.blood_group},
+        {icon:"🧬",label:"Genotype",val:h.genotype},
+        {icon:"📏",label:"Measurements",val:measurements.join(" · ")},
+        {icon:"🩺",label:"Last Check-up",val:h.last_checkup ? String(h.last_checkup).slice(0,10) : ""},
+        {icon:"💊",label:"Current Medications",val:h.current_medications},
         {icon:"⚠️",label:"Allergies",val:h.allergies},
-        {icon:"💊",label:"Medical Conditions",val:h.medical_conditions},
+        {icon:"🏥",label:"Medical Conditions",val:h.medical_conditions},
+        {icon:"♿",label:"Special Needs",val:h.special_needs},
+        {icon:"👨‍⚕️",label:"Family Doctor",val:[h.doctor_name,h.doctor_phone].filter(Boolean).join(" · ")},
+        {icon:"🪪",label:"NHIS / Insurance",val:h.insurance_no},
         {icon:"🚨",label:"Emergency Contact",val:h.emergency_contact_name},
         {icon:"📞",label:"Emergency Phone",val:h.emergency_contact_phone},
         {icon:"📋",label:"Notes",val:h.notes}
@@ -1508,6 +1524,66 @@ function ptLoadHealth() {
         }).join("") + '</div>';
     })
     .catch(function(){ if(box) box.textContent="Could not load health record."; });
+}
+
+/* ====================================================================
+   LIBRARY BOOKS
+   ==================================================================== */
+function ptLoadLibrary() {
+  if (ptLibraryLoaded) return; ptLibraryLoaded = true;
+  var box = document.getElementById("ptLibraryList");
+  if (!box) return;
+  fetch("/portal/library", { credentials:"same-origin" })
+    .then(function(r){ return r.json(); })
+    .then(function(loans) {
+      if (!loans || !loans.length) {
+        box.innerHTML='<div style="text-align:center;padding:14px;"><div style="font-size:48px;margin-bottom:8px;">📚</div><p style="color:#5B6B62;">No library books issued yet. Books you borrow from the school library will appear here.</p></div>';
+        return;
+      }
+      box.innerHTML='<div style="display:grid;gap:9px;">' +
+        loans.map(function(l) {
+          var status;
+          if (l.returned_at) { status = '<span style="background:#eaf3ec;color:#14532d;border-radius:6px;padding:3px 8px;font-size:11px;font-weight:700;">Returned ' + esc(String(l.returned_at).slice(0,10)) + '</span>'; }
+          else if (l.due_date && String(l.due_date) < new Date().toISOString().slice(0,10)) { status = '<span style="background:#fdeaea;color:#9b1c1c;border-radius:6px;padding:3px 8px;font-size:11px;font-weight:700;">⚠️ Overdue</span>'; }
+          else { status = '<span style="background:#e8f1ff;color:#1d4a30;border-radius:6px;padding:3px 8px;font-size:11px;font-weight:700;">📖 On loan</span>'; }
+          return '<div style="background:#f7faf7;border:1.5px solid #d3e8d6;border-radius:9px;padding:10px 13px;display:flex;gap:10px;align-items:flex-start;">' +
+            '<span style="font-size:20px;flex:0 0 auto;">📕</span>' +
+            '<div style="flex:1;"><div style="font-size:14px;color:#14291c;font-weight:700;">' + esc(l.title) + '</div>' +
+            '<div style="font-size:12px;color:#7d9488;">' + (l.author ? esc(l.author) + ' · ' : '') + 'issued ' + esc(String(l.issued_at).slice(0,10)) +
+            (l.due_date ? ' · due ' + esc(String(l.due_date).slice(0,10)) : '') + '</div></div>' + status + '</div>';
+        }).join("") + '</div>';
+    })
+    .catch(function(){ if(box) box.textContent="Could not load library records."; });
+}
+
+/* ====================================================================
+   TEACHER COMMENTS (term remarks)
+   ==================================================================== */
+function ptLoadRemarks() {
+  if (ptRemarksLoaded) return; ptRemarksLoaded = true;
+  var box = document.getElementById("ptRemarksList");
+  if (!box) return;
+  fetch("/portal/remarks", { credentials:"same-origin" })
+    .then(function(r){ return r.json(); })
+    .then(function(rows) {
+      if (!rows || !rows.length) {
+        box.innerHTML='<div style="text-align:center;padding:14px;"><div style="font-size:48px;margin-bottom:8px;">💬</div><p style="color:#5B6B62;">No teacher comments yet. Comments written by your child\'s teacher for each term will appear here.</p></div>';
+        return;
+      }
+      box.innerHTML='<div style="display:grid;gap:9px;">' +
+        rows.map(function(r) {
+          var comment = r.teacher_remark || r.principal_remark;
+          return '<div style="background:#f7faf7;border:1.5px solid #d3e8d6;border-radius:9px;padding:11px 13px;">' +
+            '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;">' +
+            '<b style="font-size:14px;color:#14291c;">' + esc(r.term) + ' · ' + esc(r.session) + '</b>' +
+            '<span style="font-size:11px;color:#7d9488;">' + esc(String(r.updated_at||"").slice(0,10)) + '</span></div>' +
+            (r.teacher_remark ? '<div style="margin-top:8px;"><span style="font-size:11px;font-weight:700;color:#7d9488;text-transform:uppercase;">Class Teacher</span><p style="margin:3px 0 0;font-size:14px;color:#3a5441;line-height:1.5;">' + esc(r.teacher_remark) + '</p></div>' : '') +
+            (r.principal_remark ? '<div style="margin-top:8px;"><span style="font-size:11px;font-weight:700;color:#7d9488;text-transform:uppercase;">Principal</span><p style="margin:3px 0 0;font-size:14px;color:#3a5441;line-height:1.5;">' + esc(r.principal_remark) + '</p></div>' : '') +
+            (comment ? '' : '<p style="margin:6px 0 0;font-size:13px;color:#99b09e;">No remarks written for this term yet.</p>') +
+            '</div>';
+        }).join("") + '</div>';
+    })
+    .catch(function(){ if(box) box.textContent="Could not load teacher comments."; });
 }
 
 /* ====================================================================

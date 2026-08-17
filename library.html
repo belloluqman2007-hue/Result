@@ -35,11 +35,12 @@
   </div>
   <div class="hw-card">
     <h2 style="font-size:15px;font-weight:800;color:#14291c;margin:0 0 12px;">Issue a book</h2>
-    <div class="hw-form" style="display:grid;grid-template-columns:1.4fr 1fr 1fr;gap:8px;">
+    <div class="hw-form" style="display:grid;grid-template-columns:1.4fr 1.4fr 1fr;gap:8px;">
       <select id="lbBook"><option value="">Select book...</option></select>
-      <input id="lbStudent" placeholder="Student ID">
+      <select id="lbStudentSel" onchange="document.getElementById('lbStudent').value=this.value"><option value="">Select student...</option></select>
       <input id="lbDue" type="date">
     </div>
+    <input id="lbStudent" placeholder="Student ID (auto-filled by the picker above)" style="margin-bottom:8px;">
     <button class="hw-btn" type="button" onclick="lbIssue()">📤 Issue to student</button>
   </div>
   <div class="hw-card">
@@ -55,6 +56,10 @@
 <script>
 function esc(s){return String(s==null?"":s).replace(/&/g,"&amp;").replace(/</g,"&lt;");}
 function lbLoad(){
+  fetch("/students",{credentials:"same-origin"}).then(r=>r.json()).then(students=>{
+    var sel=document.getElementById("lbStudentSel");
+    sel.innerHTML='<option value="">Select student...</option>'+(students||[]).map(s=>'<option value="'+esc(s.student_id)+'">'+esc(s.full_name)+' ('+esc(s.student_id)+') · '+esc(s.class_name||"-")+'</option>').join("");
+  }).catch(function(){});
   fetch("/api/library/books",{credentials:"same-origin"}).then(r=>r.json()).then(rows=>{
     var sel=document.getElementById("lbBook");
     sel.innerHTML='<option value="">Select book...</option>'+(rows||[]).filter(b=>Number(b.available)>0).map(b=>'<option value="'+b.id+'">'+esc(b.title)+' ('+b.available+' left)</option>').join("");
