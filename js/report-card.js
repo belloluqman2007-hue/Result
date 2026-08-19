@@ -246,10 +246,14 @@
        vertical cut positions in canvas pixels (row bottoms). A page then
        NEVER splits a table row in half - the cut snaps to the nearest
        allowed edge above the ideal page end. Returns the jsPDF instance.
+       CHANGED (one-page report): optional 4th arg `forceSinglePage` makes
+       the WHOLE canvas scale down to fit ONE A4 page (never slices) - used
+       for per-student report cards so a download/zip PDF is always a single,
+       correctly-sized page instead of "longer than one page and very big".
        FIX: when the card fits on one page (≤ 1.1x A4 height), scale it
        down and center on a single page. Otherwise slice across multiple
        pages at full width. */
-    window.amsCanvasToA4Pdf = function (canvas, quality, cutGuide) {
+    window.amsCanvasToA4Pdf = function (canvas, quality, cutGuide, forceSinglePage) {
         const pdf = new window.jspdf.jsPDF({ unit: "mm", format: "a4" });
         const pageWmm = 210;
         const pageHmm = 297;
@@ -262,7 +266,10 @@
         // Natural size at full A4 width
         const naturalHmm = (canvasH * contentWmm) / canvasW;
 
-        if (naturalHmm <= contentHmm * 1.5) {
+        // ONE-page mode: always scale the whole card down to fit a single
+        // A4 sheet (no matter how tall the source is). Used for individual
+        // student report cards so they never spill onto a 2nd page.
+        if (forceSinglePage || naturalHmm <= contentHmm * 1.5) {
             // Fits on one page — scale to fit exactly (never overflow)
             const scale = Math.min(1.0, contentHmm / naturalHmm);
             const wMm = contentWmm * scale;
@@ -332,6 +339,83 @@
                 setTimeout(resolve, timeoutMs || 4000);
             });
         })).then(() => undefined);
+    };
+
+    /* ------------------------------------------------------------------
+       ONE-PAGE report helpers (student portal download + zip + print).
+
+       The live on-screen report is designed to look good on a phone, so
+       its text is large and the card is tall. html2canvas on that card
+       was what made the downloaded PDF "longer than one page and very
+       big". These helpers render the SAME report into a hidden staging
+       area at a fixed desktop width with the compact .rcpzip skin, so the
+       captured/measured card is the correct, print-like size.
+       ------------------------------------------------------------------ */
+
+    function amsMakeStage(widthPx) {
+        const stage = document.createElement("div");
+        stage.className = "rcpzip";
+        stage.style.cssText =
+            "position:fixed; left:-12000px; top:0; width:" + (widthPx || 794) +
+            "px; background:#fff; z-index:-1;";
+        return stage;
+    }
+
+    /* Capture a report-card element to a canvas at a fixed desktop width,
+       using the compact skin, so the result is a true one-page A4 shape.
+       Resolves to an HTMLCanvasElement. */
+    window.amsCaptureReportToCanvas = function (sourceEl, opts) {
+        opts = opts || {};
+        const stage = amsMakeStage(opts.width || 794);
+        document.body.appendChild(stage);
+        const clone = sourceEl.cloneNode(true);
+        clone.id = ""; // avoid a duplicate #reportContainer id in the DOM
+        stage.appendChild(clone);
+        return window.amsWaitForImages(clone, opts.timeout || 4000)
+            .then(function () {
+                return window.html2canvas(clone, {
+                    scale: opts.scale || 2,
+                    backgroundColor: "#ffffff",
+                    useCORS: true,
+                    windowWidth: opts.windowWidth || 1024
+                });
+            })
+            .then(function (canvas) {
+                stage.remove();
+                return canvas;
+            })
+            .catch(function (err) {
+                stage.remove();
+                throw err;
+            });
+    };
+
+    /* Measure the compact card and return the zoom factor that makes the
+       REAL report print on exactly one A4 page (1 = no scaling needed).
+       The staging width matches the printable content width (190mm) so the
+       measured height mirrors what the browser lays out at print time. */
+    window.amsFitPrintZoom = function (sourceEl) {
+        const stage = amsMakeStage(718); // 190mm printable width @ 96dpi
+        document.body.appendChild(stage);
+        const clone = sourceEl.cloneNode(true);
+        clone.id = ""; // avoid a duplicate #reportContainer id in the DOM
+        stage.appendChild(clone);
+        return window.amsWaitForImages(clone, 4000)
+            .then(function () {
+                const h = clone.getBoundingClientRect().height;
+                stage.remove();
+                if (!h) return 1;
+                // A4 printable height (297mm - 2x10mm margins) ≈ 277mm ≈ 1046px.
+                // Leave a tiny safety margin so rounding never pushes a line
+                // onto a second sheet.
+                const target = 1030;
+                if (h <= target) return 1;
+                return Math.max(0.35, target / h);
+            })
+            .catch(function () {
+                stage.remove();
+                return 1;
+            });
     };
 
 })();

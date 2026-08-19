@@ -47,7 +47,14 @@
       width:238px; flex:0 0 238px;
       background:linear-gradient(180deg,#14291c,#1d4a30 70%,#20573a);
       color:#fff; padding:18px 12px; display:flex; flex-direction:column; gap:2px;
-      position:sticky; top:54px; align-self:flex-start; min-height:calc(100vh - 54px);
+      position:sticky; top:54px; align-self:flex-start;
+      /* NEW (sidebar scroll fix): cap the sidebar to the visible height and
+         let its nav links scroll, so the remaining sections (settings,
+         logout, etc.) are reachable instead of being cut off below the
+         viewport. */
+      max-height:calc(100vh - 54px);
+      overflow-y:auto;
+      -webkit-overflow-scrolling:touch;
     }
     .pt-sidenav .pt-side-brand{ display:flex; align-items:center; gap:9px; padding:4px 8px 14px; border-bottom:1px solid rgba(255,255,255,.12); margin-bottom:10px; }
     .pt-sidenav .pt-side-brand img{ width:38px; height:38px; border-radius:9px; background:#fff; }
@@ -125,6 +132,7 @@
       .pt-ham{ display:block; }
       .pt-sidenav{
         position:fixed; left:0; top:0; z-index:50; height:100vh; min-height:100vh;
+        max-height:100vh; /* sidebar scroll fix: keep it full-screen on phones */
         transform:translateX(-105%); transition:transform .22s ease;
         width:250px; flex-basis:250px;
       }

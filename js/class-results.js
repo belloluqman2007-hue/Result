@@ -423,9 +423,10 @@
 
         // Off-screen staging area with a fixed report width.
         var stage = document.createElement("div");
-        // CHANGED (pack 80): remove .rcpzip skin so the report card inside
-        // the ZIP renders EXACTLY identical to Check Result on screen/print.
-        stage.className = "ams-staging";
+        // CHANGED (one-page report): apply the compact .rcpzip skin so each
+        // student's report card in the ZIP renders at the correct print-like
+        // size and fits ONE A4 page (was longer than one page / too big).
+        stage.className = "ams-staging rcpzip";
         stage.style.width = "794px";
         document.body.appendChild(stage);
 
@@ -503,10 +504,10 @@
                         });
                     }
 
-                    /* FIX (pack 30): page cuts snap to row edges - see
-                       crCutGuides/amsCanvasToA4Pdf. Nothing is squeezed or
-                       chopped, so the PDF reads exactly like Check Result. */
-                    var pdf = window.amsCanvasToA4Pdf(canvas, 0.95, crCutGuides(card, canvas));
+                    /* FIX (one-page report): force a single A4 page per
+                       student (no slicing), so every PDF inside the ZIP is
+                       exactly one correctly-sized page. */
+                    var pdf = window.amsCanvasToA4Pdf(canvas, 0.95, null, true);
                     var blob = pdf.output("blob");
 
                     var safe = (stu.id + "-" + stu.name).replace(/[\\/:*?"<>|]+/g, "_");
@@ -559,6 +560,77 @@
             stage.remove();
             crZipHideProgress();
         }
+    };
+
+    /* ---------- NEW (print all classes): broadsheet for EVERY class ----------
+       Fills the hidden #crPrintAllArea with one broadsheet per class (for the
+       selected session + term) and opens the print dialog. Each class starts
+       on its own page; classes with no saved results are skipped. */
+    window.crPrintAllClasses = async function () {
+        var term = document.getElementById("crTerm").value;
+        var session = document.getElementById("crSession").value;
+        if (!term || !session) {
+            notify("Please select Session and Term first.", "error");
+            return;
+        }
+
+        var btn = document.getElementById("crPrintAllBtn");
+        if (btn) btn.disabled = true;
+        notify("Preparing all classes for printing\u2026", "info", 3000);
+
+        var area = document.getElementById("crPrintAllArea");
+        area.innerHTML = "";
+
+        var classes = [];
+        try {
+            classes = await fetch("/classes").then(function (r) { return r.json(); });
+        } catch (e) { classes = []; }
+        if (!Array.isArray(classes) || !classes.length) {
+            notify("No classes found.", "error");
+            if (btn) btn.disabled = false;
+            return;
+        }
+
+        var printed = 0;
+        for (var i = 0; i < classes.length; i++) {
+            var cname = classes[i].class_name || classes[i];
+            try {
+                var rows = await fetch("/class-results?class=" + encodeURIComponent(cname) +
+                    "&term=" + encodeURIComponent(term) +
+                    "&session=" + encodeURIComponent(session)).then(function (r) { return r.json(); });
+                if (!rows || !rows.length) continue;
+                var sheet = buildSheet(rows, cname, term, session);
+                if (!sheet.students.length) continue;
+                var page = document.createElement("div");
+                page.className = "bs-print-page";
+                // No fixed page label - a large class can span more than one
+                // printed sheet, so the browser's own pagination is used.
+                page.innerHTML = pdfHeaderHTML(sheet, null) +
+                    buildTableHTML(sheet, 0, sheet.students.length, false);
+                area.appendChild(page);
+                printed++;
+            } catch (e) {
+                console.log("Print-all failed for", cname, e);
+            }
+        }
+
+        if (!printed) {
+            notify("No saved results to print for " + term + " (" + session + ").", "error");
+            area.innerHTML = "";
+            if (btn) btn.disabled = false;
+            return;
+        }
+
+        // Give the freshly-added broadsheets a moment to lay out (and the
+        // school logo to decode) before the print dialog snapshots them.
+        await sleep(200);
+        document.body.classList.add("cr-printing-all");
+        window.print();
+        setTimeout(function () {
+            document.body.classList.remove("cr-printing-all");
+            area.innerHTML = "";
+            if (btn) btn.disabled = false;
+        }, 1500);
     };
 
     /* ---------- NEW (Pack 45): Purge Ghost Scores ---------- */

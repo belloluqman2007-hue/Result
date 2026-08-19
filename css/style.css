@@ -992,6 +992,11 @@ nav a{
     border-radius:0;
     box-shadow:none;
     outline:none;
+    /* NEW (one-page print): JS measures the report and sets
+       --ams-print-zoom (e.g. 0.85) so a long sheet is scaled down to
+       fit EXACTLY one A4 page in BOTH the staff Check Result page and
+       the student/parent portal. zoom:1 (default) = unchanged. */
+    zoom:var(--ams-print-zoom, 1);
   }
 
   .report-header{
