@@ -423,9 +423,9 @@
 
         // Off-screen staging area with a fixed report width.
         var stage = document.createElement("div");
-        // CHANGED (one-page report): apply the compact .rcpzip skin so each
-        // student's report card in the ZIP renders at the correct print-like
-        // size and fits ONE A4 page (was longer than one page / too big).
+        // CHANGED (pack 90): .rcpzip now reproduces the REAL full A4 result
+        // layout (not the old shortened compact card), including the larger
+        // header and a score table that fills the page without blank bands.
         stage.className = "ams-staging rcpzip";
         stage.style.width = "794px";
         document.body.appendChild(stage);
@@ -504,10 +504,12 @@
                         });
                     }
 
-                    /* FIX (one-page report): force a single A4 page per
-                       student (no slicing), so every PDF inside the ZIP is
-                       exactly one correctly-sized page. */
-                    var pdf = window.amsCanvasToA4Pdf(canvas, 0.95, null, true);
+                    /* CHANGED (pack 90): force one A4 page with the same
+                       10mm print margin used by Check Result. The staged card
+                       already has the official 190×277mm proportions, so it
+                       fills the page like the real result instead of being a
+                       short form centred on the sheet. */
+                    var pdf = window.amsCanvasToA4Pdf(canvas, 0.95, null, true, { margin: 10 });
                     var blob = pdf.output("blob");
 
                     var safe = (stu.id + "-" + stu.name).replace(/[\\/:*?"<>|]+/g, "_");
