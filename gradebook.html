@@ -39,12 +39,19 @@
     table.gb thead th.gb-name{ z-index:4; background:#0F3D2E; }
     table.gb tr:nth-child(even) td{ background:#F6FAF8; }
     table.gb tr:nth-child(even) td.gb-name{ background:#F6FAF8; }
-    table.gb td.gb-cell{ cursor:pointer; min-width:64px; }
-    table.gb td.gb-cell:hover{ outline:2px solid #2F9E6E; outline-offset:-2px; }
+    table.gb td.gb-cell{ min-width:92px; vertical-align:middle; }
+    table.gb td.gb-cell:focus-within{ outline:2px solid #2F9E6E; outline-offset:-2px; }
+    .gb-edit{ display:flex; gap:4px; justify-content:center; }
     table.gb td.gb-cell input{
-      width:56px; padding:4px 6px; border:1.5px solid #2F9E6E; border-radius:6px;
-      text-align:center; font-size:13px; font-family:inherit;
+      width:44px; padding:5px 4px; border:1.5px solid #9cc9b3; border-radius:6px;
+      text-align:center; font-size:13px; font-family:inherit; background:#fff;
     }
+    table.gb td.gb-cell input:focus{ border-color:#2F9E6E; outline:none; }
+    .gb-tot{ margin-top:3px; font-size:11px; font-weight:700; color:#0F3D2E; }
+    .gb-subh{ font-weight:500; font-size:10px; opacity:.85; margin-top:2px; }
+    .gb-id{ font-weight:500; color:#5F6E66; font-size:11px; }
+    html[data-theme="dark"] table.gb td.gb-cell input{ background:var(--m-surface-2); color:var(--m-text); border-color:#2d5a38; }
+    html[data-theme="dark"] .gb-tot, html[data-theme="dark"] .gb-id{ color:var(--m-muted,#a8c4b0); }
     table.gb td.gb-saving{ opacity:.55; }
     table.gb td.gb-ok{ background:#E8F6EE !important; }
     table.gb td.gb-err{ background:#FDECEC !important; }
@@ -65,7 +72,7 @@
       </a>
       <div class="mng-head-text">
         <h1>Grade Book</h1>
-        <p>See every student's score for every subject in one grid. Click a cell to edit.</p>
+        <p>Every student in the class has CA and Exam boxes you can type in. Scores save when you leave a box.</p>
       </div>
     </div>
 

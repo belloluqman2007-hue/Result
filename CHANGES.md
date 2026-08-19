@@ -1,5 +1,19 @@
 # UI Modernization — Change Log
 
+## Pack 87 — 2026-08-19
+
+Owner: "The grade book is not showing editing for many students"
+
+| File | What happened |
+|---|---|
+| `server.js` | **Grade Book roster was incomplete:** `/api/gradebook` used `WHERE class_name = ?`, so students (and subjects) whose Arabic class name differed by tashkeel, extra spaces or alef form never appeared — no row, no editor. Results saved under a slightly different class spelling also never attached to a cell. Loading now uses the same `classNamesMatch` helper as the publish gate, includes every student in that class plus anyone who already has a score for the term, and matches subjects the same way. **New `POST /api/gradebook/cell`** upserts by student + subject + term + session (case/space/tashkeel-insensitive) so editing never inserts a ghost row, and it is **not** under the 30-writes / 15-minute cap that blocked saving after the first few students. Export uses the same pack. Existing `/save-result` and `/update-result` are untouched. |
+| `js/gradebook.js` + `gradebook.html` | **Editing is visible on every student:** each subject cell now has always-on **CA** (0–40) and **Exam** (0–60) inputs plus a live total/grade. No more click-to-reveal (that hid the editor on phones and for most rows). Find-student search filters the grid. Saves on blur/change through the new upsert route. |
+| `sw.js` | Cache `v46 → v47`. |
+
+Result calculations, grading, positions and the frozen report-card design: untouched.
+
+---
+
 ## Pack 86 — 2026-08-19
 
 Owner: missing features — Dark Mode, Report Card/Certificate download in the parent portal, Analytics Dashboard, Grade Book, Class Management, Staff Internal Messaging.

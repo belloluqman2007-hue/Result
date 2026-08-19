@@ -9206,6 +9206,109 @@ app.get("/api/analytics", requireLogin, requireAdmin, (req, res) => {
 });
 
 /* ---------- Grade Book ---------- */
+/* FIX (pack 87): exact class_name = ? hid most of the class when Arabic
+   names differed by tashkeel/spaces, and results stored under a slightly
+   different class spelling never attached to a cell — so many students
+   appeared with no editor. Matching now uses classNamesMatch (same as
+   the publish gate) and every student in the class gets a row. */
+function amsSidKey(s) {
+    return String(s || "").trim().toLowerCase();
+}
+function amsBuildGradebook(className, term, session, cb) {
+    function fail(err) {
+        console.log(err);
+        cb(err || new Error("Database error"));
+    }
+    function withStudents(allStudents) {
+        connection.query(
+            "SELECT subject_name, class_name, is_active FROM subjects",
+            (e2, allSubs) => {
+                const takeSubs = (subs) => {
+                    connection.query(
+                        `SELECT id, student_id, student_name, class_name, subject, first_test, second_test,
+                                note_score, attendance_score, ca_score, exam_score, total, grade
+                         FROM results WHERE TRIM(term) = TRIM(?) AND TRIM(session) = TRIM(?)`,
+                        [term, session],
+                        (e3, results) => {
+                            if (e3) return fail(e3);
+                            finish(allStudents || [], subs || [], results || []);
+                        }
+                    );
+                };
+                if (e2 && e2.code === "ER_BAD_FIELD_ERROR") {
+                    return connection.query("SELECT subject_name, class_name FROM subjects", (e2b, subs2) => {
+                        if (e2b) return fail(e2b);
+                        takeSubs(subs2 || []);
+                    });
+                }
+                if (e2) return fail(e2);
+                takeSubs(allSubs || []);
+            }
+        );
+    }
+    function finish(allStudents, allSubs, results) {
+        const classStudents = allStudents.filter((s) => classNamesMatch(s.class_name, className));
+        const inClassIds = {};
+        classStudents.forEach((s) => { inClassIds[amsSidKey(s.student_id)] = 1; });
+        const relevantResults = results.filter((r) =>
+            classNamesMatch(r.class_name, className) || inClassIds[amsSidKey(r.student_id)]
+        );
+        const seen = {};
+        classStudents.forEach((s) => { seen[amsSidKey(s.student_id)] = s; });
+        relevantResults.forEach((r) => {
+            const k = amsSidKey(r.student_id);
+            if (!seen[k]) {
+                const roster = allStudents.find((s) => amsSidKey(s.student_id) === k);
+                seen[k] = roster || {
+                    student_id: r.student_id,
+                    full_name: r.student_name || r.student_id,
+                    class_name: r.class_name
+                };
+            }
+        });
+        const students = Object.keys(seen).map((k) => seen[k]).sort((a, b) =>
+            String(a.full_name || "").localeCompare(String(b.full_name || ""), undefined, { sensitivity: "base" })
+        );
+        const subSeen = {};
+        let subjects = [];
+        (allSubs || []).forEach((s) => {
+            if (!classNamesMatch(s.class_name, className)) return;
+            if (s.is_active !== undefined && s.is_active !== null && Number(s.is_active) === 0) return;
+            const name = s.subject_name;
+            const k = normalizeClassName(name);
+            if (!k || subSeen[k]) return;
+            subSeen[k] = 1;
+            subjects.push(name);
+        });
+        relevantResults.forEach((r) => {
+            const k = normalizeClassName(r.subject);
+            if (k && !subSeen[k]) { subSeen[k] = 1; subjects.push(r.subject); }
+        });
+        subjects.sort((a, b) => String(a).localeCompare(String(b), undefined, { sensitivity: "base" }));
+        cb(null, {
+            class_name: className,
+            term: term,
+            session: session,
+            students: students,
+            subjects: subjects,
+            results: relevantResults
+        });
+    }
+    connection.query(
+        "SELECT student_id, full_name, class_name, status FROM students ORDER BY full_name",
+        (err, rows) => {
+            if (err && err.code === "ER_BAD_FIELD_ERROR") {
+                return connection.query(
+                    "SELECT student_id, full_name, class_name FROM students ORDER BY full_name",
+                    (e2, rows2) => { if (e2) return fail(e2); withStudents(rows2 || []); }
+                );
+            }
+            if (err) return fail(err);
+            withStudents(rows || []);
+        }
+    );
+}
+
 app.get("/api/gradebook", requireLogin, (req, res) => {
     const className = String(req.query.class || req.query.class_name || "").trim();
     const term = String(req.query.term || "").trim();
@@ -9213,45 +9316,10 @@ app.get("/api/gradebook", requireLogin, (req, res) => {
     if (!className || !term || !session) {
         return res.status(400).json({ message: "Class, term and session are required." });
     }
-    connection.query(
-        "SELECT student_id, full_name FROM students WHERE class_name = ? ORDER BY full_name",
-        [className],
-        (err, students) => {
-            if (err) { console.log(err); return res.status(500).json({ message: "Database error" }); }
-            connection.query(
-                "SELECT subject_name FROM subjects WHERE class_name = ? ORDER BY subject_name",
-                [className],
-                (e2, subs) => {
-                    if (e2) { console.log(e2); return res.status(500).json({ message: "Database error" }); }
-                    connection.query(
-                        `SELECT id, student_id, student_name, subject, first_test, second_test,
-                                note_score, attendance_score, ca_score, exam_score, total, grade
-                         FROM results WHERE class_name = ? AND term = ? AND session = ?`,
-                        [className, term, session],
-                        (e3, results) => {
-                            if (e3) { console.log(e3); return res.status(500).json({ message: "Database error" }); }
-                            let subjects = (subs || []).map((s) => s.subject_name).filter(Boolean);
-                            if (!subjects.length) {
-                                const seen = {};
-                                (results || []).forEach((r) => {
-                                    if (r.subject && !seen[r.subject]) { seen[r.subject] = 1; subjects.push(r.subject); }
-                                });
-                                subjects.sort();
-                            }
-                            res.json({
-                                class_name: className,
-                                term: term,
-                                session: session,
-                                students: students || [],
-                                subjects: subjects,
-                                results: results || []
-                            });
-                        }
-                    );
-                }
-            );
-        }
-    );
+    amsBuildGradebook(className, term, session, (err, pack) => {
+        if (err) return res.status(500).json({ message: "Database error" });
+        res.json(pack);
+    });
 });
 
 app.get("/api/gradebook/export", requireLogin, (req, res) => {
@@ -9261,52 +9329,103 @@ app.get("/api/gradebook/export", requireLogin, (req, res) => {
     if (!className || !term || !session) {
         return res.status(400).json({ message: "Class, term and session are required." });
     }
+    amsBuildGradebook(className, term, session, (err, pack) => {
+        if (err) return res.status(500).json({ message: "Database error" });
+        const map = {};
+        (pack.results || []).forEach((r) => {
+            map[amsSidKey(r.student_id) + "||" + normalizeClassName(r.subject)] = r.total;
+        });
+        const header = ["Student ID", "Student Name"].concat(pack.subjects);
+        const aoa = [header];
+        (pack.students || []).forEach((st) => {
+            const row = [st.student_id, st.full_name];
+            pack.subjects.forEach((sub) => {
+                const v = map[amsSidKey(st.student_id) + "||" + normalizeClassName(sub)];
+                row.push(v == null ? "" : Number(v));
+            });
+            aoa.push(row);
+        });
+        const wb = XLSX.utils.book_new();
+        const ws = XLSX.utils.aoa_to_sheet(aoa);
+        XLSX.utils.book_append_sheet(wb, ws, "Grade Book");
+        const buf = XLSX.write(wb, { type: "buffer", bookType: "xlsx" });
+        const safe = className.replace(/[^a-zA-Z0-9_\\-]+/g, "_");
+        res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+        res.setHeader("Content-Disposition", 'attachment; filename="gradebook-' + safe + '.xlsx"');
+        res.send(buf);
+    });
+});
+
+/* FIX (pack 87): dedicated upsert so every student/subject cell can be
+   saved without the 30-writes/15-min cap on /save-result, and so we
+   UPDATE the existing row even when student_id / subject spelling
+   differs by case, spaces or tashkeel (instead of inserting a ghost). */
+app.post("/api/gradebook/cell", requireLogin, (req, res) => {
+    const student_id = String(req.body.student_id || "").trim();
+    const student_name = String(req.body.student_name || "").trim();
+    const class_name = String(req.body.class_name || "").trim();
+    const term = String(req.body.term || "").trim();
+    const session = String(req.body.session || "").trim();
+    const subject = String(req.body.subject || "").trim();
+    if (!student_id || !class_name || !term || !session || !subject) {
+        return res.status(400).json({ message: "Student, class, term, session and subject are required." });
+    }
+    const clamp = (n, max) => {
+        const v = Number(n);
+        if (!isFinite(v)) return 0;
+        return Math.max(0, Math.min(max, v));
+    };
+    const first_test = clamp(req.body.first_test, 10);
+    const second_test = clamp(req.body.second_test, 10);
+    const note_score = clamp(req.body.note_score, 10);
+    const attendance_score = clamp(req.body.attendance_score, 10);
+    const ca_score = clamp(req.body.ca_score, 40);
+    const exam_score = clamp(req.body.exam_score, 60);
+    let total = Number(req.body.total_score);
+    if (!isFinite(total)) total = ca_score + exam_score;
+    total = Math.max(0, Math.min(100, total));
+    const grade = String(req.body.grade || amsGradeForTotal(total)).slice(0, 10);
+
     connection.query(
-        "SELECT student_id, full_name FROM students WHERE class_name = ? ORDER BY full_name",
-        [className],
-        (err, students) => {
+        `SELECT id, subject FROM results
+         WHERE (TRIM(student_id) = TRIM(?) OR LOWER(TRIM(student_id)) = LOWER(TRIM(?)))
+           AND TRIM(term) = TRIM(?) AND TRIM(session) = TRIM(?)`,
+        [student_id, student_id, term, session],
+        (err, rows) => {
             if (err) { console.log(err); return res.status(500).json({ message: "Database error" }); }
-            connection.query(
-                "SELECT subject_name FROM subjects WHERE class_name = ? ORDER BY subject_name",
-                [className],
-                (e2, subs) => {
-                    connection.query(
-                        "SELECT student_id, subject, total, grade FROM results WHERE class_name = ? AND term = ? AND session = ?",
-                        [className, term, session],
-                        (e3, results) => {
-                            if (e3) { console.log(e3); return res.status(500).json({ message: "Database error" }); }
-                            let subjects = (subs || []).map((s) => s.subject_name).filter(Boolean);
-                            if (!subjects.length) {
-                                const seen = {};
-                                (results || []).forEach((r) => {
-                                    if (r.subject && !seen[r.subject]) { seen[r.subject] = 1; subjects.push(r.subject); }
-                                });
-                                subjects.sort();
-                            }
-                            const map = {};
-                            (results || []).forEach((r) => { map[r.student_id + "||" + r.subject] = r.total; });
-                            const header = ["Student ID", "Student Name"].concat(subjects);
-                            const aoa = [header];
-                            (students || []).forEach((st) => {
-                                const row = [st.student_id, st.full_name];
-                                subjects.forEach((sub) => {
-                                    const v = map[st.student_id + "||" + sub];
-                                    row.push(v == null ? "" : Number(v));
-                                });
-                                aoa.push(row);
-                            });
-                            const wb = XLSX.utils.book_new();
-                            const ws = XLSX.utils.aoa_to_sheet(aoa);
-                            XLSX.utils.book_append_sheet(wb, ws, "Grade Book");
-                            const buf = XLSX.write(wb, { type: "buffer", bookType: "xlsx" });
-                            const safe = className.replace(/[^a-zA-Z0-9_\-]+/g, "_");
-                            res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
-                            res.setHeader("Content-Disposition", 'attachment; filename="gradebook-' + safe + '.xlsx"');
-                            res.send(buf);
-                        }
-                    );
-                }
-            );
+            const want = normalizeClassName(subject);
+            const match = (rows || []).find((r) => normalizeClassName(r.subject) === want);
+            if (match) {
+                connection.query(
+                    `UPDATE results SET
+                        student_id = ?, student_name = ?, class_name = ?, subject = ?,
+                        first_test = ?, second_test = ?, note_score = ?, attendance_score = ?,
+                        ca_score = ?, exam_score = ?, total = ?, grade = ?
+                     WHERE id = ?`,
+                    [student_id, student_name, class_name, subject,
+                     first_test, second_test, note_score, attendance_score,
+                     ca_score, exam_score, total, grade, match.id],
+                    (uErr) => {
+                        if (uErr) { console.log(uErr); return res.status(500).json({ message: "Could not update that score." }); }
+                        res.json({ message: "Saved", id: match.id, total: total, grade: grade, ca_score: ca_score, exam_score: exam_score });
+                    }
+                );
+            } else {
+                connection.query(
+                    `INSERT INTO results
+                        (student_id, student_name, class_name, term, session, subject,
+                         first_test, second_test, note_score, attendance_score,
+                         ca_score, exam_score, total, grade)
+                     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+                    [student_id, student_name, class_name, term, session, subject,
+                     first_test, second_test, note_score, attendance_score,
+                     ca_score, exam_score, total, grade],
+                    (iErr, result) => {
+                        if (iErr) { console.log(iErr); return res.status(500).json({ message: "Could not save that score." }); }
+                        res.json({ message: "Saved", id: result.insertId, total: total, grade: grade, ca_score: ca_score, exam_score: exam_score });
+                    }
+                );
+            }
         }
     );
 });
