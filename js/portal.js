@@ -101,6 +101,20 @@
           });
           line.appendChild(btn);
 
+          var pdfBtn = document.createElement("button");
+          pdfBtn.className = "mg-btn-light";
+          pdfBtn.type = "button";
+          pdfBtn.textContent = "Download Report Card";
+          pdfBtn.addEventListener("click", function () {
+            openReport(row.term, row.session, btn).then(function () {
+              setTimeout(function () {
+                var trigger = document.getElementById("ptPdfBtn");
+                if (trigger) trigger.click();
+              }, 350);
+            });
+          });
+          line.appendChild(pdfBtn);
+
           box.appendChild(line);
         });
       })
@@ -116,7 +130,7 @@
     btn.disabled = true;
     btn.textContent = "Loading...";
 
-    window.amsFetchReportPack(student.student_id, term, session)
+    return window.amsFetchReportPack(student.student_id, term, session)
       .then(function (pack) {
         if (!pack.rows.length) {
           alert("This result could not be loaded. It may have been unpublished - please refresh and try again.");
@@ -138,6 +152,110 @@
 
   document.getElementById("ptPrintBtn").addEventListener("click", function () {
     window.print(); // print rules in css/school.css hide portal chrome only
+  });
+
+  /* Download the official report card as an A4 PDF using the same
+     amsCanvasToA4Pdf helper the class-results ZIP uses. */
+  var ptPdfBusy = false;
+  document.getElementById("ptPdfBtn").addEventListener("click", function () {
+    if (ptPdfBusy) return;
+    var card = document.querySelector("#ptReport .report-container") || document.getElementById("ptReport");
+    if (!card || !card.innerHTML.trim()) {
+      alert("Open a report sheet first.");
+      return;
+    }
+    if (!window.html2canvas || !window.amsCanvasToA4Pdf) {
+      alert("PDF tools are still loading - please try again in a moment.");
+      return;
+    }
+    var btn = document.getElementById("ptPdfBtn");
+    ptPdfBusy = true;
+    btn.disabled = true;
+    btn.textContent = "Building PDF...";
+    var wait = window.amsWaitForImages ? window.amsWaitForImages(card, 4000) : Promise.resolve();
+    wait.then(function () {
+      return window.html2canvas(card, {
+        scale: 2,
+        useCORS: true,
+        backgroundColor: "#ffffff",
+        windowWidth: 1024
+      });
+    }).then(function (canvas) {
+      var pdf = window.amsCanvasToA4Pdf(canvas, 0.95);
+      var sid = student && student.student_id ? student.student_id : "report";
+      pdf.save("report-card-" + sid + ".pdf");
+    }).catch(function () {
+      alert("Could not build the PDF. You can still use Print Report.");
+    }).finally(function () {
+      ptPdfBusy = false;
+      btn.disabled = false;
+      btn.textContent = "⬇ Download Report Card";
+    });
+  });
+
+  /* Generate a simple official certificate PDF for this student. */
+  function ptDownloadCertificate() {
+    var trigger = document.getElementById("ptCertBtn");
+    if (trigger) trigger.click();
+  }
+  var ptCertQuick = document.getElementById("ptCertQuickBtn");
+  if (ptCertQuick) ptCertQuick.addEventListener("click", ptDownloadCertificate);
+
+  document.getElementById("ptCertBtn").addEventListener("click", function () {
+    if (!student) return;
+    if (!window.jspdf || !window.jspdf.jsPDF) {
+      alert("PDF tools are still loading - please try again in a moment.");
+      return;
+    }
+    var btn = document.getElementById("ptCertBtn");
+    btn.disabled = true;
+    var JsPDF = window.jspdf.jsPDF;
+    var pdf = new JsPDF({ unit: "mm", format: "a4", orientation: "landscape" });
+    var W = 297, H = 210;
+    pdf.setFillColor(15, 61, 46);
+    pdf.rect(0, 0, W, H, "F");
+    pdf.setFillColor(255, 255, 255);
+    pdf.rect(8, 8, W - 16, H - 16, "F");
+    pdf.setDrawColor(201, 162, 39);
+    pdf.setLineWidth(1.2);
+    pdf.rect(12, 12, W - 24, H - 24);
+    pdf.setLineWidth(0.4);
+    pdf.rect(14.5, 14.5, W - 29, H - 29);
+    pdf.setTextColor(15, 61, 46);
+    pdf.setFont("times", "bold");
+    pdf.setFontSize(13);
+    pdf.text("AMEENULLAH SCHOOL OF ARABIC AND ISLAMIC STUDIES", W / 2, 32, { align: "center" });
+    pdf.setFontSize(10);
+    pdf.setFont("times", "italic");
+    pdf.text("Ijebu-Ode, Ogun State  ·  Knowledge and Worship", W / 2, 40, { align: "center" });
+    pdf.setFont("times", "bold");
+    pdf.setFontSize(22);
+    pdf.setTextColor(201, 162, 39);
+    pdf.text("CERTIFICATE OF STUDY", W / 2, 62, { align: "center" });
+    pdf.setTextColor(33, 32, 28);
+    pdf.setFont("times", "normal");
+    pdf.setFontSize(12);
+    pdf.text("This is to certify that", W / 2, 80, { align: "center" });
+    pdf.setFont("times", "bold");
+    pdf.setFontSize(22);
+    pdf.setTextColor(15, 61, 46);
+    pdf.text(String(student.full_name || "Student"), W / 2, 96, { align: "center" });
+    pdf.setFont("times", "normal");
+    pdf.setFontSize(12);
+    pdf.setTextColor(33, 32, 28);
+    var line = "Admission No. " + (student.student_id || "-") +
+      "  ·  Class: " + (student.class_name || "-");
+    pdf.text(line, W / 2, 110, { align: "center" });
+    pdf.text("is a registered student of Ameenullah School of Arabic and Islamic Studies.", W / 2, 122, { align: "center" });
+    var today = new Date();
+    var dateStr = today.toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" });
+    pdf.setFontSize(11);
+    pdf.text("Issued: " + dateStr, W / 2, 148, { align: "center" });
+    pdf.setFontSize(10);
+    pdf.text("______________________                    ______________________", W / 2, 176, { align: "center" });
+    pdf.text("Class Teacher                                      Principal", W / 2, 183, { align: "center" });
+    pdf.save("certificate-" + (student.student_id || "student") + ".pdf");
+    btn.disabled = false;
   });
 
   document.getElementById("ptCloseReport").addEventListener("click", function () {

@@ -1,5 +1,29 @@
 # UI Modernization — Change Log
 
+## Pack 86 — 2026-08-19
+
+Owner: missing features — Dark Mode, Report Card/Certificate download in the parent portal, Analytics Dashboard, Grade Book, Class Management, Staff Internal Messaging.
+
+| File | What happened |
+|---|---|
+| `css/modern-ui.css` + `js/ui.js` | **Dark Mode:** CSS variables now use the requested palette (`#0f1a12` background, `#1a2e1f` cards, `#e8f5e9` text, `#2d5a38` borders). Preference still lives in `localStorage` (`ams-theme`). A moon toggle is injected on staff pages that did not already have one (dashboard top-right toggle kept). Report cards stay light for print/PDF. |
+| `portal.html` + `js/portal.js` | **Report Card + Certificate in the parent portal:** Results tab gains **Download Report Card** (html2canvas + existing `amsCanvasToA4Pdf`) and **Download Certificate** (A4 landscape PDF for the logged-in child). Each published term also has a one-tap report download. |
+| `analytics.html` + `js/analytics.js` | **NEW admin Analytics Dashboard:** subject-average bar chart, last-10-weeks attendance line, current-session collected-vs-outstanding fee bars, class comparison table. Canvas only — no new packages. |
+| `gradebook.html` + `js/gradebook.js` | **NEW Grade Book:** pick class + term + session → students × subjects grid. Click a cell to edit the total; each save uses existing `/save-result` or `/update-result/:id`. Excel export via `/api/gradebook/export` (xlsx already installed). |
+| `manage-classes.html` + `js/manage-classes.js` | **NEW Class Management:** list classes with live student counts, add, rename (updates `students`, `results`, `attendance`, `subjects`), delete only when the class has 0 students. |
+| `staff-chat.html` + `js/staff-chat.js` | **NEW Staff Chat:** admin/teachers message each other. Reuses `messages` with a new `message_type='staff'` column. Parent chat routes are unchanged. |
+| `teacher-dashboard.html` | Sidebar links: Staff Chat, Grade Book, Class Management, Analytics (admin only). |
+| `server.js` | Additive routes only: page guards + `/api/analytics`, `/api/gradebook`, `/api/gradebook/export`, `/api/manage-classes`, `/api/staff-chat*`. Guarded `message_type` migration. No existing route, table shape, or auth flow rewritten. |
+| `sw.js` | Cache `v45 → v46`. |
+
+Result calculations, grading, positions and the frozen report-card design: untouched.
+
+---
+
+**Project:** Ameenullah School — Result Management System
+
+---
+
 ## Pack 85 — 2026-08-17
 
 Owner: "The student doesn't have library and student are not displaying in the health for admin and add some many medical related things to the section. And in teacher comments is not displaying student. And merge it"

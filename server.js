@@ -1954,6 +1954,31 @@ function runPack23Migrations() {
 runPack23Migrations();
 
 /* ------------------------------------------------------------------
+   NEW (pack 86): staff-to-staff chat reuses the existing messages
+   table with a message_type column ('parent' default, 'staff' for
+   internal mail). Guarded + idempotent — never touches existing rows.
+------------------------------------------------------------------ */
+function runPack86Migrations() {
+    const conn = addonConnection();
+    conn.connect((err) => {
+        if (err) { conn.destroy(); return setTimeout(runPack86Migrations, 4000); }
+        conn.query(
+            "ALTER TABLE messages ADD COLUMN message_type VARCHAR(20) NOT NULL DEFAULT 'parent'",
+            (qErr) => {
+                if (qErr && qErr.code !== "ER_DUP_FIELDNAME" && qErr.code !== "ER_NO_SUCH_TABLE") {
+                    console.log("Pack 86 migration notice:", qErr.code || qErr.message);
+                }
+                conn.end();
+                if (!qErr || qErr.code === "ER_DUP_FIELDNAME") {
+                    console.log("Pack 86 setup ready (staff chat message_type).");
+                }
+            }
+        );
+    });
+}
+runPack86Migrations();
+
+/* ------------------------------------------------------------------
    NEW (pack 37 - admission pipeline): enquiries can now carry gender /
    date of birth (collected at the one-tap ADMIT step), record WHICH
    student id the child became, and a 'declined' status. All guarded +
@@ -9047,6 +9072,434 @@ app.get("/portal/remarks", (req, res) => {
         (err, rows) => {
             if (err) return res.json([]);
             res.json(rows || []);
+        }
+    );
+});
+
+/* =====================================================================
+   PACK 86 — Analytics, Grade Book, Class Management, Staff Chat
+   Additive routes only. Existing routes / tables / auth are untouched.
+   ===================================================================== */
+
+function amsGradeForTotal(total) {
+    const t = Number(total) || 0;
+    if (t >= 70) return "A";
+    if (t >= 60) return "B";
+    if (t >= 50) return "C";
+    if (t >= 45) return "D";
+    if (t >= 40) return "E";
+    return "F";
+}
+
+/* ---------- Analytics (admin only) ---------- */
+app.get("/api/analytics", requireLogin, requireAdmin, (req, res) => {
+    const out = { subjects: [], attendance: [], fees: [], classes: [], session: "" };
+
+    function finish() { res.json(out); }
+
+    connection.query(
+        `SELECT subject, ROUND(AVG(total), 1) AS avg_score, COUNT(*) AS n
+         FROM results WHERE subject IS NOT NULL AND subject <> ''
+         GROUP BY subject ORDER BY avg_score ASC LIMIT 40`,
+        (err, rows) => {
+            if (!err && rows) out.subjects = rows;
+
+            connection.query(
+                `SELECT YEARWEEK(att_date, 1) AS yw,
+                        SUM(CASE WHEN status = 'present' THEN 1 ELSE 0 END) AS present,
+                        COUNT(*) AS total
+                 FROM attendance
+                 WHERE att_date >= DATE_SUB(CURDATE(), INTERVAL 10 WEEK)
+                 GROUP BY yw ORDER BY yw ASC`,
+                (e2, weeks) => {
+                    if (!e2 && weeks) {
+                        out.attendance = weeks.map((w, i) => {
+                            const tot = Number(w.total) || 0;
+                            const present = Number(w.present) || 0;
+                            return {
+                                yw: w.yw,
+                                label: "W" + (i + 1),
+                                pct: tot ? Math.round((present / tot) * 100) : 0,
+                                present: present,
+                                total: tot
+                            };
+                        });
+                    }
+
+                    connection.query(
+                        `SELECT class_name, ROUND(AVG(total), 1) AS avg_score,
+                                COUNT(DISTINCT student_id) AS students, COUNT(*) AS scores
+                         FROM results
+                         GROUP BY class_name ORDER BY avg_score DESC LIMIT 40`,
+                        (e3, cls) => {
+                            if (!e3 && cls) out.classes = cls;
+
+                            connection.query(
+                                "SELECT session FROM sessions WHERE is_current = 1 LIMIT 1",
+                                (e4, sessRows) => {
+                                    const sessionName = (!e4 && sessRows && sessRows[0] && sessRows[0].session)
+                                        ? sessRows[0].session
+                                        : "";
+                                    out.session = sessionName;
+
+                                    function feeForSession(session) {
+                                        if (!session) return finish();
+                                        connection.query(
+                                            `SELECT COALESCE(SUM(fs.amount * c.cnt), 0) AS expected
+                                             FROM fee_structure2 fs
+                                             JOIN (SELECT class_name, COUNT(*) AS cnt FROM students GROUP BY class_name) c
+                                               ON c.class_name = fs.class_name
+                                             WHERE fs.session = ?`,
+                                            [session],
+                                            (e5, expRows) => {
+                                                const expected = (!e5 && expRows && expRows[0]) ? Number(expRows[0].expected) || 0 : 0;
+                                                connection.query(
+                                                    `SELECT DATE_FORMAT(paid_at, '%Y-%m') AS ym, SUM(amount) AS collected
+                                                     FROM fee_payments WHERE session = ?
+                                                     GROUP BY ym ORDER BY ym ASC`,
+                                                    [session],
+                                                    (e6, months) => {
+                                                        if (e6 || !months || !months.length) {
+                                                            out.fees = expected
+                                                                ? [{ label: session, collected: 0, outstanding: expected }]
+                                                                : [];
+                                                            return finish();
+                                                        }
+                                                        let running = 0;
+                                                        out.fees = months.map((m) => {
+                                                            running += Number(m.collected) || 0;
+                                                            const leftover = Math.max(0, expected - running);
+                                                            const parts = String(m.ym || "").split("-");
+                                                            const label = parts.length === 2
+                                                                ? ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][Number(parts[1]) - 1] + " " + parts[0].slice(2)
+                                                                : m.ym;
+                                                            return {
+                                                                label: label,
+                                                                collected: Number(m.collected) || 0,
+                                                                outstanding: leftover
+                                                            };
+                                                        });
+                                                        finish();
+                                                    }
+                                                );
+                                            }
+                                        );
+                                    }
+
+                                    if (sessionName) return feeForSession(sessionName);
+                                    connection.query(
+                                        "SELECT session FROM fee_payments ORDER BY paid_at DESC LIMIT 1",
+                                        (e7, last) => {
+                                            const fallback = (!e7 && last && last[0]) ? last[0].session : "";
+                                            out.session = fallback;
+                                            feeForSession(fallback);
+                                        }
+                                    );
+                                }
+                            );
+                        }
+                    );
+                }
+            );
+        }
+    );
+});
+
+/* ---------- Grade Book ---------- */
+app.get("/api/gradebook", requireLogin, (req, res) => {
+    const className = String(req.query.class || req.query.class_name || "").trim();
+    const term = String(req.query.term || "").trim();
+    const session = String(req.query.session || "").trim();
+    if (!className || !term || !session) {
+        return res.status(400).json({ message: "Class, term and session are required." });
+    }
+    connection.query(
+        "SELECT student_id, full_name FROM students WHERE class_name = ? ORDER BY full_name",
+        [className],
+        (err, students) => {
+            if (err) { console.log(err); return res.status(500).json({ message: "Database error" }); }
+            connection.query(
+                "SELECT subject_name FROM subjects WHERE class_name = ? ORDER BY subject_name",
+                [className],
+                (e2, subs) => {
+                    if (e2) { console.log(e2); return res.status(500).json({ message: "Database error" }); }
+                    connection.query(
+                        `SELECT id, student_id, student_name, subject, first_test, second_test,
+                                note_score, attendance_score, ca_score, exam_score, total, grade
+                         FROM results WHERE class_name = ? AND term = ? AND session = ?`,
+                        [className, term, session],
+                        (e3, results) => {
+                            if (e3) { console.log(e3); return res.status(500).json({ message: "Database error" }); }
+                            let subjects = (subs || []).map((s) => s.subject_name).filter(Boolean);
+                            if (!subjects.length) {
+                                const seen = {};
+                                (results || []).forEach((r) => {
+                                    if (r.subject && !seen[r.subject]) { seen[r.subject] = 1; subjects.push(r.subject); }
+                                });
+                                subjects.sort();
+                            }
+                            res.json({
+                                class_name: className,
+                                term: term,
+                                session: session,
+                                students: students || [],
+                                subjects: subjects,
+                                results: results || []
+                            });
+                        }
+                    );
+                }
+            );
+        }
+    );
+});
+
+app.get("/api/gradebook/export", requireLogin, (req, res) => {
+    const className = String(req.query.class || req.query.class_name || "").trim();
+    const term = String(req.query.term || "").trim();
+    const session = String(req.query.session || "").trim();
+    if (!className || !term || !session) {
+        return res.status(400).json({ message: "Class, term and session are required." });
+    }
+    connection.query(
+        "SELECT student_id, full_name FROM students WHERE class_name = ? ORDER BY full_name",
+        [className],
+        (err, students) => {
+            if (err) { console.log(err); return res.status(500).json({ message: "Database error" }); }
+            connection.query(
+                "SELECT subject_name FROM subjects WHERE class_name = ? ORDER BY subject_name",
+                [className],
+                (e2, subs) => {
+                    connection.query(
+                        "SELECT student_id, subject, total, grade FROM results WHERE class_name = ? AND term = ? AND session = ?",
+                        [className, term, session],
+                        (e3, results) => {
+                            if (e3) { console.log(e3); return res.status(500).json({ message: "Database error" }); }
+                            let subjects = (subs || []).map((s) => s.subject_name).filter(Boolean);
+                            if (!subjects.length) {
+                                const seen = {};
+                                (results || []).forEach((r) => {
+                                    if (r.subject && !seen[r.subject]) { seen[r.subject] = 1; subjects.push(r.subject); }
+                                });
+                                subjects.sort();
+                            }
+                            const map = {};
+                            (results || []).forEach((r) => { map[r.student_id + "||" + r.subject] = r.total; });
+                            const header = ["Student ID", "Student Name"].concat(subjects);
+                            const aoa = [header];
+                            (students || []).forEach((st) => {
+                                const row = [st.student_id, st.full_name];
+                                subjects.forEach((sub) => {
+                                    const v = map[st.student_id + "||" + sub];
+                                    row.push(v == null ? "" : Number(v));
+                                });
+                                aoa.push(row);
+                            });
+                            const wb = XLSX.utils.book_new();
+                            const ws = XLSX.utils.aoa_to_sheet(aoa);
+                            XLSX.utils.book_append_sheet(wb, ws, "Grade Book");
+                            const buf = XLSX.write(wb, { type: "buffer", bookType: "xlsx" });
+                            const safe = className.replace(/[^a-zA-Z0-9_\-]+/g, "_");
+                            res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+                            res.setHeader("Content-Disposition", 'attachment; filename="gradebook-' + safe + '.xlsx"');
+                            res.send(buf);
+                        }
+                    );
+                }
+            );
+        }
+    );
+});
+
+/* ---------- Class Management ---------- */
+app.get("/api/manage-classes", requireLogin, (req, res) => {
+    connection.query(
+        `SELECT c.id, c.class_name, COUNT(s.student_id) AS student_count
+         FROM classes c
+         LEFT JOIN students s ON s.class_name = c.class_name
+         GROUP BY c.id, c.class_name
+         ORDER BY c.class_name`,
+        (err, rows) => {
+            if (err) {
+                console.log(err);
+                return connection.query("SELECT id, class_name FROM classes ORDER BY class_name", (e2, plain) => {
+                    if (e2) return res.status(500).json({ message: "Database error" });
+                    res.json((plain || []).map((r) => ({ id: r.id, class_name: r.class_name, student_count: 0 })));
+                });
+            }
+            res.json(rows || []);
+        }
+    );
+});
+
+app.put("/api/manage-classes/:id", requireLogin, writeRateLimit, (req, res) => {
+    const id = Number(req.params.id);
+    const nextName = String(req.body.class_name || "").trim();
+    if (!id || !nextName) return res.status(400).json({ message: "Class name is required." });
+    connection.query("SELECT class_name FROM classes WHERE id = ?", [id], (err, rows) => {
+        if (err) { console.log(err); return res.status(500).json({ message: "Database error" }); }
+        if (!rows.length) return res.status(404).json({ message: "Class not found." });
+        const oldName = rows[0].class_name;
+        if (oldName === nextName) return res.json({ message: "Name is unchanged." });
+        connection.query("SELECT id FROM classes WHERE class_name = ? AND id <> ?", [nextName, id], (e2, clash) => {
+            if (e2) { console.log(e2); return res.status(500).json({ message: "Database error" }); }
+            if (clash && clash.length) return res.status(400).json({ message: "That class name already exists." });
+            connection.query("UPDATE classes SET class_name = ? WHERE id = ?", [nextName, id], (e3) => {
+                if (e3) {
+                    if (e3.code === "ER_DUP_ENTRY") return res.status(400).json({ message: "That class name already exists." });
+                    console.log(e3);
+                    return res.status(500).json({ message: "Database error" });
+                }
+                const tables = ["students", "results", "attendance", "subjects"];
+                let i = 0;
+                (function nextTable() {
+                    if (i >= tables.length) {
+                        return res.json({ message: "Class renamed. Students, results, attendance and subjects were updated." });
+                    }
+                    const tbl = tables[i++];
+                    connection.query("UPDATE `" + tbl + "` SET class_name = ? WHERE class_name = ?", [nextName, oldName], (uErr) => {
+                        if (uErr) console.log("rename " + tbl + " notice:", uErr.code || uErr.message);
+                        nextTable();
+                    });
+                })();
+            });
+        });
+    });
+});
+
+app.delete("/api/manage-classes/:id", requireLogin, writeRateLimit, (req, res) => {
+    const id = Number(req.params.id);
+    if (!id) return res.status(400).json({ message: "Class is required." });
+    connection.query("SELECT class_name FROM classes WHERE id = ?", [id], (err, rows) => {
+        if (err) { console.log(err); return res.status(500).json({ message: "Database error" }); }
+        if (!rows.length) return res.status(404).json({ message: "Class not found." });
+        const name = rows[0].class_name;
+        connection.query("SELECT COUNT(*) AS c FROM students WHERE class_name = ?", [name], (e2, cnt) => {
+            if (e2) { console.log(e2); return res.status(500).json({ message: "Database error" }); }
+            if (cnt && cnt[0] && Number(cnt[0].c) > 0) {
+                return res.status(400).json({ message: "This class still has students. Move or remove them first." });
+            }
+            connection.query("DELETE FROM classes WHERE id = ?", [id], (e3) => {
+                if (e3) { console.log(e3); return res.status(500).json({ message: "Database error" }); }
+                res.json({ message: "Class deleted." });
+            });
+        });
+    });
+});
+
+/* ---------- Staff internal messaging ---------- */
+app.get("/api/staff-chat/users", requireLogin, (req, res) => {
+    connection.query("SELECT id, username, role FROM users ORDER BY username", (err, rows) => {
+        if (err) { console.log(err); return res.status(500).json({ message: "Database error" }); }
+        res.json(rows || []);
+    });
+});
+
+app.get("/api/staff-chat", requireLogin, (req, res) => {
+    const me = req.session.username;
+    connection.query(
+        `SELECT id, sender_type, sender_ref, sender_name, recipient_type, recipient_ref,
+                body, created_at, read_at, thread, kind, duration, message_type
+         FROM messages
+         WHERE message_type = 'staff'
+           AND ((sender_ref = ? AND recipient_ref <> '') OR recipient_ref = ?)
+         ORDER BY created_at ASC LIMIT 800`,
+        [me, me],
+        (err, rows) => {
+            if (err && err.code === "ER_BAD_FIELD_ERROR") {
+                return connection.query(
+                    `SELECT id, sender_type, sender_ref, sender_name, recipient_type, recipient_ref,
+                            body, created_at, read_at, thread, kind, duration
+                     FROM messages
+                     WHERE thread = 'staff'
+                       AND ((sender_ref = ?) OR recipient_ref = ?)
+                     ORDER BY created_at ASC LIMIT 800`,
+                    [me, me],
+                    (e2, rows2) => {
+                        if (e2) { if (e2.code === "ER_NO_SUCH_TABLE") return res.json([]); return res.status(500).json({ message: "Database error" }); }
+                        res.json(rows2 || []);
+                    }
+                );
+            }
+            if (err) { if (err.code === "ER_NO_SUCH_TABLE") return res.json([]); console.log(err); return res.status(500).json({ message: "Database error" }); }
+            res.json(rows || []);
+        }
+    );
+});
+
+app.post("/api/staff-chat", requireLogin, writeRateLimit, (req, res) => {
+    const me = req.session.username;
+    const to = String(req.body.to || "").trim();
+    const body = String(req.body.body || "").trim().slice(0, 2000);
+    if (!to || !body) return res.status(400).json({ message: "Recipient and message are required." });
+    if (to === me) return res.status(400).json({ message: "You cannot message yourself." });
+    connection.query("SELECT username, role FROM users WHERE username = ? LIMIT 1", [to], (err, rows) => {
+        if (err) { console.log(err); return res.status(500).json({ message: "Database error" }); }
+        if (!rows.length) return res.status(404).json({ message: "That staff account was not found." });
+        connection.query(
+            `INSERT INTO messages (sender_type, sender_ref, sender_name, recipient_type, recipient_ref, recipient_class, body, thread, message_type)
+             VALUES ('staff', ?, ?, 'staff', ?, '', ?, 'staff', 'staff')`,
+            [me, me + " (" + (req.session.role || "staff") + ")", to, body],
+            (iErr) => {
+                if (iErr && iErr.code === "ER_BAD_FIELD_ERROR") {
+                    return connection.query(
+                        `INSERT INTO messages (sender_type, sender_ref, sender_name, recipient_type, recipient_ref, recipient_class, body, thread)
+                         VALUES ('staff', ?, ?, 'staff', ?, '', ?, 'staff')`,
+                        [me, me + " (" + (req.session.role || "staff") + ")", to, body],
+                        (iErr2) => {
+                            if (iErr2) { console.log(iErr2); return res.status(500).json({ message: "Database error" }); }
+                            res.json({ message: "Message sent." });
+                        }
+                    );
+                }
+                if (iErr) { console.log(iErr); return res.status(500).json({ message: "Database error" }); }
+                try {
+                    amsPushSend("staff", [to], {
+                        title: "Staff message from " + me,
+                        body: body.slice(0, 90),
+                        url: "/staff-chat.html",
+                        tag: "staff-" + me
+                    });
+                } catch (e) { /* push is optional */ }
+                res.json({ message: "Message sent." });
+            }
+        );
+    });
+});
+
+app.post("/api/staff-chat/read", requireLogin, (req, res) => {
+    const me = req.session.username;
+    const from = String(req.body.username || "").trim();
+    if (!from) return res.json({ message: "ok" });
+    connection.query(
+        `UPDATE messages SET read_at = NOW()
+         WHERE message_type = 'staff' AND sender_ref = ? AND recipient_ref = ? AND read_at IS NULL`,
+        [from, me],
+        (err) => {
+            if (err && err.code === "ER_BAD_FIELD_ERROR") {
+                return connection.query(
+                    `UPDATE messages SET read_at = NOW()
+                     WHERE thread = 'staff' AND sender_ref = ? AND recipient_ref = ? AND read_at IS NULL`,
+                    [from, me],
+                    () => res.json({ message: "ok" })
+                );
+            }
+            res.json({ message: "ok" });
+        }
+    );
+});
+
+app.get("/api/staff-chat/unread", requireLogin, (req, res) => {
+    const me = req.session.username;
+    connection.query(
+        "SELECT COUNT(*) AS c FROM messages WHERE message_type = 'staff' AND recipient_ref = ? AND read_at IS NULL",
+        [me],
+        (err, rows) => {
+            if (err) {
+                if (err.code === "ER_BAD_FIELD_ERROR" || err.code === "ER_NO_SUCH_TABLE") return res.json({ count: 0 });
+                return res.status(500).json({ message: "Database error" });
+            }
+            res.json({ count: rows && rows[0] ? Number(rows[0].c) : 0 });
         }
     );
 });
