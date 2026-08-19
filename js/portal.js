@@ -151,8 +151,8 @@
   }
 
   document.getElementById("ptPrintBtn").addEventListener("click", function () {
-    /* NEW (one-page print): measure the compact report and scale the print
-       sheet down so it fits exactly ONE A4 page (was spilling onto page 2). */
+    /* NEW (one-page print): measure the report's natural print content and
+       scale the sheet down so it fits exactly ONE A4 page. */
     var report = document.querySelector("#ptReport .report-container") || document.getElementById("ptReport");
     if (report && window.amsFitPrintZoom) {
       window.amsFitPrintZoom(report).then(function (zoom) {
@@ -170,9 +170,9 @@
   });
 
   /* Download the official report card as a ONE-PAGE A4 PDF. The live
-     on-screen report is phone-sized (tall + large text), so we re-render
-     it into a hidden desktop-width staging area with the compact .rcpzip
-     skin, then force amsCanvasToA4Pdf to fit a single page. */
+     on-screen report can be phone-sized, so it is re-rendered in the fixed
+     desktop-width .rcpzip stage. Pack 90 makes that stage the same full A4
+     result used by Print Report rather than a shortened compact form. */
   var ptPdfBusy = false;
   document.getElementById("ptPdfBtn").addEventListener("click", function () {
     if (ptPdfBusy) return;
@@ -191,7 +191,7 @@
     btn.textContent = "Building PDF...";
     window.amsCaptureReportToCanvas(card, { width: 794, scale: 2 })
       .then(function (canvas) {
-        var pdf = window.amsCanvasToA4Pdf(canvas, 0.95, null, true); // force ONE page
+        var pdf = window.amsCanvasToA4Pdf(canvas, 0.95, null, true, { margin: 10 }); // real print margins, ONE page
         var sid = student && student.student_id ? student.student_id : "report";
         pdf.save("report-card-" + sid + ".pdf");
       })

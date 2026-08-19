@@ -1,5 +1,22 @@
 # UI Modernization — Change Log
 
+## Pack 90 — 2026-08-19
+
+Owner: "Why the unnecessary blank space around the student information and scores? Make the top a bit big, let the student info and scores fill one page, and make every result in the class ZIP look like the real result instead of a short form."
+
+| File | What happened |
+|---|---|
+| `css/style.css` | **Removed Pack 89's artificial blank bands:** print no longer uses `justify-content: space-between`, which had inserted the spare A4 height between Student Information, scores and the summary. Sections now follow each other naturally, while the score table itself grows to use the remaining printable height. The official header/logo/passport are slightly larger again. The full result stays inside one bordered A4 page. |
+| `css/style.css` | **ZIP/PDF capture is now the real full result:** `.rcpzip` no longer creates a short compact card. It reproduces the same full printable-A4 proportions, header, student information, score layout, summary and signatures as Check Result. Its score rows fill available space instead of leaving a small card centred on the PDF. Phone captures are still forced into the desktop row layout. |
+| `js/report-card.js` | The report capture stage now has separate full-A4 and fit-measurement modes. The PDF helper accepts a custom margin so official report PDFs use the same 10mm margins and 190×277mm report frame as browser printing; overflow measurement ignores the forced page height, so only genuinely long reports are scaled. |
+| `js/class-results.js` | Every individual PDF inside **Download All Student Results (ZIP)** uses the full official report capture and 10mm A4 print margins—one complete, correctly proportioned result per student, not a short form. |
+| `js/portal.js` | Parent/student **Download Report Card** uses the same full official A4 capture and margins, keeping portal PDF, class ZIP PDF and printed Check Result consistent. |
+| `sw.js` | Cache `v50 → v51` so browsers immediately receive the corrected print/PDF CSS and scripts. |
+
+Result calculations, grades, positions, cumulative third-term data, remarks, signatures, student data and all server/database routes are untouched.
+
+---
+
 ## Pack 89 — 2026-08-19
 
 Owner: "The student result's sections should be distributed across the A4 page, not only the outer border stretching" + "Class Results still prints blank in preview — fix the conflict with the shared report print stylesheet."

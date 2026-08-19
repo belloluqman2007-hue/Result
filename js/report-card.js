@@ -252,12 +252,19 @@
        correctly-sized page instead of "longer than one page and very big".
        FIX: when the card fits on one page (≤ 1.1x A4 height), scale it
        down and center on a single page. Otherwise slice across multiple
-       pages at full width. */
-    window.amsCanvasToA4Pdf = function (canvas, quality, cutGuide, forceSinglePage) {
+       pages at full width.
+       CHANGED (pack 90): optional 5th arg `options` supports a custom page
+       margin. Official report captures pass margin:10 so their 190×277mm
+       frame is identical to the browser's real 10mm-margin A4 print. */
+    window.amsCanvasToA4Pdf = function (canvas, quality, cutGuide, forceSinglePage, options) {
+        options = options || {};
         const pdf = new window.jspdf.jsPDF({ unit: "mm", format: "a4" });
         const pageWmm = 210;
         const pageHmm = 297;
-        const margin = 4;
+        const requestedMargin = Number(options.margin);
+        const margin = Number.isFinite(requestedMargin) && requestedMargin >= 0 && requestedMargin < 50
+            ? requestedMargin
+            : 4;
         const contentWmm = pageWmm - 2 * margin;
         const contentHmm = pageHmm - 2 * margin;
 
@@ -345,16 +352,16 @@
        ONE-PAGE report helpers (student portal download + zip + print).
 
        The live on-screen report is designed to look good on a phone, so
-       its text is large and the card is tall. html2canvas on that card
-       was what made the downloaded PDF "longer than one page and very
-       big". These helpers render the SAME report into a hidden staging
-       area at a fixed desktop width with the compact .rcpzip skin, so the
-       captured/measured card is the correct, print-like size.
+       html2canvas must render it in a fixed desktop-width staging area.
+       Pack 90's .rcpzip skin now mirrors the REAL full A4 print sheet
+       instead of making a shortened compact card. The optional fit-only
+       class keeps the same print typography while removing the forced A4
+       minimum height when JS only needs to measure natural overflow.
        ------------------------------------------------------------------ */
 
-    function amsMakeStage(widthPx) {
+    function amsMakeStage(widthPx, extraClass) {
         const stage = document.createElement("div");
-        stage.className = "rcpzip";
+        stage.className = "rcpzip" + (extraClass ? " " + extraClass : "");
         stage.style.cssText =
             "position:fixed; left:-12000px; top:0; width:" + (widthPx || 794) +
             "px; background:#fff; z-index:-1;";
@@ -362,7 +369,8 @@
     }
 
     /* Capture a report-card element to a canvas at a fixed desktop width,
-       using the compact skin, so the result is a true one-page A4 shape.
+       using the official full-page skin, so ZIP/portal PDFs have the same
+       arrangement and proportions as the real printed result.
        Resolves to an HTMLCanvasElement. */
     window.amsCaptureReportToCanvas = function (sourceEl, opts) {
         opts = opts || {};
@@ -390,12 +398,13 @@
             });
     };
 
-    /* Measure the compact card and return the zoom factor that makes the
-       REAL report print on exactly one A4 page (1 = no scaling needed).
-       The staging width matches the printable content width (190mm) so the
-       measured height mirrors what the browser lays out at print time. */
+    /* Measure the report's natural print content and return the zoom factor
+       that makes the REAL report print on exactly one A4 page (1 = no
+       scaling needed). The fit-only stage uses print typography/layout but
+       removes the forced A4 minimum height, so only genuine overflow causes
+       down-scaling. */
     window.amsFitPrintZoom = function (sourceEl) {
-        const stage = amsMakeStage(718); // 190mm printable width @ 96dpi
+        const stage = amsMakeStage(718, "ams-fit-only"); // 190mm printable width @ 96dpi
         document.body.appendChild(stage);
         const clone = sourceEl.cloneNode(true);
         clone.id = ""; // avoid a duplicate #reportContainer id in the DOM
