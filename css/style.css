@@ -986,6 +986,10 @@ nav a{
     position:static;
     width:100%;
     max-width:100%;
+    /* Fill the printable A4 area even when a student has only a few
+       subjects. This keeps the official report looking like one complete
+       page instead of a small card at the top of otherwise blank paper. */
+    min-height:277mm;
     margin:0;
     padding:0;
     border:2px solid var(--emerald);

@@ -222,12 +222,25 @@
   <!-- NEW: when printing from this page, only the broadsheet appears -->
   <style>
     @media print{
+      @page{ size:A4 landscape; margin:6mm; }
+
+      /* css/style.css has a report-card print guard which hides every
+         top-level body child except #reportContainer. This page prints its
+         broadsheet from .ams-shell, so explicitly restore it here with a
+         higher-specificity rule to prevent a blank print preview). */
+      body > .ams-shell.ams-shell{ display:block !important; }
       body > *:not(.ams-shell){ display:none !important; }
       .ams-sidebar, .ams-topbar, .mng-card:first-of-type, .ams-greeting{ display:none !important; }
-      .ams-main{ margin:0 !important; padding:0 !important; }
-      .ams-page-pad{ padding:0 !important; }
-      #crSheetCard{ box-shadow:none !important; border:none !important; margin:0 !important; }
-      .broadsheet-wrap{ overflow:visible !important; border:none !important; }
+      .ams-main{ margin:0 !important; padding:0 !important; width:100% !important; }
+      .ams-page-pad{ padding:0 !important; width:100% !important; }
+      #crSheetCard{ display:block !important; box-shadow:none !important; border:none !important; margin:0 !important; padding:0 !important; }
+      .broadsheet-wrap{ overflow:visible !important; border:none !important; width:100% !important; }
+      table.broadsheet{ width:100% !important; min-width:0 !important; }
+      table.broadsheet th, table.broadsheet td{ padding:5px 6px !important; font-size:9.5px !important; }
+      .bs-head-doc{ padding:4mm 4mm 3mm !important; }
+      .bs-head-doc .bs-ar{ font-size:17px !important; }
+      .bs-head-doc .bs-en{ font-size:10px !important; }
+      .bs-head-doc .bs-meta{ font-size:10px !important; }
 
       /* NEW (print all classes): when crPrintAllClasses() is active, print
          every class's broadsheet from #crPrintAllArea (one class per page)
