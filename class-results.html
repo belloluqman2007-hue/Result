@@ -154,6 +154,12 @@
             <button type="button" class="mng-btn mng-btn-ghost" id="crPrintBtn" onclick="window.print()" disabled>
               Print
             </button>
+            <!-- NEW (print all classes): prints a broadsheet for EVERY class
+                 in the chosen session + term, one class per page. -->
+            <button type="button" class="mng-btn" id="crPrintAllBtn" onclick="crPrintAllClasses()">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+              Print All Classes
+            </button>
             <!-- NEW (Pack 45): Purge Ghost Scores & Clear Class Scores buttons -->
             <button type="button" class="mng-btn mng-btn-ghost" id="crCleanOrphanBtn" onclick="crCleanOrphans()" title="Remove ghost scores of deleted/non-existent students">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
@@ -188,6 +194,11 @@
         <div class="mng-card" id="crSheetCard" style="display:none;">
           <div class="broadsheet-wrap" id="crSheetWrap"></div>
         </div>
+
+        <!-- NEW (print all classes): hidden on screen; filled with every
+             class's broadsheet right before "Print All Classes" is pressed,
+             then shown only in the print view (one class per page). -->
+        <div id="crPrintAllArea" style="display:none;"></div>
       </div>
     </main>
   </div>
@@ -217,6 +228,15 @@
       .ams-page-pad{ padding:0 !important; }
       #crSheetCard{ box-shadow:none !important; border:none !important; margin:0 !important; }
       .broadsheet-wrap{ overflow:visible !important; border:none !important; }
+
+      /* NEW (print all classes): when crPrintAllClasses() is active, print
+         every class's broadsheet from #crPrintAllArea (one class per page)
+         and hide the on-screen cards/single-class sheet. */
+      #crPrintAllArea{ display:none !important; }
+      body.cr-printing-all .mng-card{ display:none !important; }
+      body.cr-printing-all #crPrintAllArea{ display:block !important; }
+      .bs-print-page{ page-break-after:always; break-after:page; }
+      .bs-print-page:last-child{ page-break-after:auto; break-after:auto; }
     }
   </style>
 </body>

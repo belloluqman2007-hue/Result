@@ -267,6 +267,27 @@ function searchResult() {
         });
 }
 
+/* NEW (one-page print): measures the compact report and scales the print
+   sheet down just enough so the result ALWAYS fits ONE A4 page. When the
+   shared helper isn't loaded (older cache) it falls back to a normal
+   window.print() so nothing breaks. */
+function amsPrintWithFit() {
+  var report = document.getElementById("reportContainer");
+  if (!report || !window.amsFitPrintZoom) {
+    window.print();
+    return;
+  }
+  window.amsFitPrintZoom(report).then(function (zoom) {
+    document.documentElement.style.setProperty("--ams-print-zoom", String(zoom));
+    window.print();
+    setTimeout(function () {
+      document.documentElement.style.removeProperty("--ams-print-zoom");
+    }, 1500);
+  }).catch(function () {
+    window.print();
+  });
+}
+
 function printResult() {
   const studentIdCell = document.getElementById("studentId");
 
@@ -275,7 +296,7 @@ function printResult() {
     return;
   }
 
-  window.print();
+  amsPrintWithFit();
 }
 
 function downloadPDF() {
@@ -288,7 +309,7 @@ function downloadPDF() {
 
   alert('In the dialog that opens, set "Destination" to "Save as PDF" and make sure "Background graphics" is turned on, so the colors and Arabic text come out correctly.');
 
-  window.print();
+  amsPrintWithFit();
 }
 /* ====================================================================
    NEW (staff export by class): shows a small "Export results to Excel"

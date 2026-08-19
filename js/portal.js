@@ -151,11 +151,28 @@
   }
 
   document.getElementById("ptPrintBtn").addEventListener("click", function () {
-    window.print(); // print rules in css/school.css hide portal chrome only
+    /* NEW (one-page print): measure the compact report and scale the print
+       sheet down so it fits exactly ONE A4 page (was spilling onto page 2). */
+    var report = document.querySelector("#ptReport .report-container") || document.getElementById("ptReport");
+    if (report && window.amsFitPrintZoom) {
+      window.amsFitPrintZoom(report).then(function (zoom) {
+        document.documentElement.style.setProperty("--ams-print-zoom", String(zoom));
+        window.print();
+        setTimeout(function () {
+          document.documentElement.style.removeProperty("--ams-print-zoom");
+        }, 1500);
+      }).catch(function () {
+        window.print();
+      });
+    } else {
+      window.print(); // print rules in css/school.css hide portal chrome only
+    }
   });
 
-  /* Download the official report card as an A4 PDF using the same
-     amsCanvasToA4Pdf helper the class-results ZIP uses. */
+  /* Download the official report card as a ONE-PAGE A4 PDF. The live
+     on-screen report is phone-sized (tall + large text), so we re-render
+     it into a hidden desktop-width staging area with the compact .rcpzip
+     skin, then force amsCanvasToA4Pdf to fit a single page. */
   var ptPdfBusy = false;
   document.getElementById("ptPdfBtn").addEventListener("click", function () {
     if (ptPdfBusy) return;
@@ -164,7 +181,7 @@
       alert("Open a report sheet first.");
       return;
     }
-    if (!window.html2canvas || !window.amsCanvasToA4Pdf) {
+    if (!window.html2canvas || !window.amsCanvasToA4Pdf || !window.amsCaptureReportToCanvas) {
       alert("PDF tools are still loading - please try again in a moment.");
       return;
     }
@@ -172,25 +189,20 @@
     ptPdfBusy = true;
     btn.disabled = true;
     btn.textContent = "Building PDF...";
-    var wait = window.amsWaitForImages ? window.amsWaitForImages(card, 4000) : Promise.resolve();
-    wait.then(function () {
-      return window.html2canvas(card, {
-        scale: 2,
-        useCORS: true,
-        backgroundColor: "#ffffff",
-        windowWidth: 1024
+    window.amsCaptureReportToCanvas(card, { width: 794, scale: 2 })
+      .then(function (canvas) {
+        var pdf = window.amsCanvasToA4Pdf(canvas, 0.95, null, true); // force ONE page
+        var sid = student && student.student_id ? student.student_id : "report";
+        pdf.save("report-card-" + sid + ".pdf");
+      })
+      .catch(function () {
+        alert("Could not build the PDF. You can still use Print Report.");
+      })
+      .finally(function () {
+        ptPdfBusy = false;
+        btn.disabled = false;
+        btn.textContent = "⬇ Download Report Card";
       });
-    }).then(function (canvas) {
-      var pdf = window.amsCanvasToA4Pdf(canvas, 0.95);
-      var sid = student && student.student_id ? student.student_id : "report";
-      pdf.save("report-card-" + sid + ".pdf");
-    }).catch(function () {
-      alert("Could not build the PDF. You can still use Print Report.");
-    }).finally(function () {
-      ptPdfBusy = false;
-      btn.disabled = false;
-      btn.textContent = "⬇ Download Report Card";
-    });
   });
 
   /* Generate a simple official certificate PDF for this student. */
