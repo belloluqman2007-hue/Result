@@ -331,8 +331,63 @@
         };
     }
 
+    /* ---------- 9. Inject a dark-mode toggle on every staff page ----------
+       teacher-dashboard already has one in the topbar. Other admin pages
+       get a matching button in the header (or a floating one). Portal /
+       public / login pages are skipped. */
+    function makeThemeBtn() {
+        var btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "ams-icon-btn";
+        btn.id = "amsThemeToggle";
+        btn.title = "Toggle dark mode";
+        btn.setAttribute("aria-label", "Toggle dark mode");
+        btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>';
+        btn.addEventListener("click", function () { window.amsToggleTheme(); });
+        return btn;
+    }
+
+    function injectDarkToggle() {
+        if (document.getElementById("amsThemeToggle")) return;
+        if (document.querySelector("[onclick*=\"amsToggleTheme\"]")) return;
+        var page = (location.pathname.split("/").pop() || "").toLowerCase();
+        if (document.body && document.body.classList.contains("pt-body")) return;
+        if (/^(login\.html|portal-login\.html|portal\.html|index\.html|offline\.html|)$/.test(page)) return;
+        if (!document.getElementById("amsThemeInjectCss")) {
+            var st = document.createElement("style");
+            st.id = "amsThemeInjectCss";
+            st.textContent = ".ams-icon-btn{background:var(--m-surface,#fff);border:1.5px solid var(--m-border,#D9E8E0);color:var(--m-emerald,#0F3D2E);width:40px;height:40px;border-radius:12px;padding:0;display:inline-flex;align-items:center;justify-content:center;cursor:pointer;}.ams-icon-btn svg{width:19px;height:19px;}.ams-theme-float{position:fixed;top:14px;right:14px;z-index:80;}";
+            document.head.appendChild(st);
+        }
+
+        var right = document.querySelector(".ams-topbar-right");
+        if (right) {
+            right.insertBefore(makeThemeBtn(), right.firstChild);
+            return;
+        }
+        var head = document.querySelector(".mng-head");
+        if (head) {
+            var btn = makeThemeBtn();
+            btn.style.marginLeft = "auto";
+            head.appendChild(btn);
+            return;
+        }
+        var header = document.querySelector("header");
+        if (header && header.querySelector("a[href*=\"teacher-dashboard\"]")) {
+            var wrap = document.createElement("span");
+            wrap.style.cssText = "margin-left:auto; display:inline-flex;";
+            wrap.appendChild(makeThemeBtn());
+            header.appendChild(wrap);
+            return;
+        }
+        var floatBtn = makeThemeBtn();
+        floatBtn.classList.add("ams-theme-float");
+        document.body.appendChild(floatBtn);
+    }
+
     document.addEventListener("DOMContentLoaded", function () {
         startClock();
         initShell();
+        injectDarkToggle();
     });
 })();

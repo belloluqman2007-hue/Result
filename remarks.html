@@ -37,6 +37,7 @@ table.rm textarea{min-height:52px;margin:0;}
   </div>
 </div>
 <script src="js/csrf.js"></script>
+<script src="js/ui.js"></script>
 <script>
 function esc(s){return String(s==null?"":s).replace(/&/g,"&amp;").replace(/</g,"&lt;");}
 fetch("/classes",{credentials:"same-origin"}).then(r=>r.json()).then(cls=>{

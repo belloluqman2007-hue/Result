@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Staff Chat | Ameenullah School of Arabic and Islamic Studies</title>
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/modern-ui.css">
+  <link rel="stylesheet" href="css/manage.css">
+  <link rel="manifest" href="manifest.webmanifest">
+  <meta name="theme-color" content="#2f5021">
+  <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <style>
+    .sc-shell{ display:grid; grid-template-columns:280px 1fr; min-height:calc(100vh - 140px); border:1px solid var(--m-border,#D9E8E0); border-radius:18px; overflow:hidden; background:var(--m-surface,#fff); }
+    .sc-list{ border-right:1px solid var(--m-border,#D9E8E0); display:flex; flex-direction:column; background:var(--m-surface-2,#F6FAF8); }
+    .sc-search{ padding:12px; }
+    .sc-search input{ width:100%; box-sizing:border-box; padding:10px 12px; border:1.5px solid var(--m-border,#D9E8E0); border-radius:10px; font-family:inherit; }
+    .sc-people{ flex:1; overflow:auto; }
+    .sc-person{ display:flex; align-items:center; gap:10px; width:100%; border:none; background:transparent; padding:11px 14px; cursor:pointer; text-align:left; font-family:inherit; }
+    .sc-person:hover{ background:rgba(47,158,110,.10); }
+    .sc-person.on{ background:#E8F6EE; }
+    .sc-ava{ width:38px; height:38px; border-radius:50%; background:linear-gradient(135deg,#1C5A42,#2F9E6E); color:#fff; display:flex; align-items:center; justify-content:center; font-weight:800; flex:0 0 38px; }
+    .sc-pname{ font-weight:700; color:var(--m-emerald,#0F3D2E); font-size:14px; }
+    .sc-prole{ font-size:11.5px; color:var(--m-muted,#5F6E66); }
+    .sc-unread{ margin-left:auto; background:#C0392B; color:#fff; font-size:10px; font-weight:800; border-radius:10px; padding:1px 7px; }
+    .sc-convo{ display:flex; flex-direction:column; min-width:0; }
+    .sc-head{ padding:14px 16px; border-bottom:1px solid var(--m-border,#D9E8E0); font-weight:800; color:var(--m-emerald,#0F3D2E); }
+    .sc-msgs{ flex:1; overflow:auto; padding:16px; min-height:320px; background:#F4F8F5; }
+    .sc-bubble{ max-width:78%; padding:9px 12px; border-radius:12px; margin-bottom:8px; font-size:14px; line-height:1.45; white-space:pre-wrap; word-break:break-word; }
+    .sc-row{ display:flex; }
+    .sc-row.mine{ justify-content:flex-end; }
+    .sc-row.mine .sc-bubble{ background:linear-gradient(135deg,#E2F8EE,#D1EFE2); border:1px solid #B8E4CE; }
+    .sc-row.theirs .sc-bubble{ background:#fff; border:1px solid #E2E8EC; }
+    .sc-meta{ display:block; font-size:10.5px; color:#667781; margin-top:4px; }
+    .sc-idle{ text-align:center; color:var(--m-muted,#5F6E66); padding:50px 16px; }
+    .sc-composer{ display:flex; gap:8px; padding:12px; border-top:1px solid var(--m-border,#D9E8E0); }
+    .sc-composer textarea{ flex:1; border:1.5px solid var(--m-border,#D9E8E0); border-radius:12px; padding:10px 12px; font-family:inherit; resize:none; min-height:44px; }
+    .sc-composer button{ border:none; border-radius:12px; background:linear-gradient(135deg,#1C5A42,#2F9E6E); color:#fff; font-weight:800; padding:0 18px; cursor:pointer; }
+    html[data-theme="dark"] .sc-msgs{ background:#132018; }
+    html[data-theme="dark"] .sc-person.on{ background:#1a2e1f; }
+    html[data-theme="dark"] .sc-row.theirs .sc-bubble{ background:#1a2e1f; border-color:#2d5a38; color:#e8f5e9; }
+    @media (max-width:760px){
+      .sc-shell{ grid-template-columns:1fr; }
+      .sc-list{ max-height:240px; }
+    }
+  </style>
+</head>
+<body onload="checkAuth(); scInit();">
+  <div class="mng-page" style="max-width:1100px;">
+    <div class="mng-head">
+      <a class="mng-back" href="teacher-dashboard.html">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5"/><path d="m12 19-7-7 7-7"/></svg>
+        Dashboard
+      </a>
+      <div class="mng-head-text">
+        <h1>Staff Chat</h1>
+        <p>Internal messages between admin and teachers — not visible to parents.</p>
+      </div>
+    </div>
+
+    <div class="sc-shell">
+      <aside class="sc-list">
+        <div class="sc-search">
+          <input type="search" id="scSearch" placeholder="Search staff…" oninput="scFilter()">
+        </div>
+        <div class="sc-people" id="scPeople"><div class="sc-idle">Loading staff…</div></div>
+      </aside>
+      <section class="sc-convo">
+        <div class="sc-head" id="scHead">Pick a colleague</div>
+        <div class="sc-msgs" id="scMsgs">
+          <div class="sc-idle">Choose someone on the left to start a staff conversation.</div>
+        </div>
+        <form class="sc-composer" id="scForm" onsubmit="scSend(event)">
+          <textarea id="scBody" rows="1" maxlength="2000" placeholder="Type a staff message…" disabled></textarea>
+          <button type="submit" id="scSendBtn" disabled>Send</button>
+        </form>
+      </section>
+    </div>
+  </div>
+
+  <script src="js/csrf.js"></script>
+  <script src="js/ui.js"></script>
+  <script src="js/app.js"></script>
+  <script src="js/staff-chat.js"></script>
+  <script src="js/pwa.js" defer></script>
+</body>
+</html>

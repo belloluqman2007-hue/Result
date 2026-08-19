@@ -1507,21 +1507,49 @@ table:not(#resultTable):not(.report-container *):not(.cover-info-table) tr:nth-c
 ========================================================== */
 @media screen{
 html[data-theme="dark"] body{
-  background-color:#0D1512;
+  background-color:#0f1a12;
   background-image:radial-gradient(circle at 1px 1px, rgba(63,179,126,.10) 1px, transparent 0);
-  color:#E4EFE8;
+  color:#e8f5e9;
 }
 
 html[data-theme="dark"]{
-  --m-bg:#0D1512;
-  --m-surface:#15211B;
-  --m-surface-2:#1A2A22;
-  --m-border:#284034;
-  --m-text:#E4EFE8;
-  --m-muted:#93AC9E;
+  --m-bg:#0f1a12;
+  --m-surface:#1a2e1f;
+  --m-surface-2:#163024;
+  --m-border:#2d5a38;
+  --m-text:#e8f5e9;
+  --m-muted:#a8cbb0;
   --m-shadow-1:0 2px 6px rgba(0,0,0,.35);
   --m-shadow-2:0 12px 32px rgba(0,0,0,.45);
   --m-shadow-3:0 24px 60px rgba(0,0,0,.55);
+}
+
+/* Floating / injected dark-mode toggle (ui.js adds this on admin pages) */
+.ams-theme-float{
+  position:fixed;
+  top:14px;
+  right:14px;
+  z-index:80;
+  box-shadow:var(--m-shadow-2);
+}
+html[data-theme="dark"] .mng-page,
+html[data-theme="dark"] .mng-card,
+html[data-theme="dark"] .mg-card,
+html[data-theme="dark"] .hw-card,
+html[data-theme="dark"] .card-section{
+  background:var(--m-surface);
+  border-color:var(--m-border);
+  color:var(--m-text);
+}
+html[data-theme="dark"] .mng-head-text h1,
+html[data-theme="dark"] .mng-card-title,
+html[data-theme="dark"] .mg-card h3{
+  color:#e8f5e9;
+}
+html[data-theme="dark"] .mng-back{
+  background:var(--m-surface);
+  border-color:var(--m-border);
+  color:#e8f5e9;
 }
 
 html[data-theme="dark"] .ams-topbar{

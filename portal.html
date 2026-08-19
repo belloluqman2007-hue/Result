@@ -260,7 +260,12 @@
         <h1 class="pt-view-title">&#128202; Results</h1>
         <!-- Published results -->
         <section class="pt-card portal-no-print">
-          <h2>Published Results</h2>
+          <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+            <h2 style="margin:0;">Published Results</h2>
+            <span style="margin-left:auto;">
+              <button class="mg-btn-light" id="ptCertQuickBtn" type="button">&#127891; Download Certificate</button>
+            </span>
+          </div>
           <p class="pt-hint">A result shows here only <b>after the school publishes it</b>. If nothing shows yet, please check back later.</p>
           <div id="ptTerms">
             <div class="pt-empty">Loading published results...</div>
@@ -273,6 +278,8 @@
             <h2 style="margin:0;">Official Report Sheet</h2>
             <span style="margin-left:auto; display:flex; gap:8px; flex-wrap:wrap;">
               <button class="mg-btn" id="ptPrintBtn" type="button">&#128424;&#65039; Print Report</button>
+              <button class="mg-btn" id="ptPdfBtn" type="button">&#11015; Download Report Card</button>
+              <button class="mg-btn-light" id="ptCertBtn" type="button">&#127891; Download Certificate</button>
               <button class="mg-btn-light" id="ptCloseReport" type="button">&#10006; Close</button>
             </span>
           </div>
