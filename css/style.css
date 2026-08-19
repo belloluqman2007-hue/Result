@@ -1003,6 +1003,21 @@ nav a{
     zoom:var(--ams-print-zoom, 1);
   }
 
+  /* NEW (pack 89 - print fill): the min-height above only stretched the
+     OUTER border of the report - a short result (few subjects) hugged the
+     top of the page and the bottom half of the A4 sat blank. The report
+     is now a PRINT-ONLY flex column, so the actual sections (school
+     header, student info, subject table, summary + signatures) are
+     distributed across the full page height. space-between only
+     distributes LEFTOVER space: a tall sheet lays out exactly as before
+     and the fit-zoom still scales it to one page. Screen layout is
+     untouched (this rule lives only inside @media print). */
+  #reportContainer{
+    display:flex;
+    flex-direction:column;
+    justify-content:space-between;
+  }
+
   .report-header{
     page-break-inside:avoid;
     break-inside:avoid;
