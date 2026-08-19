@@ -10,6 +10,12 @@ function amsFmtScore(v) {
     return isFinite(n) ? String(Math.round(n)) : String(v);
 }
 
+function esc(str) {
+    return String(str == null ? "" : str)
+        .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;");
+}
+
 function searchResult() {
 
     let studentId = document.getElementById("searchId").value;
@@ -31,6 +37,7 @@ function searchResult() {
             let found = data.length > 0;
 
             if (isThirdTerm) {
+                table.className = "cumulative-view";
                 table.innerHTML = `
                     <tr>
                         <th>Subject</th>
@@ -42,6 +49,7 @@ function searchResult() {
                     </tr>
                 `;
             } else {
+                table.className = "";
                 table.innerHTML = `
                     <tr>
                         <th>Subject</th>
@@ -162,6 +170,7 @@ function searchResult() {
                 // Cumulative view: show 1st/2nd/3rd term totals per subject,
                 // plus a cumulative average, and base the overall average on
                 // those cumulative subject averages rather than just term 3.
+                // The Total Score is the sum of ALL three term scores.
                 let averagesSum = 0;
                 let averagesCount = 0;
 
@@ -170,15 +179,16 @@ function searchResult() {
                     const secondTotal = result.second_term_total !== null && result.second_term_total !== undefined ? result.second_term_total : "-";
                     const thirdTotal = result.third_term_total;
                     const cumulativeAvg = result.cumulative_average;
+                    const grade = result.cumulative_grade || result.grade || "";
 
                     table.innerHTML += `
                         <tr>
-                            <td>${result.subject}</td>
+                            <td>${esc(result.subject)}</td>
                             <td>${amsFmtScore(firstTotal)}</td>
                             <td>${amsFmtScore(secondTotal)}</td>
                             <td>${amsFmtScore(thirdTotal)}</td>
                             <td>${cumulativeAvg !== null && cumulativeAvg !== undefined ? amsFmtScore(cumulativeAvg) : "-"}</td>
-                            <td>${result.grade}</td>
+                            <td>${esc(grade)}</td>
                         </tr>
                     `;
 
@@ -187,7 +197,7 @@ function searchResult() {
                         averagesCount++;
                     }
 
-                    totalScore += Number(thirdTotal);
+                    totalScore += (Number(firstTotal) || 0) + (Number(secondTotal) || 0) + (Number(thirdTotal) || 0);
                 });
 
                 average = averagesCount > 0 ? Number((averagesSum / averagesCount).toFixed(2)) : 0;
@@ -196,11 +206,11 @@ function searchResult() {
                 data.forEach(result => {
                     table.innerHTML += `
                         <tr>
-                            <td>${result.subject}</td>
+                            <td>${esc(result.subject)}</td>
                             <td>${amsFmtScore(result.ca_score)}</td>
                             <td>${amsFmtScore(result.exam_score)}</td>
                             <td>${amsFmtScore(result.total)}</td>
-                            <td>${result.grade}</td>
+                            <td>${esc(result.grade)}</td>
                         </tr>
                     `;
                     totalScore += Number(result.total);

@@ -2911,9 +2911,9 @@ app.get("/search-result/:studentId", publishResultGate, (req, res) => { // CHANG
         // For 3rd Term, also pull 1st and 2nd Term results for the same
         // student and session so we can show a cumulative subject average.
         if (term === "3rd Term" && currentTermResults.length > 0) {
-            const priorSql = "SELECT * FROM results WHERE student_id = ? AND session = ? AND term IN ('1st Term','2nd Term')";
+            const priorSql = "SELECT * FROM results WHERE (TRIM(student_id) = TRIM(?) OR LOWER(TRIM(student_id)) = LOWER(TRIM(?))) AND session = ? AND term IN ('1st Term','2nd Term')";
 
-            connection.query(priorSql, [studentId, session], (err2, priorResults) => {
+            connection.query(priorSql, [studentId, studentId, session], (err2, priorResults) => {
                 if (err2) {
                     console.log(err2);
                     return res.status(500).send("Database Error");
@@ -2923,29 +2923,43 @@ app.get("/search-result/:studentId", publishResultGate, (req, res) => { // CHANG
                 const secondTermBySubject = {};
 
                 priorResults.forEach(row => {
+                    // Match subjects tolerantly (tashkeel / spacing / case
+                    // differences between terms must not hide a score).
+                    const key = normalizeClassName(row.subject);
+                    if (!key) return;
                     if (row.term === "1st Term") {
-                        firstTermBySubject[row.subject] = row.total;
+                        firstTermBySubject[key] = row.total;
                     } else if (row.term === "2nd Term") {
-                        secondTermBySubject[row.subject] = row.total;
+                        secondTermBySubject[key] = row.total;
                     }
                 });
 
                 const enriched = currentTermResults.map(row => {
-                    const firstTotal = firstTermBySubject.hasOwnProperty(row.subject) ? Number(firstTermBySubject[row.subject]) : null;
-                    const secondTotal = secondTermBySubject.hasOwnProperty(row.subject) ? Number(secondTermBySubject[row.subject]) : null;
+                    const subjectKey = normalizeClassName(row.subject);
+                    const firstTotal = subjectKey && firstTermBySubject.hasOwnProperty(subjectKey) ? Number(firstTermBySubject[subjectKey]) : null;
+                    const secondTotal = subjectKey && secondTermBySubject.hasOwnProperty(subjectKey) ? Number(secondTermBySubject[subjectKey]) : null;
                     const thirdTotal = Number(row.total);
 
+                    // The three term scores are combined per subject: the
+                    // cumulative average uses whichever of the 1st/2nd/3rd
+                    // term totals exist for that subject.
                     const termsPresent = [firstTotal, secondTotal, thirdTotal].filter(v => v !== null);
                     const cumulativeAverage = termsPresent.length > 0
                         ? Math.round((termsPresent.reduce((a, b) => a + b, 0) / termsPresent.length) * 100) / 100
                         : null;
+                    // Grade is now based on the THREE-TERM average (not just
+                    // the 3rd term), matching the pass rule (50% and above).
+                    const cumulativeGrade = cumulativeAverage !== null && cumulativeAverage !== undefined
+                        ? amsGradeForTotal(cumulativeAverage)
+                        : (row.grade || "");
 
                     return {
                         ...row,
                         first_term_total: firstTotal,
                         second_term_total: secondTotal,
                         third_term_total: thirdTotal,
-                        cumulative_average: cumulativeAverage
+                        cumulative_average: cumulativeAverage,
+                        cumulative_grade: cumulativeGrade
                     };
                 });
 
@@ -2957,120 +2971,157 @@ app.get("/search-result/:studentId", publishResultGate, (req, res) => { // CHANG
     });
 });
 
+/* FIX (pack 88): /student-position was returning position 0 (report
+   shows "-") whenever the student's current class name differed from the
+   class stored on their result rows - e.g. after promotion, or when
+   Arabic class names differed by tashkeel / extra spaces. Now the class
+   is resolved from the student's OWN result rows, all class/subject/id
+   matching is tolerant, and the 3rd Term ranking uses the cumulative
+   three-term average - exactly the number the report sheet displays. */
+function amsTolerantId(a, b) {
+    return String(a || "").trim().toLowerCase() === String(b || "").trim().toLowerCase();
+}
+function amsTermOrder(term) {
+    const t = String(term || "").trim();
+    if (t === "3rd Term") return 3;
+    if (t === "2nd Term") return 2;
+    return 1;
+}
+/* rows: {student_id, class_name, subject, term, total} for ONE class +
+   session. Ranks students by their average total (per-term) or by the
+   average of each subject's cumulative three-term average (3rd Term).
+   Ties share the same position. Returns { position, total }. */
+function amsRankClassResults(rows, term, targetStudentId) {
+    const isThird = term === "3rd Term";
+    const perSubject = {};   // sid -> subjectKey -> { term: total }
+    const perTermAvg = {};   // sid -> { sum, count }
+    const hasThird = {};     // sid -> true (only rank 3rd-term students)
+
+    (rows || []).forEach(r => {
+        const sid = String(r.student_id || "").trim();
+        if (!sid) return;
+        const total = Number(r.total);
+        if (!isFinite(total)) return;
+        if (isThird) {
+            const key = normalizeClassName(r.subject);
+            if (!key) return;
+            if (!perSubject[sid]) perSubject[sid] = {};
+            if (!perSubject[sid][key]) perSubject[sid][key] = {};
+            perSubject[sid][key][String(r.term || "").trim()] = total;
+            if (String(r.term || "").trim() === "3rd Term") hasThird[sid] = true;
+        } else {
+            if (!perTermAvg[sid]) perTermAvg[sid] = { sum: 0, count: 0 };
+            perTermAvg[sid].sum += total;
+            perTermAvg[sid].count++;
+        }
+    });
+
+    const averages = {};
+    if (isThird) {
+        Object.keys(perSubject).forEach(sid => {
+            if (!hasThird[sid]) return; // only rank students with a 3rd term result
+            const subjects = perSubject[sid];
+            let sum = 0, count = 0;
+            Object.keys(subjects).forEach(key => {
+                const vals = Object.values(subjects[key]);
+                if (vals.length) { sum += vals.reduce((a, b) => a + b, 0) / vals.length; count++; }
+            });
+            averages[sid] = count ? sum / count : 0;
+        });
+    } else {
+        Object.keys(perTermAvg).forEach(sid => {
+            const a = perTermAvg[sid];
+            averages[sid] = a.count ? a.sum / a.count : 0;
+        });
+    }
+
+    const sids = Object.keys(averages);
+    sids.sort((a, b) => averages[b] - averages[a] || String(a).localeCompare(String(b)));
+
+    let position = 0;
+    let lastAvg = null;
+    let lastPos = 0;
+    sids.forEach((sid, idx) => {
+        if (lastAvg === null || averages[sid] < lastAvg) {
+            lastPos = idx + 1;
+            lastAvg = averages[sid];
+        }
+        if (amsTolerantId(sid, targetStudentId)) position = lastPos;
+    });
+
+    return { position: position, total: sids.length };
+}
+/* A student's 1st/2nd-term rows may sit under a DIFFERENT class name
+   than their 3rd-term class (promotion / class change mid-session).
+   The report sheet still combines those terms (it looks the student up
+   by id), so the ranking must use the same numbers - append the target
+   student's own prior-term rows to the class rows before ranking. */
+function amsAppendOwnPriorRows(classRows, ownPriorRows, targetStudentId) {
+    const out = Array.isArray(classRows) ? classRows.slice() : [];
+    (ownPriorRows || []).forEach(r => {
+        if (amsTolerantId(r.student_id, targetStudentId)) out.push(r);
+    });
+    return out;
+}
+
 app.get("/student-position/:studentId", portalOwnerGate, (req, res) => { // CHANGED (pack 13): portal/anon users - owner only; staff unchanged
-    const studentId = req.params.studentId;
-    const className = req.query.className;
-    const term = req.query.term;
-    const session = req.query.session;
+    const studentId = String(req.params.studentId || "").trim();
+    const className = (req.query.className || "").trim();
+    const term = (req.query.term || "").trim();
+    const session = (req.query.session || "").trim();
 
     if (!className || !term || !session) {
         return res.status(400).json({ message: "className, term, and session are required." });
     }
 
-    if (term === "3rd Term") {
-        // Cumulative ranking: pull every term's results for this class+session,
-        // build each student's per-subject cumulative average (using whichever
-        // of 1st/2nd/3rd terms exist for that subject), then rank students by
-        // the average of those cumulative subject averages.
-        const sql = `
-            SELECT student_id, subject, term, total
-            FROM results
-            WHERE class_name = ? AND session = ? AND term IN ('1st Term','2nd Term','3rd Term')
-        `;
-
-        connection.query(sql, [className, session], (err, rows) => {
+    // Resolve the class from the student's OWN result rows for this
+    // term/session (prefer one matching the caller's hint). This survives
+    // promotion and Arabic spelling differences.
+    connection.query(
+        `SELECT DISTINCT class_name FROM results
+         WHERE (TRIM(student_id) = TRIM(?) OR LOWER(TRIM(student_id)) = LOWER(TRIM(?)))
+           AND TRIM(term) = TRIM(?) AND TRIM(session) = TRIM(?)`,
+        [studentId, studentId, term, session],
+        (err, ownRows) => {
             if (err) {
                 console.log(err);
                 return res.status(500).send("Database Error");
             }
+            const ownClasses = (ownRows || []).map(r => r.class_name).filter(Boolean);
+            const resolvedClass = ownClasses.find(c => classNamesMatch(c, className)) || ownClasses[0] || className;
 
-            // studentSubjects[studentId][subject] = { '1st Term': total, ... }
-            const studentSubjects = {};
-            const studentsWithThirdTerm = new Set();
-
-            rows.forEach(row => {
-                if (!studentSubjects[row.student_id]) {
-                    studentSubjects[row.student_id] = {};
+            const termFilter = term === "3rd Term" ? "term IN ('1st Term','2nd Term','3rd Term')" : "term = ?";
+            const sql = `SELECT student_id, class_name, subject, term, total
+                         FROM results WHERE session = ? AND ${termFilter}`;
+            const params = term === "3rd Term" ? [session] : [session, term];
+            connection.query(sql, params, (err2, rows) => {
+                if (err2) {
+                    console.log(err2);
+                    return res.status(500).send("Database Error");
                 }
-                if (!studentSubjects[row.student_id][row.subject]) {
-                    studentSubjects[row.student_id][row.subject] = {};
-                }
-                studentSubjects[row.student_id][row.subject][row.term] = Number(row.total);
-
-                if (row.term === "3rd Term") {
-                    studentsWithThirdTerm.add(row.student_id);
-                }
-            });
-
-            const rankings = [];
-
-            Object.keys(studentSubjects).forEach(sid => {
-                // Only rank students who actually have a 3rd term result
-                if (!studentsWithThirdTerm.has(sid)) return;
-
-                const subjects = studentSubjects[sid];
-                let subjectAverages = [];
-
-                Object.keys(subjects).forEach(subject => {
-                    const terms = subjects[subject];
-                    const values = Object.values(terms);
-                    if (values.length > 0) {
-                        const avg = values.reduce((a, b) => a + b, 0) / values.length;
-                        subjectAverages.push(avg);
+                // JS-side class filter: tashkeel / spacing differences in
+                // other students' class names never hide ranking rows.
+                const classRows = (rows || []).filter(r => classNamesMatch(r.class_name, resolvedClass));
+                const doRank = (finalRows) => {
+                    const rank = amsRankClassResults(finalRows, term, studentId);
+                    res.json({ position: rank.position, total: rank.total, class_name: resolvedClass });
+                };
+                if (term !== "3rd Term") return doRank(classRows);
+                // Merge the student's own 1st/2nd-term rows (any class) so
+                // their cumulative average matches the report sheet exactly.
+                connection.query(
+                    `SELECT student_id, class_name, subject, term, total FROM results
+                     WHERE (TRIM(student_id) = TRIM(?) OR LOWER(TRIM(student_id)) = LOWER(TRIM(?)))
+                       AND session = ? AND term IN ('1st Term','2nd Term')`,
+                    [studentId, studentId, session],
+                    (eOwn, ownRows) => {
+                        if (eOwn) { console.log(eOwn); return doRank(classRows); }
+                        doRank(amsAppendOwnPriorRows(classRows, ownRows, studentId));
                     }
-                });
-
-                const overallAverage = subjectAverages.length > 0
-                    ? subjectAverages.reduce((a, b) => a + b, 0) / subjectAverages.length
-                    : 0;
-
-                rankings.push({ student_id: sid, average: overallAverage });
+                );
             });
-
-            rankings.sort((a, b) => b.average - a.average);
-
-            let position = 0;
-            rankings.forEach((student, index) => {
-                if (student.student_id === studentId) {
-                    position = index + 1;
-                }
-            });
-
-            res.json({ position });
-        });
-
-    } else {
-        const sql = `
-            SELECT
-                student_id,
-                ROUND(AVG(total),2) AS average
-            FROM results
-            WHERE class_name = ?
-            AND term = ?
-            AND session = ?
-            GROUP BY student_id
-            ORDER BY average DESC
-        `;
-
-        connection.query(sql, [className, term, session], (err, results) => {
-
-            if (err) {
-                console.log(err);
-                return res.status(500).send("Database Error");
-            }
-
-            let position = 0;
-
-            results.forEach((student, index) => {
-                if (student.student_id === studentId) {
-                    position = index + 1;
-                }
-            });
-
-            res.json({ position });
-
-        });
-    }
+        }
+    );
 });
 
 
@@ -4850,21 +4901,64 @@ app.get("/class-results", requireLogin, (req, res) => {
         return res.status(400).json({ message: "Class, Term and Session are all required." });
     }
 
-    connection.query(
-        `SELECT r.student_id, COALESCE(s.full_name, r.student_name) AS student_name, r.class_name, r.subject, r.total, r.grade
-         FROM results r
-         INNER JOIN students s ON r.student_id = s.student_id
-         WHERE r.class_name = ? AND r.term = ? AND r.session = ?
-         ORDER BY s.full_name, r.subject`,
-        [className, term, session],
-        (err, rows) => {
-            if (err) {
-                console.log(err);
-                return res.status(500).json({ message: "Database Error" });
-            }
-            res.json(rows);
+    // FIX (pack 88): the broadsheet now mirrors the report sheet -
+    //   * LEFT JOIN so scores for students no longer in the register still
+    //     appear (they did before on the printed report, but vanished here),
+    //   * tolerant class matching (tashkeel / spacing) like every other
+    //     result endpoint,
+    //   * for 3rd Term the rows are enriched with the same 1st/2nd/3rd term
+    //     totals + cumulative average + cumulative grade the report shows,
+    //     so class totals / averages / positions agree with the printed card.
+    const termFilter = term === "3rd Term" ? "term IN ('1st Term','2nd Term','3rd Term')" : "term = ?";
+    const sql = `SELECT r.student_id, COALESCE(s.full_name, r.student_name) AS student_name,
+                        r.class_name, r.subject, r.term, r.total, r.grade
+                 FROM results r
+                 LEFT JOIN students s ON s.student_id = r.student_id
+                 WHERE r.session = ? AND ${termFilter}
+                 ORDER BY COALESCE(s.full_name, r.student_name), r.subject`;
+    const params = term === "3rd Term" ? [session] : [session, term];
+
+    connection.query(sql, params, (err, rows) => {
+        if (err) {
+            console.log(err);
+            return res.status(500).json({ message: "Database Error" });
         }
-    );
+        const classRows = (rows || []).filter(r => classNamesMatch(r.class_name, className));
+        if (term !== "3rd Term") {
+            return res.json(classRows.map(r => ({ ...r, term })));
+        }
+
+        // Enrich each 3rd-term row with the same cumulative fields as
+        // /search-result (subject matching is tolerant).
+        const priorByTerm = { "1st Term": {}, "2nd Term": {} };
+        classRows.forEach(r => {
+            if (r.term === "3rd Term") return;
+            const subjKey = normalizeClassName(r.subject);
+            if (!subjKey) return;
+            const key = String(r.student_id || "").trim().toLowerCase() + "||" + subjKey;
+            priorByTerm[r.term][key] = r.total;
+        });
+        const enriched = classRows.filter(r => r.term === "3rd Term").map(r => {
+            const key = String(r.student_id || "").trim().toLowerCase() + "||" + normalizeClassName(r.subject);
+            const firstTotal = priorByTerm["1st Term"].hasOwnProperty(key) ? Number(priorByTerm["1st Term"][key]) : null;
+            const secondTotal = priorByTerm["2nd Term"].hasOwnProperty(key) ? Number(priorByTerm["2nd Term"][key]) : null;
+            const thirdTotal = Number(r.total);
+            const present = [firstTotal, secondTotal, thirdTotal].filter(v => v !== null);
+            const cumulativeAverage = present.length
+                ? Math.round((present.reduce((a, b) => a + b, 0) / present.length) * 100) / 100
+                : null;
+            const cumulativeGrade = cumulativeAverage !== null ? amsGradeForTotal(cumulativeAverage) : (r.grade || "");
+            return {
+                ...r,
+                first_term_total: firstTotal,
+                second_term_total: secondTotal,
+                third_term_total: thirdTotal,
+                cumulative_average: cumulativeAverage,
+                cumulative_grade: cumulativeGrade
+            };
+        });
+        res.json(enriched);
+    });
 });
 
 app.get("/dashboard-summary", requireLogin, (req, res) => {
@@ -8442,37 +8536,92 @@ app.get("/portal/progress", (req, res) => {
 });
 
 /* ---------- CLASS POSITION per term/session ---------- */
+/* FIX (pack 88): the portal "Class Position" list came back empty for
+   promoted students and for classes whose Arabic name differed by
+   tashkeel/spacing (results were looked up under the CURRENT class only,
+   with an exact SQL =). Now every (term, session) the student actually
+   has results for is resolved to the class stored on THEIR result rows,
+   all matching is tolerant, and the 3rd Term position uses the same
+   cumulative three-term average as the report sheet - so the sidebar
+   always agrees with the printed report. */
 app.get("/portal/position", (req, res) => {
     const sid = req.session && req.session.portalStudentId;
     if (!sid) return res.json([]);
     connection.query(
-        `SELECT class_name FROM students WHERE student_id = ? LIMIT 1`, [sid],
-        (err, stuRows) => {
-            if (err || !stuRows.length) return res.status(500).json({ message: "Student not found" });
-            const cls = stuRows[0].class_name;
+        `SELECT DISTINCT term, session, class_name FROM results
+         WHERE (TRIM(student_id) = TRIM(?) OR LOWER(TRIM(student_id)) = LOWER(TRIM(?)))`,
+        [sid, sid],
+        (err, ownRows) => {
+            if (err) { console.log(err); return res.status(500).json({ message: "Database error" }); }
+            const pairs = [];
+            const seen = Object.create(null);
+            (ownRows || []).forEach(r => {
+                const key = String(r.term || "") + "|" + String(r.session || "");
+                if (seen[key]) return;
+                seen[key] = true;
+                pairs.push({ term: r.term, session: r.session, class_name: r.class_name });
+            });
+            if (!pairs.length) return res.json([]);
+
             connection.query(
-                `SELECT r.student_id, r.term, r.session,
-                        ROUND(AVG(r.total), 2) AS avg_score
-                 FROM results r
-                 WHERE r.class_name = ?
-                 GROUP BY r.student_id, r.term, r.session`,
-                [cls], (err2, allRows) => {
-                    if (err2) return res.status(500).json({ message: "Database error" });
-                    const grouped = {};
-                    (allRows || []).forEach(r => {
-                        const key = r.term + "|" + r.session;
-                        if (!grouped[key]) grouped[key] = [];
-                        grouped[key].push({ student_id: r.student_id, avg: Number(r.avg_score) });
-                    });
+                `SELECT class_name FROM students
+                 WHERE TRIM(student_id) = TRIM(?) OR LOWER(TRIM(student_id)) = LOWER(TRIM(?)) LIMIT 1`,
+                [sid, sid],
+                (err2, stu) => {
+                    if (err2) { console.log(err2); return res.status(500).json({ message: "Database error" }); }
+                    const currentClass = (stu && stu[0] && stu[0].class_name) || "";
                     const result = [];
-                    Object.entries(grouped).forEach(([key, students]) => {
-                        const [term, session] = key.split("|");
-                        students.sort((a, b) => b.avg - a.avg);
-                        const pos = students.findIndex(s => s.student_id === sid) + 1;
-                        if (pos > 0) result.push({ term, session, position: pos, total: students.length });
-                    });
-                    result.sort((a, b) => String(b.session).localeCompare(String(a.session)));
-                    res.json(result);
+                    let i = 0;
+                    const next = () => {
+                        if (i >= pairs.length) {
+                            result.sort((a, b) =>
+                                String(b.session).localeCompare(String(a.session)) ||
+                                amsTermOrder(b.term) - amsTermOrder(a.term)
+                            );
+                            return res.json(result);
+                        }
+                        const p = pairs[i++];
+                        connection.query(
+                            `SELECT DISTINCT class_name FROM results
+                             WHERE (TRIM(student_id) = TRIM(?) OR LOWER(TRIM(student_id)) = LOWER(TRIM(?)))
+                               AND TRIM(term) = TRIM(?) AND TRIM(session) = TRIM(?)`,
+                            [sid, sid, p.term, p.session],
+                            (err3, ownRows2) => {
+                                if (err3) { console.log(err3); return next(); }
+                                const ownClasses = (ownRows2 || []).map(x => x.class_name).filter(Boolean);
+                                const resolved = ownClasses.find(c => classNamesMatch(c, currentClass)) || ownClasses[0] || p.class_name || currentClass;
+                                const termFilter = p.term === "3rd Term" ? "term IN ('1st Term','2nd Term','3rd Term')" : "term = ?";
+                                const sql = `SELECT student_id, class_name, subject, term, total
+                                             FROM results WHERE session = ? AND ${termFilter}`;
+                                const params = p.term === "3rd Term" ? [p.session] : [p.session, p.term];
+                                connection.query(sql, params, (err4, rows) => {
+                                    if (err4) { console.log(err4); return next(); }
+                                    const classRows = (rows || []).filter(r => classNamesMatch(r.class_name, resolved));
+                                    const doRank = (finalRows) => {
+                                        const rank = amsRankClassResults(finalRows, p.term, sid);
+                                        if (rank.position > 0) {
+                                            result.push({ term: p.term, session: p.session, position: rank.position, total: rank.total });
+                                        }
+                                        next();
+                                    };
+                                    if (p.term !== "3rd Term") return doRank(classRows);
+                                    // Merge the student's own 1st/2nd-term rows
+                                    // (any class) - same rule as /student-position.
+                                    connection.query(
+                                        `SELECT student_id, class_name, subject, term, total FROM results
+                                         WHERE (TRIM(student_id) = TRIM(?) OR LOWER(TRIM(student_id)) = LOWER(TRIM(?)))
+                                           AND session = ? AND term IN ('1st Term','2nd Term')`,
+                                        [sid, sid, p.session],
+                                        (eOwn, ownRows) => {
+                                            if (eOwn) { console.log(eOwn); return doRank(classRows); }
+                                            doRank(amsAppendOwnPriorRows(classRows, ownRows, sid));
+                                        }
+                                    );
+                                });
+                            }
+                        );
+                    };
+                    next();
                 }
             );
         }

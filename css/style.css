@@ -796,6 +796,37 @@ nav a{
   font-family:'Amiri','Cairo',serif;
 }
 
+/* FIX (pack 88 - result arrangement): scores are numbers - keep the
+   subject column left-aligned but centre every number column, and give
+   the 6-column cumulative (3rd Term) view balanced widths so the sheet
+   reads cleanly on screen, in print and in the downloaded PDF. */
+#resultTable th,
+#resultTable td{
+  text-align:center;
+}
+#resultTable th:first-child,
+#resultTable td:first-child{
+  text-align:left;
+}
+#resultTable.cumulative-view th:first-child,
+#resultTable.cumulative-view td:first-child{
+  width:34%;
+}
+#resultTable.cumulative-view th:nth-child(2),
+#resultTable.cumulative-view td:nth-child(2),
+#resultTable.cumulative-view th:nth-child(3),
+#resultTable.cumulative-view td:nth-child(3),
+#resultTable.cumulative-view th:nth-child(4),
+#resultTable.cumulative-view td:nth-child(4),
+#resultTable.cumulative-view th:nth-child(5),
+#resultTable.cumulative-view td:nth-child(5){
+  width:13%;
+}
+#resultTable.cumulative-view th:last-child,
+#resultTable.cumulative-view td:last-child{
+  width:14%;
+}
+
 /* Performance summary */
 .bottom-section{
   margin:28px 30px 0;
@@ -1077,6 +1108,90 @@ nav a{
 
   button{
     display:none !important;
+  }
+
+  /* FIX (pack 88 - ONE page): the 3rd Term cumulative table has six
+     columns, so the print skin is tightened a little further so the whole
+     report sheet - header, student info, scores, summary and signatures -
+     still fits ONE A4 page, exactly like the 1st/2nd term sheets. The
+     downloaded PDF uses the same print layout, so it matches perfectly. */
+  #reportContainer{
+    page-break-inside:avoid;
+    break-inside:avoid;
+  }
+  #resultTable.cumulative-view th,
+  #resultTable.cumulative-view td{
+    padding:3.5px 5px;
+    font-size:10.5px;
+    line-height:1.2;
+  }
+  .report-header{
+    padding:10px 20px !important;
+    gap:10px;
+  }
+  .school-details h1{
+    font-size:15px;
+    margin-bottom:3px;
+  }
+  .school-details .motto{
+    font-size:8.5px;
+    padding:2px 10px;
+    margin-bottom:4px;
+  }
+  .school-line{
+    margin-top:4px;
+  }
+  .school-line #reportLevel{
+    font-size:9.5px;
+    padding:3px 12px;
+  }
+  .school-logo{
+    width:56px;
+    height:56px;
+  }
+  .student-passport{
+    width:56px;
+    height:70px;
+    min-width:56px;
+    min-height:70px;
+  }
+  .report-container > h3:first-of-type{
+    margin-top:8px !important;
+  }
+  .report-container h3{
+    font-size:12px;
+    margin-bottom:4px;
+  }
+  .student-info-table td{
+    padding:5px 9px;
+    font-size:11.5px;
+    line-height:1.25;
+  }
+  .bottom-section{
+    margin-top:8px !important;
+  }
+  .bottom-section h3{
+    margin-bottom:5px;
+  }
+  .summary-table td{
+    padding:5px 8px;
+    font-size:11.5px;
+    line-height:1.25;
+  }
+  .signature-section{
+    margin-top:10px !important;
+    padding-top:7px;
+    gap:14px !important;
+  }
+  .signature-img{
+    max-height:32px;
+  }
+  .signature-box strong{
+    font-size:11px;
+  }
+  .signature-box p{
+    font-size:10px;
+    margin:1px 0;
   }
 }
 
