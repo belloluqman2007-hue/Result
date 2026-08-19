@@ -126,12 +126,14 @@
                 const secondTotal = result.second_term_total !== null && result.second_term_total !== undefined ? result.second_term_total : "-";
                 const thirdTotal = result.third_term_total;
                 const cumulativeAvg = result.cumulative_average;
-                tableRows += `<tr><td>${esc(result.subject)}</td><td>${amsFmtScore(firstTotal)}</td><td>${amsFmtScore(secondTotal)}</td><td>${amsFmtScore(thirdTotal)}</td><td>${cumulativeAvg !== null && cumulativeAvg !== undefined ? amsFmtScore(cumulativeAvg) : "-"}</td><td>${esc(result.grade)}</td></tr>`;
+                const grade = result.cumulative_grade || result.grade || "";
+                tableRows += `<tr><td>${esc(result.subject)}</td><td>${amsFmtScore(firstTotal)}</td><td>${amsFmtScore(secondTotal)}</td><td>${amsFmtScore(thirdTotal)}</td><td>${cumulativeAvg !== null && cumulativeAvg !== undefined ? amsFmtScore(cumulativeAvg) : "-"}</td><td>${esc(grade)}</td></tr>`;
                 if (cumulativeAvg !== null && cumulativeAvg !== undefined) {
                     averagesSum += Number(cumulativeAvg);
                     averagesCount++;
                 }
-                totalScore += Number(thirdTotal);
+                // Total Score = ALL three term scores combined
+                totalScore += (Number(firstTotal) || 0) + (Number(secondTotal) || 0) + (Number(thirdTotal) || 0);
             });
             average = averagesCount > 0 ? Number((averagesSum / averagesCount).toFixed(2)) : 0;
             tableRows += `<tr><td colspan="4"><strong>Cumulative Average</strong></td><td><strong>${amsFmtScore(average)}</strong></td><td></td></tr>`;
@@ -190,7 +192,7 @@
       </tr>
     </table>
 
-    <table id="resultTable">${tableRows}</table>
+    <table id="resultTable"${isThirdTerm ? ' class="cumulative-view"' : ''}>${tableRows}</table>
 
     <div class="bottom-section">
       <h3>Performance Summary</h3>

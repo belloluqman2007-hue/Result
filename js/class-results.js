@@ -54,16 +54,24 @@
         subjects.sort(function (a, b) { return String(a).localeCompare(String(b)); });
 
         // Group scores per student (keyed by student_id).
+        var isThird = term === "3rd Term";
         var byId = {};
         rows.forEach(function (r) {
             if (!byId[r.student_id]) {
                 byId[r.student_id] = {
                     id: r.student_id,
                     name: r.student_name,
-                    scores: {} // subject -> total
+                    scores: {} // subject -> score
                 };
             }
-            byId[r.student_id].scores[r.subject] = Number(r.total);
+            // FIX (pack 88): for 3rd Term the report sheet shows each
+            // subject's cumulative three-term average, so the broadsheet
+            // uses the same number - totals, averages and positions then
+            // agree with the printed report cards.
+            var v = (isThird && r.cumulative_average !== null && r.cumulative_average !== undefined)
+                ? Number(r.cumulative_average)
+                : Number(r.total);
+            byId[r.student_id].scores[r.subject] = v;
         });
 
         var students = Object.keys(byId).map(function (k) {
@@ -95,7 +103,7 @@
             s.position = lastPos;
         });
 
-        return { className: className, term: term, session: session, subjects: subjects, students: students };
+        return { className: className, term: term, session: session, subjects: subjects, students: students, cumulative: isThird };
     }
 
     function ordinal(n) {
@@ -163,7 +171,8 @@
             "</div>" +
             "</div>" +
             '<div class="bs-meta"><b>Class Results Broadsheet</b> &nbsp;\u2022&nbsp; ' +
-            escapeHTML(sheet.className) + " \u2022 " + escapeHTML(sheet.term) + " \u2022 " +
+            escapeHTML(sheet.className) + " \u2022 " + escapeHTML(sheet.term) +
+            (sheet.cumulative ? " (3-term average)" : "") + " \u2022 " +
             escapeHTML(sheet.session) +
             (pageLabel ? " &nbsp;\u2022&nbsp; <b>" + pageLabel + "</b>" : "") +
             "</div></div>";

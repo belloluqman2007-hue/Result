@@ -1,5 +1,22 @@
 # UI Modernization — Change Log
 
+## Pack 88 — 2026-08-19
+
+Owner: "Fix my third-term result system — combine the 1st, 2nd and 3rd term scores into one average (pass 50%+, fail below 50%), keep the result on ONE page, fix the position in the student portal result and the portal position sidebar, and make the main/print/download views match perfectly."
+
+| File | What happened |
+|---|---|
+| `server.js` | **Third-term results now combine ALL three terms.** `/search-result` for 3rd Term now matches subjects tolerantly (tashkeel/spacing/case) when pulling 1st & 2nd term totals, and adds a `cumulative_grade` computed from the three-term average — so the Grade column reflects the combined average, not just the 3rd term. **Position fixed:** `/student-position` previously returned `0` (report shows "-") whenever the current class name differed from the class stored on the result rows — after promotion or with Arabic tashkeel/spacing differences. It now resolves the class from the student's own result rows, matches ids/classes/subjects tolerantly, ranks 3rd Term by the same cumulative three-term average the report displays (merging the student's own 1st/2nd-term rows even if they sit under another class), and returns `position` + `total`. **Portal "Class Position" fixed:** `/portal/position` used an exact `class_name =` against the CURRENT class only, so promoted students / tashkeel variants got an empty list; it now resolves every term/session the student has results for to their result-row class and reuses the same cumulative ranking. **Class broadsheet fixed:** `/class-results` now LEFT JOINs the register (scores for removed students no longer vanish), filters the class tolerantly, and enriches 3rd Term rows with the same cumulative fields — so admin/teacher totals, averages and positions agree with the printed cards. |
+| `js/result.js` | **Total Score on the 3rd Term report = 1st + 2nd + 3rd term scores combined** (all three terms, per subject); Grade column shows the cumulative three-term grade; subject names are HTML-escaped; the table is tagged `cumulative-view` so it gets the balanced 6-column layout. Pass/fail (50%) remarks unchanged. |
+| `js/report-card.js` + `report-card.js` (duplicate kept in sync) | Same combined-total + cumulative-grade logic in the shared report-card builder used by the student portal and the class ZIP/PDF downloads, so every download/print shows the identical cumulative sheet. |
+| `js/class-results.js` | Broadsheet uses each subject's cumulative three-term average for 3rd Term (totals/averages/positions now match the printed report cards) and labels the sheet "(3-term average)". |
+| `css/style.css` | **Result arrangement + ONE page:** number columns centred with the subject column left-aligned and balanced widths for the 6-column cumulative view; print skin tightened (smaller header/passport/table/summary/signatures) with `break-inside: avoid` so the whole 3rd Term sheet stays on one A4 page, and the downloaded PDF (same print layout) matches the printed result exactly. |
+| `sw.js` | Cache `v47 → v48` (browsers pick up the new result layout/scripts). |
+
+Existing 1st/2nd term reports, score entry, grading thresholds for single terms and all other modules are untouched.
+
+---
+
 ## Pack 87 — 2026-08-19
 
 Owner: "The grade book is not showing editing for many students"
