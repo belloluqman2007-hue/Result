@@ -1,5 +1,19 @@
 # UI Modernization — Change Log
 
+## Pack 89 — 2026-08-19
+
+Owner: "The student result's sections should be distributed across the A4 page, not only the outer border stretching" + "Class Results still prints blank in preview — fix the conflict with the shared report print stylesheet."
+
+| File | What happened |
+|---|---|
+| `css/style.css` | **Student result print now fills the A4 for real:** the report is a print-only flex column (`justify-content: space-between`) so the actual sections — school header, student info, subject table, summary + signatures — are distributed across the full page height instead of hugging the top of an empty 277mm-tall bordered box. `space-between` only distributes leftover space, so a tall sheet (many subjects) lays out exactly as before and the one-page fit-zoom still scales it to a single A4 page. Lives only inside `@media print` — on-screen design untouched. Applies to the staff Check Result page and the student/parent portal (same `#reportContainer` markup). |
+| `class-results.html` | **Class Results no longer prints blank:** the shell now carries a dedicated print ID (`#crPrintShell`), and the page's print block restores it with `body > #crPrintShell#crPrintShell` — specificity (2,0,1) beats the shared guard's `body > *:not(#reportContainer):not(.no-result-print)` (1,1,1) in `css/style.css`. The old class-based rule (0,2,1) lost that fight, which is why the broadsheet vanished from print preview. The "hide everything else" rule now keys off the same ID. |
+| `sw.js` | Cache `v49 → v50` (browsers pick up the new print CSS immediately). |
+
+Result calculations, grading, positions, report card generation, the ZIP/PDF captures (offscreen `.rcpzip` staging) and every staff/portal query: completely untouched.
+
+---
+
 ## Pack 88 — 2026-08-19
 
 Owner: "Fix my third-term result system — combine the 1st, 2nd and 3rd term scores into one average (pass 50%+, fail below 50%), keep the result on ONE page, fix the position in the student portal result and the portal position sidebar, and make the main/print/download views match perfectly."

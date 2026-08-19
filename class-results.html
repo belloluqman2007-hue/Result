@@ -27,7 +27,13 @@
        route. The existing per-student "Download Result" on the
        Check Result page is completely unchanged.
   ========================================================== -->
-  <div class="ams-shell">
+  <!-- NEW (pack 89): dedicated PRINT ID. css/style.css's shared report
+       print guard hides every top-level body child that is not
+       #reportContainer (its selector carries an ID, so class-based
+       overrides lose the specificity fight). This page's shell now carries
+       #crPrintShell so the print block below can restore it with a
+       selector that outranks the guard - no more blank print preview. -->
+  <div class="ams-shell" id="crPrintShell">
     <div class="ams-scrim"></div>
 
     <aside class="ams-sidebar">
@@ -224,12 +230,18 @@
     @media print{
       @page{ size:A4 landscape; margin:6mm; }
 
-      /* css/style.css has a report-card print guard which hides every
-         top-level body child except #reportContainer. This page prints its
-         broadsheet from .ams-shell, so explicitly restore it here with a
-         higher-specificity rule to prevent a blank print preview). */
-      body > .ams-shell.ams-shell{ display:block !important; }
-      body > *:not(.ams-shell){ display:none !important; }
+      /* FIX (print conflict with the shared report print stylesheet):
+         css/style.css (loaded by every page, including this one) hides
+         EVERY top-level body child that is not #reportContainer:
+             body > *:not(#reportContainer):not(.no-result-print){display:none !important}
+         That guard carries an ID in its selector (specificity 1,1,1), so
+         the old class-based restore (body > .ams-shell.ams-shell = 0,2,1)
+         LOST the fight and the whole broadsheet printed BLANK. The shell
+         now carries the dedicated print ID #crPrintShell, and this rule
+         repeats the ID to push its specificity (2,0,1) PAST the guard -
+         it wins on specificity, not just source order. */
+      body > #crPrintShell#crPrintShell{ display:block !important; }
+      body > *:not(#crPrintShell){ display:none !important; }
       .ams-sidebar, .ams-topbar, .mng-card:first-of-type, .ams-greeting{ display:none !important; }
       .ams-main{ margin:0 !important; padding:0 !important; width:100% !important; }
       .ams-page-pad{ padding:0 !important; width:100% !important; }
