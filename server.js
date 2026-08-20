@@ -27,12 +27,17 @@ const session = require("express-session");
 const bcrypt = require("bcryptjs");
 const connection = require("./db");
 
+// NEW (Third Term Results feature): pure parser/export-builder for the
+// school's internal grade workbook (one sheet per class). The module
+// lazy-loads XLSX itself, so this require stays cheap at boot.
+const thirdTermParser = require("./third-term-parser");
+
 const app = express();
 app.use(helmet({
     contentSecurityPolicy: false,
     crossOriginEmbedderPolicy: false
 }));
-app.use(express.json());
+app.use(express.json({ limit: "25mb" })); // 25mb: Third Term Results export posts every parsed class back for the Excel builder
 // Accept classic HTML form posts too, in case any page submits without JS.
 app.use(express.urlencoded({ extended: true }));
 
@@ -549,6 +554,13 @@ app.get("/students.html", requireLogin, (req, res) => {
 // ----------------------------------------------------------------
 app.get("/class-results.html", requireLogin, (req, res) => {
     res.sendFile(path.join(__dirname, "class-results.html"));
+});
+
+// NEW (Third Term Results feature): the page that uploads the school's
+// internal grade workbook (.xlsx, one sheet per class) and generates
+// third-term result sheets / PDFs / a consolidated Excel export.
+app.get("/third-term-results.html", requireLogin, (req, res) => {
+    res.sendFile(path.join(__dirname, "third-term-results.html"));
 });
 
 // NEW (bulk results / discipline / lesson planner pages).
@@ -6845,6 +6857,66 @@ app.delete("/payroll/:id", requireLogin, requireAdmin, (req, res) => {
         if (err) { console.log(err); return res.status(500).json({ message: "Database error" }); }
         res.json({ message: "Payroll entry deleted" });
     });
+});
+
+
+/* =====================================================================
+   NEW (feature: Third Term Results from the internal grade workbook)
+   ---------------------------------------------------------------------
+   POST /third-term-upload
+   Accepts the school's internal grade-tracking workbook (.xlsx): one
+   sheet per class, teacher/class in rows 1-3, then per subject the
+   F / S / N / A (CA sub-scores /10), a 40-total column, a 60-exam
+   column and the ف1 / ف2 / ف3 term scores, then student rows
+   (S/N | Adm/Num | Student Name | scores). PARSE-ONLY: nothing is
+   written to the database. The frontend renders tables/PDFs from the
+   returned JSON and calls /third-term-export-excel for the workbook.
+
+   POST /third-term-export-excel
+   Receives the parsed classes (with positions/percentages already
+   computed by the page) and returns one consolidated .xlsx with a
+   Summary tab + one tab per class.
+   ===================================================================== */
+
+app.post("/third-term-upload", requireLogin, writeRateLimit, uploadExcel.single("file"), (req, res) => {
+    if (!req.file) return res.status(400).json({ message: "No file uploaded." });
+
+    let parsed;
+    try {
+        parsed = thirdTermParser.parseWorkbook(req.file.buffer);
+    } catch (err) {
+        console.log(err);
+        return res.status(400).json({
+            message: "Could not read the uploaded file. Make sure it is a valid .xlsx / .xls workbook with one sheet per class."
+        });
+    }
+
+    res.json({
+        fileName: req.file.originalname || "workbook.xlsx",
+        sheetCount: parsed.classes.length + parsed.errors.length,
+        classes: parsed.classes,
+        errors: parsed.errors
+    });
+});
+
+app.post("/third-term-export-excel", requireLogin, writeRateLimit, (req, res) => {
+    const classes = Array.isArray(req.body && req.body.classes) ? req.body.classes : [];
+    if (!classes.length) {
+        return res.status(400).json({ message: "No result data to export. Upload and parse the workbook first." });
+    }
+
+    let buffer;
+    try {
+        buffer = thirdTermParser.buildThirdTermWorkbook(classes);
+    } catch (err) {
+        console.log(err);
+        return res.status(500).json({ message: "Could not build the Excel export." });
+    }
+
+    const fileName = "third-term-results-" + new Date().toISOString().slice(0, 10) + ".xlsx";
+    res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+    res.setHeader("Content-Disposition", `attachment; filename*=UTF-8''${encodeURIComponent(fileName)}`);
+    res.send(buffer);
 });
 
 

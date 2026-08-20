@@ -1,5 +1,23 @@
 # UI Modernization — Change Log
 
+## Pack 91 — 2026-08-20
+
+Owner: "Third Term Result Upload & Generator" — upload the school's internal grade workbook (one sheet per class), generate third-term result tables with positions, then download one official PDF per class (one A4 page per student) or one consolidated Excel workbook (a tab per class). Bilingual labels throughout — Arabic on the right, English on the left. Parse-only: nothing is ever written to the database.
+
+| File | What happened |
+|---|---|
+| `third-term-parser.js` (NEW) | Server-side parser + Excel builder for the internal grade workbook. Each sheet = one class: rows 1-3 carry teacher (أُسْتَاذُ الْفَصْلِ) and class (الصَّفُّ) — detected with tashkeel-insensitive Arabic label matching; the subject header band is located by its F / S / N / A + 40 / 60 + ف1 / ف2 / ف3 markers (Arabic-Indic digits and ف/س/ن/أ variants accepted); subject names/numbers are recovered from the rows above each block (name prefixes like "١:" stripped); student rows are S/N \| Adm/Num \| Name with per-subject CA = F+S+N+A (/40), Exam (/60), Total (/100) and the ف3 third-term score. Footer rows (المعدل، المجموع، average…) are skipped. Missing data = blank columns or entirely-zero blocks, or blank exam/ف3 columns → `incomplete` flag + the list of missing subjects. Sheets without the expected structure return a per-sheet error with the reason. `buildThirdTermWorkbook()` writes the consolidated export: Summary tab + one tab per class (school header, class/teacher, subject band merged across CA/Exam/Total/ف3 columns, grand total, percentage, ordinal position, status). XLSX stays lazy-loaded (RAM-friendly boot, same trick as server.js). |
+| `server.js` | `POST /third-term-upload` (login + rate-limit + uploadExcel multer): parses the workbook in memory, returns every class + per-sheet errors — read-only, nothing stored. `POST /third-term-export-excel`: receives the parsed classes (positions/percentages already computed on the page) and streams back the consolidated .xlsx (UTF-8 filename header, Arabic-safe). `GET /third-term-results.html` served under `requireLogin` like the other management pages. Global `express.json` limit raised to 25mb so the export payload (every parsed class) fits. |
+| `third-term-results.html` (NEW) | Management page (same shell as Class Results): upload card with format guide + downloadable sample workbook link, "sheets that failed" card with the exact reason per sheet, detected-classes picker (checkbox list with teacher/student counts/incomplete warnings, Select All / Clear), export bar with the consolidated Excel button, and per-class result cards. |
+| `js/third-term-results.js` (NEW) | Upload → parse → compute Grand Total, Overall Percentage and class Position (ties share the position) for every parsed class up-front; renders one sortable result table per class (two-band header: subject names merged over CA / Exam / Total / ف3, then Grand Total / % / Position / Status; click the Name / Grand Total / % headers to sort); incomplete students get the yellow row + "Incomplete Data / بيانات ناقصة" note listing the missing subjects; per-class "Download Results (PDF)" builds ONE A4 PDF per class with html2canvas + jsPDF — each student on one page with school header (Arabic right / English left), class, teacher, student name, Adm No, subject table (CA /40, Exam /60, Total /100, ف3), grand total, percentage, position, incomplete warning and signature lines; "Download Excel (All Classes)" posts the parsed classes to the export route and saves the workbook. |
+| `templates/third-term-sample.xlsx` (NEW) | Sample of the internal workbook: three conforming class sheets (الأوّل التّحضيريّ، الأوّل الابتدائيّ، الثّاني الإعداديّ) with teacher/class headers, 6 numbered subjects (Quran, Arabic, Hadith, Calligraphy, Maths, English) each with F/S/N/A + 40/60 + ف1/ف2/ف3, students including an incomplete one, a footer row to skip, plus one deliberately non-conforming sheet (ملاحظات) to preview the error handling. |
+| `teacher-dashboard.html` + `class-results.html` | Sidebar links to the new page (under Results). |
+| `sw.js` | Cache `v51 → v52` so browsers pick up the new page script immediately. |
+
+Result calculations in the existing modules, grades, the database and every other route are untouched — this feature reads the uploaded workbook only.
+
+---
+
 ## Pack 90 — 2026-08-19
 
 Owner: "Why the unnecessary blank space around the student information and scores? Make the top a bit big, let the student info and scores fill one page, and make every result in the class ZIP look like the real result instead of a short form."
