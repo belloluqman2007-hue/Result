@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Third Term Results | Ameenullah School of Arabic and Islamic Studies</title>
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/modern-ui.css">
+  <link rel="stylesheet" href="css/manage.css">
+
+  <link rel="manifest" href="manifest.webmanifest">
+  <meta name="theme-color" content="#2f5021">
+  <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+</head>
+<body>
+  <!-- ==========================================================
+       NEW PAGE (Third Term Results feature): upload the school's
+       internal grade workbook (.xlsx, ONE SHEET PER CLASS), pick
+       the classes, generate result tables with positions, then
+       download one official PDF per class (one A4 page per
+       student) or one consolidated Excel workbook (a tab per
+       class). Everything is read from the uploaded file - the
+       database is never written to.
+  ========================================================== -->
+  <div class="ams-shell">
+    <div class="ams-scrim"></div>
+
+    <aside class="ams-sidebar">
+      <div class="ams-side-brand">
+        <img src="images/LOGO.JPG" alt="School Logo">
+        <div>
+          <div class="ams-school-name">AMEENULLAH SCHOOL OF ARABIC AND ISLAMIC STUDIES</div>
+          <div class="ams-school-sub">Result Management System</div>
+        </div>
+      </div>
+
+      <nav class="ams-side-nav">
+        <div class="ams-nav-label">Main</div>
+        <a href="teacher-dashboard.html">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/></svg>
+          Dashboard
+        </a>
+        <a href="add-student.html">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M19 8v6"/><path d="M22 11h-6"/></svg>
+          Add Student
+        </a>
+        <a href="students.html">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+          Students Directory
+        </a>
+        <a href="add-subject.html">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+          Classes &amp; Subjects
+        </a>
+        <div class="ams-nav-label">Results</div>
+        <a href="class-results.html">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M16 13H8"/><path d="M16 17H8"/></svg>
+          Class Results
+        </a>
+        <!-- NEW (Third Term Results feature): this page -->
+        <a href="third-term-results.html" class="ams-active">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M16 13H8"/><path d="M16 17H8"/><path d="m9 16 2 2 4-4"/></svg>
+          Third Term Results
+        </a>
+        <a href="student-result.html">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+          Check Result
+        </a>
+        <div class="ams-nav-label">Tools</div>
+        <a href="bulk-results.html">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m17 8-5-5-5 5"/><path d="M12 3v12"/></svg>
+          Bulk Result Import
+        </a>
+        <a href="scores.html">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="2" width="8" height="4" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="M9 12h6"/><path d="M9 16h6"/></svg>
+          Student Scores
+        </a>
+        <a href="gradebook.html">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/><path d="M9 21V9"/></svg>
+          Grade Book
+        </a>
+        <a href="manage-signatures.html">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.24 12.24a6 6 0 0 0-8.49-8.49L5 10.5V19h8.5z"/><path d="m16 8-9.04 9.07"/><path d="M17.5 15H9"/></svg>
+          Manage Signatures
+        </a>
+      </nav>
+
+      <div class="ams-side-footer">
+        <button class="logout-btn" onclick="logout()">Logout</button>
+      </div>
+    </aside>
+
+    <main class="ams-main">
+      <header class="ams-topbar">
+        <button class="ams-icon-btn ams-hamburger" id="amsMenuToggle" aria-label="Menu">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
+        </button>
+        <div class="ams-page-title">Third Term Results</div>
+        <div class="ams-topbar-right">
+          <div class="ams-clock" id="amsClock"></div>
+          <button class="ams-icon-btn" onclick="amsToggleTheme()" title="Toggle dark mode">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>
+          </button>
+        </div>
+      </header>
+
+      <div class="ams-page-pad">
+        <div class="ams-greeting">
+          <div>
+            <h1>Third Term Results <span lang="ar" dir="rtl" style="font-size:15px;">نتائج الفصل الثالث</span></h1>
+            <p>Upload the school's grade workbook (one sheet per class) and generate official third-term result sheets.</p>
+          </div>
+        </div>
+
+        <!-- Upload card -->
+        <div class="mng-card">
+          <h3 style="margin-top:0;">&#128229; Upload Workbook <span lang="ar" dir="rtl" style="font-size:13px; color:#5B6B62;">&nbsp;- رفع ملف الدرجات</span></h3>
+          <p class="mg-note" style="margin-top:0;">Accepting a single <b>.xlsx</b> file. Each sheet in the workbook is one class (e.g. الأوّل التّحضيريّ، الأوّل الابتدائيّ، الثّاني الإعداديّ). Per subject the sheet must have the <b>F, S, N, A</b> sub-score columns (each /10), a <b>40</b> total column, a <b>60</b> exam column and the <b>ف1 / ف2 / ف3</b> term-score columns. Student rows are <b>S/N | Adm/Num | Student Name | scores</b>.</p>
+          <div class="mg-toolbar" style="margin-top:10px;">
+            <div class="mg-field" style="flex:1;">
+              <label for="ttrFile">Excel workbook (.xlsx / .xls)</label>
+              <input type="file" id="ttrFile" accept=".xlsx,.xls">
+            </div>
+            <button type="button" class="mg-btn" id="ttrUploadBtn" onclick="ttrUpload()" style="align-self:flex-end;">&#128230; Upload &amp; Parse</button>
+          </div>
+          <p class="mg-note" style="margin:10px 0 0;">
+            <a href="templates/third-term-sample.xlsx" download style="color:#0F3D2E; font-weight:800;">&#11015; Download a sample workbook</a>
+            <span lang="ar" dir="rtl" style="font-size:12.5px;">&nbsp;- نموذج لملف الدرجات</span>
+            &nbsp;(one sheet per class, including a non-conforming sheet to preview the error message).
+          </p>
+          <div id="ttrUploadStatus" style="margin-top:12px; font-size:13px; color:#5B6B62;"></div>
+        </div>
+
+        <!-- Sheet errors -->
+        <div class="mng-card" id="ttrErrorsCard" style="display:none; border-color:#F1C6C6;">
+          <h3 style="margin-top:0; color:#A93226;">&#9888;&#65039; Sheets That Failed <span lang="ar" dir="rtl" style="font-size:13px;">&nbsp;- أوراق العمل غير المتوافقة</span></h3>
+          <div id="ttrErrorsList"></div>
+        </div>
+
+        <!-- Detected classes -->
+        <div class="mng-card" id="ttrClassesCard" style="display:none;">
+          <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px;">
+            <h3 style="margin:0;">&#128202; Detected Classes <span id="ttrClassesCount" lang="ar" dir="rtl" style="font-size:13px; color:#5B6B62;"></span></h3>
+            <div style="display:flex; gap:8px; flex-wrap:wrap;">
+              <button type="button" class="mng-btn mng-btn-sm mng-btn-ghost" onclick="ttrSelectAll(true)">Select All</button>
+              <button type="button" class="mng-btn mng-btn-sm mng-btn-ghost" onclick="ttrSelectAll(false)">Clear</button>
+              <button type="button" class="mng-btn mng-btn-sm" id="ttrGenerateBtn" onclick="ttrGenerate()">&#128269; Generate Results</button>
+            </div>
+          </div>
+          <div id="ttrClassesList" style="margin-top:14px; display:grid; grid-template-columns:repeat(auto-fill,minmax(300px,1fr)); gap:10px;"></div>
+        </div>
+
+        <!-- Export bar -->
+        <div class="mng-card" id="ttrExportBar" style="display:none; border-color:#BFE3D0; background:linear-gradient(90deg,#F2FBF6,#FFFFFF);">
+          <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px;">
+            <div style="font-size:13.5px; color:#0F3D2E; font-weight:700;">
+              &#11015; Export <span lang="ar" dir="rtl">التصدير</span>
+              <div style="font-weight:400; color:#5B6B62; font-size:12.5px; margin-top:2px;">One PDF per class (one A4 page per student) from each class card below; one consolidated Excel with all classes on separate tabs.</div>
+            </div>
+            <button type="button" class="mng-btn" id="ttrExcelBtn" onclick="ttrDownloadExcel()">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="15" height="15" style="vertical-align:-2px;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m17 8-5-5-5 5"/><path d="M12 3v12"/></svg>
+              &nbsp;Download Excel (All Classes)
+            </button>
+          </div>
+          <div id="ttrExcelStatus" style="margin-top:10px; font-size:13px; color:#5B6B62;"></div>
+        </div>
+
+        <!-- Generated per-class results -->
+        <div id="ttrResults"></div>
+      </div>
+    </main>
+  </div>
+
+  <script src="js/csrf.js"></script>
+  <script src="js/ui.js"></script>
+  <script src="js/app.js"></script>
+  <script src="js/vendor/jspdf.umd.min.js"></script>
+  <script src="js/vendor/html2canvas.min.js"></script>
+  <script src="js/third-term-results.js"></script>
+
+  <script src="js/pwa.js" defer></script>
+
+  <style>
+    /* ---------- Third Term Results page styles (additive) ---------- */
+    .ttr-class-check{
+      display:flex; align-items:flex-start; gap:10px; padding:12px 14px;
+      border:1px solid var(--m-border,#D9E8E0); border-radius:12px; background:#fff;
+      cursor:pointer; transition:border-color .15s, background .15s;
+    }
+    .ttr-class-check:hover{ border-color:#9FC7B2; }
+    .ttr-class-check.ttr-on{ border-color:#2F9E6E; background:#F2FBF6; }
+    .ttr-class-check input{ margin-top:3px; accent-color:#1C5A42; width:16px; height:16px; }
+    .ttr-class-check b{ font-size:13.5px; color:#0F3D2E; }
+    .ttr-class-check .ttr-sub{ font-size:12px; color:#5B6B62; margin-top:2px; line-height:1.5; }
+    .ttr-class-check .ttr-warn{ color:#B7791F; font-weight:700; }
+
+    .ttr-err-item{
+      padding:10px 14px; border-radius:10px; background:#FDF2F2; border:1px solid #F1C6C6;
+      margin-bottom:8px; font-size:13px; color:#7B241C;
+    }
+    .ttr-err-item b{ color:#A93226; }
+
+    .ttr-card-head{
+      display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px;
+      padding:14px 18px; border-bottom:1px solid var(--m-border,#D9E8E0);
+    }
+    .ttr-card-head h3{ margin:0; font-size:16px; color:#0F3D2E; }
+    .ttr-card-head .ttr-meta{ font-size:12.5px; color:#5B6B62; margin-top:3px; }
+
+    /* bilingual label: English left, Arabic right */
+    .bi-lbl{ display:inline-flex; align-items:center; gap:6px; }
+    .bi-lbl .bi-ar{ order:2; font-family:'Amiri','Cairo',serif; letter-spacing:normal; }
+    .bi-lbl .bi-en{ order:1; }
+
+    /* result table */
+    .ttr-table-wrap{ overflow-x:auto; }
+    table.ttr-table{
+      border-collapse:collapse; width:100%; min-width:760px;
+      font-size:12.5px; background:#fff; color:#1c1c1c;
+    }
+    table.ttr-table th, table.ttr-table td{
+      border:1px solid #CBD8D0; padding:6px 7px; text-align:center; white-space:nowrap;
+    }
+    table.ttr-table thead th{
+      background:var(--m-emerald,#0F3D2E); color:#fff; font-size:11px; letter-spacing:.3px;
+    }
+    table.ttr-table thead tr.ttr-band2 th{ background:#1C5A42; font-weight:600; }
+    table.ttr-table th.ttr-sortable{ cursor:pointer; user-select:none; }
+    table.ttr-table th.ttr-sortable:hover{ background:#15503A; }
+    table.ttr-table th .ttr-sort-arrow{ font-size:9px; opacity:.85; }
+    table.ttr-table td.ttr-name{ text-align:left; font-weight:700; min-width:180px; white-space:normal; }
+    table.ttr-table td.ttr-subj-empty{ color:#B0B8B2; }
+    table.ttr-table tr.ttr-incomplete td{ background:#FFF8DC !important; }
+    table.ttr-table tr.ttr-incomplete td.ttr-name{ color:#7A5C00; }
+    table.ttr-table tr.ttr-incomplete td.ttr-status{ color:#8A6D00; font-weight:800; font-size:11.5px; }
+    table.ttr-table tr:nth-child(even) td{ background:#F4FAF7; }
+    table.ttr-table tr:nth-child(even).ttr-incomplete td{ background:#FFF8DC !important; }
+    .ttr-grand{ font-weight:800; }
+    .ttr-pct{ font-weight:700; }
+    .ttr-pos{ font-weight:700; color:#0F3D2E; }
+
+    .ttr-empty-cell{ color:#C4CBC6; }
+
+    /* per-student A4 PDF page (rendered off-screen, captured with html2canvas) */
+    .ttr-page{
+      width:794px; box-sizing:border-box; background:#fff; color:#111;
+      font-family:'Cairo', 'Segoe UI', Arial, sans-serif;
+      padding:34px 38px 30px;
+    }
+    .ttr-page .ttr-p-head{
+      display:flex; align-items:center; gap:14px; border-bottom:3px double #0F3D2E; padding-bottom:12px;
+    }
+    .ttr-page .ttr-p-logo{
+      width:62px; height:62px; border-radius:50%; border:2px solid #0F3D2E;
+      object-fit:cover; flex-shrink:0;
+    }
+    .ttr-page .ttr-p-school{ flex:1; }
+    .ttr-page .ttr-p-school .ttr-p-en{
+      font-size:13px; font-weight:800; letter-spacing:.6px; text-align:left; color:#0F3D2E;
+    }
+    .ttr-page .ttr-p-school .ttr-p-ar{
+      font-family:'Amiri','Cairo',serif; font-size:20px; font-weight:700; text-align:right;
+      direction:rtl; color:#0F3D2E; margin-top:2px; letter-spacing:normal;
+    }
+    .ttr-page .ttr-p-school .ttr-p-motto{
+      font-size:10px; text-align:center; color:#5B6B62; margin-top:3px; letter-spacing:1.5px;
+    }
+    .ttr-page .ttr-p-title{
+      text-align:center; font-size:14px; font-weight:800; color:#0F3D2E; margin-top:10px;
+      letter-spacing:.5px;
+    }
+    .ttr-page .ttr-p-info{
+      display:flex; gap:12px; margin-top:12px; flex-wrap:wrap;
+    }
+    .ttr-page .ttr-p-box{
+      flex:1; min-width:230px; border:1.4px solid #0F3D2E; border-radius:8px; padding:9px 12px;
+    }
+    .ttr-page .ttr-p-box .ttr-p-line{
+      display:flex; justify-content:space-between; gap:10px; font-size:12.5px; padding:2px 0;
+    }
+    .ttr-page .ttr-p-box .ttr-p-line b{ font-weight:800; color:#0F3D2E; }
+    .ttr-page .ttr-p-box .ttr-p-line .ttr-p-val{ font-weight:700; direction:rtl; text-align:right; }
+    .ttr-page table.ttr-p-table{
+      width:100%; border-collapse:collapse; margin-top:12px; font-size:11.5px;
+    }
+    .ttr-page table.ttr-p-table th, .ttr-page table.ttr-p-table td{
+      border:1px solid #8FA896; padding:5px 6px; text-align:center;
+    }
+    .ttr-page table.ttr-p-table thead th{ background:#0F3D2E; color:#fff; font-size:10.5px; }
+    .ttr-page table.ttr-p-table td.ttr-p-subj{ text-align:right; direction:rtl; font-weight:700; }
+    .ttr-page .ttr-p-sum{
+      display:flex; justify-content:space-between; gap:12px; margin-top:12px; flex-wrap:wrap;
+    }
+    .ttr-page .ttr-p-sum .ttr-p-cell{
+      flex:1; min-width:120px; border:1.4px solid #0F3D2E; border-radius:8px; padding:8px 10px; text-align:center;
+    }
+    .ttr-page .ttr-p-sum .ttr-p-cell .ttr-p-k{ font-size:10px; font-weight:700; color:#5B6B62; }
+    .ttr-page .ttr-p-sum .ttr-p-cell .ttr-p-v{ font-size:17px; font-weight:900; color:#0F3D2E; margin-top:2px; }
+    .ttr-page .ttr-p-warn{
+      margin-top:12px; background:#FFF8DC; border:1.4px solid #E8C66A; border-radius:8px;
+      padding:8px 12px; font-size:11.5px; font-weight:800; color:#7A5C00; text-align:center;
+    }
+    .ttr-page .ttr-p-sigs{
+      display:flex; justify-content:space-between; margin-top:34px; padding:0 20px; font-size:11.5px; font-weight:700;
+    }
+    .ttr-page .ttr-p-sigs .ttr-p-sig{ width:220px; text-align:center; }
+    .ttr-page .ttr-p-sigs .ttr-p-sig div{ border-top:1.5px solid #333; padding-top:5px; }
+    .ttr-page .ttr-p-foot{
+      margin-top:16px; text-align:center; font-size:9.5px; color:#5B6B62;
+      border-top:1px solid #CBD8D0; padding-top:7px;
+    }
+  </style>
+</body>
+</html>
