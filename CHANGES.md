@@ -1,5 +1,19 @@
 # UI Modernization — Change Log
 
+## Pack 92 — 2026-08-21
+
+Owner: third-term result PDF should have an aligned bigger header, normal signature lines (like Check Result), and fill a full A4 page.
+
+| File | What happened |
+|---|---|
+| `js/third-term-results.js` | PDF letterhead now stacks Arabic name → English name → address → tel/email → motto (all centred next to a larger logo). Signature blocks match Check Result: a plain underline plus **Class Teacher's Signature** / **Principal's Signature** — no 3 cm empty band and no extra Arabic captions. |
+| `third-term-results.html` | Capture sheet is a true A4 (`794×1123px`) flex column with a 92 px crest, larger centred school names, stacked bilingual table headers, and signature lines pinned to the bottom of the page so leftover height is signing space. |
+| `sw.js` | Cache `v52 → v53` so browsers pick up the new PDF layout immediately. |
+
+Columns, averages, grand total, position and Excel export are unchanged.
+
+---
+
 ## Pack 91 — 2026-08-20
 
 Owner: "Third Term Result Upload & Generator" — upload the school's internal grade workbook (one sheet per class), generate third-term result tables with positions, then download one official PDF per class (one A4 page per student) or one consolidated Excel workbook (a tab per class). Bilingual labels throughout — Arabic on the right, English on the left. Parse-only: nothing is ever written to the database.

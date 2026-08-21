@@ -242,62 +242,84 @@
 
     .ttr-empty-cell{ color:#C4CBC6; }
 
-    /* per-student A4 PDF page (rendered off-screen, captured with html2canvas) */
+    /* per-student A4 PDF page (rendered off-screen, captured with html2canvas).
+       794×1123px = full A4 at 96dpi so the captured sheet fills one page. */
     .ttr-page{
-      width:794px; box-sizing:border-box; background:#fff; color:#111;
+      width:794px; min-height:1123px; box-sizing:border-box; background:#fff; color:#111;
       font-family:'Cairo', 'Segoe UI', Arial, sans-serif;
-      padding:34px 38px 30px;
+      padding:22px 28px 18px;
+      border:2.5px solid #0F3D2E;
+      display:flex; flex-direction:column;
     }
     .ttr-page .ttr-p-head{
-      display:flex; align-items:center; gap:14px; border-bottom:3px double #0F3D2E; padding-bottom:12px;
+      display:flex; align-items:center; gap:16px;
+      border-bottom:3px double #0F3D2E; padding-bottom:14px;
     }
     .ttr-page .ttr-p-logo{
-      width:62px; height:62px; border-radius:50%; border:2px solid #0F3D2E;
-      object-fit:cover; flex-shrink:0;
+      width:92px; height:92px; border-radius:50%; border:2.5px solid #0F3D2E;
+      object-fit:cover; flex-shrink:0; background:#fff;
     }
-    .ttr-page .ttr-p-school{ flex:1; }
-    .ttr-page .ttr-p-school .ttr-p-en{
-      font-size:13px; font-weight:800; letter-spacing:.6px; text-align:left; color:#0F3D2E;
-    }
+    .ttr-page .ttr-p-school{ flex:1; text-align:center; }
     .ttr-page .ttr-p-school .ttr-p-ar{
-      font-family:'Amiri','Cairo',serif; font-size:20px; font-weight:700; text-align:right;
-      direction:rtl; color:#0F3D2E; margin-top:2px; letter-spacing:normal;
+      font-family:'Amiri','Cairo',serif; font-size:26px; font-weight:700; text-align:center;
+      direction:rtl; color:#0F3D2E; letter-spacing:normal; line-height:1.25;
+    }
+    .ttr-page .ttr-p-school .ttr-p-en{
+      font-size:16px; font-weight:800; letter-spacing:.5px; text-align:center;
+      color:#0F3D2E; margin-top:4px; line-height:1.3;
+    }
+    .ttr-page .ttr-p-school .ttr-p-address{
+      font-size:11.5px; text-align:center; color:#333; margin-top:5px; line-height:1.4;
+    }
+    .ttr-page .ttr-p-school .ttr-p-contact{
+      font-size:11px; text-align:center; color:#333; margin-top:2px; line-height:1.4;
     }
     .ttr-page .ttr-p-school .ttr-p-motto{
-      font-size:10px; text-align:center; color:#5B6B62; margin-top:3px; letter-spacing:1.5px;
+      display:inline-block; margin-top:7px; font-size:10.5px; font-weight:700;
+      letter-spacing:1.1px; color:#0F3D2E; text-align:center;
+      border:1px solid #0F3D2E; padding:3px 16px;
     }
+    /* bilingual labels on the PDF: Arabic stacked above English, both centred */
+    .ttr-page .bi-lbl{
+      display:flex; flex-direction:column; align-items:center; gap:1px; line-height:1.25;
+    }
+    .ttr-page .bi-lbl .bi-ar{ order:1; font-size:11px; font-family:'Amiri','Cairo',serif; }
+    .ttr-page .bi-lbl .bi-en{ order:2; font-size:9.5px; font-weight:600; }
     .ttr-page .ttr-p-title{
-      text-align:center; font-size:14px; font-weight:800; color:#0F3D2E; margin-top:10px;
-      letter-spacing:.5px;
+      text-align:center; font-size:15px; font-weight:800; color:#0F3D2E; margin-top:12px;
+      letter-spacing:.4px;
     }
-    .ttr-page .ttr-p-contact{
-      text-align:center; font-size:10.5px; color:#333; margin-top:7px;
-      letter-spacing:.3px; line-height:1.7;
-    }
+    .ttr-page .ttr-p-title .bi-lbl{ display:flex; }
     .ttr-page .ttr-p-info{
-      display:flex; gap:12px; margin-top:12px; flex-wrap:wrap;
+      display:flex; gap:12px; margin-top:12px;
     }
     .ttr-page .ttr-p-box{
-      flex:1; min-width:230px; border:1.4px solid #0F3D2E; border-radius:8px; padding:9px 12px;
+      flex:1; border:1.4px solid #0F3D2E; border-radius:6px; padding:8px 12px;
     }
     .ttr-page .ttr-p-box .ttr-p-line{
-      display:flex; justify-content:space-between; gap:10px; font-size:12.5px; padding:2px 0;
+      display:flex; align-items:center; justify-content:space-between; gap:10px;
+      font-size:12.5px; padding:3px 0;
     }
+    .ttr-page .ttr-p-box .ttr-p-line .bi-lbl{
+      flex-direction:row; gap:6px; align-items:baseline;
+    }
+    .ttr-page .ttr-p-box .ttr-p-line .bi-lbl .bi-ar{ order:2; font-size:12.5px; }
+    .ttr-page .ttr-p-box .ttr-p-line .bi-lbl .bi-en{ order:1; font-size:12.5px; }
     .ttr-page .ttr-p-box .ttr-p-line b{ font-weight:800; color:#0F3D2E; }
-    .ttr-page .ttr-p-box .ttr-p-line .ttr-p-val{ font-weight:700; direction:rtl; text-align:right; }
+    .ttr-page .ttr-p-box .ttr-p-line .ttr-p-val{ font-weight:700; text-align:right; }
     .ttr-page table.ttr-p-table{
       width:100%; border-collapse:collapse; margin-top:12px; font-size:11.5px;
     }
     .ttr-page table.ttr-p-table th, .ttr-page table.ttr-p-table td{
-      border:1px solid #8FA896; padding:5px 6px; text-align:center;
+      border:1px solid #8FA896; padding:6px 6px; text-align:center;
     }
-    .ttr-page table.ttr-p-table thead th{ background:#0F3D2E; color:#fff; font-size:10.5px; }
+    .ttr-page table.ttr-p-table thead th{ background:#0F3D2E; color:#fff; font-size:10px; vertical-align:middle; }
     .ttr-page table.ttr-p-table td.ttr-p-subj{ text-align:right; direction:rtl; font-weight:700; }
     .ttr-page .ttr-p-sum{
-      display:flex; justify-content:space-between; gap:12px; margin-top:12px; flex-wrap:wrap;
+      display:flex; justify-content:space-between; gap:12px; margin-top:12px;
     }
     .ttr-page .ttr-p-sum .ttr-p-cell{
-      flex:1; min-width:120px; border:1.4px solid #0F3D2E; border-radius:8px; padding:8px 10px; text-align:center;
+      flex:1; border:1.4px solid #0F3D2E; border-radius:6px; padding:8px 10px; text-align:center;
     }
     .ttr-page .ttr-p-sum .ttr-p-cell .ttr-p-k{ font-size:10px; font-weight:700; color:#5B6B62; }
     .ttr-page .ttr-p-sum .ttr-p-cell .ttr-p-v{ font-size:17px; font-weight:900; color:#0F3D2E; margin-top:2px; }
@@ -305,21 +327,21 @@
       margin-top:12px; background:#FFF8DC; border:1.4px solid #E8C66A; border-radius:8px;
       padding:8px 12px; font-size:11.5px; font-weight:800; color:#7A5C00; text-align:center;
     }
+    /* normal signature lines (same style as Check Result) sit at the
+       bottom of the A4 page; leftover height is the signing space */
     .ttr-page .ttr-p-sigs{
-      display:flex; justify-content:space-between; margin-top:44px; padding:0 26px;
+      display:flex; justify-content:space-around; gap:20px;
+      margin-top:auto; padding:28px 20px 8px;
     }
-    .ttr-page .ttr-p-sigs .ttr-p-sig{ width:250px; text-align:center; }
-    /* generous, visibly empty room above the line for a handwritten
-       signature (at least 3cm / 80px) */
-    .ttr-page .ttr-p-sigs .ttr-p-sig .ttr-p-sig-space{ height:84px; }
-    .ttr-page .ttr-p-sigs .ttr-p-sig .ttr-p-sig-ar{
-      font-size:13px; font-weight:800; color:#0F3D2E;
+    .ttr-page .ttr-p-sigs .ttr-p-sig{ width:45%; text-align:center; }
+    .ttr-page .ttr-p-sigs .ttr-p-sig .ttr-p-sig-line{
+      letter-spacing:1px; color:#111; font-size:13px; line-height:1; margin-bottom:6px;
     }
     .ttr-page .ttr-p-sigs .ttr-p-sig .ttr-p-sig-en{
-      margin-top:6px; font-size:10.5px; font-weight:600; color:#333; white-space:nowrap;
+      font-size:12px; font-weight:700; color:#0F3D2E; letter-spacing:.3px;
     }
     .ttr-page .ttr-p-foot{
-      margin-top:16px; text-align:center; font-size:9.5px; color:#5B6B62;
+      margin-top:10px; text-align:center; font-size:9.5px; color:#5B6B62;
       border-top:1px solid #CBD8D0; padding-top:7px;
     }
   </style>
