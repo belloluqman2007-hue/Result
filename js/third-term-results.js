@@ -57,6 +57,25 @@
             '</span><span class="bi-ar" dir="rtl" lang="ar">' + esc(ar) + "</span></span>";
     }
 
+    /* Hard-coded school letterhead (spec) — printed at the top of every
+       result sheet, alongside the school logo. */
+    var SCHOOL = {
+        nameEn: "AMEENULLAH SCHOOL OF ARABIC AND ISLAMIC STUDIES",
+        nameAr: "مَدْرَسَةُ أَمِينِ اللهِ لِلْعُلُومِ الْعَرَبِيَّةِ الْإِسْلَامِيَّةِ",
+        address: "3, Temidire Street off Ondo Benin Road, Ijebu-Ode, Ogun State, Nigeria",
+        tel: "08062445559, 08058306889",
+        email: "madrasatuameenillah22@gmail.com",
+        mottoEn: "KNOWLEDGE AND WORSHIP",
+        mottoAr: "الشَّعَارُ الْعِلْمُ وَالْعِبَادَةُ"
+    };
+
+    /* Format a number to one decimal place (averages + overall %). */
+    function fmt1(v) {
+        if (v === null || v === undefined || v === "") return "";
+        const n = Number(v);
+        return isFinite(n) ? n.toFixed(1) : String(v);
+    }
+
     function ordinal(n) {
         const p = Number(n) || 0;
         if (p === 1) return "1st";
@@ -148,20 +167,45 @@
         var subjects = cls.subjects || [];
         var students = (cls.students || []).map(function (st) {
             var grandTotal = 0;
-            (st.scores || []).forEach(function (sc) {
-                if (sc.total !== null && sc.total !== undefined) grandTotal += Number(sc.total);
+            var scores = (st.scores || []).map(function (sc) {
+                /* Column logic (spec):
+                   CA /40   = continuous assessment (F + S + N + A)
+                   EXAM /60 = the exam score
+                   T3 /100  = CA + EXAM (this term's result)
+                   T1 /100  = first-term score (ف1)
+                   T2 /100  = second-term score (ف2)
+                   AVERAGE  = (T1 + T2 + T3) / 3, rounded to 1 decimal */
+                var t1 = sc.t1;
+                var t2 = sc.t2;
+                var t3 = sc.total; // T3 = CA + EXAM
+                var average = null;
+                if (t1 !== null && t1 !== undefined &&
+                    t2 !== null && t2 !== undefined &&
+                    t3 !== null && t3 !== undefined) {
+                    average = Math.round(((Number(t1) + Number(t2) + Number(t3)) / 3) * 10) / 10;
+                }
+                if (average !== null) grandTotal += average;
+                return {
+                    ca: sc.ca,       // CA /40
+                    exam: sc.exam,   // EXAM /60
+                    total: sc.total, // T3 /100 (CA + EXAM)
+                    t1: t1,          // T1 /100
+                    t2: t2,          // T2 /100
+                    average: average // AVERAGE /100
+                };
             });
+            /* Grand Total = sum of the subject AVERAGE scores. */
             var pct = subjects.length
-                ? Math.round((grandTotal / (subjects.length * 100)) * 10000) / 100
+                ? Math.round((grandTotal / (subjects.length * 100)) * 1000) / 10
                 : 0;
             return {
                 sn: st.sn,
                 adm: st.adm,
                 name: st.name,
-                scores: st.scores || [],
+                scores: scores,
                 missingSubjects: st.missingSubjects || [],
                 incomplete: !!st.incomplete,
-                grandTotal: grandTotal,
+                grandTotal: Math.round(grandTotal * 10) / 10,
                 pct: pct,
                 position: 0
             };
@@ -346,7 +390,7 @@
         html += '<th rowspan="2" class="ttr-sortable" onclick="ttrSort(' + idx + ',&#39;name&#39;)">' +
             bi("اسم الطالب", "Student Name") + " " + arrow("name") + "</th>";
         subjects.forEach(function (sub) {
-            html += '<th colspan="4" lang="ar" dir="rtl">' + esc(sub.name) + "</th>";
+            html += '<th colspan="6" lang="ar" dir="rtl">' + esc(sub.name) + "</th>";
         });
         html += '<th rowspan="2" class="ttr-sortable" onclick="ttrSort(' + idx + ',&#39;grandTotal&#39;)">' +
             bi("المجموع الكلي", "Grand Total") + " " + arrow("grandTotal") + "</th>";
@@ -356,7 +400,7 @@
         html += "<th rowspan=\"2\">" + bi("الحالة", "Status") + "</th>";
         html += '</tr><tr class="ttr-band2">';
         subjects.forEach(function () {
-            html += "<th>CA /40</th><th>Exam /60</th><th>Total /100</th><th>ف3</th>";
+            html += "<th>CA /40</th><th>EXAM /60</th><th>T3 /100</th><th>T1 /100</th><th>T2 /100</th><th>AVG /100</th>";
         });
         html += "</tr></thead><tbody>";
 
@@ -365,14 +409,23 @@
             html += "<td>" + esc(st.sn) + "</td><td>" + esc(st.adm) + "</td>";
             html += '<td class="ttr-name">' + esc(st.name) + "</td>";
             st.scores.forEach(function (sc) {
-                var cells = [sc.ca, sc.exam, sc.total, sc.t3];
-                cells.forEach(function (v) {
-                    html += "<td" + (v === null || v === undefined ? ' class="ttr-empty-cell"' : "") + ">" +
-                        (v === null || v === undefined ? "—" : fmt(v)) + "</td>";
+                var cells = [
+                    { v: sc.ca },
+                    { v: sc.exam },
+                    { v: sc.total },
+                    { v: sc.t1 },
+                    { v: sc.t2 },
+                    { v: sc.average, one: true }
+                ];
+                cells.forEach(function (c) {
+                    var v = c.v;
+                    var empty = v === null || v === undefined;
+                    html += "<td" + (empty ? ' class="ttr-empty-cell"' : "") + ">" +
+                        (empty ? "—" : (c.one ? fmt1(v) : fmt(v))) + "</td>";
                 });
             });
-            html += '<td class="ttr-grand">' + fmt(st.grandTotal) + "</td>";
-            html += '<td class="ttr-pct">' + fmt(st.pct) + "%</td>";
+            html += '<td class="ttr-grand">' + fmt1(st.grandTotal) + "</td>";
+            html += '<td class="ttr-pct">' + fmt1(st.pct) + "%</td>";
             html += '<td class="ttr-pos">' + ordinal(st.position) + "</td>";
             html += st.incomplete
                 ? '<td class="ttr-status" title="' + esc(st.missingSubjects.join(", ")) + '">&#9888;&#65039; ' + bi("بيانات ناقصة", "Incomplete Data") + "</td>"
@@ -403,14 +456,36 @@
     function studentPageHTML(res, st, pageNo) {
         var subjects = res.subjects;
         var rows = "";
+
+        /* ---- School letterhead (hard-coded per spec) ---- */
+        var schoolEn = SCHOOL.nameEn;
+        var schoolAr = SCHOOL.nameAr;
+        var mottoEn = SCHOOL.mottoEn;
+        var mottoAr = SCHOOL.mottoAr;
+        var address = SCHOOL.address;
+        var tel = SCHOOL.tel;
+        var email = SCHOOL.email;
+
+        var mottoHtml = "MOTTO: " + esc(mottoEn) +
+            " &nbsp;|&nbsp; <span dir=\"rtl\" lang=\"ar\">" + esc(mottoAr) + "</span>";
+
+        var contactParts = [];
+        if (address) contactParts.push(esc(address));
+        if (tel) contactParts.push("&#9742; " + esc(tel));
+        if (email) contactParts.push("&#9993; " + esc(email));
+        var contactHtml = contactParts.length
+            ? '<div class="ttr-p-contact">' + contactParts.join(" &nbsp;|&nbsp; ") + "</div>"
+            : "";
         st.scores.forEach(function (sc, i) {
             var sub = subjects[i] ? esc(subjects[i].name) : "";
             rows += "<tr>" +
                 "<td class=\"ttr-p-subj\" lang=\"ar\" dir=\"rtl\">" + sub + "</td>" +
-                "<td>" + (sc.ca === null ? "—" : fmt(sc.ca)) + "</td>" +
-                "<td>" + (sc.exam === null ? "—" : fmt(sc.exam)) + "</td>" +
-                "<td>" + (sc.total === null ? "—" : fmt(sc.total)) + "</td>" +
-                "<td>" + (sc.t3 === null ? "—" : fmt(sc.t3)) + "</td>" +
+                "<td>" + (sc.ca === null || sc.ca === undefined ? "—" : fmt(sc.ca)) + "</td>" +
+                "<td>" + (sc.exam === null || sc.exam === undefined ? "—" : fmt(sc.exam)) + "</td>" +
+                "<td>" + (sc.total === null || sc.total === undefined ? "—" : fmt(sc.total)) + "</td>" +
+                "<td>" + (sc.t1 === null || sc.t1 === undefined ? "—" : fmt(sc.t1)) + "</td>" +
+                "<td>" + (sc.t2 === null || sc.t2 === undefined ? "—" : fmt(sc.t2)) + "</td>" +
+                "<td>" + (sc.average === null || sc.average === undefined ? "—" : fmt1(sc.average)) + "</td>" +
                 "</tr>";
         });
 
@@ -424,10 +499,11 @@
             '<div class="ttr-p-head">' +
             '<img class="ttr-p-logo" src="images/LOGO.JPG" alt="">' +
             '<div class="ttr-p-school">' +
-            '<div class="ttr-p-en">AMEENULLAH SCHOOL OF ARABIC AND ISLAMIC STUDIES</div>' +
-            '<div class="ttr-p-ar">مَدْرَسَةُ أَمِينِ اللهِ لِلْعُلُومِ الْعَرَبِيَّةِ الْإِسْلَامِيَّةِ</div>' +
-            '<div class="ttr-p-motto">MOTTO: KNOWLEDGE AND WORSHIP &nbsp;|&nbsp; الْعِلْمُ وَالْعِبَادَةُ</div>' +
+            '<div class="ttr-p-en">' + esc(schoolEn) + "</div>" +
+            '<div class="ttr-p-ar" lang="ar" dir="rtl">' + esc(schoolAr) + "</div>" +
+            '<div class="ttr-p-motto">' + mottoHtml + "</div>" +
             "</div></div>" +
+            contactHtml +
             '<div class="ttr-p-title">' + bi("نتائج الفصل الثالث — كشف درجات", "THIRD TERM RESULT SHEET") + "</div>" +
             '<div class="ttr-p-info">' +
             '<div class="ttr-p-box">' +
@@ -441,20 +517,30 @@
             "</div>" +
             '<table class="ttr-p-table">' +
             "<thead><tr>" +
-            "<th>" + bi("المادة", "Subject") + "</th>" +
-            "<th>" + bi("التقويم المستمر /40", "CA /40") + "</th>" +
-            "<th>" + bi("الامتحان /60", "Exam /60") + "</th>" +
-            "<th>" + bi("المجموع /100", "Total /100") + "</th>" +
-            "<th>ف3</th>" +
+            "<th>" + bi("المادة", "SUBJECT") + "</th>" +
+            "<th>" + bi("التقييم المستمر", "CA /40") + "</th>" +
+            "<th>" + bi("الامتحان", "EXAM /60") + "</th>" +
+            "<th>" + bi("المجموع", "T3 /100") + "</th>" +
+            "<th>" + bi("الفصل الأول", "T1 /100") + "</th>" +
+            "<th>" + bi("الفصل الثاني", "T2 /100") + "</th>" +
+            "<th>" + bi("المعدل", "AVERAGE /100") + "</th>" +
             "</tr></thead><tbody>" + rows + "</tbody></table>" +
             '<div class="ttr-p-sum">' +
-            '<div class="ttr-p-cell"><div class="ttr-p-k">' + bi("المجموع الكلي", "GRAND TOTAL") + '</div><div class="ttr-p-v">' + fmt(st.grandTotal) + " / " + (res.subjects.length * 100) + "</div></div>" +
-            '<div class="ttr-p-cell"><div class="ttr-p-k">' + bi("النسبة المئوية", "OVERALL PERCENTAGE") + '</div><div class="ttr-p-v">' + fmt(st.pct) + "%</div></div>" +
+            '<div class="ttr-p-cell"><div class="ttr-p-k">' + bi("المجموع الكلي", "GRAND TOTAL") + '</div><div class="ttr-p-v">' + fmt1(st.grandTotal) + " / " + (res.subjects.length * 100) + "</div></div>" +
+            '<div class="ttr-p-cell"><div class="ttr-p-k">' + bi("النسبة المئوية", "OVERALL PERCENTAGE") + '</div><div class="ttr-p-v">' + fmt1(st.pct) + "%</div></div>" +
             '<div class="ttr-p-cell"><div class="ttr-p-k">' + bi("الترتيب في الفصل", "CLASS POSITION") + '</div><div class="ttr-p-v">' + ordinal(st.position) + "</div></div>" +
             "</div>" + warn +
             '<div class="ttr-p-sigs">' +
-            '<div class="ttr-p-sig"><div>' + bi("توقيع معلم الفصل", "Class Teacher&apos;s Signature") + "</div></div>" +
-            '<div class="ttr-p-sig"><div>' + bi("توقيع المدير", "Principal&apos;s Signature") + "</div></div>" +
+            '<div class="ttr-p-sig">' +
+            '<div class="ttr-p-sig-space"></div>' +
+            '<div class="ttr-p-sig-ar" lang="ar" dir="rtl">توقيع معلم الفصل</div>' +
+            '<div class="ttr-p-sig-en">Class Teacher&apos;s Signature: _______________</div>' +
+            "</div>" +
+            '<div class="ttr-p-sig">' +
+            '<div class="ttr-p-sig-space"></div>' +
+            '<div class="ttr-p-sig-ar" lang="ar" dir="rtl">توقيع المدير</div>' +
+            '<div class="ttr-p-sig-en">Principal&apos;s Signature: _______________</div>' +
+            "</div>" +
             "</div>" +
             '<div class="ttr-p-foot">Generated ' +
             new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }) +

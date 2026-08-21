@@ -270,6 +270,10 @@
       text-align:center; font-size:14px; font-weight:800; color:#0F3D2E; margin-top:10px;
       letter-spacing:.5px;
     }
+    .ttr-page .ttr-p-contact{
+      text-align:center; font-size:10.5px; color:#333; margin-top:7px;
+      letter-spacing:.3px; line-height:1.7;
+    }
     .ttr-page .ttr-p-info{
       display:flex; gap:12px; margin-top:12px; flex-wrap:wrap;
     }
@@ -302,10 +306,18 @@
       padding:8px 12px; font-size:11.5px; font-weight:800; color:#7A5C00; text-align:center;
     }
     .ttr-page .ttr-p-sigs{
-      display:flex; justify-content:space-between; margin-top:34px; padding:0 20px; font-size:11.5px; font-weight:700;
+      display:flex; justify-content:space-between; margin-top:44px; padding:0 26px;
     }
-    .ttr-page .ttr-p-sigs .ttr-p-sig{ width:220px; text-align:center; }
-    .ttr-page .ttr-p-sigs .ttr-p-sig div{ border-top:1.5px solid #333; padding-top:5px; }
+    .ttr-page .ttr-p-sigs .ttr-p-sig{ width:250px; text-align:center; }
+    /* generous, visibly empty room above the line for a handwritten
+       signature (at least 3cm / 80px) */
+    .ttr-page .ttr-p-sigs .ttr-p-sig .ttr-p-sig-space{ height:84px; }
+    .ttr-page .ttr-p-sigs .ttr-p-sig .ttr-p-sig-ar{
+      font-size:13px; font-weight:800; color:#0F3D2E;
+    }
+    .ttr-page .ttr-p-sigs .ttr-p-sig .ttr-p-sig-en{
+      margin-top:6px; font-size:10.5px; font-weight:600; color:#333; white-space:nowrap;
+    }
     .ttr-page .ttr-p-foot{
       margin-top:16px; text-align:center; font-size:9.5px; color:#5B6B62;
       border-top:1px solid #CBD8D0; padding-top:7px;
