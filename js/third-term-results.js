@@ -146,7 +146,90 @@
             var el = document.getElementById(id);
             if (el) el.addEventListener("input", saveDates);
         });
+        loadTtrSignatures(); // load Principal + per-class teacher signatures for previews + PDF stamping
     });
+
+    /* ----------------------------------------------------------------
+       Load signatures (Principal + per-class teachers) from the shared
+       Manage Signatures section. This keeps the "create signature"
+       logic entirely in the linked manage-signatures page.
+       Previews shown inside the Third Term section only.
+    ---------------------------------------------------------------- */
+    var ttrSignatures = { principal: null, classTeacher: null, perClass: {} }; // perClass[className] = path
+
+    function loadTtrSignatures() {
+        var previewHost = document.getElementById("ttrSigPreviews");
+        if (previewHost) previewHost.innerHTML = '<span style="font-size:12px;color:#5B6B62;">Loading signatures…</span>';
+
+        Promise.all([
+            fetch("/signatures").then(r => r.ok ? r.json() : []).catch(() => []),
+            fetch("/class-signatures").then(r => r.ok ? r.json() : []).catch(() => [])
+        ]).then(([sigs, classSigs]) => {
+            ttrSignatures.principal = (sigs || []).find(s => s.role === "principal") || null;
+            ttrSignatures.classTeacher = (sigs || []).find(s => s.role === "class_teacher") || null;
+            ttrSignatures.perClass = {};
+            (classSigs || []).forEach(cs => {
+                if (cs.class_name && cs.signature_path) ttrSignatures.perClass[cs.class_name] = cs.signature_path;
+            });
+            renderTtrSigPreviews();
+        }).catch(() => {
+            if (previewHost) previewHost.innerHTML = '<span style="font-size:12px;color:#B7791F;">Could not load signatures. Using lines only.</span>';
+        });
+    }
+
+    function renderTtrSigPreviews() {
+        var host = document.getElementById("ttrSigPreviews");
+        if (!host) return;
+        host.innerHTML = "";
+
+        // Principal
+        var pWrap = document.createElement("div");
+        pWrap.style.cssText = "display:flex; flex-direction:column; align-items:center; font-size:11px;";
+        pWrap.innerHTML = '<div style="font-weight:700;color:#0F3D2E;margin-bottom:2px;">Principal</div>';
+        var pImg = document.createElement("img");
+        pImg.style.cssText = "height:42px; max-width:160px; object-fit:contain; border:1px solid #CBD8D0; background:#fff; padding:3px; border-radius:4px;";
+        if (ttrSignatures.principal && ttrSignatures.principal.signature_path) {
+            pImg.src = ttrSignatures.principal.signature_path + "?t=" + Date.now();
+        } else {
+            pImg.style.display = "none";
+            var note = document.createElement("div");
+            note.style.cssText = "font-size:10px;color:#B7791F;";
+            note.textContent = "No principal signature yet";
+            pWrap.appendChild(note);
+        }
+        pWrap.appendChild(pImg);
+        host.appendChild(pWrap);
+
+        // Shared class teacher (fallback)
+        var ctWrap = document.createElement("div");
+        ctWrap.style.cssText = "display:flex; flex-direction:column; align-items:center; font-size:11px;";
+        ctWrap.innerHTML = '<div style="font-weight:700;color:#0F3D2E;margin-bottom:2px;">Class Teacher (shared)</div>';
+        var ctImg = document.createElement("img");
+        ctImg.style.cssText = "height:42px; max-width:160px; object-fit:contain; border:1px solid #CBD8D0; background:#fff; padding:3px; border-radius:4px;";
+        if (ttrSignatures.classTeacher && ttrSignatures.classTeacher.signature_path) {
+            ctImg.src = ttrSignatures.classTeacher.signature_path + "?t=" + Date.now();
+        } else {
+            ctImg.style.display = "none";
+            var note2 = document.createElement("div");
+            note2.style.cssText = "font-size:10px;color:#B7791F;";
+            note2.textContent = "No shared class teacher signature";
+            ctWrap.appendChild(note2);
+        }
+        ctWrap.appendChild(ctImg);
+        host.appendChild(ctWrap);
+
+        // Per-class
+        Object.keys(ttrSignatures.perClass).forEach(cn => {
+            var cWrap = document.createElement("div");
+            cWrap.style.cssText = "display:flex; flex-direction:column; align-items:center; font-size:11px;";
+            cWrap.innerHTML = '<div style="font-weight:700;color:#0F3D2E;margin-bottom:2px;">' + esc(cn) + ' (Teacher)</div>';
+            var cImg = document.createElement("img");
+            cImg.style.cssText = "height:42px; max-width:160px; object-fit:contain; border:1px solid #CBD8D0; background:#fff; padding:3px; border-radius:4px;";
+            cImg.src = ttrSignatures.perClass[cn] + "?t=" + Date.now();
+            cWrap.appendChild(cImg);
+            host.appendChild(cWrap);
+        });
+    }
 
     function safeFileName(s) {
         return String(s || "class").replace(/[\\/:*?"<>|]+/g, "_").replace(/\s+/g, "-");
@@ -647,17 +730,26 @@
             "</div>" + warn + datesHtml +
             '<div class="ttr-p-sigs">' +
             '<div class="ttr-p-sig">' +
-            '<div class="ttr-p-sig-line">______________________________</div>' +
-            '<div class="ttr-p-sig-en"><strong>Class Teacher&apos;s Signature</strong></div>' +
+            (function(){ 
+                var cls = res.className || "";
+                var teacherPath = ttrSignatures.perClass[cls] || (ttrSignatures.classTeacher ? ttrSignatures.classTeacher.signature_path : null);
+                if (teacherPath) {
+                    return '<img src="' + teacherPath + '?t=' + Date.now() + '" style="max-height:48px; max-width:160px; object-fit:contain; display:block; margin:0 auto 4px;" alt="Teacher signature">';
+                }
+                return '<div class="ttr-p-sig-line">______________________________</div>';
+            })() +
+            '<div class="ttr-p-sig-en"><strong>Class Teacher\'s Signature</strong></div>' +
             "</div>" +
             '<div class="ttr-p-sig">' +
-            '<div class="ttr-p-sig-line">______________________________</div>' +
-            '<div class="ttr-p-sig-en"><strong>Principal&apos;s Signature</strong></div>' +
+            (ttrSignatures.principal && ttrSignatures.principal.signature_path ?
+                '<img src="' + ttrSignatures.principal.signature_path + '?t=' + Date.now() + '" style="max-height:48px; max-width:160px; object-fit:contain; display:block; margin:0 auto 4px;" alt="Principal signature">' :
+                '<div class="ttr-p-sig-line">______________________________</div>') +
+            '<div class="ttr-p-sig-en"><strong>Principal\'s Signature</strong></div>' +
             "</div>" +
             "</div>" +
             '<div class="ttr-p-foot">Generated ' +
             new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }) +
-            " • Ameenullah School Result System • " + bi("صفحة", "Page") + " " + pageNo + "</div>" +
+            " • Ameenullah School Result System • " + "Page " + pageNo + "</div>" +
             "</div>";
     }
 

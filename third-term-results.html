@@ -150,6 +150,20 @@
           <div id="ttrDatesStatus" style="margin-top:10px; font-size:13px; color:#5B6B62;"></div>
         </div>
 
+        <!-- NEW: Signatures section (linked to Manage Signatures) - INSIDE third term only -->
+        <div class="mng-card" id="ttrSigCard">
+          <h3 style="margin-top:0;">&#9998; Signatures for Third Term Results <span lang="ar" dir="rtl" style="font-size:13px; color:#5B6B62;">&nbsp;- التوقيعات لنتائج الفصل الثالث</span></h3>
+          <p class="mg-note" style="margin-top:0;">One Principal signature + one teacher signature per class (or shared Class Teacher fallback) are automatically stamped on every result sheet below. Manage / create signatures in the central tool:</p>
+          <div style="margin:10px 0;">
+            <a href="manage-signatures.html" target="_blank" class="mng-btn mng-btn-sm" style="text-decoration:none; display:inline-flex; align-items:center; gap:6px;">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="14" height="14"><path d="M20.24 12.24a6 6 0 0 0-8.49-8.49L5 10.5V19h8.5z"/><path d="m16 8-9.04 9.07"/><path d="M17.5 15H9"/></svg>
+              Open Create / Manage Signatures
+            </a>
+          </div>
+          <div id="ttrSigPreviews" style="display:flex; flex-wrap:wrap; gap:16px; margin-top:8px;"></div>
+          <p class="mg-note" style="margin-top:8px; font-size:12px;">Per-class teacher signatures override the shared one for that class only. Update in Manage Signatures and regenerate to see changes.</p>
+        </div>
+
         <!-- Sheet errors -->
         <div class="mng-card" id="ttrErrorsCard" style="display:none; border-color:#F1C6C6;">
           <h3 style="margin-top:0; color:#A93226;">&#9888;&#65039; Sheets That Failed <span lang="ar" dir="rtl" style="font-size:13px;">&nbsp;- أوراق العمل غير المتوافقة</span></h3>
