@@ -581,6 +581,23 @@
            also what the position is measured against ("3rd of 24"). */
         var classSize = res.studentCount || (res.students || []).length;
 
+        /* Admission decision follows the school's pass mark exactly. */
+        var admission = Number(st.pct) >= 50 ? "PROMOTED" : "REPEAT";
+        var admissionClass = admission === "PROMOTED" ? "ttr-p-promoted" : "ttr-p-repeat";
+
+        /* Decorative stars are real text rather than a CSS-only pattern so
+           html2canvas includes the full border reliably in downloaded PDFs. */
+        var horizontalStars = new Array(48).join("★ ");
+        var verticalStars = new Array(54).join("★<br>");
+        var decorationHtml =
+            '<img class="ttr-p-watermark" src="images/LOGO.JPG" alt="" aria-hidden="true">' +
+            '<div class="ttr-p-star-border" aria-hidden="true">' +
+            '<span class="ttr-p-stars-h ttr-p-stars-top">' + horizontalStars + "</span>" +
+            '<span class="ttr-p-stars-h ttr-p-stars-bottom">' + horizontalStars + "</span>" +
+            '<span class="ttr-p-stars-v ttr-p-stars-left">' + verticalStars + "</span>" +
+            '<span class="ttr-p-stars-v ttr-p-stars-right">' + verticalStars + "</span>" +
+            "</div>";
+
         /* Term / session dates typed on the page — printed on every sheet. */
         var dates = readDates();
         var blankLine = "________________________";
@@ -592,7 +609,7 @@
             '<span class="ttr-p-dval">' + (dates.newSessionStarts ? esc(dates.newSessionStarts) : blankLine) + "</span></div>" +
             "</div>";
 
-        return '<div class="ttr-page">' +
+        return '<div class="ttr-page">' + decorationHtml +
             '<div class="ttr-p-head">' +
             '<img class="ttr-p-logo" src="images/LOGO.JPG" alt="">' +
             '<div class="ttr-p-school">' +
@@ -626,6 +643,7 @@
             '<div class="ttr-p-cell"><div class="ttr-p-k">' + bi("المجموع الكلي", "GRAND TOTAL") + '</div><div class="ttr-p-v">' + fmt1(st.grandTotal) + " / " + ((st.maxTotal != null) ? st.maxTotal : (res.subjects.length * 300)) + "</div></div>" +
             '<div class="ttr-p-cell"><div class="ttr-p-k">' + bi("المعدل العام", "AVERAGE") + '</div><div class="ttr-p-v">' + fmt1(st.pct) + "</div></div>" +
             '<div class="ttr-p-cell"><div class="ttr-p-k">' + bi("الترتيب في الفصل", "CLASS POSITION") + '</div><div class="ttr-p-v">' + esc(positionOf(st.position, classSize)) + "</div></div>" +
+            '<div class="ttr-p-cell ttr-p-admission ' + admissionClass + '"><div class="ttr-p-k">' + bi("القبول", "ADMISSION") + '</div><div class="ttr-p-v">' + admission + "</div></div>" +
             "</div>" + warn + datesHtml +
             '<div class="ttr-p-sigs">' +
             '<div class="ttr-p-sig">' +

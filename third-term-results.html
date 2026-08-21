@@ -268,6 +268,34 @@
       padding:22px 28px 18px;
       border:2.5px solid #0F3D2E;
       display:flex; flex-direction:column;
+      position:relative; overflow:hidden; isolation:isolate;
+    }
+    /* Faint school-crest watermark behind every part of the result. */
+    .ttr-page .ttr-p-watermark{
+      position:absolute; z-index:0; left:50%; top:51%; transform:translate(-50%,-50%);
+      width:390px; height:390px; object-fit:contain; border-radius:50%;
+      opacity:.055; filter:grayscale(1); pointer-events:none;
+    }
+    /* Gold stars replace a plain inner line while the green outside rule
+       keeps the A4 edge crisp. Text is used so html2canvas captures it. */
+    .ttr-page .ttr-p-star-border{
+      position:absolute; z-index:3; inset:5px; color:#A87919;
+      overflow:hidden; pointer-events:none; font-family:Georgia,'Times New Roman',serif;
+    }
+    .ttr-page .ttr-p-stars-h{
+      position:absolute; left:14px; right:14px; height:11px; overflow:hidden;
+      white-space:nowrap; text-align:center; font-size:8px; line-height:10px; word-spacing:6px;
+    }
+    .ttr-page .ttr-p-stars-top{ top:0; }
+    .ttr-page .ttr-p-stars-bottom{ bottom:0; }
+    .ttr-page .ttr-p-stars-v{
+      position:absolute; top:13px; bottom:13px; width:10px; overflow:hidden;
+      text-align:center; font-size:8px; line-height:20.5px;
+    }
+    .ttr-page .ttr-p-stars-left{ left:0; }
+    .ttr-page .ttr-p-stars-right{ right:0; }
+    .ttr-page > :not(.ttr-p-watermark):not(.ttr-p-star-border){
+      position:relative; z-index:1;
     }
     .ttr-page .ttr-p-head{
       display:flex; align-items:center; gap:16px;
@@ -352,6 +380,15 @@
     }
     .ttr-page .ttr-p-sum .ttr-p-cell .ttr-p-k{ font-size:10px; font-weight:700; color:#5B6B62; }
     .ttr-page .ttr-p-sum .ttr-p-cell .ttr-p-v{ font-size:17px; font-weight:900; color:#0F3D2E; margin-top:2px; }
+    .ttr-page .ttr-p-admission .ttr-p-v{ font-size:14px; letter-spacing:.5px; }
+    .ttr-page .ttr-p-admission.ttr-p-promoted{
+      border-color:#247447; background:rgba(235,248,239,.82);
+    }
+    .ttr-page .ttr-p-admission.ttr-p-promoted .ttr-p-v{ color:#176038; }
+    .ttr-page .ttr-p-admission.ttr-p-repeat{
+      border-color:#A43F3F; background:rgba(253,239,239,.84);
+    }
+    .ttr-page .ttr-p-admission.ttr-p-repeat .ttr-p-v{ color:#922D2D; }
     .ttr-page .ttr-p-warn{
       margin-top:12px; background:#FFF8DC; border:1.4px solid #E8C66A; border-radius:8px;
       padding:8px 12px; font-size:11.5px; font-weight:800; color:#7A5C00; text-align:center;
