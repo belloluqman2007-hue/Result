@@ -61,17 +61,24 @@
                 byId[r.student_id] = {
                     id: r.student_id,
                     name: r.student_name,
-                    scores: {} // subject -> score
+                    scores: {}, // subject -> score shown in the cell
+                    termSum: 0  // T1+T2+T3 across subjects (3rd Term grand total)
                 };
             }
-            // FIX (pack 88): for 3rd Term the report sheet shows each
-            // subject's cumulative three-term average, so the broadsheet
-            // uses the same number - totals, averages and positions then
-            // agree with the printed report cards.
+            // Subject cell: 3rd Term still shows the per-subject
+            // (T1+T2+T3)/3 average. Grand Total / position use the SUM
+            // of every term score: 13 subjects → 3900, average = 3900÷39.
             var v = (isThird && r.cumulative_average !== null && r.cumulative_average !== undefined)
                 ? Number(r.cumulative_average)
                 : Number(r.total);
             byId[r.student_id].scores[r.subject] = v;
+            if (isThird) {
+                var t1 = Number(r.first_term_total);
+                var t2 = Number(r.second_term_total);
+                var t3 = Number(r.third_term_total);
+                if (!isFinite(t3)) t3 = Number(r.total);
+                byId[r.student_id].termSum += (isFinite(t1) ? t1 : 0) + (isFinite(t2) ? t2 : 0) + (isFinite(t3) ? t3 : 0);
+            }
         });
 
         var students = Object.keys(byId).map(function (k) {
@@ -86,8 +93,15 @@
                 }
             });
             s.subjectCount = count;
-            s.total = total;
-            s.average = count > 0 ? Math.round((total / count) * 100) / 100 : 0;
+            if (isThird) {
+                // Grand Total = all 100s from 1st + 2nd + 3rd term.
+                // Average = Grand Total ÷ (subjects × 3).
+                s.total = s.termSum || 0;
+                s.average = count > 0 ? Math.round((s.total / (count * 3)) * 100) / 100 : 0;
+            } else {
+                s.total = total;
+                s.average = count > 0 ? Math.round((total / count) * 100) / 100 : 0;
+            }
             return s;
         });
 

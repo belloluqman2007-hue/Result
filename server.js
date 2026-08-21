@@ -3000,9 +3000,14 @@ function amsTermOrder(term) {
     return 1;
 }
 /* rows: {student_id, class_name, subject, term, total} for ONE class +
-   session. Ranks students by their average total (per-term) or by the
-   average of each subject's cumulative three-term average (3rd Term).
-   Ties share the same position. Returns { position, total }. */
+   session. Ranks students by their average total (per-term) or, for
+   3rd Term, by Grand Total ÷ (subjects × 3):
+     Grand Total = every 1st + 2nd + 3rd term score
+       (13 subjects → 13×100×3 = 3900)
+     Average     = Grand Total ÷ (subjects × 3)
+       (3900 ÷ 39 = 100)
+   That average decides class position. Ties share the same position.
+   Returns { position, total }. */
 function amsRankClassResults(rows, term, targetStudentId) {
     const isThird = term === "3rd Term";
     const perSubject = {};   // sid -> subjectKey -> { term: total }
@@ -3033,12 +3038,20 @@ function amsRankClassResults(rows, term, targetStudentId) {
         Object.keys(perSubject).forEach(sid => {
             if (!hasThird[sid]) return; // only rank students with a 3rd term result
             const subjects = perSubject[sid];
-            let sum = 0, count = 0;
+            let grand = 0;
+            let nSubjects = 0;
             Object.keys(subjects).forEach(key => {
-                const vals = Object.values(subjects[key]);
-                if (vals.length) { sum += vals.reduce((a, b) => a + b, 0) / vals.length; count++; }
+                const terms = subjects[key];
+                // Count only subjects the student sat in 3rd Term — same
+                // set the report sheet lists. Missing 1st/2nd scores are
+                // 0, and the divisor is always subjects × 3.
+                if (!Object.prototype.hasOwnProperty.call(terms, "3rd Term")) return;
+                nSubjects++;
+                grand += (Number(terms["1st Term"]) || 0)
+                    + (Number(terms["2nd Term"]) || 0)
+                    + (Number(terms["3rd Term"]) || 0);
             });
-            averages[sid] = count ? sum / count : 0;
+            averages[sid] = nSubjects ? grand / (nSubjects * 3) : 0;
         });
     } else {
         Object.keys(perTermAvg).forEach(sid => {

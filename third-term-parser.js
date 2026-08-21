@@ -447,6 +447,41 @@ function subjectAverage(sc) {
     return Math.round(((Number(sc.t1) + Number(sc.t2) + Number(sc.total)) / 3) * 10) / 10;
 }
 
+/* Grand Total = T1 + T2 + T3 across every subject (13 subjects → 3900).
+   Overall average = Grand Total ÷ (subjects × 3) (3900 ÷ 39 = 100).
+   Position is ranked by that average. Applied here so the Excel export
+   matches the on-screen / PDF formula even if a stale client posted. */
+function applyGrandTotals(cls) {
+    const n = (cls.subjects || []).length;
+    const slots = n * 3;
+    (cls.students || []).forEach((st) => {
+        let grand = 0;
+        (st.scores || []).forEach((sc) => {
+            const t1 = Number(sc.t1);
+            const t2 = Number(sc.t2);
+            const t3 = Number(sc.total);
+            if (isFinite(t1)) grand += t1;
+            if (isFinite(t2)) grand += t2;
+            if (isFinite(t3)) grand += t3;
+        });
+        st.grandTotal = Math.round(grand * 10) / 10;
+        st.pct = slots ? Math.round((grand / slots) * 10) / 10 : 0;
+        st.maxTotal = n * 300;
+    });
+    const sorted = (cls.students || []).slice().sort((a, b) =>
+        (Number(b.pct) - Number(a.pct)) || (Number(b.grandTotal) - Number(a.grandTotal))
+    );
+    let lastAvg = null;
+    let lastPos = 0;
+    sorted.forEach((s, i) => {
+        if (lastAvg === null || Number(s.pct) < lastAvg) {
+            lastPos = i + 1;
+            lastAvg = Number(s.pct);
+        }
+        s.position = lastPos;
+    });
+}
+
 /* Position rendered as "3rd of 24" so class size is always visible. */
 function positionOf(pos, total) {
     const t = Number(total) || 0;
@@ -505,6 +540,7 @@ function buildThirdTermWorkbook(classes, meta) {
 
     /* ---------- One tab per class ---------- */
     classes.forEach((c) => {
+        applyGrandTotals(c);
         const subjects = c.subjects || [];
         const students = c.students || [];
         const n = subjects.length;
@@ -537,7 +573,7 @@ function buildThirdTermWorkbook(classes, meta) {
             subBand.push("T1 /100", "T2 /100", "T3 /100", "AVERAGE /100");
             merges.push({ s: { r: bandRow, c: base }, e: { r: bandRow, c: base + 3 } });
         });
-        band.push("Grand Total / المجموع الكلي", "% / النسبة", "Students in Class / عدد الطلاب", "Position / الترتيب", "Status / الحالة");
+        band.push("Grand Total / المجموع الكلي", "Average / المعدل العام", "Students in Class / عدد الطلاب", "Position / الترتيب", "Status / الحالة");
         subBand.push("", "", "", "", "");
         rows.push(band, subBand);
 
@@ -552,8 +588,9 @@ function buildThirdTermWorkbook(classes, meta) {
                     avg === null ? "" : avg
                 );
             });
+            const maxTotal = st.maxTotal || (n * 300);
             row.push(
-                st.grandTotal === null || st.grandTotal === undefined ? "" : st.grandTotal,
+                st.grandTotal === null || st.grandTotal === undefined ? "" : (st.grandTotal + " / " + maxTotal),
                 st.pct === null || st.pct === undefined ? "" : st.pct,
                 classSize,
                 positionOf(st.position, classSize),

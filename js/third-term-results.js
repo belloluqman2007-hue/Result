@@ -10,9 +10,13 @@
         are used ONLY to work out T3 (= CA + EXAM); they are never
         reported. The page shows T1 /100, T2 /100, T3 /100 and
         AVERAGE /100 = (T1 + T2 + T3) / 3.
-     2. The admin picks one or all classes; this file computes Grand
-        Total, Overall Percentage and class Position, and renders a
-        sortable result table per class.
+     2. The admin picks one or all classes; this file computes:
+          Grand Total = T1 + T2 + T3 across every subject
+            (13 subjects → 13×100×3 = 3900)
+          Overall average = Grand Total ÷ (subjects × 3)
+            (3900 ÷ 39 = 100)
+          Class position is ranked by that average.
+        Then it renders a sortable result table per class.
      3. "Download PDF" builds ONE official A4 PDF per class (one page
         per student) with jsPDF + html2canvas (same approach as
         js/class-results.js).
@@ -225,6 +229,11 @@
        ---------------------------------------------------------------- */
     function computeClassResult(cls) {
         var subjects = cls.subjects || [];
+        /* Divisor for the overall average: every subject has three /100
+           term scores, so 13 subjects → 13 × 3 = 39. Perfect score:
+           3900 ÷ 39 = 100. */
+        var termSlots = subjects.length * 3;
+        var maxTotal = subjects.length * 300; // 13 × 100 × 3 = 3900
         var students = (cls.students || []).map(function (st) {
             var grandTotal = 0;
             var scores = (st.scores || []).map(function (sc) {
@@ -235,17 +244,24 @@
                      T3 /100  = CA + EXAM (this term's result)
                      T1 /100  = first-term score (ف1)
                      T2 /100  = second-term score (ف2)
-                     AVERAGE  = (T1 + T2 + T3) / 3, rounded to 1 decimal */
+                     AVERAGE  = (T1 + T2 + T3) / 3, rounded to 1 decimal
+                   Grand Total adds every term score (missing = 0). */
                 var t1 = sc.t1;
                 var t2 = sc.t2;
                 var t3 = sc.total; // T3 = CA + EXAM
+                var t1n = (t1 === null || t1 === undefined || t1 === "") ? null : Number(t1);
+                var t2n = (t2 === null || t2 === undefined || t2 === "") ? null : Number(t2);
+                var t3n = (t3 === null || t3 === undefined || t3 === "") ? null : Number(t3);
+                if (!isFinite(t1n)) t1n = null;
+                if (!isFinite(t2n)) t2n = null;
+                if (!isFinite(t3n)) t3n = null;
                 var average = null;
-                if (t1 !== null && t1 !== undefined &&
-                    t2 !== null && t2 !== undefined &&
-                    t3 !== null && t3 !== undefined) {
-                    average = Math.round(((Number(t1) + Number(t2) + Number(t3)) / 3) * 10) / 10;
+                if (t1n !== null && t2n !== null && t3n !== null) {
+                    average = Math.round(((t1n + t2n + t3n) / 3) * 10) / 10;
                 }
-                if (average !== null) grandTotal += average;
+                if (t1n !== null) grandTotal += t1n;
+                if (t2n !== null) grandTotal += t2n;
+                if (t3n !== null) grandTotal += t3n;
                 return {
                     t1: t1,          // T1 /100
                     t2: t2,          // T2 /100
@@ -253,9 +269,10 @@
                     average: average // AVERAGE /100 = (T1 + T2 + T3) / 3
                 };
             });
-            /* Grand Total = sum of the subject AVERAGE scores. */
-            var pct = subjects.length
-                ? Math.round((grandTotal / (subjects.length * 100)) * 1000) / 10
+            /* Grand Total = T1 + T2 + T3 across every subject.
+               Overall average / % = Grand Total ÷ (subjects × 3). */
+            var pct = termSlots
+                ? Math.round((grandTotal / termSlots) * 10) / 10
                 : 0;
             return {
                 sn: st.sn,
@@ -265,19 +282,24 @@
                 missingSubjects: st.missingSubjects || [],
                 incomplete: !!st.incomplete,
                 grandTotal: Math.round(grandTotal * 10) / 10,
+                maxTotal: maxTotal,
                 pct: pct,
                 position: 0
             };
         });
 
-        /* Position: highest total = 1st; ties share the position. */
-        var sorted = students.slice().sort(function (a, b) { return b.grandTotal - a.grandTotal; });
-        var lastTotal = null;
+        /* Position: highest overall average (Grand Total ÷ (n×3)) = 1st;
+           ties share the position. Grand total is the tie-break so two
+           students with the same average stay in a stable order. */
+        var sorted = students.slice().sort(function (a, b) {
+            return (b.pct - a.pct) || (b.grandTotal - a.grandTotal);
+        });
+        var lastAvg = null;
         var lastPos = 0;
         sorted.forEach(function (s, i) {
-            if (lastTotal === null || s.grandTotal < lastTotal) {
+            if (lastAvg === null || s.pct < lastAvg) {
                 lastPos = i + 1;
-                lastTotal = s.grandTotal;
+                lastAvg = s.pct;
             }
             s.position = lastPos;
         });
@@ -455,7 +477,7 @@
         html += '<th rowspan="2" class="ttr-sortable" onclick="ttrSort(' + idx + ',&#39;grandTotal&#39;)">' +
             bi("المجموع الكلي", "Grand Total") + " " + arrow("grandTotal") + "</th>";
         html += '<th rowspan="2" class="ttr-sortable" onclick="ttrSort(' + idx + ',&#39;pct&#39;)">' +
-            bi("النسبة المئوية", "%") + " " + arrow("pct") + "</th>";
+            bi("المعدل العام", "Average") + " " + arrow("pct") + "</th>";
         html += "<th rowspan=\"2\">" + bi("عدد الطلاب", "Students in Class") + "</th>";
         html += "<th rowspan=\"2\">" + bi("الترتيب", "Position") + "</th>";
         html += "<th rowspan=\"2\">" + bi("الحالة", "Status") + "</th>";
@@ -483,8 +505,8 @@
                         (empty ? "—" : (c.one ? fmt1(v) : fmt(v))) + "</td>";
                 });
             });
-            html += '<td class="ttr-grand">' + fmt1(st.grandTotal) + "</td>";
-            html += '<td class="ttr-pct">' + fmt1(st.pct) + "%</td>";
+            html += '<td class="ttr-grand">' + fmt1(st.grandTotal) + " / " + (st.maxTotal || (res.subjects.length * 300)) + "</td>";
+            html += '<td class="ttr-pct">' + fmt1(st.pct) + "</td>";
             html += "<td>" + res.students.length + "</td>";
             html += '<td class="ttr-pos">' + positionOf(st.position, res.students.length) + "</td>";
             html += st.incomplete
@@ -601,8 +623,8 @@
             "<th>" + bi("المعدل", "AVERAGE /100") + "</th>" +
             "</tr></thead><tbody>" + rows + "</tbody></table></div>" +
             '<div class="ttr-p-sum">' +
-            '<div class="ttr-p-cell"><div class="ttr-p-k">' + bi("المجموع الكلي", "GRAND TOTAL") + '</div><div class="ttr-p-v">' + fmt1(st.grandTotal) + " / " + (res.subjects.length * 100) + "</div></div>" +
-            '<div class="ttr-p-cell"><div class="ttr-p-k">' + bi("النسبة المئوية", "OVERALL PERCENTAGE") + '</div><div class="ttr-p-v">' + fmt1(st.pct) + "%</div></div>" +
+            '<div class="ttr-p-cell"><div class="ttr-p-k">' + bi("المجموع الكلي", "GRAND TOTAL") + '</div><div class="ttr-p-v">' + fmt1(st.grandTotal) + " / " + ((st.maxTotal != null) ? st.maxTotal : (res.subjects.length * 300)) + "</div></div>" +
+            '<div class="ttr-p-cell"><div class="ttr-p-k">' + bi("المعدل العام", "AVERAGE") + '</div><div class="ttr-p-v">' + fmt1(st.pct) + "</div></div>" +
             '<div class="ttr-p-cell"><div class="ttr-p-k">' + bi("الترتيب في الفصل", "CLASS POSITION") + '</div><div class="ttr-p-v">' + esc(positionOf(st.position, classSize)) + "</div></div>" +
             "</div>" + warn + datesHtml +
             '<div class="ttr-p-sigs">' +
