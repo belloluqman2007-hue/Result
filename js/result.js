@@ -167,12 +167,11 @@ function searchResult() {
             let totalScore = 0;
 
             if (isThirdTerm) {
-                // Cumulative view: show 1st/2nd/3rd term totals per subject,
-                // plus a cumulative average, and base the overall average on
-                // those cumulative subject averages rather than just term 3.
-                // The Total Score is the sum of ALL three term scores.
-                let averagesSum = 0;
-                let averagesCount = 0;
+                // Cumulative view: show 1st/2nd/3rd term totals per subject
+                // plus a per-subject average. Grand Total = T1+T2+T3 across
+                // every subject (13 subjects → 3900). Overall average =
+                // Grand Total ÷ (subjects × 3) (3900 ÷ 39 = 100). That
+                // average is what decides class position.
 
                 data.forEach(result => {
                     const firstTotal = result.first_term_total !== null && result.first_term_total !== undefined ? result.first_term_total : "-";
@@ -192,15 +191,10 @@ function searchResult() {
                         </tr>
                     `;
 
-                    if (cumulativeAvg !== null && cumulativeAvg !== undefined) {
-                        averagesSum += Number(cumulativeAvg);
-                        averagesCount++;
-                    }
-
                     totalScore += (Number(firstTotal) || 0) + (Number(secondTotal) || 0) + (Number(thirdTotal) || 0);
                 });
 
-                average = averagesCount > 0 ? Number((averagesSum / averagesCount).toFixed(2)) : 0;
+                average = data.length > 0 ? Number((totalScore / (data.length * 3)).toFixed(2)) : 0;
 
             } else {
                 data.forEach(result => {
@@ -220,7 +214,9 @@ function searchResult() {
             }
 
             document.getElementById("totalSubjects").textContent = data.length;
-            document.getElementById("grandTotal").textContent = amsFmtScore(totalScore); // pack 21: clean whole number
+            document.getElementById("grandTotal").textContent = isThirdTerm && data.length
+                ? amsFmtScore(totalScore) + " / " + (data.length * 300)
+                : amsFmtScore(totalScore); // 3rd Term: 13 subjects → 3900 / 3900
 
             let teacherRemark = "";
 

@@ -120,7 +120,6 @@
 
         if (isThirdTerm) {
             tableRows += `<tr><th>Subject</th><th>1st Term</th><th>2nd Term</th><th>3rd Term</th><th>Average</th><th>Grade</th></tr>`;
-            let averagesSum = 0, averagesCount = 0;
             data.forEach(result => {
                 const firstTotal = result.first_term_total !== null && result.first_term_total !== undefined ? result.first_term_total : "-";
                 const secondTotal = result.second_term_total !== null && result.second_term_total !== undefined ? result.second_term_total : "-";
@@ -128,14 +127,11 @@
                 const cumulativeAvg = result.cumulative_average;
                 const grade = result.cumulative_grade || result.grade || "";
                 tableRows += `<tr><td>${esc(result.subject)}</td><td>${amsFmtScore(firstTotal)}</td><td>${amsFmtScore(secondTotal)}</td><td>${amsFmtScore(thirdTotal)}</td><td>${cumulativeAvg !== null && cumulativeAvg !== undefined ? amsFmtScore(cumulativeAvg) : "-"}</td><td>${esc(grade)}</td></tr>`;
-                if (cumulativeAvg !== null && cumulativeAvg !== undefined) {
-                    averagesSum += Number(cumulativeAvg);
-                    averagesCount++;
-                }
-                // Total Score = ALL three term scores combined
+                // Grand Total = T1 + T2 + T3 across every subject
+                // (13 subjects → 3900). Average = Grand Total ÷ (n × 3).
                 totalScore += (Number(firstTotal) || 0) + (Number(secondTotal) || 0) + (Number(thirdTotal) || 0);
             });
-            average = averagesCount > 0 ? Number((averagesSum / averagesCount).toFixed(2)) : 0;
+            average = data.length > 0 ? Number((totalScore / (data.length * 3)).toFixed(2)) : 0;
             tableRows += `<tr><td colspan="4"><strong>Cumulative Average</strong></td><td><strong>${amsFmtScore(average)}</strong></td><td></td></tr>`;
         } else {
             tableRows += `<tr><th>Subject</th><th>CA</th><th>Exam</th><th>Total</th><th>Grade</th></tr>`;
@@ -198,7 +194,7 @@
       <h3>Performance Summary</h3>
       <table class="summary-table">
         <tr><td><strong>Total Subjects</strong></td><td>${data.length}</td></tr>
-        <tr><td><strong>Total Score</strong></td><td>${amsFmtScore(totalScore)}</td></tr>
+        <tr><td><strong>Total Score</strong></td><td>${amsFmtScore(totalScore)}${isThirdTerm && data.length ? " / " + (data.length * 300) : ""}</td></tr>
         <tr><td><strong>Teacher's Remark</strong></td><td>${esc(teacherRemark)}</td></tr>
         <tr><td><strong>Principal's Remark</strong></td><td>${esc(principalRemark)}</td></tr>
       </table>
