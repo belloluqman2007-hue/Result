@@ -5,8 +5,11 @@
 
      1. POST /third-term-upload  - send the school's internal grade
         workbook (.xlsx, one sheet per class). The server PARSES it and
-        returns every class with subjects + student scores (CA /40,
-        Exam /60, Total /100, ف3) - nothing is written to the database.
+        returns every class with subjects + student scores - nothing is
+        written to the database. The sheet's CA /40 and EXAM /60 columns
+        are used ONLY to work out T3 (= CA + EXAM); they are never
+        reported. The page shows T1 /100, T2 /100, T3 /100 and
+        AVERAGE /100 = (T1 + T2 + T3) / 3.
      2. The admin picks one or all classes; this file computes Grand
         Total, Overall Percentage and class Position, and renders a
         sortable result table per class.
@@ -83,6 +86,63 @@
         if (p === 3) return "3rd";
         return p + "th";
     }
+
+    /* Position shown as "3rd of 24" so the class size is always visible. */
+    function positionOf(pos, total) {
+        var t = Number(total) || 0;
+        if (!pos) return t ? "— of " + t : "—";
+        return ordinal(pos) + (t ? " of " + t : "");
+    }
+
+    /* ----------------------------------------------------------------
+       Term / session dates — typed by the admin on this page, printed on
+       EVERY result sheet and remembered in this browser (localStorage).
+       ---------------------------------------------------------------- */
+    var DATES_KEY = "ttrSessionDates";
+
+    function readDates() {
+        var endsEl = document.getElementById("ttrTermEnds");
+        var startsEl = document.getElementById("ttrSessionStarts");
+        return {
+            termEndsOn: endsEl ? String(endsEl.value || "").trim() : "",
+            newSessionStarts: startsEl ? String(startsEl.value || "").trim() : ""
+        };
+    }
+
+    function saveDates() {
+        var d = readDates();
+        try { localStorage.setItem(DATES_KEY, JSON.stringify(d)); } catch (e) { /* private mode */ }
+        var status = document.getElementById("ttrDatesStatus");
+        if (!status) return;
+        if (d.termEndsOn || d.newSessionStarts) {
+            status.innerHTML = "&#10003; Saved in this browser — printed on every result sheet." +
+                (d.termEndsOn ? " <b>Term Ends On:</b> " + esc(d.termEndsOn) + "." : "") +
+                (d.newSessionStarts ? " <b>New Session Starts:</b> " + esc(d.newSessionStarts) + "." : "");
+        } else {
+            status.innerHTML = "Not set yet — the sheets will show a blank line for these two dates.";
+        }
+    }
+
+    function loadDates() {
+        var saved = { termEndsOn: "", newSessionStarts: "" };
+        try {
+            var raw = localStorage.getItem(DATES_KEY);
+            if (raw) saved = JSON.parse(raw) || saved;
+        } catch (e) { /* ignore */ }
+        var endsEl = document.getElementById("ttrTermEnds");
+        var startsEl = document.getElementById("ttrSessionStarts");
+        if (endsEl) endsEl.value = saved.termEndsOn || "";
+        if (startsEl) startsEl.value = saved.newSessionStarts || "";
+        saveDates();
+    }
+
+    document.addEventListener("DOMContentLoaded", function () {
+        loadDates();
+        ["ttrTermEnds", "ttrSessionStarts"].forEach(function (id) {
+            var el = document.getElementById(id);
+            if (el) el.addEventListener("input", saveDates);
+        });
+    });
 
     function safeFileName(s) {
         return String(s || "class").replace(/[\\/:*?"<>|]+/g, "_").replace(/\s+/g, "-");
@@ -169,12 +229,13 @@
             var grandTotal = 0;
             var scores = (st.scores || []).map(function (sc) {
                 /* Column logic (spec):
-                   CA /40   = continuous assessment (F + S + N + A)
-                   EXAM /60 = the exam score
-                   T3 /100  = CA + EXAM (this term's result)
-                   T1 /100  = first-term score (ف1)
-                   T2 /100  = second-term score (ف2)
-                   AVERAGE  = (T1 + T2 + T3) / 3, rounded to 1 decimal */
+                   ONLY the /100 columns are reported. The workbook's
+                   CA /40 and EXAM /60 columns are read purely to work out
+                   T3 and are never shown on the table, PDF or Excel.
+                     T3 /100  = CA + EXAM (this term's result)
+                     T1 /100  = first-term score (ف1)
+                     T2 /100  = second-term score (ف2)
+                     AVERAGE  = (T1 + T2 + T3) / 3, rounded to 1 decimal */
                 var t1 = sc.t1;
                 var t2 = sc.t2;
                 var t3 = sc.total; // T3 = CA + EXAM
@@ -186,12 +247,10 @@
                 }
                 if (average !== null) grandTotal += average;
                 return {
-                    ca: sc.ca,       // CA /40
-                    exam: sc.exam,   // EXAM /60
-                    total: sc.total, // T3 /100 (CA + EXAM)
                     t1: t1,          // T1 /100
                     t2: t2,          // T2 /100
-                    average: average // AVERAGE /100
+                    total: t3,       // T3 /100
+                    average: average // AVERAGE /100 = (T1 + T2 + T3) / 3
                 };
             });
             /* Grand Total = sum of the subject AVERAGE scores. */
@@ -232,6 +291,7 @@
             subjects: subjects,
             warnings: cls.warnings || [],
             students: students,
+            studentCount: students.length,   // "Students in Class" - shown on every sheet
             incompleteCount: incompleteCount
         };
     }
@@ -390,17 +450,18 @@
         html += '<th rowspan="2" class="ttr-sortable" onclick="ttrSort(' + idx + ',&#39;name&#39;)">' +
             bi("اسم الطالب", "Student Name") + " " + arrow("name") + "</th>";
         subjects.forEach(function (sub) {
-            html += '<th colspan="6" lang="ar" dir="rtl">' + esc(sub.name) + "</th>";
+            html += '<th colspan="4" lang="ar" dir="rtl">' + esc(sub.name) + "</th>";
         });
         html += '<th rowspan="2" class="ttr-sortable" onclick="ttrSort(' + idx + ',&#39;grandTotal&#39;)">' +
             bi("المجموع الكلي", "Grand Total") + " " + arrow("grandTotal") + "</th>";
         html += '<th rowspan="2" class="ttr-sortable" onclick="ttrSort(' + idx + ',&#39;pct&#39;)">' +
             bi("النسبة المئوية", "%") + " " + arrow("pct") + "</th>";
+        html += "<th rowspan=\"2\">" + bi("عدد الطلاب", "Students in Class") + "</th>";
         html += "<th rowspan=\"2\">" + bi("الترتيب", "Position") + "</th>";
         html += "<th rowspan=\"2\">" + bi("الحالة", "Status") + "</th>";
         html += '</tr><tr class="ttr-band2">';
         subjects.forEach(function () {
-            html += "<th>CA /40</th><th>EXAM /60</th><th>T3 /100</th><th>T1 /100</th><th>T2 /100</th><th>AVG /100</th>";
+            html += "<th>T1 /100</th><th>T2 /100</th><th>T3 /100</th><th>AVERAGE /100</th>";
         });
         html += "</tr></thead><tbody>";
 
@@ -410,11 +471,9 @@
             html += '<td class="ttr-name">' + esc(st.name) + "</td>";
             st.scores.forEach(function (sc) {
                 var cells = [
-                    { v: sc.ca },
-                    { v: sc.exam },
-                    { v: sc.total },
                     { v: sc.t1 },
                     { v: sc.t2 },
+                    { v: sc.total },
                     { v: sc.average, one: true }
                 ];
                 cells.forEach(function (c) {
@@ -426,7 +485,8 @@
             });
             html += '<td class="ttr-grand">' + fmt1(st.grandTotal) + "</td>";
             html += '<td class="ttr-pct">' + fmt1(st.pct) + "%</td>";
-            html += '<td class="ttr-pos">' + ordinal(st.position) + "</td>";
+            html += "<td>" + res.students.length + "</td>";
+            html += '<td class="ttr-pos">' + positionOf(st.position, res.students.length) + "</td>";
             html += st.incomplete
                 ? '<td class="ttr-status" title="' + esc(st.missingSubjects.join(", ")) + '">&#9888;&#65039; ' + bi("بيانات ناقصة", "Incomplete Data") + "</td>"
                 : "<td>—</td>";
@@ -482,11 +542,9 @@
             var sub = subjects[i] ? esc(subjects[i].name) : "";
             rows += "<tr>" +
                 "<td class=\"ttr-p-subj\" lang=\"ar\" dir=\"rtl\">" + sub + "</td>" +
-                "<td>" + (sc.ca === null || sc.ca === undefined ? "—" : fmt(sc.ca)) + "</td>" +
-                "<td>" + (sc.exam === null || sc.exam === undefined ? "—" : fmt(sc.exam)) + "</td>" +
-                "<td>" + (sc.total === null || sc.total === undefined ? "—" : fmt(sc.total)) + "</td>" +
                 "<td>" + (sc.t1 === null || sc.t1 === undefined ? "—" : fmt(sc.t1)) + "</td>" +
                 "<td>" + (sc.t2 === null || sc.t2 === undefined ? "—" : fmt(sc.t2)) + "</td>" +
+                "<td>" + (sc.total === null || sc.total === undefined ? "—" : fmt(sc.total)) + "</td>" +
                 "<td>" + (sc.average === null || sc.average === undefined ? "—" : fmt1(sc.average)) + "</td>" +
                 "</tr>";
         });
@@ -496,6 +554,21 @@
               bi("بيانات ناقصة", "Incomplete Data") + " — " + esc(st.missingSubjects.join("، ")) +
               " / Missing: " + esc(st.missingSubjects.join(", ")) + "</div>"
             : "";
+
+        /* Class size — "Students in Class" appears on every sheet and is
+           also what the position is measured against ("3rd of 24"). */
+        var classSize = res.studentCount || (res.students || []).length;
+
+        /* Term / session dates typed on the page — printed on every sheet. */
+        var dates = readDates();
+        var blankLine = "________________________";
+        var datesHtml =
+            '<div class="ttr-p-dates">' +
+            '<div class="ttr-p-date">' + bi("ينتهي الفصل في", "Term Ends On") +
+            '<span class="ttr-p-dval">' + (dates.termEndsOn ? esc(dates.termEndsOn) : blankLine) + "</span></div>" +
+            '<div class="ttr-p-date">' + bi("يبدأ العام الجديد في", "New Session Starts") +
+            '<span class="ttr-p-dval">' + (dates.newSessionStarts ? esc(dates.newSessionStarts) : blankLine) + "</span></div>" +
+            "</div>";
 
         return '<div class="ttr-page">' +
             '<div class="ttr-p-head">' +
@@ -512,27 +585,26 @@
             '<div class="ttr-p-box">' +
             '<div class="ttr-p-line"><span>' + bi("الصف", "Class") + "</span><span class=\"ttr-p-val\">" + esc(res.className) + "</span></div>" +
             '<div class="ttr-p-line"><span>' + bi("الأستاذ", "Teacher") + "</span><span class=\"ttr-p-val\">" + esc(res.teacher || "—") + "</span></div>" +
+            '<div class="ttr-p-line"><span>' + bi("عدد الطلاب في الفصل", "Students in Class") + "</span><span class=\"ttr-p-val\">" + classSize + "</span></div>" +
             "</div>" +
             '<div class="ttr-p-box">' +
             '<div class="ttr-p-line"><span>' + bi("اسم الطالب", "Student Name") + "</span><span class=\"ttr-p-val\">" + esc(st.name) + "</span></div>" +
             '<div class="ttr-p-line"><span>' + bi("رقم القيد", "Adm No") + "</span><span class=\"ttr-p-val\">" + esc(st.adm || "—") + "</span></div>" +
             "</div>" +
             "</div>" +
-            '<table class="ttr-p-table">' +
+            '<div class="ttr-p-tablewrap"><table class="ttr-p-table' + (subjects.length <= 8 ? " ttr-p-roomy" : "") + '">' +
             "<thead><tr>" +
             "<th>" + bi("المادة", "SUBJECT") + "</th>" +
-            "<th>" + bi("التقييم المستمر", "CA /40") + "</th>" +
-            "<th>" + bi("الامتحان", "EXAM /60") + "</th>" +
-            "<th>" + bi("المجموع", "T3 /100") + "</th>" +
             "<th>" + bi("الفصل الأول", "T1 /100") + "</th>" +
             "<th>" + bi("الفصل الثاني", "T2 /100") + "</th>" +
+            "<th>" + bi("الفصل الثالث", "T3 /100") + "</th>" +
             "<th>" + bi("المعدل", "AVERAGE /100") + "</th>" +
-            "</tr></thead><tbody>" + rows + "</tbody></table>" +
+            "</tr></thead><tbody>" + rows + "</tbody></table></div>" +
             '<div class="ttr-p-sum">' +
             '<div class="ttr-p-cell"><div class="ttr-p-k">' + bi("المجموع الكلي", "GRAND TOTAL") + '</div><div class="ttr-p-v">' + fmt1(st.grandTotal) + " / " + (res.subjects.length * 100) + "</div></div>" +
             '<div class="ttr-p-cell"><div class="ttr-p-k">' + bi("النسبة المئوية", "OVERALL PERCENTAGE") + '</div><div class="ttr-p-v">' + fmt1(st.pct) + "%</div></div>" +
-            '<div class="ttr-p-cell"><div class="ttr-p-k">' + bi("الترتيب في الفصل", "CLASS POSITION") + '</div><div class="ttr-p-v">' + ordinal(st.position) + "</div></div>" +
-            "</div>" + warn +
+            '<div class="ttr-p-cell"><div class="ttr-p-k">' + bi("الترتيب في الفصل", "CLASS POSITION") + '</div><div class="ttr-p-v">' + esc(positionOf(st.position, classSize)) + "</div></div>" +
+            "</div>" + warn + datesHtml +
             '<div class="ttr-p-sigs">' +
             '<div class="ttr-p-sig">' +
             '<div class="ttr-p-sig-line">______________________________</div>' +
@@ -550,6 +622,24 @@
     }
 
     var pdfRunning = false;
+
+    /* Belt-and-braces companion to the flex CSS: after the sheet is laid
+       out, top up any residual gap so the score table always reaches the
+       bottom of its A4 slot (matters most for 5-subject classes). */
+    function stretchTable(page) {
+        var wrap = page.querySelector(".ttr-p-tablewrap");
+        var table = wrap ? wrap.querySelector("table") : null;
+        if (!wrap || !table) return;
+        var rows = table.querySelectorAll("tbody tr");
+        if (!rows.length) return;
+        var gap = wrap.clientHeight - table.offsetHeight;
+        if (gap <= 1) return;
+        var heights = [];
+        for (var r = 0; r < rows.length; r++) heights.push(rows[r].offsetHeight);
+        var add = Math.floor(gap / rows.length);
+        if (add <= 0) return;
+        for (var k = 0; k < rows.length; k++) rows[k].style.height = (heights[k] + add) + "px";
+    }
 
     window.ttrDownloadPdf = function (idx) {
         var res = state.results[idx];
@@ -583,8 +673,18 @@
             if (i >= res.students.length) { finish(); return; }
             stage.innerHTML = studentPageHTML(res, res.students[i], i + 1);
             var page = stage.firstChild;
-            /* Guarantee a full A4 capture even if html2canvas ignores min-height. */
-            if (page && page.offsetHeight < 1123) page.style.height = "1123px";
+            /* Pin the sheet to exactly one A4 (794x1123 @96dpi) when its
+               content fits, so the flex layout has a definite height and
+               the score table stretches to fill the page (a 5-subject
+               class must not sit as a small block at the top). Classes
+               with a lot of subjects keep their natural height and are
+               scaled down to the page by the PDF step below. */
+            if (page) {
+                page.style.height = "auto";
+                var natural = page.scrollHeight;
+                page.style.height = (natural <= 1123 ? 1123 : natural) + "px";
+                stretchTable(page);
+            }
             setTimeout(function () {
                 html2canvas(page, { scale: 2, backgroundColor: "#ffffff", useCORS: true, width: 794 })
                     .then(function (cv) { canvases.push(cv); i++; captureNext(); })
@@ -641,7 +741,7 @@
             method: "POST",
             credentials: "same-origin",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ classes: state.results })
+            body: JSON.stringify({ classes: state.results, meta: readDates() })
         })
             .then(function (r) {
                 if (!r.ok) {
