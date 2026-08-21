@@ -427,6 +427,26 @@ function ordinalPos(n) {
     return p + "th";
 }
 
+/* Hard-coded school letterhead (spec) - printed at the top of the
+   Summary tab and every class tab. */
+const SCHOOL_LETTERHEAD = {
+    nameEn: "AMEENULLAH SCHOOL OF ARABIC AND ISLAMIC STUDIES",
+    nameAr: "مَدْرَسَةُ أَمِينِ اللهِ لِلْعُلُومِ الْعَرَبِيَّةِ الْإِسْلَامِيَّةِ",
+    address: "3, Temidire Street off Ondo Benin Road, Ijebu-Ode, Ogun State, Nigeria",
+    tel: "08062445559, 08058306889",
+    email: "madrasatuameenillah22@gmail.com"
+};
+
+/* AVERAGE /100 = (T1 + T2 + T3) / 3 rounded to 1 decimal. Uses the value
+   the page already computed when present, otherwise derives it. */
+function subjectAverage(sc) {
+    if (sc.average !== null && sc.average !== undefined) return sc.average;
+    if (sc.t1 === null || sc.t1 === undefined ||
+        sc.t2 === null || sc.t2 === undefined ||
+        sc.total === null || sc.total === undefined) return null;
+    return Math.round(((Number(sc.t1) + Number(sc.t2) + Number(sc.total)) / 3) * 10) / 10;
+}
+
 /* classes: array of parsed class objects (may already carry computed
    position / percentage / grandTotal fields - used when present). */
 function buildThirdTermWorkbook(classes) {
@@ -435,14 +455,18 @@ function buildThirdTermWorkbook(classes) {
     const today = new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
     const usedNames = [];
 
+    const schoolName = SCHOOL_LETTERHEAD.nameEn;
+    const schoolNameAr = SCHOOL_LETTERHEAD.nameAr;
+    const contactLine = [SCHOOL_LETTERHEAD.address, "Tel: " + SCHOOL_LETTERHEAD.tel, "Email: " + SCHOOL_LETTERHEAD.email].join("  |  ");
+
     /* ---------- Summary tab ---------- */
-    const summaryRows = [
-        ["AMEENULLAH SCHOOL OF ARABIC AND ISLAMIC STUDIES"],
-        ["مَدْرَسَةُ أَمِينِ اللهِ لِلْعُلُومِ الْعَرَبِيَّةِ الْإِسْلَامِيَّةِ"],
-        ["THIRD TERM RESULTS - Consolidated Export / نتائج الفصل الثالث - تصدير موحّد"],
-        [],
-        ["Class / الصف", "Teacher / الأستاذ", "Students / الطلاب", "Subjects / المواد", "Generated / التاريخ"],
-    ];
+    const summaryRows = [];
+    summaryRows.push([schoolName]);
+    summaryRows.push([schoolNameAr]);
+    if (contactLine) summaryRows.push([contactLine]);
+    summaryRows.push(["THIRD TERM RESULTS - Consolidated Export / نتائج الفصل الثالث - تصدير موحّد"]);
+    summaryRows.push([]);
+    summaryRows.push(["Class / الصف", "Teacher / الأستاذ", "Students / الطلاب", "Subjects / المواد", "Generated / التاريخ"]);
     classes.forEach((c) => {
         summaryRows.push([
             c.className || c.sheet || "",
@@ -453,11 +477,11 @@ function buildThirdTermWorkbook(classes) {
         ]);
     });
     const summarySheet = XLSX.utils.aoa_to_sheet(summaryRows);
-    summarySheet["!merges"] = [
-        { s: { r: 0, c: 0 }, e: { r: 0, c: 4 } },
-        { s: { r: 1, c: 0 }, e: { r: 1, c: 4 } },
-        { s: { r: 2, c: 0 }, e: { r: 2, c: 4 } }
-    ];
+    const summaryMerges = [];
+    for (let r = 0; r < summaryRows.length - 2; r++) {
+        summaryMerges.push({ s: { r, c: 0 }, e: { r, c: 4 } });
+    }
+    summarySheet["!merges"] = summaryMerges;
     summarySheet["!cols"] = [{ wch: 30 }, { wch: 30 }, { wch: 14 }, { wch: 14 }, { wch: 16 }];
     XLSX.utils.book_append_sheet(wb, summarySheet, "Summary");
 
@@ -466,30 +490,30 @@ function buildThirdTermWorkbook(classes) {
         const subjects = c.subjects || [];
         const students = c.students || [];
         const n = subjects.length;
-        const width = 3 + n * 4 + 4; // S/N, Adm, Name + 4 cols/subject + GrandTotal, %, Position, Status
+        const width = 3 + n * 6 + 4; // S/N, Adm, Name + 6 cols/subject + GrandTotal, %, Position, Status
 
-        const rows = [
-            ["AMEENULLAH SCHOOL OF ARABIC AND ISLAMIC STUDIES"],
-            ["مَدْرَسَةُ أَمِينِ اللهِ لِلْعُلُومِ الْعَرَبِيَّةِ الْإِسْلَامِيَّةِ"],
-            ["THIRD TERM RESULTS / نتائج الفصل الثالث"],
-            ["Class / الصف: " + (c.className || c.sheet || ""), "Teacher / الأستاذ: " + (c.teacher || "")],
-            ["Term: 3rd Term / الفصل الثالث", "Generated: " + today],
-            []
-        ];
+        const rows = [];
+        rows.push([schoolName]);
+        rows.push([schoolNameAr]);
+        if (contactLine) rows.push([contactLine]);
+        rows.push(["THIRD TERM RESULTS / نتائج الفصل الثالث"]);
+        rows.push(["Class / الصف: " + (c.className || c.sheet || ""), "Teacher / الأستاذ: " + (c.teacher || "")]);
+        rows.push(["Term: 3rd Term / الفصل الثالث", "Generated: " + today]);
+        rows.push([]);
 
-        // Subject band (names merged across their 4 sub-columns)
+        // Subject band (names merged across their 6 sub-columns)
         const band = ["S/N", "Adm No", "Student Name / اسم الطالب"];
         const subBand = ["", "", ""];
-        const merges = [
-            { s: { r: 0, c: 0 }, e: { r: 0, c: width - 1 } },
-            { s: { r: 1, c: 0 }, e: { r: 1, c: width - 1 } },
-            { s: { r: 2, c: 0 }, e: { r: 2, c: width - 1 } }
-        ];
+        const bandRow = rows.length;      // subject-name band row index
+        const merges = [];
+        for (let r = 0; r < rows.length; r++) {
+            merges.push({ s: { r, c: 0 }, e: { r, c: width - 1 } });
+        }
         subjects.forEach((sub, si) => {
-            const base = 3 + si * 4;
-            band.push(sub.name, "", "", "");
-            subBand.push("CA /40", "Exam /60", "Total /100", "ف3");
-            merges.push({ s: { r: 6, c: base }, e: { r: 6, c: base + 3 } });
+            const base = 3 + si * 6;
+            band.push(sub.name, "", "", "", "", "");
+            subBand.push("CA /40", "EXAM /60", "T3 /100", "T1 /100", "T2 /100", "AVG /100");
+            merges.push({ s: { r: bandRow, c: base }, e: { r: bandRow, c: base + 5 } });
         });
         band.push("Grand Total / المجموع الكلي", "% / النسبة", "Position / الترتيب", "Status / الحالة");
         subBand.push("", "", "", "");
@@ -498,11 +522,14 @@ function buildThirdTermWorkbook(classes) {
         students.forEach((st) => {
             const row = [st.sn, st.adm, st.name];
             (st.scores || []).forEach((sc) => {
+                const avg = subjectAverage(sc);
                 row.push(
-                    sc.ca === null ? "" : sc.ca,
-                    sc.exam === null ? "" : sc.exam,
-                    sc.total === null ? "" : sc.total,
-                    sc.t3 === null ? "" : sc.t3
+                    sc.ca === null || sc.ca === undefined ? "" : sc.ca,
+                    sc.exam === null || sc.exam === undefined ? "" : sc.exam,
+                    sc.total === null || sc.total === undefined ? "" : sc.total,
+                    sc.t1 === null || sc.t1 === undefined ? "" : sc.t1,
+                    sc.t2 === null || sc.t2 === undefined ? "" : sc.t2,
+                    avg === null ? "" : avg
                 );
             });
             row.push(
@@ -518,7 +545,7 @@ function buildThirdTermWorkbook(classes) {
         ws["!merges"] = merges;
         ws["!cols"] = [{ wch: 6 }, { wch: 13 }, { wch: 32 }];
         for (let si = 0; si < n; si++) {
-            for (let k = 0; k < 4; k++) ws["!cols"].push({ wch: 9 });
+            for (let k = 0; k < 6; k++) ws["!cols"].push({ wch: 9 });
         }
         ws["!cols"].push({ wch: 12 }, { wch: 9 }, { wch: 10 }, { wch: 22 });
 
