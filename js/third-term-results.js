@@ -470,11 +470,13 @@
             " &nbsp;|&nbsp; <span dir=\"rtl\" lang=\"ar\">" + esc(mottoAr) + "</span>";
 
         var contactParts = [];
-        if (address) contactParts.push(esc(address));
-        if (tel) contactParts.push("&#9742; " + esc(tel));
-        if (email) contactParts.push("&#9993; " + esc(email));
+        if (tel) contactParts.push("Tel: " + esc(tel));
+        if (email) contactParts.push("Email: " + esc(email));
         var contactHtml = contactParts.length
-            ? '<div class="ttr-p-contact">' + contactParts.join(" &nbsp;|&nbsp; ") + "</div>"
+            ? '<div class="ttr-p-contact">' + contactParts.join("  |  ") + "</div>"
+            : "";
+        var addressHtml = address
+            ? '<div class="ttr-p-address">' + esc(address) + "</div>"
             : "";
         st.scores.forEach(function (sc, i) {
             var sub = subjects[i] ? esc(subjects[i].name) : "";
@@ -499,11 +501,12 @@
             '<div class="ttr-p-head">' +
             '<img class="ttr-p-logo" src="images/LOGO.JPG" alt="">' +
             '<div class="ttr-p-school">' +
-            '<div class="ttr-p-en">' + esc(schoolEn) + "</div>" +
             '<div class="ttr-p-ar" lang="ar" dir="rtl">' + esc(schoolAr) + "</div>" +
+            '<div class="ttr-p-en">' + esc(schoolEn) + "</div>" +
+            addressHtml +
+            contactHtml +
             '<div class="ttr-p-motto">' + mottoHtml + "</div>" +
             "</div></div>" +
-            contactHtml +
             '<div class="ttr-p-title">' + bi("نتائج الفصل الثالث — كشف درجات", "THIRD TERM RESULT SHEET") + "</div>" +
             '<div class="ttr-p-info">' +
             '<div class="ttr-p-box">' +
@@ -532,14 +535,12 @@
             "</div>" + warn +
             '<div class="ttr-p-sigs">' +
             '<div class="ttr-p-sig">' +
-            '<div class="ttr-p-sig-space"></div>' +
-            '<div class="ttr-p-sig-ar" lang="ar" dir="rtl">توقيع معلم الفصل</div>' +
-            '<div class="ttr-p-sig-en">Class Teacher&apos;s Signature: _______________</div>' +
+            '<div class="ttr-p-sig-line">______________________________</div>' +
+            '<div class="ttr-p-sig-en"><strong>Class Teacher&apos;s Signature</strong></div>' +
             "</div>" +
             '<div class="ttr-p-sig">' +
-            '<div class="ttr-p-sig-space"></div>' +
-            '<div class="ttr-p-sig-ar" lang="ar" dir="rtl">توقيع المدير</div>' +
-            '<div class="ttr-p-sig-en">Principal&apos;s Signature: _______________</div>' +
+            '<div class="ttr-p-sig-line">______________________________</div>' +
+            '<div class="ttr-p-sig-en"><strong>Principal&apos;s Signature</strong></div>' +
             "</div>" +
             "</div>" +
             '<div class="ttr-p-foot">Generated ' +
@@ -581,8 +582,11 @@
         function captureNext() {
             if (i >= res.students.length) { finish(); return; }
             stage.innerHTML = studentPageHTML(res, res.students[i], i + 1);
+            var page = stage.firstChild;
+            /* Guarantee a full A4 capture even if html2canvas ignores min-height. */
+            if (page && page.offsetHeight < 1123) page.style.height = "1123px";
             setTimeout(function () {
-                html2canvas(stage.firstChild, { scale: 2, backgroundColor: "#ffffff", useCORS: true })
+                html2canvas(page, { scale: 2, backgroundColor: "#ffffff", useCORS: true, width: 794 })
                     .then(function (cv) { canvases.push(cv); i++; captureNext(); })
                     .catch(function () { i++; captureNext(); });
             }, 50);
