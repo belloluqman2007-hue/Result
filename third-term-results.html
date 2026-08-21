@@ -116,7 +116,7 @@
         <!-- Upload card -->
         <div class="mng-card">
           <h3 style="margin-top:0;">&#128229; Upload Workbook <span lang="ar" dir="rtl" style="font-size:13px; color:#5B6B62;">&nbsp;- رفع ملف الدرجات</span></h3>
-          <p class="mg-note" style="margin-top:0;">Accepting a single <b>.xlsx</b> file. Each sheet in the workbook is one class (e.g. الأوّل التّحضيريّ، الأوّل الابتدائيّ، الثّاني الإعداديّ). Per subject the sheet must have the <b>F, S, N, A</b> sub-score columns (each /10), a <b>40</b> total column, a <b>60</b> exam column and the <b>ف1 / ف2 / ف3</b> term-score columns. Student rows are <b>S/N | Adm/Num | Student Name | scores</b>.</p>
+          <p class="mg-note" style="margin-top:0;">Accepting a single <b>.xlsx</b> file. Each sheet in the workbook is one class (e.g. الأوّل التّحضيريّ، الأوّل الابتدائيّ، الثّاني الإعداديّ). Per subject the sheet must have the <b>F, S, N, A</b> sub-score columns (each /10), a <b>40</b> total column, a <b>60</b> exam column and the <b>ف1 / ف2 / ف3</b> term-score columns. Student rows are <b>S/N | Adm/Num | Student Name | scores</b>.<br><b>Note:</b> the 40 and 60 columns are only used to work out <b>T3 /100</b> (40 + 60). They are never shown on the result table, the PDF or the Excel export &mdash; only <b>T1 /100 · T2 /100 · T3 /100 · AVERAGE /100</b> are reported.</p>
           <div class="mg-toolbar" style="margin-top:10px;">
             <div class="mg-field" style="flex:1;">
               <label for="ttrFile">Excel workbook (.xlsx / .xls)</label>
@@ -130,6 +130,24 @@
             &nbsp;(one sheet per class, including a non-conforming sheet to preview the error message).
           </p>
           <div id="ttrUploadStatus" style="margin-top:12px; font-size:13px; color:#5B6B62;"></div>
+        </div>
+
+        <!-- NEW: session dates typed by the admin. Printed on EVERY result
+             sheet (PDF + Excel) and remembered in this browser. -->
+        <div class="mng-card">
+          <h3 style="margin-top:0;">&#128197; Term &amp; Session Dates <span lang="ar" dir="rtl" style="font-size:13px; color:#5B6B62;">&nbsp;- تواريخ الفصل والعام الدراسي</span></h3>
+          <p class="mg-note" style="margin-top:0;">Type these two dates yourself &mdash; they are printed on <b>every</b> result sheet. They are saved in this browser, so you only type them once.</p>
+          <div class="mg-toolbar" style="margin-top:10px;">
+            <div class="mg-field" style="flex:1; min-width:240px;">
+              <label for="ttrTermEnds">Term Ends On <span lang="ar" dir="rtl" style="color:#5B6B62;">ينتهي الفصل في</span></label>
+              <input type="text" id="ttrTermEnds" placeholder="e.g. 24th July, 2026" autocomplete="off">
+            </div>
+            <div class="mg-field" style="flex:1; min-width:240px;">
+              <label for="ttrSessionStarts">New Session Starts <span lang="ar" dir="rtl" style="color:#5B6B62;">يبدأ العام الجديد في</span></label>
+              <input type="text" id="ttrSessionStarts" placeholder="e.g. 14th September, 2026" autocomplete="off">
+            </div>
+          </div>
+          <div id="ttrDatesStatus" style="margin-top:10px; font-size:13px; color:#5B6B62;"></div>
         </div>
 
         <!-- Sheet errors -->
@@ -308,13 +326,24 @@
     .ttr-page .ttr-p-box .ttr-p-line b{ font-weight:800; color:#0F3D2E; }
     .ttr-page .ttr-p-box .ttr-p-line .ttr-p-val{ font-weight:700; text-align:right; }
     .ttr-page table.ttr-p-table{
-      width:100%; border-collapse:collapse; margin-top:12px; font-size:11.5px;
+      width:100%; border-collapse:collapse; font-size:11.5px;
     }
+    /* The score table lives in a flex:1 wrapper and is stretched to that
+       wrapper's full height, so a 5-subject class fills the whole A4 page
+       instead of sitting as a small block at the top. */
+    .ttr-page .ttr-p-tablewrap{
+      flex:1 1 auto; display:flex; flex-direction:column; margin-top:12px; min-height:0;
+    }
+    .ttr-page .ttr-p-tablewrap table.ttr-p-table{ flex:1 1 auto; height:100%; }
     .ttr-page table.ttr-p-table th, .ttr-page table.ttr-p-table td{
-      border:1px solid #8FA896; padding:6px 6px; text-align:center;
+      border:1px solid #8FA896; padding:6px 6px; text-align:center; vertical-align:middle;
     }
-    .ttr-page table.ttr-p-table thead th{ background:#0F3D2E; color:#fff; font-size:10px; vertical-align:middle; }
+    .ttr-page table.ttr-p-table thead th{ background:#0F3D2E; color:#fff; font-size:10px; vertical-align:middle; height:34px; }
     .ttr-page table.ttr-p-table td.ttr-p-subj{ text-align:right; direction:rtl; font-weight:700; }
+    /* Fewer subjects => taller rows, so the table always reaches the
+       bottom of the sheet. Set as a class on the table by the renderer. */
+    .ttr-page table.ttr-p-table.ttr-p-roomy td{ font-size:13px; padding:10px 8px; }
+    .ttr-page table.ttr-p-table.ttr-p-roomy thead th{ font-size:11px; }
     .ttr-page .ttr-p-sum{
       display:flex; justify-content:space-between; gap:12px; margin-top:12px;
     }
@@ -327,6 +356,21 @@
       margin-top:12px; background:#FFF8DC; border:1.4px solid #E8C66A; border-radius:8px;
       padding:8px 12px; font-size:11.5px; font-weight:800; color:#7A5C00; text-align:center;
     }
+    /* Term / session dates strip - printed on every sheet */
+    .ttr-page .ttr-p-dates{
+      display:flex; gap:12px; margin-top:12px;
+    }
+    .ttr-page .ttr-p-dates .ttr-p-date{
+      flex:1; border:1.4px solid #0F3D2E; border-radius:6px; padding:7px 12px;
+      display:flex; align-items:center; justify-content:space-between; gap:10px;
+      font-size:12.5px;
+    }
+    .ttr-page .ttr-p-dates .ttr-p-date .bi-lbl{
+      flex-direction:row; gap:6px; align-items:baseline;
+    }
+    .ttr-page .ttr-p-dates .ttr-p-date .bi-lbl .bi-ar{ order:2; font-size:12.5px; }
+    .ttr-page .ttr-p-dates .ttr-p-date .bi-lbl .bi-en{ order:1; font-size:12.5px; font-weight:800; color:#0F3D2E; }
+    .ttr-page .ttr-p-dates .ttr-p-date .ttr-p-dval{ font-weight:800; text-align:right; }
     /* normal signature lines (same style as Check Result) sit at the
        bottom of the A4 page; leftover height is the signing space */
     .ttr-page .ttr-p-sigs{

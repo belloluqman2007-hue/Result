@@ -1,5 +1,21 @@
 # UI Modernization — Change Log
 
+## Pack 93 — 2026-08-21
+
+Owner: no more 40 / 60 anywhere; only the /100 columns (T1 · T2 · T3 · AVERAGE) with Average = (T1 + T2 + T3) ÷ 3 and Grand Total = the sum of those averages; show the number of students in the class on every sheet and write the position as `3rd of 24`; let the admin type **Term Ends On** and **New Session Starts** on the page so they print on every sheet; and make 5-subject classes fill the whole A4 page instead of a small block at the top.
+
+| File | What happened |
+|---|---|
+| `js/third-term-results.js` | **CA /40 and EXAM /60 are gone from every output.** The uploaded workbook's 40/60 columns are still read, but only to work out `T3 = CA + EXAM` — they are no longer carried into the computed result objects, so they cannot reach the screen, the PDF or Excel. Each subject now reports exactly **T1 /100 · T2 /100 · T3 /100 · AVERAGE /100**, with `AVERAGE = (T1 + T2 + T3) ÷ 3` (1 decimal) and `Grand Total = Σ AVERAGE` (unchanged maths, now the only maths). NEW `positionOf()` renders the rank as **`3rd of 24`** everywhere. NEW **Students in Class** column on the on-screen table and an info line on the PDF sheet. NEW term/session dates: typed on the page, kept in `localStorage` (`ttrSessionDates`), reloaded on every visit and printed as a two-box strip on **every** result sheet (a blank ruled line when not filled in). PDF capture now measures the sheet's natural height first: if it fits, the page is pinned to a true A4 (`1123px`) and `stretchTable()` tops up any residual gap by growing the tbody rows, so a 5-subject class reaches the bottom of the page; taller classes keep their natural height and are scaled to the page as before. The Excel request now also sends the two dates. |
+| `third-term-results.html` | NEW **Term & Session Dates** card (two typed fields, saved-in-this-browser confirmation line). The score table on the A4 sheet lives in a `flex:1` wrapper and is stretched to it (`.ttr-p-tablewrap`), with a `.ttr-p-roomy` modifier that enlarges cells for classes of 8 subjects or fewer — so few-subject sheets fill the page instead of sitting as a block at the top. NEW `.ttr-p-dates` strip styling. Upload guide now states that the 40/60 columns are read only to compute T3 and are never reported. |
+| `third-term-parser.js` | Excel export rebuilt around the /100 columns only: the subject band merges across **4** columns (`T1 /100`, `T2 /100`, `T3 /100`, `AVERAGE /100`) instead of 6 — no CA or EXAM column is written at all. NEW **Students in Class** column plus `positionOf()` so the Position column reads `3rd of 24`. The class banner now carries class / teacher / students-in-class on one line and a dedicated **Term Ends On … New Session Starts …** line, both repeated on the Summary tab. Summary merges fixed to cover only the banner rows (they previously ran into the data rows). `buildThirdTermWorkbook(classes, meta)` takes the typed dates. |
+| `server.js` | `POST /third-term-export-excel` accepts an optional `meta` object, trims/limits `termEndsOn` and `newSessionStarts` to 120 chars each and passes them to the workbook builder. |
+| `sw.js` | Cache `v53 → v54` so browsers pick up the new columns and dates immediately. |
+
+Parsing of the internal grade workbook, grand-total/percentage/position maths, the database and every other route are untouched — this pack changes what is reported, not how it is calculated.
+
+---
+
 ## Pack 92 — 2026-08-21
 
 Owner: third-term result PDF should have an aligned bigger header, normal signature lines (like Check Result), and fill a full A4 page.

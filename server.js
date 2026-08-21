@@ -6905,9 +6905,17 @@ app.post("/third-term-export-excel", requireLogin, writeRateLimit, (req, res) =>
         return res.status(400).json({ message: "No result data to export. Upload and parse the workbook first." });
     }
 
+    /* Term / session dates typed by the admin on the page - printed on
+       every exported sheet. */
+    const rawMeta = (req.body && req.body.meta) || {};
+    const meta = {
+        termEndsOn: String(rawMeta.termEndsOn || "").slice(0, 120),
+        newSessionStarts: String(rawMeta.newSessionStarts || "").slice(0, 120)
+    };
+
     let buffer;
     try {
-        buffer = thirdTermParser.buildThirdTermWorkbook(classes);
+        buffer = thirdTermParser.buildThirdTermWorkbook(classes, meta);
     } catch (err) {
         console.log(err);
         return res.status(500).json({ message: "Could not build the Excel export." });
