@@ -126,18 +126,15 @@ alt="Student Photo">
 
 
 </table>
-  <!-- NEW (pack 100 - subject on the right): the placeholder header
-       matches the new column order that js/result.js uses for 1st/2nd
-       term (CA, Exam, Total, Grade, Subject). The 3rd-term cumulative
-       view is rebuilt by JS on search; only the 5-col placeholder
-       needed to mirror the reorder so the page is consistent on first
-       paint. -->
+  <!-- The first/second-term placeholder matches the live report table.
+       The 3rd-term cumulative view is rebuilt when a result is searched. -->
   <table id="resultTable">
     <tr>
-      <th>CA (40)</th>
-      <th>Exam (60)</th>
-      <th>Total</th>
+      <th>Average</th>
       <th>Grade</th>
+      <th>Total</th>
+      <th>Exam</th>
+      <th>CA</th>
       <th>Subject</th>
     </tr>
   </table>

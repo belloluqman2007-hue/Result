@@ -3006,6 +3006,13 @@ app.get("/search-result/:studentId", publishResultGate, (req, res) => { // CHANG
                     // cumulative average uses whichever of the 1st/2nd/3rd
                     // term totals exist for that subject.
                     const termsPresent = [firstTotal, secondTotal, thirdTotal].filter(v => v !== null);
+                    // Per-subject cumulative total shown on the 3rd-term
+                    // report: the available 1st + 2nd + 3rd term scores.
+                    // Keep it separate from the /100 cumulative average.
+                    const cumulativeTotal = [firstTotal, secondTotal, thirdTotal].reduce(
+                        (sum, value) => Number.isFinite(value) ? sum + value : sum,
+                        0
+                    );
                     const cumulativeAverage = termsPresent.length > 0
                         ? Math.round((termsPresent.reduce((a, b) => a + b, 0) / termsPresent.length) * 100) / 100
                         : null;
@@ -3020,6 +3027,7 @@ app.get("/search-result/:studentId", publishResultGate, (req, res) => { // CHANG
                         first_term_total: firstTotal,
                         second_term_total: secondTotal,
                         third_term_total: thirdTotal,
+                        cumulative_total: cumulativeTotal,
                         cumulative_average: cumulativeAverage,
                         cumulative_grade: cumulativeGrade
                     };
@@ -5019,6 +5027,12 @@ app.get("/class-results", requireLogin, (req, res) => {
             const secondTotal = priorByTerm["2nd Term"].hasOwnProperty(key) ? Number(priorByTerm["2nd Term"][key]) : null;
             const thirdTotal = Number(r.total);
             const present = [firstTotal, secondTotal, thirdTotal].filter(v => v !== null);
+            // Match /search-result: expose a per-subject 3-term total for
+            // the report-card and class-download renderers.
+            const cumulativeTotal = [firstTotal, secondTotal, thirdTotal].reduce(
+                (sum, value) => Number.isFinite(value) ? sum + value : sum,
+                0
+            );
             const cumulativeAverage = present.length
                 ? Math.round((present.reduce((a, b) => a + b, 0) / present.length) * 100) / 100
                 : null;
@@ -5028,6 +5042,7 @@ app.get("/class-results", requireLogin, (req, res) => {
                 first_term_total: firstTotal,
                 second_term_total: secondTotal,
                 third_term_total: thirdTotal,
+                cumulative_total: cumulativeTotal,
                 cumulative_average: cumulativeAverage,
                 cumulative_grade: cumulativeGrade
             };

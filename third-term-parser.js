@@ -606,6 +606,20 @@ function subjectAverage(sc) {
     return Math.round(((Number(sc.t1) + Number(sc.t2) + Number(sc.total)) / 3) * 10) / 10;
 }
 
+/* Per-subject Total = T1 + T2 + T3. It is deliberately separate from
+   the class-wide Grand Total and from the /100 subject average. */
+function subjectTotal(sc) {
+    let found = false;
+    const sum = [sc && sc.t1, sc && sc.t2, sc && sc.total].reduce((total, raw) => {
+        if (raw === null || raw === undefined || raw === "") return total;
+        const value = Number(raw);
+        if (!isFinite(value)) return total;
+        found = true;
+        return total + value;
+    }, 0);
+    return found ? Math.round(sum * 100) / 100 : null;
+}
+
 /* Grand Total = T1 + T2 + T3 across every subject (13 subjects → 3900).
    Overall average = Grand Total ÷ (subjects × 3) (3900 ÷ 39 = 100).
    Position is ranked by that average. Applied here so the Excel export
@@ -704,9 +718,9 @@ function buildThirdTermWorkbook(classes, meta) {
         const students = c.students || [];
         const n = subjects.length;
         const classSize = c.studentCount || students.length;
-        /* Only the /100 columns are reported: T1, T2, T3, AVERAGE.
-           CA /40 and EXAM /60 are deliberately NOT exported. */
-        const width = 4 + n * 4 + 5; // S/N, Adm, Name EN, Name AR + 4 cols/subject + GrandTotal, %, Students, Position, Status
+        /* Per subject, export Average, Total, T3, T2 and T1. CA /40
+           and Exam /60 are deliberately not exported. */
+        const width = 4 + n * 5 + 5; // identity + 5 cols/subject + summary columns
 
         const rows = [];
         rows.push([schoolName]);
@@ -729,10 +743,11 @@ function buildThirdTermWorkbook(classes, meta) {
             merges.push({ s: { r, c: 0 }, e: { r, c: width - 1 } });
         }
         subjects.forEach((sub, si) => {
-            const base = 3 + si * 4;
-            band.push(sub.name, "", "", "");
-            subBand.push("T1 /100", "T2 /100", "T3 /100", "AVERAGE /100");
-            merges.push({ s: { r: bandRow, c: base }, e: { r: bandRow, c: base + 3 } });
+            // Four identity columns precede every five-column subject band.
+            const base = 4 + si * 5;
+            band.push(sub.name, "", "", "", "");
+            subBand.push("AVERAGE /100", "TOTAL", "T3 /100", "T2 /100", "T1 /100");
+            merges.push({ s: { r: bandRow, c: base }, e: { r: bandRow, c: base + 4 } });
         });
         band.push("Grand Total / المجموع الكلي", "Average / النسبة المئوية", "Students in Class / عدد الطلاب في الفترة", "Position / الدرجة", "Status / الحالة");
         subBand.push("", "", "", "", "");
@@ -753,11 +768,13 @@ function buildThirdTermWorkbook(classes, meta) {
             const row = [st.sn, st.adm, nameEn, nameAr];
             (st.scores || []).forEach((sc) => {
                 const avg = subjectAverage(sc);
+                const total = subjectTotal(sc);
                 row.push(
-                    sc.t1 === null || sc.t1 === undefined ? "" : sc.t1,
-                    sc.t2 === null || sc.t2 === undefined ? "" : sc.t2,
+                    avg === null ? "" : avg,
+                    total === null ? "" : total,
                     sc.total === null || sc.total === undefined ? "" : sc.total,
-                    avg === null ? "" : avg
+                    sc.t2 === null || sc.t2 === undefined ? "" : sc.t2,
+                    sc.t1 === null || sc.t1 === undefined ? "" : sc.t1
                 );
             });
             const maxTotal = st.maxTotal || (n * 300);
@@ -775,7 +792,7 @@ function buildThirdTermWorkbook(classes, meta) {
         ws["!merges"] = merges;
         ws["!cols"] = [{ wch: 6 }, { wch: 13 }, { wch: 30 }, { wch: 30 }];
         for (let si = 0; si < n; si++) {
-            for (let k = 0; k < 4; k++) ws["!cols"].push({ wch: 11 });
+            for (let k = 0; k < 5; k++) ws["!cols"].push({ wch: 11 });
         }
         ws["!cols"].push({ wch: 12 }, { wch: 9 }, { wch: 18 }, { wch: 12 }, { wch: 22 });
 

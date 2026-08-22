@@ -8,8 +8,8 @@
         returns every class with subjects + student scores - nothing is
         written to the database. The sheet's CA /40 and EXAM /60 columns
         are used ONLY to work out T3 (= CA + EXAM); they are never
-        reported. The page shows T1 /100, T2 /100, T3 /100 and
-        AVERAGE /100 = (T1 + T2 + T3) / 3.
+        reported. Each subject shows AVERAGE /100, TOTAL, T3 /100,
+        T2 /100 and T1 /100 in that order.
      2. The admin picks one or all classes; this file computes:
           Grand Total = T1 + T2 + T3 across every subject
             (13 subjects → 13×100×3 = 3900)
@@ -56,6 +56,22 @@
         if (v === null || v === undefined) return "";
         const n = Number(v);
         return isFinite(n) ? String(Math.round(n * 100) / 100) : String(v);
+    }
+
+    /* Per-subject total for the third-term section: the available 1st,
+       2nd and 3rd term scores added together. Keep it separate from the
+       /100 average and from the class-wide Grand Total. */
+    function subjectTotal(sc) {
+        var found = false;
+        var sum = ["t1", "t2", "total"].reduce(function (total, key) {
+            var raw = sc && sc[key];
+            if (raw === null || raw === undefined || raw === "") return total;
+            var value = Number(raw);
+            if (!isFinite(value)) return total;
+            found = true;
+            return total + value;
+        }, 0);
+        return found ? Math.round(sum * 100) / 100 : null;
     }
 
     /* Bilingual label: Arabic on the right, English on the left. */
@@ -403,14 +419,13 @@
         var students = (cls.students || []).map(function (st) {
             var grandTotal = 0;
             var scores = (st.scores || []).map(function (sc) {
-                /* Column logic (spec):
-                   ONLY the /100 columns are reported. The workbook's
-                   CA /40 and EXAM /60 columns are read purely to work out
-                   T3 and are never shown on the table, PDF or Excel.
-                     T3 /100  = CA + EXAM (this term's result)
-                     T1 /100  = first-term score (ف1)
-                     T2 /100  = second-term score (ف2)
-                     AVERAGE  = (T1 + T2 + T3) / 3, rounded to 1 decimal
+                /* Column logic (spec): CA /40 and EXAM /60 are read only
+                   to work out T3; neither appears in any output.
+                     AVERAGE /100 = (T1 + T2 + T3) / 3
+                     TOTAL         = T1 + T2 + T3
+                     T3 /100       = CA + EXAM (this term's result)
+                     T2 /100       = second-term score (ف2)
+                     T1 /100       = first-term score (ف1)
                    Grand Total adds every term score (missing = 0). */
                 var t1 = sc.t1;
                 var t2 = sc.t2;
@@ -429,10 +444,11 @@
                 if (t2n !== null) grandTotal += t2n;
                 if (t3n !== null) grandTotal += t3n;
                 return {
-                    t1: t1,          // T1 /100
-                    t2: t2,          // T2 /100
-                    total: t3,       // T3 /100
-                    average: average // AVERAGE /100 = (T1 + T2 + T3) / 3
+                    t1: t1,                         // T1 /100
+                    t2: t2,                         // T2 /100
+                    total: t3,                      // T3 /100
+                    cumulativeTotal: subjectTotal({ t1: t1, t2: t2, total: t3 }),
+                    average: average                // AVERAGE /100
                 };
             });
             /* Grand Total = T1 + T2 + T3 across every subject.
@@ -610,7 +626,7 @@
         return card;
     }
 
-    /* Sortable table: two header bands (subject names + CA/Exam/Total/ف3). */
+    /* Sortable table: one five-column cumulative score band per subject. */
     function buildTableHTML(res, idx, sort) {
         var subjects = res.subjects;
         var students = res.students.slice();
@@ -641,7 +657,7 @@
         html += '<th rowspan="2" class="ttr-sortable" onclick="ttrSort(' + idx + ',&#39;name&#39;)">' +
             bi("اسم الطالب:", "Student Name:") + " " + arrow("name") + "</th>";
         subjects.forEach(function (sub) {
-            html += '<th colspan="4" lang="ar" dir="rtl">' + esc(sub.name) + "</th>";
+            html += '<th colspan="5" lang="ar" dir="rtl">' + esc(sub.name) + "</th>";
         });
         html += '<th rowspan="2" class="ttr-sortable" onclick="ttrSort(' + idx + ',&#39;grandTotal&#39;)">' +
             bi("المجموع الكلي", "Grand Total") + " " + arrow("grandTotal") + "</th>";
@@ -652,7 +668,7 @@
         html += "<th rowspan=\"2\">" + bi("الحالة", "Status") + "</th>";
         html += '</tr><tr class="ttr-band2">';
         subjects.forEach(function () {
-            html += "<th>T1 /100</th><th>T2 /100</th><th>T3 /100</th><th>AVERAGE /100</th>";
+            html += "<th>AVERAGE /100</th><th>TOTAL</th><th>T3 /100</th><th>T2 /100</th><th>T1 /100</th>";
         });
         html += "</tr></thead><tbody>";
 
@@ -673,10 +689,11 @@
             html += '<td class="ttr-name">' + nameCellHtml + "</td>";
             st.scores.forEach(function (sc) {
                 var cells = [
-                    { v: sc.t1 },
-                    { v: sc.t2 },
+                    { v: sc.average, one: true },
+                    { v: sc.cumulativeTotal !== undefined ? sc.cumulativeTotal : subjectTotal(sc) },
                     { v: sc.total },
-                    { v: sc.average, one: true }
+                    { v: sc.t2 },
+                    { v: sc.t1 }
                 ];
                 cells.forEach(function (c) {
                     var v = c.v;
@@ -740,19 +757,17 @@
         var addressHtml = address
             ? '<div class="ttr-p-address">' + esc(address) + "</div>"
             : "";
-        /* NEW (pack 100 - subject on the right): the official third-term
-           sheet now reads score columns first (T1, T2, T3, AVERAGE) and
-           the subject name last, on the right, right-aligned. The Arabic
-           subject cell keeps the .ttr-p-subj class which already enforces
-           direction:rtl + text-align:right + bold + emerald colour, so
-           the visual order on the printed sheet is now: scores -> subject. */
+        /* Official third-term sheet order: Average, Total, T3 /100,
+           T2 /100, T1 /100, then the subject on the right. */
         st.scores.forEach(function (sc, i) {
             var sub = subjects[i] ? esc(subjects[i].name) : "";
+            var total = sc.cumulativeTotal !== undefined ? sc.cumulativeTotal : subjectTotal(sc);
             rows += "<tr>" +
-                "<td>" + (sc.t1 === null || sc.t1 === undefined ? "—" : fmt(sc.t1)) + "</td>" +
-                "<td>" + (sc.t2 === null || sc.t2 === undefined ? "—" : fmt(sc.t2)) + "</td>" +
-                "<td>" + (sc.total === null || sc.total === undefined ? "—" : fmt(sc.total)) + "</td>" +
                 "<td>" + (sc.average === null || sc.average === undefined ? "—" : fmt1(sc.average)) + "</td>" +
+                "<td>" + (total === null || total === undefined ? "—" : fmt(total)) + "</td>" +
+                "<td>" + (sc.total === null || sc.total === undefined ? "—" : fmt(sc.total)) + "</td>" +
+                "<td>" + (sc.t2 === null || sc.t2 === undefined ? "—" : fmt(sc.t2)) + "</td>" +
+                "<td>" + (sc.t1 === null || sc.t1 === undefined ? "—" : fmt(sc.t1)) + "</td>" +
                 "<td class=\"ttr-p-subj\" lang=\"ar\" dir=\"rtl\">" + sub + "</td>" +
                 "</tr>";
         });
@@ -849,17 +864,15 @@
             '<div class="ttr-p-line"><span>' + bi("الفترة الدراسية", "Term") + "</span><span class=\"ttr-p-val\">3rd Term</span></div>" +
             "</div>" +
             "</div>" +
-            /* NEW (pack 100 - subject on the right): subject name is now
-               the LAST column on the printed third-term sheet. The four
-               score columns stay in their original order (T1, T2, T3,
-               AVERAGE); SUBJECT moves to the rightmost position so the
-               row reads left -> right as scores, then the subject name. */
+            /* The dedicated Third Term Results section has no grade
+               column: Average, Total, T3 /100, T2 /100, T1 /100, Subject. */
             '<div class="ttr-p-tablewrap"><table class="ttr-p-table' + (subjects.length <= 8 ? " ttr-p-roomy" : "") + '">' +
             "<thead><tr>" +
-            "<th>" + bi("الفترة الأولى", "T1 /100") + "</th>" +
-            "<th>" + bi("الفترة الثانية", "T2 /100") + "</th>" +
-            "<th>" + bi("الفترة الثالثة", "T3 /100") + "</th>" +
             "<th>" + bi("النسبة المئوية", "AVERAGE /100") + "</th>" +
+            "<th>" + bi("المجموع", "TOTAL") + "</th>" +
+            "<th>" + bi("الفترة الثالثة", "T3 /100") + "</th>" +
+            "<th>" + bi("الفترة الثانية", "T2 /100") + "</th>" +
+            "<th>" + bi("الفترة الأولى", "T1 /100") + "</th>" +
             "<th>" + bi("المواد الدراسية", "SUBJECT") + "</th>" +
             "</tr></thead><tbody>" + rows + "</tbody></table></div>" +
             '<div class="ttr-p-sum">' +
