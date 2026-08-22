@@ -800,8 +800,7 @@ nav a{
    every number column, and give the 6-column cumulative (3rd Term)
    view balanced widths so the sheet reads cleanly on screen, in print
    and in the downloaded PDF. Subject is the LAST column on the right;
-   Grade is the second-to-last and is slightly wider so the new order
-   reads: T1, T2, T3, Average, Grade, Subject. */
+   Average and Grade on the left, then scores: Average, Grade, T1, T2, T3, Subject. */
 #resultTable th,
 #resultTable td{
   text-align:center;
@@ -811,22 +810,24 @@ nav a{
   text-align:right;
 }
 #resultTable.cumulative-view th:nth-child(1),
-#resultTable.cumulative-view td:nth-child(1),
+#resultTable.cumulative-view td:nth-child(1){
+  width:12%;
+}
 #resultTable.cumulative-view th:nth-child(2),
-#resultTable.cumulative-view td:nth-child(2),
+#resultTable.cumulative-view td:nth-child(2){
+  width:10%;
+}
 #resultTable.cumulative-view th:nth-child(3),
 #resultTable.cumulative-view td:nth-child(3),
 #resultTable.cumulative-view th:nth-child(4),
-#resultTable.cumulative-view td:nth-child(4){
-  width:13%;
-}
+#resultTable.cumulative-view td:nth-child(4),
 #resultTable.cumulative-view th:nth-child(5),
 #resultTable.cumulative-view td:nth-child(5){
-  width:14%;
+  width:13%;
 }
 #resultTable.cumulative-view th:last-child,
 #resultTable.cumulative-view td:last-child{
-  width:34%;
+  width:36%;
 }
 
 /* Performance summary */

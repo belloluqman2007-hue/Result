@@ -109,7 +109,11 @@ function loadSessions() {
 
 function addSession() {
   var session = document.getElementById("newSession").value.trim();
-  if (!session) { setNotify("Type the session first (e.g. 2027/2028).", false); return; }
+  // Add "on" prefix if not present
+  if (session && !session.toLowerCase().startsWith("on ")) {
+    session = "on " + session;
+  }
+  if (!session || session === "on ") { setNotify("Type the session first (e.g. on 2027/2028).", false); return; }
   saveSession(session, 0);
 }
 

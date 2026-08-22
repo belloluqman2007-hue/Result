@@ -45,28 +45,24 @@ function searchResult() {
                    right-aligns Arabic subject names. */
                 table.innerHTML = `
                     <tr>
+                        <th>Average</th>
+                        <th>Grade</th>
                         <th>1st Term</th>
                         <th>2nd Term</th>
                         <th>3rd Term</th>
-                        <th>Average</th>
-                        <th>Grade</th>
                         <th>Subject</th>
                     </tr>
                 `;
             } else {
                 table.className = "";
-                /* NEW (pack 100 - subject on the right): same column
-                   reorder for the 1st / 2nd term view - Subject sits
-                   last on the right. The Average row colspan is
-                   reduced to 3 (CA, Exam, Total) so the "Average" label
-                   still spans all three score columns when Subject is
-                   no longer the first cell. */
+                /* UPDATED: Average and Grade on the left, then scores, Subject last */
                 table.innerHTML = `
                     <tr>
+                        <th>Average</th>
+                        <th>Grade</th>
                         <th>CA</th>
                         <th>Exam</th>
                         <th>Total</th>
-                        <th>Grade</th>
                         <th>Subject</th>
                     </tr>
                 `;
@@ -196,11 +192,11 @@ function searchResult() {
 
                     table.innerHTML += `
                         <tr>
+                            <td>${cumulativeAvg !== null && cumulativeAvg !== undefined ? amsFmtScore(cumulativeAvg) : "-"}</td>
+                            <td>${esc(grade)}</td>
                             <td>${amsFmtScore(firstTotal)}</td>
                             <td>${amsFmtScore(secondTotal)}</td>
                             <td>${amsFmtScore(thirdTotal)}</td>
-                            <td>${cumulativeAvg !== null && cumulativeAvg !== undefined ? amsFmtScore(cumulativeAvg) : "-"}</td>
-                            <td>${esc(grade)}</td>
                             <td>${esc(result.subject)}</td>
                         </tr>
                     `;
@@ -211,16 +207,15 @@ function searchResult() {
                 average = data.length > 0 ? Number((totalScore / (data.length * 3)).toFixed(2)) : 0;
 
             } else {
-                // NEW (pack 100 - subject on the right): rows now read
-                // CA, Exam, Total, Grade, Subject (Subject is the right-
-                // most cell).
+                // UPDATED: Average, Grade on left, then scores, Subject last
                 data.forEach(result => {
                     table.innerHTML += `
                         <tr>
+                            <td>-</td>
+                            <td>${esc(result.grade)}</td>
                             <td>${amsFmtScore(result.ca_score)}</td>
                             <td>${amsFmtScore(result.exam_score)}</td>
                             <td>${amsFmtScore(result.total)}</td>
-                            <td>${esc(result.grade)}</td>
                             <td>${esc(result.subject)}</td>
                         </tr>
                     `;
@@ -273,14 +268,27 @@ function searchResult() {
                (the one whose header reads "Average" / "Total"). Grade and
                Subject cells on the right are left empty so the row ends
                flush with the rest of the table. */
-            table.innerHTML += `
-                <tr>
-                    <td colspan="${isThirdTerm ? 3 : 2}"><strong>${isThirdTerm ? "Cumulative Average" : "Average"}</strong></td>
-                    <td><strong>${amsFmtScore(average)}</strong></td>
-                    <td></td>
-                    <td></td>
-                </tr>
-            `;
+            /* UPDATED: Average and Grade on left, then scores, Subject last.
+               The Average label spans the score columns (1st/2nd/3rd Term or CA/Exam/Total). */
+            if (isThirdTerm) {
+                table.innerHTML += `
+                    <tr>
+                        <td><strong>Cumulative Average</strong></td>
+                        <td></td>
+                        <td colspan="3"></td>
+                        <td></td>
+                    </tr>
+                `;
+            } else {
+                table.innerHTML += `
+                    <tr>
+                        <td><strong>Average</strong></td>
+                        <td></td>
+                        <td colspan="3"></td>
+                        <td></td>
+                    </tr>
+                `;
+            }
         })
         .catch(error => {
             console.log(error);
