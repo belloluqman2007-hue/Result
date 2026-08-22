@@ -791,7 +791,7 @@
 
         /* Student name band (top of the sheet):
            line 1 — "Student Name  <English name>" pinned to the LEFT,
-           line 2 — "اسم الطلاب  <Arabic name>" pinned to the RIGHT (RTL).
+           line 2 — "اسم الطالب  <Arabic name>" pinned to the RIGHT (RTL).
            The combined workbook cell (e.g. "احمد علي Ahmed Ali") is
            SPLIT here: the English spelling appears ONLY on the top line
            and the Arabic spelling ONLY on the bottom line — never the
@@ -811,7 +811,7 @@
         if (nameAr) {
             nameBandHtml +=
                 '<div class="ttr-p-name-row ttr-p-name-ar" dir="rtl" lang="ar">' +
-                '<span class="ttr-p-name-k">اسم الطلاب</span>' +
+                '<span class="ttr-p-name-k">اسم الطالب</span>' +
                 '<span class="ttr-p-name-v">' + esc(nameAr) + "</span>" +
                 "</div>";
         }
