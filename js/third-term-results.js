@@ -639,16 +639,16 @@
         html += '<th rowspan="2">S/N</th>';
         html += '<th rowspan="2">Adm No</th>';
         html += '<th rowspan="2" class="ttr-sortable" onclick="ttrSort(' + idx + ',&#39;name&#39;)">' +
-            bi("اسم الطالب", "Student Name") + " " + arrow("name") + "</th>";
+            bi("اسم الطالب:", "Student Name:") + " " + arrow("name") + "</th>";
         subjects.forEach(function (sub) {
             html += '<th colspan="4" lang="ar" dir="rtl">' + esc(sub.name) + "</th>";
         });
         html += '<th rowspan="2" class="ttr-sortable" onclick="ttrSort(' + idx + ',&#39;grandTotal&#39;)">' +
             bi("المجموع الكلي", "Grand Total") + " " + arrow("grandTotal") + "</th>";
         html += '<th rowspan="2" class="ttr-sortable" onclick="ttrSort(' + idx + ',&#39;pct&#39;)">' +
-            bi("المعدل العام", "Average") + " " + arrow("pct") + "</th>";
-        html += "<th rowspan=\"2\">" + bi("عدد الطلاب", "Students in Class") + "</th>";
-        html += "<th rowspan=\"2\">" + bi("الترتيب", "Position") + "</th>";
+            bi("النسبة المئوية", "Average") + " " + arrow("pct") + "</th>";
+        html += "<th rowspan=\"2\">" + bi("عدد الطلاب في الفترة", "Students in Class") + "</th>";
+        html += "<th rowspan=\"2\">" + bi("الدرجة", "Position") + "</th>";
         html += "<th rowspan=\"2\">" + bi("الحالة", "Status") + "</th>";
         html += '</tr><tr class="ttr-band2">';
         subjects.forEach(function () {
@@ -783,7 +783,7 @@
         var blankLine = "________________________";
         var datesHtml =
             '<div class="ttr-p-dates">' +
-            '<div class="ttr-p-date">' + bi("ينتهي الفصل في", "Term Ends On") +
+            '<div class="ttr-p-date">' + bi("تنتهي الفترة في", "Term Ends On") +
             '<span class="ttr-p-dval">' + (dates.termEndsOn ? esc(dates.termEndsOn) : blankLine) + "</span></div>" +
             '<div class="ttr-p-date">' + bi("يبدأ العام الجديد في", "New Session Starts") +
             '<span class="ttr-p-dval">' + (dates.newSessionStarts ? esc(dates.newSessionStarts) : blankLine) + "</span></div>" +
@@ -804,14 +804,14 @@
         if (nameEn) {
             nameBandHtml +=
                 '<div class="ttr-p-name-row ttr-p-name-en">' +
-                '<span class="ttr-p-name-k">Student Name</span>' +
+                '<span class="ttr-p-name-k">Student Name:</span>' +
                 '<span class="ttr-p-name-v">' + esc(nameEn) + "</span>" +
                 "</div>";
         }
         if (nameAr) {
             nameBandHtml +=
                 '<div class="ttr-p-name-row ttr-p-name-ar" dir="rtl" lang="ar">' +
-                '<span class="ttr-p-name-k">اسم الطالب</span>' +
+                '<span class="ttr-p-name-k">اسم الطالب:</span>' +
                 '<span class="ttr-p-name-v">' + esc(nameAr) + "</span>" +
                 "</div>";
         }
@@ -827,34 +827,34 @@
             contactHtml +
             '<div class="ttr-p-motto">' + mottoHtml + "</div>" +
             "</div></div>" +
-            '<div class="ttr-p-title">' + bi("نتائج الفصل الثالث — كشف درجات", "THIRD TERM RESULT SHEET") + "</div>" +
+            '<div class="ttr-p-title">' + bi("نتائج الفترة الثالثة — كشف الدرجات", "THIRD TERM RESULT SHEET") + "</div>" +
             nameBandHtml +
             '<div class="ttr-p-info">' +
             '<div class="ttr-p-box">' +
             '<div class="ttr-p-line"><span>' + bi("الصف", "Class") + "</span><span class=\"ttr-p-val\">" + esc(res.className) + "</span></div>" +
             '<div class="ttr-p-line"><span>' + bi("الأستاذ", "Teacher") + "</span><span class=\"ttr-p-val\">" + esc(res.teacher || "—") + "</span></div>" +
-            '<div class="ttr-p-line"><span>' + bi("عدد الطلاب في الفصل", "Students in Class") + "</span><span class=\"ttr-p-val\">" + classSize + "</span></div>" +
+            '<div class="ttr-p-line"><span>' + bi("عدد الطلاب في الفترة", "Students in Class") + "</span><span class=\"ttr-p-val\">" + classSize + "</span></div>" +
             "</div>" +
             '<div class="ttr-p-box">' +
             /* The student name now has its own band directly under the
                title (English left / Arabic right), so this box only keeps
                the admission number and the term. */
-            '<div class="ttr-p-line"><span>' + bi("رقم القيد", "Adm No") + "</span><span class=\"ttr-p-val\">" + esc(st.adm || "—") + "</span></div>" +
-            '<div class="ttr-p-line"><span>' + bi("الفصل الدراسي", "Term") + "</span><span class=\"ttr-p-val\">3rd Term</span></div>" +
+            '<div class="ttr-p-line"><span>' + bi("رقم القبول", "Adm No") + "</span><span class=\"ttr-p-val\">" + esc(st.adm || "—") + "</span></div>" +
+            '<div class="ttr-p-line"><span>' + bi("الفترة الدراسية", "Term") + "</span><span class=\"ttr-p-val\">3rd Term</span></div>" +
             "</div>" +
             "</div>" +
             '<div class="ttr-p-tablewrap"><table class="ttr-p-table' + (subjects.length <= 8 ? " ttr-p-roomy" : "") + '">' +
             "<thead><tr>" +
-            "<th>" + bi("المادة", "SUBJECT") + "</th>" +
-            "<th>" + bi("الفصل الأول", "T1 /100") + "</th>" +
-            "<th>" + bi("الفصل الثاني", "T2 /100") + "</th>" +
-            "<th>" + bi("الفصل الثالث", "T3 /100") + "</th>" +
-            "<th>" + bi("المعدل", "AVERAGE /100") + "</th>" +
+            "<th>" + bi("المواد الدراسية", "SUBJECT") + "</th>" +
+            "<th>" + bi("الفترة الأولى", "T1 /100") + "</th>" +
+            "<th>" + bi("الفترة الثانية", "T2 /100") + "</th>" +
+            "<th>" + bi("الفترة الثالثة", "T3 /100") + "</th>" +
+            "<th>" + bi("النسبة المئوية", "AVERAGE /100") + "</th>" +
             "</tr></thead><tbody>" + rows + "</tbody></table></div>" +
             '<div class="ttr-p-sum">' +
             '<div class="ttr-p-cell"><div class="ttr-p-k">' + bi("المجموع الكلي", "GRAND TOTAL") + '</div><div class="ttr-p-v">' + fmt1(st.grandTotal) + " / " + ((st.maxTotal != null) ? st.maxTotal : (res.subjects.length * 300)) + "</div></div>" +
-            '<div class="ttr-p-cell"><div class="ttr-p-k">' + bi("المعدل العام", "AVERAGE") + '</div><div class="ttr-p-v">' + fmt1(st.pct) + "</div></div>" +
-            '<div class="ttr-p-cell"><div class="ttr-p-k">' + bi("الترتيب في الفصل", "CLASS POSITION") + '</div><div class="ttr-p-v">' + esc(positionOf(st.position, classSize)) + "</div></div>" +
+            '<div class="ttr-p-cell"><div class="ttr-p-k">' + bi("النسبة المئوية", "AVERAGE") + '</div><div class="ttr-p-v">' + fmt1(st.pct) + "</div></div>" +
+            '<div class="ttr-p-cell"><div class="ttr-p-k">' + bi("الدرجة", "CLASS POSITION") + '</div><div class="ttr-p-v">' + esc(positionOf(st.position, classSize)) + "</div></div>" +
             '<div class="ttr-p-cell ttr-p-admission ' + admissionClass + '"><div class="ttr-p-k">' + bi("القبول", "ADMISSION") + '</div><div class="ttr-p-v">' + admission + "</div></div>" +
             "</div>" + warn + datesHtml +
             '<div class="ttr-p-sigs">' +
