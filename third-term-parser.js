@@ -28,6 +28,74 @@ function X() {
     return _XLSX;
 }
 
+/* FIX: school grade workbooks often carry a huge Excel used-range
+   (!ref spanning tens of thousands of empty formatted cells). Feeding
+   that whole range to sheet_to_json() with defval:"" allocated hundreds
+   of MB, OOMed the process and dropped the socket — the page then
+   showed "Network error while parsing the workbook." Cap the scan to
+   a generous class-sheet size and skip styles/HTML so parse stays lean. */
+const MAX_PARSE_ROWS = 400;
+const MAX_PARSE_COLS = 280;
+
+const LEAN_READ = {
+    cellStyles: false,
+    cellHTML: false,
+    cellNF: false,
+    sheetStubs: false
+};
+
+function readWorkbook(buffer) {
+    const XLSX = X();
+    try {
+        return XLSX.read(buffer, Object.assign({ type: "buffer" }, LEAN_READ));
+    } catch (e1) {
+        try {
+            return XLSX.read(buffer, Object.assign({ type: "array" }, LEAN_READ));
+        } catch (e2) {
+            const bin = Buffer.isBuffer(buffer)
+                ? buffer.toString("binary")
+                : String(buffer || "");
+            return XLSX.read(bin, Object.assign({ type: "binary" }, LEAN_READ));
+        }
+    }
+}
+
+function decodeSafeRange(sheet) {
+    const XLSX = X();
+    let range = null;
+    if (sheet && sheet["!ref"]) {
+        try { range = XLSX.utils.decode_range(sheet["!ref"]); } catch (e) { range = null; }
+    }
+    if (!range) {
+        let maxR = 0, maxC = 0, found = false;
+        Object.keys(sheet || {}).forEach((k) => {
+            if (!k || k.charAt(0) === "!") return;
+            let addr;
+            try { addr = XLSX.utils.decode_cell(k); } catch (e) { return; }
+            if (addr.r > maxR) maxR = addr.r;
+            if (addr.c > maxC) maxC = addr.c;
+            found = true;
+        });
+        if (!found) return null;
+        range = { s: { r: 0, c: 0 }, e: { r: maxR, c: maxC } };
+    }
+    if (range.e.r - range.s.r > MAX_PARSE_ROWS) range.e.r = range.s.r + MAX_PARSE_ROWS;
+    if (range.e.c - range.s.c > MAX_PARSE_COLS) range.e.c = range.s.c + MAX_PARSE_COLS;
+    return range;
+}
+
+function sheetToGrid(sheet) {
+    const range = decodeSafeRange(sheet);
+    if (!range) return [];
+    return X().utils.sheet_to_json(sheet, {
+        header: 1,
+        defval: "",
+        raw: true,
+        blankrows: false,
+        range: range
+    });
+}
+
 /* ------------------------------------------------------------------
    Tiny text helpers
    ------------------------------------------------------------------ */
@@ -262,15 +330,15 @@ function isFooterRow(admKey, nameKey, rowKey) {
    Main entry: parse one workbook buffer -> { classes, errors }
    ------------------------------------------------------------------ */
 function parseWorkbook(buffer) {
-    const workbook = X().read(buffer, { type: "buffer" });
+    const workbook = readWorkbook(buffer);
     const classes = [];
     const errors = [];
 
-    workbook.SheetNames.forEach((sheetName) => {
+    (workbook.SheetNames || []).forEach((sheetName) => {
         const sheet = workbook.Sheets[sheetName];
         let grid;
         try {
-            grid = X().utils.sheet_to_json(sheet, { header: 1, defval: "" });
+            grid = sheetToGrid(sheet);
         } catch (e) {
             errors.push({ sheet: sheetName, reason: "Could not read this sheet's cells." });
             return;

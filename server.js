@@ -2682,6 +2682,45 @@ const uploadExcel = multer({
     }
 });
 
+/* FIX: dedicated receiver for Third Term Results. The shared uploadExcel
+   instance rejected common browser MIME types (application/octet-stream,
+   empty, zip) and answered LIMIT_FILE_SIZE as plain text — the page's
+   r.json() then threw and showed "Network error while parsing the workbook."
+   Accept by file extension, allow 20 MB, and always reply with JSON. */
+const THIRD_TERM_MAX_BYTES = 20 * 1024 * 1024;
+const uploadThirdTermExcel = multer({
+    storage: multer.memoryStorage(),
+    limits: { fileSize: THIRD_TERM_MAX_BYTES },
+    fileFilter: (req, file, cb) => {
+        const name = String((file && file.originalname) || "").toLowerCase();
+        if (/\.(xlsx|xls)$/.test(name)) return cb(null, true);
+        const mime = String((file && file.mimetype) || "").toLowerCase();
+        const okMime = [
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            "application/vnd.ms-excel",
+            "application/octet-stream",
+            "application/zip",
+            "application/x-zip-compressed"
+        ].indexOf(mime) !== -1;
+        if (okMime) return cb(null, true);
+        cb(new Error("Only .xlsx or .xls workbooks are allowed."));
+    }
+});
+
+function receiveThirdTermWorkbook(req, res, next) {
+    uploadThirdTermExcel.single("file")(req, res, function (err) {
+        if (!err) return next();
+        if (err instanceof multer.MulterError && err.code === "LIMIT_FILE_SIZE") {
+            return res.status(400).json({
+                message: "The workbook is too large (maximum 20 MB). Remove unused sheets or images and try again."
+            });
+        }
+        return res.status(400).json({
+            message: (err && err.message) || "Could not receive the uploaded workbook."
+        });
+    });
+}
+
 const storeDir = path.join(__dirname, "uploads", "store");
 try { fs.mkdirSync(storeDir, { recursive: true }); } catch (e) { /* exists */ }
 
@@ -9867,7 +9906,21 @@ app.get("/api/staff-chat/unread", requireLogin, (req, res) => {
 
 // Handle multer errors (bad file type, too large, etc.) with a clean response
 app.use((err, req, res, next) => {
-    if (err instanceof multer.MulterError || err.message === "Only JPG and PNG images are allowed.") {
+    const isMulter = err instanceof multer.MulterError
+        || err.message === "Only JPG and PNG images are allowed."
+        || err.message === "Only .xlsx, .xls, or .csv files are allowed."
+        || err.message === "Only .xlsx or .xls workbooks are allowed.";
+    if (isMulter) {
+        /* JSON for the Third Term upload (and any fetch that asked for it)
+           so the page never treats a plain-text multer reply as a network error. */
+        const wantsJson = req.path === "/third-term-upload"
+            || (req.headers.accept && String(req.headers.accept).indexOf("application/json") !== -1);
+        if (wantsJson) {
+            const msg = (err instanceof multer.MulterError && err.code === "LIMIT_FILE_SIZE")
+                ? "The workbook is too large. Save a smaller copy and try again."
+                : err.message;
+            return res.status(400).json({ message: msg });
+        }
         return res.status(400).send(err.message);
     }
     next(err);

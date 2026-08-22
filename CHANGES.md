@@ -1,5 +1,22 @@
 # UI Modernization — Change Log
 
+## Pack 97 — 2026-08-22
+
+Owner: third-term Excel upload failed with **"Network error while parsing the workbook"**.
+
+The toast was a lie. The upload itself usually reached the server; the page then called `r.json()` on a **non-JSON** reply (multer's plain-text `"File too large"`, a MIME-type rejection HTML page, or a dropped socket after SheetJS expanded a huge Excel used-range) and the `catch` reported a network error.
+
+| File | What happened |
+|---|---|
+| `server.js` | Dedicated `receiveThirdTermWorkbook` multer for `POST /third-term-upload`: accepts by **file extension** (Safari/Android often send `application/octet-stream`), **20 MB** limit, and **always JSON** on reject / oversize. The route no longer shares the 5 MB MIME-strict `uploadExcel` instance. Global multer error handler also returns JSON for this path. |
+| `third-term-parser.js` | Lean `XLSX.read` (no styles/HTML). Caps each sheet to **400 rows × 280 cols** before `sheet_to_json`, so a formatted-empty used-range can no longer OOM the process and drop the socket. Falls back through buffer / array / binary readers for awkward `.xls` files. |
+| `js/third-term-results.js` | Reads the response as text and JSON-parses safely, so a server error message is shown instead of a fake network error. Client-side 20 MB check before upload. |
+| `sw.js` | Cache `v57 → v58` so browsers pick up the new upload script immediately. |
+
+Parsing maths, PDF/Excel export, the database and every other route are untouched.
+
+---
+
 ## Pack 96 — 2026-08-22
 
 Owner: on the third-term result sheet, put the student's name at the very top — **Student Name** on the left, **اسم الطلاب** in Arabic on the right — and shrink the sheet a little from all sides so it no longer sits edge-to-edge on the paper.
