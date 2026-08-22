@@ -140,6 +140,60 @@ function toNum(v) {
 }
 
 /* ------------------------------------------------------------------
+   Bilingual name splitting
+   ------------------------------------------------------------------
+   The workbook's "Student Name" cell usually carries BOTH spellings in
+   one cell (e.g. "احمد علي Ahmed Ali" or "Ahmed Ali / احمد علي").
+   The result sheet must split them: the English name at the top line
+   and the Arabic name at the bottom line - never the same combined
+   name twice. This function separates the Latin and Arabic parts.
+   ------------------------------------------------------------------ */
+const ARABIC_CHAR_RE = /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]/;
+const LATIN_CHAR_RE = /[A-Za-z0-9'’.]/;
+
+function splitBilingualName(raw) {
+    const s = String(raw == null ? "" : raw).trim();
+    if (!s) return { nameEn: "", nameAr: "" };
+
+    // Pure Latin (no Arabic characters): one spelling only.
+    if (!ARABIC_CHAR_RE.test(s)) return { nameEn: s, nameAr: "" };
+    // Pure Arabic (no Latin letters): one spelling only.
+    if (!/[A-Za-z]/.test(s)) return { nameEn: "", nameAr: s };
+
+    /* Mixed: walk the string, grouping consecutive characters of the
+       same script. Spaces attach to the current group; anything else
+       (slashes, dashes, brackets) just ends the group. */
+    let en = "", ar = "", buf = "", bufType = "";
+    const flush = () => {
+        const piece = buf.replace(/\s+/g, " ").trim();
+        const type = bufType;
+        buf = "";
+        bufType = "";
+        if (!piece) return;
+        if (type === "ar") ar += (ar ? " " : "") + piece;
+        else en += (en ? " " : "") + piece;
+    };
+    for (const ch of s) {
+        if (ARABIC_CHAR_RE.test(ch)) {
+            if (bufType === "en") flush();
+            bufType = "ar";
+            buf += ch;
+        } else if (LATIN_CHAR_RE.test(ch)) {
+            if (bufType === "ar") flush();
+            bufType = "en";
+            buf += ch;
+        } else if (/\s/.test(ch)) {
+            buf += " "; // space keeps the current group together
+        } else {
+            flush();    // punctuation / separators end the group
+        }
+    }
+    flush();
+
+    return { nameEn: en, nameAr: ar };
+}
+
+/* ------------------------------------------------------------------
    Subject-block header markers (F / S / N / A / 40 / 60 / ف1 / ف2 / ف3)
    ------------------------------------------------------------------ */
 function markerType(v) {
@@ -381,7 +435,10 @@ function parseWorkbook(buffer) {
            student's name (اسم الطلاب / الاسم بالعربية). When present it is
            printed on the Arabic line of the result sheet's name band. */
         let nameArCol = -1;
-        for (let r = 0; r < headerRow; r++) {
+        /* Scan through AND including the header row - some workbooks put
+           the S/N | Adm | Student Name | Arabic Name column titles on
+           the subject-band row itself. */
+        for (let r = 0; r <= headerRow; r++) {
             const row = grid[r] || [];
             for (let c = 0; c < row.length; c++) {
                 const k = normKey(cellText(row[c]));
@@ -390,9 +447,12 @@ function parseWorkbook(buffer) {
                     k === "admission" || k === "admissionno" || k === "admissionnumber" ||
                     k === "رقمالقيد" || k === "رقمالطالب" || k.startsWith("adm"))) admCol = c;
                 else if (nameArCol === -1 && (k === "arabicname" || k === "namearabic" ||
-                    k === "studentnamearabic" || k === "اسمالطلاب" ||
-                    k === "الاسمبالعربية" || k === "الاسمالعربي" ||
-                    k === "اسمالطالببالعربية")) nameArCol = c;
+                    k === "studentnamearabic" || k === "nameinarabic" ||
+                    k === "namearab" || k === "arabic" || k === "اسمالطلاب" ||
+                    k === "الاسمبالعربية" || k === "الاسمبالعربي" ||
+                    k === "الاسمالعربي" || k === "الاسمالعربيه" ||
+                    k === "الاسمالعربى" || k === "الاسمبالعربيه" ||
+                    k === "اسمالطالببالعربية" || k === "اسمالتلميذبالعربية")) nameArCol = c;
                 else if (nameCol === -1 && (k === "name" || k === "names" || k === "studentname" ||
                     k === "fullname" || k === "الاسم" || k === "اسمالطالب" ||
                     k === "اسمالتلميذ" || k === "الاسمالكامل")) nameCol = c;
@@ -410,6 +470,21 @@ function parseWorkbook(buffer) {
             const name = cellText(nameCol < row.length ? row[nameCol] : "");
             const nameAr = nameArCol !== -1 && nameArCol < row.length ? cellText(row[nameArCol]) : "";
             if (!adm && !name) continue;
+
+            /* Split the combined name cell into its English and Arabic
+               parts. When the workbook has a separate Arabic-name column,
+               that column wins for the Arabic line and only the Latin part
+               of the main column is used for the English line. */
+            const splitMain = splitBilingualName(name);
+            let nameEn = splitMain.nameEn;
+            let finalNameAr = splitMain.nameAr;
+            if (nameAr) {
+                const splitAr = splitBilingualName(nameAr);
+                /* Dedicated Arabic column: use its Arabic part (or the
+                   whole cell when it holds no Latin text at all). */
+                finalNameAr = splitAr.nameAr || nameAr;
+                if (!nameEn) nameEn = splitAr.nameEn; // main column was Arabic-only
+            }
 
             const admKey = normKey(adm);
             const nameKey = normKey(name);
@@ -454,7 +529,8 @@ function parseWorkbook(buffer) {
                 sn: cellText(row[0]),
                 adm,
                 name,
-                nameAr,
+                nameEn,
+                nameAr: finalNameAr,
                 scores,
                 missingSubjects,
                 incomplete: missingSubjects.length > 0
@@ -625,7 +701,7 @@ function buildThirdTermWorkbook(classes, meta) {
         const classSize = c.studentCount || students.length;
         /* Only the /100 columns are reported: T1, T2, T3, AVERAGE.
            CA /40 and EXAM /60 are deliberately NOT exported. */
-        const width = 3 + n * 4 + 5; // S/N, Adm, Name + 4 cols/subject + GrandTotal, %, Students, Position, Status
+        const width = 4 + n * 4 + 5; // S/N, Adm, Name EN, Name AR + 4 cols/subject + GrandTotal, %, Students, Position, Status
 
         const rows = [];
         rows.push([schoolName]);
@@ -637,9 +713,11 @@ function buildThirdTermWorkbook(classes, meta) {
         rows.push([datesLine]);
         rows.push([]);
 
-        // Subject band (names merged across their 4 sub-columns)
-        const band = ["S/N", "Adm No", "Student Name / اسم الطالب"];
-        const subBand = ["", "", ""];
+        /* The name is SPLIT here, like on the result sheet: English name
+           in its own column, Arabic name in its own column (the workbook
+           usually has both spellings together in one cell). */
+        const band = ["S/N", "Adm No", "Student Name (English) / الاسم بالإنجليزية", "Student Name (Arabic) / الاسم بالعربية"];
+        const subBand = ["", "", "", ""];
         const bandRow = rows.length;      // subject-name band row index
         const merges = [];
         for (let r = 0; r < rows.length; r++) {
@@ -656,7 +734,18 @@ function buildThirdTermWorkbook(classes, meta) {
         rows.push(band, subBand);
 
         students.forEach((st) => {
-            const row = [st.sn, st.adm, st.name];
+            /* Fall back to splitting when the client did not send the
+               split fields (e.g. data parsed by an older build). */
+            let nameEn = "", nameAr = "";
+            if (st.nameEn !== undefined || st.nameAr !== undefined) {
+                nameEn = st.nameEn || "";
+                nameAr = st.nameAr || "";
+            } else {
+                const split = splitBilingualName(st.name);
+                nameEn = split.nameEn;
+                nameAr = split.nameAr;
+            }
+            const row = [st.sn, st.adm, nameEn, nameAr];
             (st.scores || []).forEach((sc) => {
                 const avg = subjectAverage(sc);
                 row.push(
@@ -679,7 +768,7 @@ function buildThirdTermWorkbook(classes, meta) {
 
         const ws = XLSX.utils.aoa_to_sheet(rows);
         ws["!merges"] = merges;
-        ws["!cols"] = [{ wch: 6 }, { wch: 13 }, { wch: 32 }];
+        ws["!cols"] = [{ wch: 6 }, { wch: 13 }, { wch: 30 }, { wch: 30 }];
         for (let si = 0; si < n; si++) {
             for (let k = 0; k < 4; k++) ws["!cols"].push({ wch: 11 });
         }
@@ -691,4 +780,4 @@ function buildThirdTermWorkbook(classes, meta) {
     return XLSX.write(wb, { type: "buffer", bookType: "xlsx" });
 }
 
-module.exports = { parseWorkbook, buildThirdTermWorkbook };
+module.exports = { parseWorkbook, buildThirdTermWorkbook, splitBilingualName };

@@ -2665,16 +2665,27 @@ const upload = multer({
 
 // Separate multer instance for bulk student uploads - keeps the file in
 // memory only (never written to disk) since we just need to read its rows.
+// FIX: accept by file EXTENSION as well as MIME type. Phones (Android
+// file pickers, iOS Safari, Google Drive) routinely send .xlsx/.xls/.csv
+// as application/octet-stream or with an empty MIME type; a strict MIME
+// whitelist made those uploads fail with "Only .xlsx, .xls, or .csv files
+// are allowed" / a fake network error. The rows are parsed and validated
+// afterwards, so being permissive here is safe.
 const uploadExcel = multer({
     storage: multer.memoryStorage(),
-    limits: { fileSize: 5 * 1024 * 1024 },
+    limits: { fileSize: 20 * 1024 * 1024 },
     fileFilter: (req, file, cb) => {
+        const name = String((file && file.originalname) || "").toLowerCase();
+        if (/\.(xlsx|xls|csv)$/.test(name)) return cb(null, true);
         const allowed = [
             "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             "application/vnd.ms-excel",
-            "text/csv"
+            "text/csv",
+            "application/csv",
+            "application/octet-stream",
+            "application/zip"
         ];
-        if (allowed.includes(file.mimetype)) {
+        if (allowed.includes(String((file && file.mimetype) || "").toLowerCase())) {
             cb(null, true);
         } else {
             cb(new Error("Only .xlsx, .xls, or .csv files are allowed."));
@@ -6930,7 +6941,12 @@ app.delete("/payroll/:id", requireLogin, requireAdmin, (req, res) => {
    Summary tab + one tab per class.
    ===================================================================== */
 
-app.post("/third-term-upload", requireLogin, writeRateLimit, uploadExcel.single("file"), (req, res) => {
+/* FIX: use the dedicated permissive receiver, NOT the shared uploadExcel.
+   The shared instance whitelisted only a few MIME types (and 5 MB), so
+   phones/browsers that send .xlsx as application/octet-stream (or with an
+   empty MIME type) were rejected before the route ever ran — the page then
+   showed "Network error while parsing the workbook." */
+app.post("/third-term-upload", requireLogin, writeRateLimit, receiveThirdTermWorkbook, (req, res) => {
     if (!req.file) return res.status(400).json({ message: "No file uploaded." });
 
     let parsed;
