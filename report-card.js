@@ -31,6 +31,21 @@
             .replace(/"/g, "&quot;");
     }
 
+    /* The third-term Total is the subject's 1st + 2nd + 3rd term score.
+       Prefer the API field, with a fallback so an already-open page that
+       receives an older response still renders the right total. */
+    function cumulativeTotalFor(result, firstTotal, secondTotal, thirdTotal) {
+        const supplied = result && result.cumulative_total;
+        const suppliedNumber = Number(supplied);
+        if (supplied !== null && supplied !== undefined && supplied !== "" && Number.isFinite(suppliedNumber)) {
+            return suppliedNumber;
+        }
+        return [firstTotal, secondTotal, thirdTotal].reduce((sum, value) => {
+            const number = Number(value);
+            return Number.isFinite(number) ? sum + number : sum;
+        }, 0);
+    }
+
     /* Fetch everything one report needs (read-only public endpoints,
        the very same ones the Check Result page uses).
        Pass sharedSignatures (fetched once by the caller) to avoid
@@ -119,33 +134,34 @@
         let average = 0;
 
         if (isThirdTerm) {
-            tableRows += `<tr><th>Average</th><th>Grade</th><th>1st Term</th><th>2nd Term</th><th>3rd Term</th><th>Subject</th></tr>`;
-            let averagesSum = 0, averagesCount = 0;
+            /* Third-term cumulative reports use the requested order:
+               Average, Grade, Total, 3rd /100, 2nd /100, 1st /100, Subject. */
+            tableRows += `<tr><th>Average</th><th>Grade</th><th>Total</th><th>3rd Term /100</th><th>2nd Term /100</th><th>1st Term /100</th><th>Subject</th></tr>`;
             data.forEach(result => {
                 const firstTotal = result.first_term_total !== null && result.first_term_total !== undefined ? result.first_term_total : "-";
                 const secondTotal = result.second_term_total !== null && result.second_term_total !== undefined ? result.second_term_total : "-";
-                const thirdTotal = result.third_term_total;
+                const thirdTotal = result.third_term_total !== null && result.third_term_total !== undefined
+                    ? result.third_term_total
+                    : result.total;
                 const cumulativeAvg = result.cumulative_average;
+                const cumulativeTotal = cumulativeTotalFor(result, firstTotal, secondTotal, thirdTotal);
                 const grade = result.cumulative_grade || result.grade || "";
-                tableRows += `<tr><td>${cumulativeAvg !== null && cumulativeAvg !== undefined ? amsFmtScore(cumulativeAvg) : "-"}</td><td>${esc(grade)}</td><td>${amsFmtScore(firstTotal)}</td><td>${amsFmtScore(secondTotal)}</td><td>${amsFmtScore(thirdTotal)}</td><td>${esc(result.subject)}</td></tr>`;
-                if (cumulativeAvg !== null && cumulativeAvg !== undefined) {
-                    averagesSum += Number(cumulativeAvg);
-                    averagesCount++;
-                }
-                // Total Score = ALL three term scores combined
+                tableRows += `<tr><td>${cumulativeAvg !== null && cumulativeAvg !== undefined ? amsFmtScore(cumulativeAvg) : "-"}</td><td>${esc(grade)}</td><td>${amsFmtScore(cumulativeTotal)}</td><td>${amsFmtScore(thirdTotal)}</td><td>${amsFmtScore(secondTotal)}</td><td>${amsFmtScore(firstTotal)}</td><td>${esc(result.subject)}</td></tr>`;
+                // Grand Total = T1 + T2 + T3 across every subject.
                 totalScore += (Number(firstTotal) || 0) + (Number(secondTotal) || 0) + (Number(thirdTotal) || 0);
             });
-            average = averagesCount > 0 ? Number((averagesSum / averagesCount).toFixed(2)) : 0;
-            tableRows += `<tr><td><strong>${amsFmtScore(average)}</strong></td><td></td><td colspan="3"><strong>Cumulative Average</strong></td><td></td></tr>`;
+            average = data.length > 0 ? Number((totalScore / (data.length * 3)).toFixed(2)) : 0;
+            // Total + the three term columns form the four-cell label span.
+            tableRows += `<tr><td><strong>${amsFmtScore(average)}</strong></td><td></td><td colspan="4"><strong>Cumulative Average</strong></td><td></td></tr>`;
         } else {
-            tableRows += `<tr><th>Average</th><th>Grade</th><th>CA</th><th>Exam</th><th>Total</th><th>Subject</th></tr>`;
+            /* First and second term order: Average, Grade, Total, Exam, CA, Subject. */
+            tableRows += `<tr><th>Average</th><th>Grade</th><th>Total</th><th>Exam</th><th>CA</th><th>Subject</th></tr>`;
             data.forEach(result => {
-                tableRows += `<tr><td>-</td><td>${esc(result.grade)}</td><td>${amsFmtScore(result.ca_score)}</td><td>${amsFmtScore(result.exam_score)}</td><td>${amsFmtScore(result.total)}</td><td>${esc(result.subject)}</td></tr>`;
-                totalScore += Number(result.total);
+                tableRows += `<tr><td>-</td><td>${esc(result.grade)}</td><td>${amsFmtScore(result.total)}</td><td>${amsFmtScore(result.exam_score)}</td><td>${amsFmtScore(result.ca_score)}</td><td>${esc(result.subject)}</td></tr>`;
+                totalScore += Number(result.total) || 0;
             });
             average = data.length > 0 ? Number((totalScore / data.length).toFixed(2)) : 0;
-            // FIX (exact-original parity): the original average row has
-            // NO trailing empty cell on 1st/2nd term reports.
+            // Total, Exam and CA form the score span; Grade/Subject stay blank.
             tableRows += `<tr><td><strong>${amsFmtScore(average)}</strong></td><td></td><td colspan="3"><strong>Average</strong></td><td></td></tr>`;
         }
 

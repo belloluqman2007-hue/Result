@@ -1,5 +1,26 @@
 # UI Modernization — Change Log
 
+## Pack 101 — 2026-08-22
+
+Owner: restore the requested score-column order across every result output and add the per-subject three-term total.
+
+| Result | Column order |
+|---|---|
+| 1st / 2nd Term | **Average · Grade · Total · Exam · CA · Subject** |
+| 3rd Term report card (Check Result, portal, class ZIP/PDF) | **Average · Grade · Total · 3rd Term /100 · 2nd Term /100 · 1st Term /100 · Subject** |
+| Dedicated Third Term Results section (screen, PDF and Excel) | **Average /100 · Total · T3 /100 · T2 /100 · T1 /100 · Subject** (no Grade column) |
+
+`Total` on a third-term subject is the combined 1st + 2nd + 3rd term score. It is distinct from the existing class-wide Grand Total. The API now returns this as `cumulative_total`; report clients retain a fallback so a cached client response still displays it correctly. CA /40 and Exam /60 remain input-only in the dedicated Third Term Results workflow.
+
+| File | What happened |
+|---|---|
+| `js/result.js`, `student-result.html`, `js/report-card.js`, `report-card.js`, `result.html` | Reordered all first/second and third-term report-card columns; fixed the empty-state column spans; report totals and footer average rows now line up with the new layout. |
+| `server.js` | Adds `cumulative_total` to both third-term result endpoints. |
+| `js/third-term-results.js`, `third-term-results.html`, `third-term-parser.js` | Added per-subject total and applied the required dedicated-third-term ordering consistently on the on-screen table, A4 PDF and Excel export. |
+| `css/style.css`, `sw.js` | Balanced the seven-column cumulative report print layout and bumped the static-asset cache to `v62`. |
+
+---
+
 ## Pack 99 — 2026-08-22
 
 Owner: apply the third-term Arabic wording table on the printed sheet, upload page, on-screen table and Excel export, then merge.

@@ -796,11 +796,9 @@ nav a{
   font-family:'Amiri','Cairo',serif;
 }
 
-/* FIX (pack 100 - subject on the right): scores are numbers - centre
-   every number column, and give the 6-column cumulative (3rd Term)
-   view balanced widths so the sheet reads cleanly on screen, in print
-   and in the downloaded PDF. Subject is the LAST column on the right;
-   Average and Grade on the left, then scores: Average, Grade, T1, T2, T3, Subject. */
+/* Result columns: numeric values are centred and the subject remains
+   the last, right-aligned column. Third-term reports have seven columns:
+   Average, Grade, Total, T3 /100, T2 /100, T1 /100, Subject. */
 #resultTable th,
 #resultTable td{
   text-align:center;
@@ -811,23 +809,25 @@ nav a{
 }
 #resultTable.cumulative-view th:nth-child(1),
 #resultTable.cumulative-view td:nth-child(1){
-  width:12%;
+  width:11%;
 }
 #resultTable.cumulative-view th:nth-child(2),
 #resultTable.cumulative-view td:nth-child(2){
-  width:10%;
+  width:9%;
 }
 #resultTable.cumulative-view th:nth-child(3),
 #resultTable.cumulative-view td:nth-child(3),
 #resultTable.cumulative-view th:nth-child(4),
 #resultTable.cumulative-view td:nth-child(4),
 #resultTable.cumulative-view th:nth-child(5),
-#resultTable.cumulative-view td:nth-child(5){
-  width:13%;
+#resultTable.cumulative-view td:nth-child(5),
+#resultTable.cumulative-view th:nth-child(6),
+#resultTable.cumulative-view td:nth-child(6){
+  width:12.5%;
 }
 #resultTable.cumulative-view th:last-child,
 #resultTable.cumulative-view td:last-child{
-  width:36%;
+  width:30%;
 }
 
 /* Performance summary */
@@ -1140,8 +1140,8 @@ nav a{
     display:none !important;
   }
 
-  /* FIX (pack 88 - ONE page): the 3rd Term cumulative table has six
-     columns, so the cells remain compact enough for one A4 page. Pack 90
+  /* The 3rd Term cumulative table has seven columns, so its cells stay
+     compact enough for one A4 page. Pack 90
      restores a slightly larger official header while the growing score
      table uses the remaining height instead of creating blank bands. */
   #reportContainer{
