@@ -309,6 +309,10 @@ function parseWorkbook(buffer) {
            the documented order S/N | Adm/Num | Student Name (cols 0,1,2). */
         let admCol = -1;
         let nameCol = -1;
+        /* Optional second name column holding the Arabic spelling of the
+           student's name (اسم الطلاب / الاسم بالعربية). When present it is
+           printed on the Arabic line of the result sheet's name band. */
+        let nameArCol = -1;
         for (let r = 0; r < headerRow; r++) {
             const row = grid[r] || [];
             for (let c = 0; c < row.length; c++) {
@@ -317,6 +321,10 @@ function parseWorkbook(buffer) {
                 if (admCol === -1 && (k === "adm" || k === "admno" || k === "adm/no" ||
                     k === "admission" || k === "admissionno" || k === "admissionnumber" ||
                     k === "رقمالقيد" || k === "رقمالطالب" || k.startsWith("adm"))) admCol = c;
+                else if (nameArCol === -1 && (k === "arabicname" || k === "namearabic" ||
+                    k === "studentnamearabic" || k === "اسمالطلاب" ||
+                    k === "الاسمبالعربية" || k === "الاسمالعربي" ||
+                    k === "اسمالطالببالعربية")) nameArCol = c;
                 else if (nameCol === -1 && (k === "name" || k === "names" || k === "studentname" ||
                     k === "fullname" || k === "الاسم" || k === "اسمالطالب" ||
                     k === "اسمالتلميذ" || k === "الاسمالكامل")) nameCol = c;
@@ -332,6 +340,7 @@ function parseWorkbook(buffer) {
 
             const adm = cellText(admCol < row.length ? row[admCol] : "");
             const name = cellText(nameCol < row.length ? row[nameCol] : "");
+            const nameAr = nameArCol !== -1 && nameArCol < row.length ? cellText(row[nameArCol]) : "";
             if (!adm && !name) continue;
 
             const admKey = normKey(adm);
@@ -377,6 +386,7 @@ function parseWorkbook(buffer) {
                 sn: cellText(row[0]),
                 adm,
                 name,
+                nameAr,
                 scores,
                 missingSubjects,
                 incomplete: missingSubjects.length > 0
