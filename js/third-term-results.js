@@ -692,6 +692,24 @@
             '<span class="ttr-p-dval">' + (dates.newSessionStarts ? esc(dates.newSessionStarts) : blankLine) + "</span></div>" +
             "</div>";
 
+        /* Student name band (top of the sheet):
+           line 1 — "Student Name  <name>" pinned to the LEFT,
+           line 2 — "اسم الطلاب  <name>" pinned to the RIGHT (RTL).
+           A separate Arabic name is used when the workbook supplies one,
+           otherwise the same name is repeated on both lines. */
+        var nameAr = st.nameAr || st.name_ar || st.arabicName || st.name;
+        var nameBandHtml =
+            '<div class="ttr-p-namebar">' +
+            '<div class="ttr-p-name-row ttr-p-name-en">' +
+            '<span class="ttr-p-name-k">Student Name</span>' +
+            '<span class="ttr-p-name-v">' + esc(st.name) + "</span>" +
+            "</div>" +
+            '<div class="ttr-p-name-row ttr-p-name-ar" dir="rtl" lang="ar">' +
+            '<span class="ttr-p-name-k">اسم الطلاب</span>' +
+            '<span class="ttr-p-name-v">' + esc(nameAr) + "</span>" +
+            "</div>" +
+            "</div>";
+
         return '<div class="ttr-page">' + decorationHtml +
             '<div class="ttr-p-head">' +
             '<img class="ttr-p-logo" src="images/LOGO.JPG" alt="">' +
@@ -703,6 +721,7 @@
             '<div class="ttr-p-motto">' + mottoHtml + "</div>" +
             "</div></div>" +
             '<div class="ttr-p-title">' + bi("نتائج الفصل الثالث — كشف درجات", "THIRD TERM RESULT SHEET") + "</div>" +
+            nameBandHtml +
             '<div class="ttr-p-info">' +
             '<div class="ttr-p-box">' +
             '<div class="ttr-p-line"><span>' + bi("الصف", "Class") + "</span><span class=\"ttr-p-val\">" + esc(res.className) + "</span></div>" +
@@ -710,8 +729,11 @@
             '<div class="ttr-p-line"><span>' + bi("عدد الطلاب في الفصل", "Students in Class") + "</span><span class=\"ttr-p-val\">" + classSize + "</span></div>" +
             "</div>" +
             '<div class="ttr-p-box">' +
-            '<div class="ttr-p-line"><span>' + bi("اسم الطالب", "Student Name") + "</span><span class=\"ttr-p-val\">" + esc(st.name) + "</span></div>" +
+            /* The student name now has its own band directly under the
+               title (English left / Arabic right), so this box only keeps
+               the admission number and the term. */
             '<div class="ttr-p-line"><span>' + bi("رقم القيد", "Adm No") + "</span><span class=\"ttr-p-val\">" + esc(st.adm || "—") + "</span></div>" +
+            '<div class="ttr-p-line"><span>' + bi("الفصل الدراسي", "Term") + "</span><span class=\"ttr-p-val\">3rd Term</span></div>" +
             "</div>" +
             "</div>" +
             '<div class="ttr-p-tablewrap"><table class="ttr-p-table' + (subjects.length <= 8 ? " ttr-p-roomy" : "") + '">' +
@@ -835,18 +857,32 @@
             }
 
             var pdf = new window.jspdf.jsPDF({ unit: "mm", format: "a4", orientation: "portrait" });
+
+            /* Breathing space: the sheet no longer bleeds to the paper
+               edge — it is shrunk a little and inset by an equal white
+               margin on all four sides (top, bottom, left, right). */
+            var MARGIN_MM = 9;
+            var maxW = 210 - MARGIN_MM * 2;   // 192mm of usable width
+            var maxH = 297 - MARGIN_MM * 2;   // 279mm of usable height
+
+            /* One shared scale for every page so all sheets in the class
+               come out exactly the same size. */
             var fits = canvases.map(function (cv) {
-                var hMm = (cv.height * 210) / cv.width;
-                return hMm > 297 ? 297 / hMm : 1;
+                var hMm = (cv.height * maxW) / cv.width;
+                return hMm > maxH ? maxH / hMm : 1;
             });
             var globalFit = Math.min.apply(null, fits.concat([1]));
 
             canvases.forEach(function (cv, k) {
-                var hMm = (cv.height * 210) / cv.width;
-                var w = 210 * globalFit;
-                var h = Math.min(hMm * globalFit, 297);
+                var w = maxW * globalFit;
+                var h = Math.min(((cv.height * maxW) / cv.width) * globalFit, maxH);
                 if (k > 0) pdf.addPage();
-                pdf.addImage(cv.toDataURL("image/jpeg", 0.95), "JPEG", (210 - w) / 2, 0, w, h);
+                /* Centre the sheet on the paper so the white margin is
+                   even on the left, right, top and bottom (never less
+                   than MARGIN_MM on any side). */
+                var x = (210 - w) / 2;
+                var y = Math.max((297 - h) / 2, MARGIN_MM);
+                pdf.addImage(cv.toDataURL("image/jpeg", 0.95), "JPEG", x, y, w, h);
             });
 
             pdf.save("third-term-results-" + safeFileName(res.className) + ".pdf");

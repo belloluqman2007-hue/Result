@@ -350,6 +350,29 @@
       letter-spacing:.4px;
     }
     .ttr-page .ttr-p-title .bi-lbl{ display:flex; }
+    /* Student name band under the title: the English label + name sit on
+       the first line hugging the LEFT edge, the Arabic label + name on the
+       second line hugging the RIGHT edge (right-to-left). */
+    .ttr-page .ttr-p-namebar{
+      margin-top:10px; border:1.4px solid #0F3D2E; border-radius:6px;
+      padding:7px 12px; background:rgba(244,250,247,.75);
+    }
+    .ttr-page .ttr-p-namebar .ttr-p-name-row{
+      display:flex; align-items:baseline; gap:10px; line-height:1.35;
+    }
+    .ttr-page .ttr-p-namebar .ttr-p-name-en{ justify-content:flex-start; text-align:left; }
+    .ttr-page .ttr-p-namebar .ttr-p-name-ar{
+      justify-content:flex-start; text-align:right; direction:rtl; margin-top:3px;
+      font-family:'Amiri','Cairo',serif;
+    }
+    .ttr-page .ttr-p-namebar .ttr-p-name-k{
+      font-size:12.5px; font-weight:800; color:#0F3D2E; white-space:nowrap;
+    }
+    .ttr-page .ttr-p-namebar .ttr-p-name-ar .ttr-p-name-k{ font-size:13.5px; }
+    .ttr-page .ttr-p-namebar .ttr-p-name-v{
+      font-size:13.5px; font-weight:700; color:#111;
+    }
+    .ttr-page .ttr-p-namebar .ttr-p-name-ar .ttr-p-name-v{ font-size:14.5px; }
     .ttr-page .ttr-p-info{
       display:flex; gap:12px; margin-top:12px;
     }

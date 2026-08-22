@@ -1,5 +1,20 @@
 # UI Modernization — Change Log
 
+## Pack 96 — 2026-08-22
+
+Owner: on the third-term result sheet, put the student's name at the very top — **Student Name** on the left, **اسم الطلاب** in Arabic on the right — and shrink the sheet a little from all sides so it no longer sits edge-to-edge on the paper.
+
+| File | What happened |
+|---|---|
+| `js/third-term-results.js` | NEW **student name band** rendered directly under the sheet title: line 1 is `Student Name  <name>` hugging the **left** edge, line 2 is `اسم الطلاب  <name>` hugging the **right** edge (`dir="rtl"`). The Arabic line prints the student's real Arabic name when the workbook supplies one (`st.nameAr`), otherwise it repeats the same name. The old `Student Name` row was removed from the right-hand info box (it would have shown the name twice); that box now carries **Adm No** and **Term**. PDF placement rewritten: the captured sheet is fitted into a `210×297mm` page **inset by a 9 mm white margin on every side** (usable area `192×279mm`) and centred both horizontally and vertically, so the result no longer bleeds to the paper edge. All pages in a class still share one scale factor, so every sheet comes out the same size. |
+| `third-term-results.html` | NEW `.ttr-p-namebar` styles — a bordered, lightly tinted band with a left-aligned English row and a right-aligned RTL Arabic row (Amiri/Cairo, slightly larger) so both names read clearly at print size. |
+| `third-term-parser.js` | The student-row scanner now also detects an **optional Arabic name column** (`اسم الطلاب`, `الاسم بالعربية`, `الاسم العربي`, `Arabic Name`, …) and returns it as `nameAr` on each student. Workbooks without that column are unaffected — `nameAr` is simply empty and the sheet falls back to the Latin name. |
+| `sw.js` | Cache `v56 → v57` so browsers pick up the new sheet layout immediately. |
+
+Averages, grand total, position, the admission decision and the Excel export are untouched.
+
+---
+
 ## Pack 93 — 2026-08-21
 
 Owner: no more 40 / 60 anywhere; only the /100 columns (T1 · T2 · T3 · AVERAGE) with Average = (T1 + T2 + T3) ÷ 3 and Grand Total = the sum of those averages; show the number of students in the class on every sheet and write the position as `3rd of 24`; let the admin type **Term Ends On** and **New Session Starts** on the page so they print on every sheet; and make 5-subject classes fill the whole A4 page instead of a small block at the top.
