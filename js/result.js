@@ -55,7 +55,6 @@ function searchResult() {
                 `;
             } else {
                 table.className = "";
-                /* UPDATED: Average and Grade on the left, then scores, Subject last */
                 table.innerHTML = `
                     <tr>
                         <th>Average</th>
@@ -207,7 +206,6 @@ function searchResult() {
                 average = data.length > 0 ? Number((totalScore / (data.length * 3)).toFixed(2)) : 0;
 
             } else {
-                // UPDATED: Average, Grade on left, then scores, Subject last
                 data.forEach(result => {
                     table.innerHTML += `
                         <tr>
@@ -268,8 +266,6 @@ function searchResult() {
                (the one whose header reads "Average" / "Total"). Grade and
                Subject cells on the right are left empty so the row ends
                flush with the rest of the table. */
-            /* UPDATED: Average and Grade on left, then scores, Subject last.
-               The Average label spans the score columns (1st/2nd/3rd Term or CA/Exam/Total). */
             if (isThirdTerm) {
                 table.innerHTML += `
                     <tr>
