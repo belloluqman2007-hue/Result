@@ -26,7 +26,7 @@
 <body>
 
   <div class="search-container">
-    <h2>Check Result</h2>
+    <h2>Check Result <span lang="ar" style="font-size:.8em; color:#5B6B62;">| فحص النتائج</span></h2>
 
     <input type="text"  id="searchId" placeholder="Enter Student ID">
 
@@ -96,61 +96,63 @@ alt="Student Photo">
 
     </div>
  
- <h3>Student Information</h3>
+ <h3>Student Information <span class="ar-lbl" lang="ar">معلومات الطالب</span></h3>
 
 <table class="student-info-table">
 
 <tr>
-    <td><strong>Name:</strong></td>
+    <td><strong>Name:</strong> <span class="ar-lbl" lang="ar">الاسم</span></td>
     <td id="studentName"></td>
 
-    <td><strong>Class:</strong></td>
+    <td><strong>Class:</strong> <span class="ar-lbl" lang="ar">الصف</span></td>
     <td id="studentClass"></td>
 </tr>
 
 <tr>
-      <td><strong>Student ID:</strong></td>
+      <td><strong>Student ID:</strong> <span class="ar-lbl" lang="ar">رقم الطالب</span></td>
       <td id="studentId"></td>
     
-    <td><strong>Term:</strong></td>
+    <td><strong>Term:</strong> <span class="ar-lbl" lang="ar">الفترة</span></td>
     <td id="studentTerm"></td>
 </tr>
 
 <tr>
-    <td><strong>Position:</strong></td>
+    <td><strong>Position:</strong> <span class="ar-lbl" lang="ar">الترتيب</span></td>
     <td id="studentPosition"></td>
 
-        <td><strong>Session:</strong></td>
+        <td><strong>Session:</strong> <span class="ar-lbl" lang="ar">العام الدراسي</span></td>
     <td id="studentSession"></td>
 </tr>
 
 
 </table>
   <!-- The first/second-term placeholder matches the live report table.
-       The 3rd-term cumulative view is rebuilt when a result is searched. -->
+       The 3rd-term cumulative view is rebuilt when a result is searched.
+       CHANGED (owner request): bilingual headers - the term names and the
+       Average / Grade / Total / Subject columns carry their Arabic. -->
   <table id="resultTable">
     <tr>
-      <th>Average</th>
-      <th>Grade</th>
-      <th>Total</th>
-      <th>Exam</th>
-      <th>CA</th>
-      <th>Subject</th>
+      <th>Average<br><span lang="ar">النسبة المئوية</span></th>
+      <th>Grade<br><span lang="ar">الدرجة</span></th>
+      <th>Total<br><span lang="ar">الدرجة الكلية</span></th>
+      <th>Exam<br><span lang="ar">الاختبار</span></th>
+      <th>CA<br><span lang="ar">التقييم المستمر</span></th>
+      <th>Subject<br><span lang="ar">المواد الدراسية</span></th>
     </tr>
   </table>
 
 <div class="bottom-section">
-<h3>Performance Summary</h3>
+<h3>Performance Summary <span class="ar-lbl" lang="ar">ملخص الأداء</span></h3>
 
 <table class="summary-table">
 
 <tr>
-    <td><strong>Total Subjects</strong></td>
+    <td><strong>Total Subjects</strong> <span class="ar-lbl" lang="ar">عدد المواد الدراسية</span></td>
     <td id="totalSubjects"></td>
 </tr>
 
 <tr>
-    <td><strong>Total Score</strong></td>
+    <td><strong>Total Score</strong> <span class="ar-lbl" lang="ar">المجموع الكلي</span></td>
     <td id="grandTotal"></td>
 </tr>
 
@@ -160,12 +162,12 @@ alt="Student Photo">
 
 
 <tr>
-    <td><strong>Teacher's Remark</strong></td>
+    <td><strong>Teacher's Remark</strong> <span class="ar-lbl" lang="ar">ملاحظة المعلم</span></td>
     <td id="teacherRemark"></td>
 </tr>
 
 <tr>
-    <td><strong>Principal's Remark</strong></td>
+    <td><strong>Principal's Remark</strong> <span class="ar-lbl" lang="ar">ملاحظة المدير</span></td>
     <td id="principalRemark"></td>
 </tr>
 
@@ -180,13 +182,13 @@ alt="Student Photo">
   <div class="signature-box">
     <img id="classTeacherSignature" class="signature-img" alt="" style="display:none;">
     <p>______________________________</p>
-    <p><strong>Class Teacher's Signature</strong></p>
+    <p><strong>Class Teacher's Signature</strong> <span class="ar-lbl" lang="ar">توقيع معلم الصف</span></p>
   </div>
 
   <div class="signature-box">
     <img id="principalSignature" class="signature-img" alt="" style="display:none;">
     <p> ______________________________</p>
-    <P><strong>Principal's Signature</strong></P>
+    <P><strong>Principal's Signature</strong> <span class="ar-lbl" lang="ar">توقيع المدير</span></P>
   </div>
 </div>
 </div>

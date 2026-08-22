@@ -168,6 +168,19 @@
     }
 
     /* ----------------------------------------------------------------
+       CHANGED (owner request): the "القبول / ADMISSION" label box is
+       removed - the box now carries only:
+         pass: درجة ناجحة PROMOTED
+         fail: درجة راسبة REPEAT
+       The pass mark (overall average ≥ 50) is unchanged.
+    ---------------------------------------------------------------- */
+    function ttrPromotionHTML(st) {
+        return Number(st.pct) >= 50
+            ? '<span lang="ar">درجة ناجحة</span> PROMOTED'
+            : '<span lang="ar">درجة راسبة</span> REPEAT';
+    }
+
+    /* ----------------------------------------------------------------
        Term / session dates — typed by the admin on this page, printed on
        EVERY result sheet and remembered in this browser (localStorage).
        ---------------------------------------------------------------- */
@@ -706,9 +719,14 @@
             html += '<td class="ttr-pct">' + fmt1(st.pct) + "</td>";
             html += "<td>" + res.students.length + "</td>";
             html += '<td class="ttr-pos">' + positionOf(st.position, res.students.length) + "</td>";
-            html += st.incomplete
-                ? '<td class="ttr-status" title="' + esc(st.missingSubjects.join(", ")) + '">&#9888;&#65039; ' + bi("بيانات ناقصة", "Incomplete Data") + "</td>"
-                : "<td>—</td>";
+            /* CHANGED (owner request): the Status column now shows the
+               same result word as the PDF sheet (green for pass, red
+               for fail); incomplete rows keep their warning. */
+            if (st.incomplete) {
+                html += '<td class="ttr-status" title="' + esc(st.missingSubjects.join(", ")) + '">&#9888;&#65039; ' + bi("بيانات ناقصة", "Incomplete Data") + "</td>";
+            } else {
+                html += '<td class="ttr-status"><span class="ttr-prom ' + (Number(st.pct) >= 50 ? "ttr-prom-pass" : "ttr-prom-fail") + '">' + ttrPromotionHTML(st) + "</span></td>";
+            }
             html += "</tr>";
         });
 
@@ -782,9 +800,13 @@
            also what the position is measured against ("3rd of 24"). */
         var classSize = res.studentCount || (res.students || []).length;
 
-        /* Admission decision follows the school's pass mark exactly. */
-        var admission = Number(st.pct) >= 50 ? "PROMOTED" : "REPEAT";
-        var admissionClass = admission === "PROMOTED" ? "ttr-p-promoted" : "ttr-p-repeat";
+        /* CHANGED (owner request): the "القبول / ADMISSION" label box is
+           removed - the box now carries only the result word
+           (درجة ناجحة for pass, درجة راسبة for fail). The pass mark
+           itself is unchanged. */
+        var promoted = Number(st.pct) >= 50;
+        var admissionClass = promoted ? "ttr-p-promoted" : "ttr-p-repeat";
+        var admissionText = ttrPromotionHTML(st);
 
         /* Decorative stars are real text rather than a CSS-only pattern so
            html2canvas includes the full border reliably in downloaded PDFs. */
@@ -879,7 +901,7 @@
             '<div class="ttr-p-cell"><div class="ttr-p-k">' + bi("المجموع الكلي", "GRAND TOTAL") + '</div><div class="ttr-p-v">' + fmt1(st.grandTotal) + " / " + ((st.maxTotal != null) ? st.maxTotal : (res.subjects.length * 300)) + "</div></div>" +
             '<div class="ttr-p-cell"><div class="ttr-p-k">' + bi("النسبة المئوية", "AVERAGE") + '</div><div class="ttr-p-v">' + fmt1(st.pct) + "</div></div>" +
             '<div class="ttr-p-cell"><div class="ttr-p-k">' + bi("الدرجة", "CLASS POSITION") + '</div><div class="ttr-p-v">' + esc(positionOf(st.position, classSize)) + "</div></div>" +
-            '<div class="ttr-p-cell ttr-p-admission ' + admissionClass + '"><div class="ttr-p-k">' + bi("القبول", "ADMISSION") + '</div><div class="ttr-p-v">' + admission + "</div></div>" +
+            '<div class="ttr-p-cell ttr-p-admission ' + admissionClass + '"><div class="ttr-p-v">' + admissionText + "</div></div>" +
             "</div>" + warn + datesHtml +
             '<div class="ttr-p-sigs">' +
             '<div class="ttr-p-sig">' +

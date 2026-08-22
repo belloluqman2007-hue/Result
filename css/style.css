@@ -572,6 +572,34 @@ nav a{
   border:1px solid var(--line);
 }
 
+/* NEW (owner request): bilingual report labels. Arabic always renders in
+   a joined Arabic typeface (letter-spacing disconnects Arabic letters)
+   and is shown a little smaller and muted next to the English label. */
+.report-container [lang="ar"]{
+  font-family:'Amiri','Cairo',serif;
+  letter-spacing:normal;
+}
+.report-container .ar-lbl{
+  font-family:'Amiri','Cairo',serif;
+  letter-spacing:normal;
+  font-size:.85em;
+  font-weight:600;
+  color:#5B6B62;
+  margin-left:4px;
+}
+.report-container #resultTable th .ar-lbl{
+  color:#d8ecd9;
+  font-weight:400;
+  font-size:11px;
+  margin-left:0;
+}
+.report-container #resultTable td .ar-lbl{
+  color:#5B6B62;
+  margin-left:0;
+}
+.report-container .student-info-table .ar-lbl{ font-size:12.5px; }
+.report-container .summary-table .ar-lbl{ font-size:12.5px; }
+
 .report-container::before,
 .report-container::after{
   content:none;

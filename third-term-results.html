@@ -428,9 +428,23 @@
     }
     .ttr-page .ttr-p-sum .ttr-p-cell{
       flex:1; border:1.4px solid #0F3D2E; border-radius:6px; padding:8px 10px; text-align:center;
+      /* NEW (owner request): vertically centred so the label-free result
+         box (درجة ناجحة / درجة راسبة) sits level with its siblings. */
+      display:flex; flex-direction:column; justify-content:center;
     }
     .ttr-page .ttr-p-sum .ttr-p-cell .ttr-p-k{ font-size:10px; font-weight:700; color:#5B6B62; }
     .ttr-page .ttr-p-sum .ttr-p-cell .ttr-p-v{ font-size:17px; font-weight:900; color:#0F3D2E; margin-top:2px; }
+    /* The result box value mixes Arabic + English - keep the Arabic
+       joined (the box value has letter-spacing for the old English
+       words only) and never let it wrap inside the box. */
+    .ttr-page .ttr-p-admission .ttr-p-v{ margin-top:0; white-space:nowrap; }
+    .ttr-page .ttr-p-v [lang="ar"]{ font-family:'Amiri','Cairo',serif; letter-spacing:0; }
+    /* Status column of the on-screen result tables: the result word in
+       green (pass) or red (fail). */
+    .ttr-prom{ font-weight:800; font-size:11.5px; white-space:nowrap; }
+    .ttr-prom.ttr-prom-pass{ color:#176038; }
+    .ttr-prom.ttr-prom-fail{ color:#922D2D; }
+    .ttr-prom [lang="ar"]{ font-family:'Amiri','Cairo',serif; font-size:12.5px; }
     .ttr-page .ttr-p-admission .ttr-p-v{ font-size:14px; letter-spacing:.5px; }
     .ttr-page .ttr-p-admission.ttr-p-promoted{
       border-color:#247447; background:rgba(235,248,239,.82);
