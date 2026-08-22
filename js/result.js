@@ -38,25 +38,36 @@ function searchResult() {
 
             if (isThirdTerm) {
                 table.className = "cumulative-view";
+                /* NEW (pack 100 - subject on the right): the Check Result
+                   table now reads scores left -> right and the subject
+                   name is the LAST column (rightmost). CSS in style.css
+                   gives the last column the wide 34% / 14% slot and
+                   right-aligns Arabic subject names. */
                 table.innerHTML = `
                     <tr>
-                        <th>Subject</th>
                         <th>1st Term</th>
                         <th>2nd Term</th>
                         <th>3rd Term</th>
                         <th>Average</th>
                         <th>Grade</th>
+                        <th>Subject</th>
                     </tr>
                 `;
             } else {
                 table.className = "";
+                /* NEW (pack 100 - subject on the right): same column
+                   reorder for the 1st / 2nd term view - Subject sits
+                   last on the right. The Average row colspan is
+                   reduced to 3 (CA, Exam, Total) so the "Average" label
+                   still spans all three score columns when Subject is
+                   no longer the first cell. */
                 table.innerHTML = `
                     <tr>
-                        <th>Subject</th>
                         <th>CA</th>
                         <th>Exam</th>
                         <th>Total</th>
                         <th>Grade</th>
+                        <th>Subject</th>
                     </tr>
                 `;
             }
@@ -172,6 +183,9 @@ function searchResult() {
                 // every subject (13 subjects → 3900). Overall average =
                 // Grand Total ÷ (subjects × 3) (3900 ÷ 39 = 100). That
                 // average is what decides class position.
+                //
+                // NEW (pack 100 - subject on the right): the cell order
+                // matches the new header (scores first, Subject last).
 
                 data.forEach(result => {
                     const firstTotal = result.first_term_total !== null && result.first_term_total !== undefined ? result.first_term_total : "-";
@@ -182,12 +196,12 @@ function searchResult() {
 
                     table.innerHTML += `
                         <tr>
-                            <td>${esc(result.subject)}</td>
                             <td>${amsFmtScore(firstTotal)}</td>
                             <td>${amsFmtScore(secondTotal)}</td>
                             <td>${amsFmtScore(thirdTotal)}</td>
                             <td>${cumulativeAvg !== null && cumulativeAvg !== undefined ? amsFmtScore(cumulativeAvg) : "-"}</td>
                             <td>${esc(grade)}</td>
+                            <td>${esc(result.subject)}</td>
                         </tr>
                     `;
 
@@ -197,14 +211,17 @@ function searchResult() {
                 average = data.length > 0 ? Number((totalScore / (data.length * 3)).toFixed(2)) : 0;
 
             } else {
+                // NEW (pack 100 - subject on the right): rows now read
+                // CA, Exam, Total, Grade, Subject (Subject is the right-
+                // most cell).
                 data.forEach(result => {
                     table.innerHTML += `
                         <tr>
-                            <td>${esc(result.subject)}</td>
                             <td>${amsFmtScore(result.ca_score)}</td>
                             <td>${amsFmtScore(result.exam_score)}</td>
                             <td>${amsFmtScore(result.total)}</td>
                             <td>${esc(result.grade)}</td>
+                            <td>${esc(result.subject)}</td>
                         </tr>
                     `;
                     totalScore += Number(result.total);
@@ -249,11 +266,19 @@ function searchResult() {
 
             document.getElementById("principalRemark").textContent = principalRemark;
 
+            /* NEW (pack 100 - subject on the right): the Average / Cumulative
+               Average row's colspan is recalculated so the label still
+               sits across the score columns when Subject is the rightmost
+               cell. The Average VALUE stays in the same logical column
+               (the one whose header reads "Average" / "Total"). Grade and
+               Subject cells on the right are left empty so the row ends
+               flush with the rest of the table. */
             table.innerHTML += `
                 <tr>
-                    <td colspan="${isThirdTerm ? 4 : 3}"><strong>${isThirdTerm ? "Cumulative Average" : "Average"}</strong></td>
+                    <td colspan="${isThirdTerm ? 3 : 2}"><strong>${isThirdTerm ? "Cumulative Average" : "Average"}</strong></td>
                     <td><strong>${amsFmtScore(average)}</strong></td>
-                    ${isThirdTerm ? "<td></td>" : ""}
+                    <td></td>
+                    <td></td>
                 </tr>
             `;
         })

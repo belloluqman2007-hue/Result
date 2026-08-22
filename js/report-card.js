@@ -119,30 +119,44 @@
         let average = 0;
 
         if (isThirdTerm) {
-            tableRows += `<tr><th>Subject</th><th>1st Term</th><th>2nd Term</th><th>3rd Term</th><th>Average</th><th>Grade</th></tr>`;
+            /* NEW (pack 100 - subject on the right): the official report
+               card (used by the class ZIP and the student/parent portal
+               PDF) now reads scores first and the subject name last, on
+               the right. Same column reorder as js/result.js. */
+            tableRows += `<tr><th>1st Term</th><th>2nd Term</th><th>3rd Term</th><th>Average</th><th>Grade</th><th>Subject</th></tr>`;
             data.forEach(result => {
                 const firstTotal = result.first_term_total !== null && result.first_term_total !== undefined ? result.first_term_total : "-";
                 const secondTotal = result.second_term_total !== null && result.second_term_total !== undefined ? result.second_term_total : "-";
                 const thirdTotal = result.third_term_total;
                 const cumulativeAvg = result.cumulative_average;
                 const grade = result.cumulative_grade || result.grade || "";
-                tableRows += `<tr><td>${esc(result.subject)}</td><td>${amsFmtScore(firstTotal)}</td><td>${amsFmtScore(secondTotal)}</td><td>${amsFmtScore(thirdTotal)}</td><td>${cumulativeAvg !== null && cumulativeAvg !== undefined ? amsFmtScore(cumulativeAvg) : "-"}</td><td>${esc(grade)}</td></tr>`;
+                tableRows += `<tr><td>${amsFmtScore(firstTotal)}</td><td>${amsFmtScore(secondTotal)}</td><td>${amsFmtScore(thirdTotal)}</td><td>${cumulativeAvg !== null && cumulativeAvg !== undefined ? amsFmtScore(cumulativeAvg) : "-"}</td><td>${esc(grade)}</td><td>${esc(result.subject)}</td></tr>`;
                 // Grand Total = T1 + T2 + T3 across every subject
                 // (13 subjects → 3900). Average = Grand Total ÷ (n × 3).
                 totalScore += (Number(firstTotal) || 0) + (Number(secondTotal) || 0) + (Number(thirdTotal) || 0);
             });
             average = data.length > 0 ? Number((totalScore / (data.length * 3)).toFixed(2)) : 0;
-            tableRows += `<tr><td colspan="4"><strong>Cumulative Average</strong></td><td><strong>${amsFmtScore(average)}</strong></td><td></td></tr>`;
+            // Average label spans the 3 term columns; value in Average
+            // cell; Grade + Subject cells stay empty so the row ends
+            // flush with the rest of the table.
+            tableRows += `<tr><td colspan="3"><strong>Cumulative Average</strong></td><td><strong>${amsFmtScore(average)}</strong></td><td></td><td></td></tr>`;
         } else {
-            tableRows += `<tr><th>Subject</th><th>CA</th><th>Exam</th><th>Total</th><th>Grade</th></tr>`;
+            /* NEW (pack 100 - subject on the right): the 1st / 2nd term
+               report-card view (class ZIP, portal PDF) also moves
+               Subject to the last column on the right. The Average row
+               label spans CA + Exam; value sits in Total; Grade and
+               Subject are left empty. */
+            tableRows += `<tr><th>CA</th><th>Exam</th><th>Total</th><th>Grade</th><th>Subject</th></tr>`;
             data.forEach(result => {
-                tableRows += `<tr><td>${esc(result.subject)}</td><td>${amsFmtScore(result.ca_score)}</td><td>${amsFmtScore(result.exam_score)}</td><td>${amsFmtScore(result.total)}</td><td>${esc(result.grade)}</td></tr>`;
+                tableRows += `<tr><td>${amsFmtScore(result.ca_score)}</td><td>${amsFmtScore(result.exam_score)}</td><td>${amsFmtScore(result.total)}</td><td>${esc(result.grade)}</td><td>${esc(result.subject)}</td></tr>`;
                 totalScore += Number(result.total);
             });
             average = data.length > 0 ? Number((totalScore / data.length).toFixed(2)) : 0;
-            // FIX (exact-original parity): the original average row has
-            // NO trailing empty cell on 1st/2nd term reports.
-            tableRows += `<tr><td colspan="3"><strong>Average</strong></td><td><strong>${amsFmtScore(average)}</strong></td></tr>`;
+            // FIX (pack 100 - subject on the right): the Average label
+            // now spans CA + Exam (2 cells) because Subject is no
+            // longer the first column. Grade and Subject cells stay
+            // empty so the row ends flush with the rest of the table.
+            tableRows += `<tr><td colspan="2"><strong>Average</strong></td><td><strong>${amsFmtScore(average)}</strong></td><td></td><td></td></tr>`;
         }
 
         // Remarks - identical thresholds and wording to js/result.js

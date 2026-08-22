@@ -405,6 +405,20 @@
     }
     .ttr-page table.ttr-p-table thead th{ background:#0F3D2E; color:#fff; font-size:10px; vertical-align:middle; height:34px; }
     .ttr-page table.ttr-p-table td.ttr-p-subj{ text-align:right; direction:rtl; font-weight:700; }
+    /* NEW (pack 100 - subject on the right): subject is now the LAST
+       column. Give it a fixed share of the row so the four score
+       columns keep room for their numbers and Arabic long names don't
+       push the table past the printable area. */
+    .ttr-page table.ttr-p-table th:last-child,
+    .ttr-page table.ttr-p-table td.ttr-p-subj{ width:30%; }
+    .ttr-page table.ttr-p-table th:nth-child(1),
+    .ttr-page table.ttr-p-table th:nth-child(2),
+    .ttr-page table.ttr-p-table th:nth-child(3),
+    .ttr-page table.ttr-p-table th:nth-child(4),
+    .ttr-page table.ttr-p-table td:nth-child(1),
+    .ttr-page table.ttr-p-table td:nth-child(2),
+    .ttr-page table.ttr-p-table td:nth-child(3),
+    .ttr-page table.ttr-p-table td:nth-child(4){ width:17.5%; }
     /* Fewer subjects => taller rows, so the table always reaches the
        bottom of the sheet. Set as a class on the table by the renderer. */
     .ttr-page table.ttr-p-table.ttr-p-roomy td{ font-size:13px; padding:10px 8px; }

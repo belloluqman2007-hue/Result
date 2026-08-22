@@ -789,42 +789,44 @@ nav a{
    Now ONLY the font family changes (Amiri = clear Arabic); size, padding
    and line-height are back to the previous one-page values everywhere,
    on screen AND in print. Data untouched. */
-#resultTable td:first-child{
-  text-align:left;
+#resultTable td:last-child{
+  text-align:right;
   font-weight:700;
   color:var(--emerald);
   font-family:'Amiri','Cairo',serif;
 }
 
-/* FIX (pack 88 - result arrangement): scores are numbers - keep the
-   subject column left-aligned but centre every number column, and give
-   the 6-column cumulative (3rd Term) view balanced widths so the sheet
-   reads cleanly on screen, in print and in the downloaded PDF. */
+/* FIX (pack 100 - subject on the right): scores are numbers - centre
+   every number column, and give the 6-column cumulative (3rd Term)
+   view balanced widths so the sheet reads cleanly on screen, in print
+   and in the downloaded PDF. Subject is the LAST column on the right;
+   Grade is the second-to-last and is slightly wider so the new order
+   reads: T1, T2, T3, Average, Grade, Subject. */
 #resultTable th,
 #resultTable td{
   text-align:center;
 }
-#resultTable th:first-child,
-#resultTable td:first-child{
-  text-align:left;
+#resultTable th:last-child,
+#resultTable td:last-child{
+  text-align:right;
 }
-#resultTable.cumulative-view th:first-child,
-#resultTable.cumulative-view td:first-child{
-  width:34%;
-}
+#resultTable.cumulative-view th:nth-child(1),
+#resultTable.cumulative-view td:nth-child(1),
 #resultTable.cumulative-view th:nth-child(2),
 #resultTable.cumulative-view td:nth-child(2),
 #resultTable.cumulative-view th:nth-child(3),
 #resultTable.cumulative-view td:nth-child(3),
 #resultTable.cumulative-view th:nth-child(4),
-#resultTable.cumulative-view td:nth-child(4),
+#resultTable.cumulative-view td:nth-child(4){
+  width:13%;
+}
 #resultTable.cumulative-view th:nth-child(5),
 #resultTable.cumulative-view td:nth-child(5){
-  width:13%;
+  width:14%;
 }
 #resultTable.cumulative-view th:last-child,
 #resultTable.cumulative-view td:last-child{
-  width:14%;
+  width:34%;
 }
 
 /* Performance summary */
