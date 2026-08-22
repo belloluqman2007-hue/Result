@@ -138,11 +138,12 @@
     /* ---------- render the table (used on screen AND in the PDF) ---------- */
     function buildTableHTML(sheet, fromIdx, toIdx, showActions) {
         var html = '<table class="broadsheet"><thead><tr>' +
-            '<th>S/N</th><th>Adm No</th><th style="text-align:left;">Student Name</th>';
+            '<th>S/N</th><th>Adm No</th><th style="text-align:left;">Student Name</th>' +
+            '<th>Average</th>';
         sheet.subjects.forEach(function (sub) {
             html += '<th lang="ar">' + escapeHTML(sub) + "</th>";
         });
-        html += "<th>Total</th><th>Average</th><th>Position</th>";
+        html += "<th>Total</th><th>Position</th>";
         if (showActions) {
             html += '<th class="bs-action-col">Action</th>';
         }
@@ -151,12 +152,13 @@
         for (var i = fromIdx; i < toIdx; i++) {
             var s = sheet.students[i];
             html += "<tr><td>" + (i + 1) + "</td><td>" + escapeHTML(s.id) + "</td>" +
-                '<td class="bs-name">' + escapeHTML(s.name) + "</td>";
+                '<td class="bs-name">' + escapeHTML(s.name) + "</td>" +
+                "<td>" + fmtScore(s.average) + "</td>";
             sheet.subjects.forEach(function (sub) {
                 var v = s.scores[sub];
                 html += "<td>" + ((typeof v === "number" && !isNaN(v)) ? fmtScore(v) : "-") + "</td>";
             });
-            html += "<td><b>" + fmtScore(s.total) + "</b></td><td>" + fmtScore(s.average) + "</td>" +
+            html += "<td><b>" + fmtScore(s.total) + "</b></td>" +
                 "<td>" + ordinal(s.position) + "</td>";
             if (showActions) {
                 var escName = escapeHTML(s.name).replace(/'/g, "\\'");

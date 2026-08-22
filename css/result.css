@@ -474,14 +474,18 @@ body{
 
 }
 
+/* Average is now the first column - keep it centered like other numbers */
 #resultTable td:first-child{
+    text-align:center;
+    font-weight:normal;
+    color:inherit;
+}
 
-    text-align:left;
-
+/* Subject (last column) gets the special styling */
+#resultTable td:last-child{
+    text-align:right;
     font-weight:bold;
-
     color:var(--primary);
-
 }
 
 #resultTable td:last-child{

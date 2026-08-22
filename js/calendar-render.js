@@ -17,7 +17,7 @@
     tel: "Tel: 08062445559, 08058306889.",
     email: "Email: madrasatuameenillah22@gmail.com",
     motto: "MOTTO: KNOWLEDGE AND WORSHIP",
-    mottoAr: "شعارنا: العلم والعبادة"
+    mottoAr: ":الشِّعار الْعِلْمُ وَالْعِبَادَة"
   };
 
   function esc(v) {

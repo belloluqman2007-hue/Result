@@ -19,7 +19,7 @@ var certSchool = {
   nameAr: "مدرسة أمين اللّه للعلوم العربيّة الإسلاميّة",
   addr: "3, Temidire Street, Off Ondo Road, Ijebu-Ode, Ogun State.  •  Tel: 08062445559, 08058306889",
   motto: "MOTTO: KNOWLEDGE AND WORSHIP",
-  mottoAr: "شعارنا: العلم والعبادة"
+  mottoAr: ":الشِّعار الْعِلْمُ وَالْعِبَادَة"
 };
 var certBusy = false;
 var certOrient = "ls"; // default landscape ('ls' or 'pt')
@@ -379,7 +379,7 @@ function certBuildHtml(stu, posText) {
         '<div class="cert-h-ar" lang="ar">مَدْرَسَةُ أَمِيْنِ اللّهِ لِلْعُلُومِ الْعَرَبِيَّةِ الْإِسْلَامِيَّةِ</div>' +
         '<div class="cert-h-en">AMEENULLAH SCHOOL OF ARABIC AND ISLAMIC STUDIES</div>' +
         '<div class="cert-h-addr">' + certEsc(certSchool.addr) + '<br>Email: madrasatuameenillah22@gmail.com</div>' +
-        '<div class="cert-motto-pill">MOTTO: KNOWLEDGE AND WORSHIP &nbsp;·&nbsp; <span lang="ar">الشِّعَار: الْعِلْمُ وَالْعِبَادَة</span></div>' +
+        '<div class="cert-motto-pill">MOTTO: KNOWLEDGE AND WORSHIP &nbsp;·&nbsp; <span lang="ar">:الشِّعار الْعِلْمُ وَالْعِبَادَة</span></div>' +
       "</div>" +
       '<div class="cert-h-right">' +
         '<div class="cert-no"><span>Cert. No.:</span><b>' + certEsc(serial) + '</b></div>' +
