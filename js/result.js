@@ -16,6 +16,16 @@ function esc(str) {
         .replace(/"/g, "&quot;");
 }
 
+/* NEW (owner request): Arabic for the three term names, so the term
+   columns and the Term field can be shown bilingually on the report. */
+function amsTermAr(term) {
+    var t = String(term || "");
+    if (t.indexOf("1st") === 0) return "الفترة الأولى";
+    if (t.indexOf("2nd") === 0) return "الفترة الثانية";
+    if (t.indexOf("3rd") === 0) return "الفترة الثالثة";
+    return "";
+}
+
 /* The 3rd-term report shows a Total alongside the three /100 term
    scores. Prefer the API's explicit cumulative_total and keep a safe
    client-side fallback for reports returned by an older server. */
@@ -55,27 +65,31 @@ function searchResult() {
                 table.className = "cumulative-view";
                 /* Cumulative third-term result: score summary first,
                    the subject name last on the right. */
+                /* CHANGED (owner request): term columns + Average / Grade /
+                   Total / Subject are now bilingual - Arabic on the 2nd line. */
                 table.innerHTML = `
                     <tr>
-                        <th>Average</th>
-                        <th>Grade</th>
-                        <th>Total</th>
-                        <th>3rd Term /100</th>
-                        <th>2nd Term /100</th>
-                        <th>1st Term /100</th>
-                        <th>Subject</th>
+                        <th>Average<br><span lang="ar">النسبة المئوية</span></th>
+                        <th>Grade<br><span lang="ar">الدرجة</span></th>
+                        <th>Total<br><span lang="ar">الدرجة الكلية</span></th>
+                        <th>3rd Term /100<br><span lang="ar">الفترة الثالثة</span></th>
+                        <th>2nd Term /100<br><span lang="ar">الفترة الثانية</span></th>
+                        <th>1st Term /100<br><span lang="ar">الفترة الأولى</span></th>
+                        <th>Subject<br><span lang="ar">المواد الدراسية</span></th>
                     </tr>
                 `;
             } else {
                 table.className = "";
+                /* CHANGED (owner request): same bilingual treatment for the
+                   first/second term layout (Average/Grade/Total/Subject). */
                 table.innerHTML = `
                     <tr>
-                        <th>Average</th>
-                        <th>Grade</th>
-                        <th>Total</th>
-                        <th>Exam</th>
-                        <th>CA</th>
-                        <th>Subject</th>
+                        <th>Average<br><span lang="ar">النسبة المئوية</span></th>
+                        <th>Grade<br><span lang="ar">الدرجة</span></th>
+                        <th>Total<br><span lang="ar">الدرجة الكلية</span></th>
+                        <th>Exam<br><span lang="ar">الاختبار</span></th>
+                        <th>CA<br><span lang="ar">التقييم المستمر</span></th>
+                        <th>Subject<br><span lang="ar">المواد الدراسية</span></th>
                     </tr>
                 `;
             }
@@ -105,7 +119,10 @@ function searchResult() {
             document.getElementById("studentId").textContent = data[0].student_id;
             document.getElementById("studentName").textContent = data[0].student_name;
             document.getElementById("studentClass").textContent = data[0].class_name;
-            document.getElementById("studentTerm").textContent = data[0].term;
+            /* CHANGED (owner request): the term is shown with its Arabic
+               name too - "3rd Term (الفترة الثالثة)". */
+            var termAr = amsTermAr(data[0].term);
+            document.getElementById("studentTerm").textContent = termAr ? data[0].term + " (" + termAr + ")" : data[0].term;
             document.getElementById("studentSession").textContent = data[0].session;
 
             const className = data[0].class_name;
@@ -283,7 +300,7 @@ function searchResult() {
                     <tr>
                         <td><strong>${amsFmtScore(average)}</strong></td>
                         <td></td>
-                        <td colspan="4"><strong>Cumulative Average</strong></td>
+                        <td colspan="4"><strong>Cumulative Average<br><span lang="ar">المعدل التراكمي</span></strong></td>
                         <td></td>
                     </tr>
                 `;
@@ -292,7 +309,7 @@ function searchResult() {
                     <tr>
                         <td><strong>${amsFmtScore(average)}</strong></td>
                         <td></td>
-                        <td colspan="3"><strong>Average</strong></td>
+                        <td colspan="3"><strong>Average<br><span lang="ar">المعدل</span></strong></td>
                         <td></td>
                     </tr>
                 `;

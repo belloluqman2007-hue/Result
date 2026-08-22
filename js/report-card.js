@@ -31,6 +31,16 @@
             .replace(/"/g, "&quot;");
     }
 
+    /* NEW (owner request): Arabic for the three term names, identical to
+       the Check Result page (js/result.js -> amsTermAr). */
+    function amsTermAr(term) {
+        var t = String(term || "");
+        if (t.indexOf("1st") === 0) return "الفترة الأولى";
+        if (t.indexOf("2nd") === 0) return "الفترة الثانية";
+        if (t.indexOf("3rd") === 0) return "الفترة الثالثة";
+        return "";
+    }
+
     /* The third-term Total is the subject's 1st + 2nd + 3rd term score.
        Prefer the API field, with a fallback so an already-open page that
        receives an older response still renders the right total. */
@@ -135,8 +145,11 @@
 
         if (isThirdTerm) {
             /* Third-term cumulative reports use the requested order:
-               Average, Grade, Total, 3rd /100, 2nd /100, 1st /100, Subject. */
-            tableRows += `<tr><th>Average</th><th>Grade</th><th>Total</th><th>3rd Term /100</th><th>2nd Term /100</th><th>1st Term /100</th><th>Subject</th></tr>`;
+               Average, Grade, Total, 3rd /100, 2nd /100, 1st /100, Subject.
+               CHANGED (owner request): bilingual headers - term names,
+               Average (النسبة المئوية), Total (الدرجة الكلية) and Subject
+               (المواد الدراسية) carry their Arabic on the second line. */
+            tableRows += `<tr><th>Average<br><span lang="ar">النسبة المئوية</span></th><th>Grade<br><span lang="ar">الدرجة</span></th><th>Total<br><span lang="ar">الدرجة الكلية</span></th><th>3rd Term /100<br><span lang="ar">الفترة الثالثة</span></th><th>2nd Term /100<br><span lang="ar">الفترة الثانية</span></th><th>1st Term /100<br><span lang="ar">الفترة الأولى</span></th><th>Subject<br><span lang="ar">المواد الدراسية</span></th></tr>`;
             data.forEach(result => {
                 const firstTotal = result.first_term_total !== null && result.first_term_total !== undefined ? result.first_term_total : "-";
                 const secondTotal = result.second_term_total !== null && result.second_term_total !== undefined ? result.second_term_total : "-";
@@ -152,17 +165,18 @@
             });
             average = data.length > 0 ? Number((totalScore / (data.length * 3)).toFixed(2)) : 0;
             // Total + the three term columns form the four-cell label span.
-            tableRows += `<tr><td><strong>${amsFmtScore(average)}</strong></td><td></td><td colspan="4"><strong>Cumulative Average</strong></td><td></td></tr>`;
+            tableRows += `<tr><td><strong>${amsFmtScore(average)}</strong></td><td></td><td colspan="4"><strong>Cumulative Average<br><span lang="ar">المعدل التراكمي</span></strong></td><td></td></tr>`;
         } else {
-            /* First and second term order: Average, Grade, Total, Exam, CA, Subject. */
-            tableRows += `<tr><th>Average</th><th>Grade</th><th>Total</th><th>Exam</th><th>CA</th><th>Subject</th></tr>`;
+            /* First and second term order: Average, Grade, Total, Exam, CA, Subject.
+               CHANGED (owner request): same bilingual treatment as the 3rd term. */
+            tableRows += `<tr><th>Average<br><span lang="ar">النسبة المئوية</span></th><th>Grade<br><span lang="ar">الدرجة</span></th><th>Total<br><span lang="ar">الدرجة الكلية</span></th><th>Exam<br><span lang="ar">الاختبار</span></th><th>CA<br><span lang="ar">التقييم المستمر</span></th><th>Subject<br><span lang="ar">المواد الدراسية</span></th></tr>`;
             data.forEach(result => {
                 tableRows += `<tr><td>-</td><td>${esc(result.grade)}</td><td>${amsFmtScore(result.total)}</td><td>${amsFmtScore(result.exam_score)}</td><td>${amsFmtScore(result.ca_score)}</td><td>${esc(result.subject)}</td></tr>`;
                 totalScore += Number(result.total) || 0;
             });
             average = data.length > 0 ? Number((totalScore / data.length).toFixed(2)) : 0;
             // Total, Exam and CA form the score span; Grade/Subject stay blank.
-            tableRows += `<tr><td><strong>${amsFmtScore(average)}</strong></td><td></td><td colspan="3"><strong>Average</strong></td><td></td></tr>`;
+            tableRows += `<tr><td><strong>${amsFmtScore(average)}</strong></td><td></td><td colspan="3"><strong>Average<br><span lang="ar">المعدل</span></strong></td><td></td></tr>`;
         }
 
         // Remarks - identical thresholds and wording to js/result.js
@@ -192,43 +206,45 @@
            onerror="this.onerror=null; this.src='images/default.png';" alt="Student Photo">
     </div>
 
-    <h3>Student Information</h3>
+    <!-- CHANGED (owner request): bilingual labels - Arabic on every field
+         of the report, exactly like the live Check Result page. -->
+    <h3>Student Information <span class="ar-lbl" lang="ar">معلومات الطالب</span></h3>
     <table class="student-info-table">
       <tr>
-        <td><strong>Name:</strong></td><td>${esc(first.student_name)}</td>
-        <td><strong>Class:</strong></td><td>${esc(first.class_name)}</td>
+        <td><strong>Name:</strong> <span class="ar-lbl" lang="ar">الاسم</span></td><td>${esc(first.student_name)}</td>
+        <td><strong>Class:</strong> <span class="ar-lbl" lang="ar">الصف</span></td><td>${esc(first.class_name)}</td>
       </tr>
       <tr>
-        <td><strong>Student ID:</strong></td><td>${esc(first.student_id)}</td>
-        <td><strong>Term:</strong></td><td>${esc(term)}</td>
+        <td><strong>Student ID:</strong> <span class="ar-lbl" lang="ar">رقم الطالب</span></td><td>${esc(first.student_id)}</td>
+        <td><strong>Term:</strong> <span class="ar-lbl" lang="ar">الفترة</span></td><td>${esc(term)}${amsTermAr(term) ? ' <span class="ar-lbl" lang="ar">(' + amsTermAr(term) + ')</span>' : ''}</td>
       </tr>
       <tr>
-        <td><strong>Position:</strong></td><td>${positionText}</td>
-        <td><strong>Session:</strong></td><td>${esc(session)}</td>
+        <td><strong>Position:</strong> <span class="ar-lbl" lang="ar">الترتيب</span></td><td>${positionText}</td>
+        <td><strong>Session:</strong> <span class="ar-lbl" lang="ar">العام الدراسي</span></td><td>${esc(session)}</td>
       </tr>
     </table>
 
     <table id="resultTable"${isThirdTerm ? ' class="cumulative-view"' : ''}>${tableRows}</table>
 
     <div class="bottom-section">
-      <h3>Performance Summary</h3>
+      <h3>Performance Summary <span class="ar-lbl" lang="ar">ملخص الأداء</span></h3>
       <table class="summary-table">
-        <tr><td><strong>Total Subjects</strong></td><td>${data.length}</td></tr>
-        <tr><td><strong>Total Score</strong></td><td>${amsFmtScore(totalScore)}${isThirdTerm && data.length ? " / " + (data.length * 300) : ""}</td></tr>
-        <tr><td><strong>Teacher's Remark</strong></td><td>${esc(teacherRemark)}</td></tr>
-        <tr><td><strong>Principal's Remark</strong></td><td>${esc(principalRemark)}</td></tr>
+        <tr><td><strong>Total Subjects</strong> <span class="ar-lbl" lang="ar">عدد المواد الدراسية</span></td><td>${data.length}</td></tr>
+        <tr><td><strong>Total Score</strong> <span class="ar-lbl" lang="ar">المجموع الكلي</span></td><td>${amsFmtScore(totalScore)}${isThirdTerm && data.length ? " / " + (data.length * 300) : ""}</td></tr>
+        <tr><td><strong>Teacher's Remark</strong> <span class="ar-lbl" lang="ar">ملاحظة المعلم</span></td><td>${esc(teacherRemark)}</td></tr>
+        <tr><td><strong>Principal's Remark</strong> <span class="ar-lbl" lang="ar">ملاحظة المدير</span></td><td>${esc(principalRemark)}</td></tr>
       </table>
 
       <div class="signature-section">
         <div class="signature-box">
           <img class="signature-img" alt="" ${classTeacherSig ? `src="${esc(classTeacherSig.signature_path)}"` : 'style="display:none;"'}>
           <p>______________________________</p>
-          <p><strong>Class Teacher's Signature</strong></p>
+          <p><strong>Class Teacher's Signature</strong> <span class="ar-lbl" lang="ar">توقيع معلم الصف</span></p>
         </div>
         <div class="signature-box">
           <img class="signature-img" alt="" ${principalSig ? `src="${esc(principalSig.signature_path)}"` : 'style="display:none;"'}>
           <p>______________________________</p>
-          <p><strong>Principal's Signature</strong></p>
+          <p><strong>Principal's Signature</strong> <span class="ar-lbl" lang="ar">توقيع المدير</span></p>
         </div>
       </div>
     </div>`;
