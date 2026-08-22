@@ -64,6 +64,40 @@
             '</span><span class="bi-ar" dir="rtl" lang="ar">' + esc(ar) + "</span></span>";
     }
 
+    /* Bilingual name splitting (mirrors the server parser). The workbook
+       keeps the English + Arabic spelling in ONE name cell; the result
+       must show the English name on the TOP line and the Arabic name on
+       the BOTTOM line only. */
+    var ARABIC_BLOCK_RE = /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]/;
+    var ARABIC_BLOCK_RE_G = /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]/g;
+    var NON_ARABIC_RE_G = /[^\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF\s]/g;
+
+    function cleanLatinNamePart(s) {
+        return String(s || "")
+            .replace(ARABIC_BLOCK_RE_G, " ")
+            .replace(/\s+/g, " ")
+            .replace(/^[\s/|,;:()\[\]{}<>«»–—\-\u2011]+/, "")
+            .replace(/[\s/|,;:()\[\]{}<>«»–—\-\u2011]+$/, "")
+            .trim();
+    }
+
+    function cleanArabicNamePart(s) {
+        return String(s || "")
+            .replace(NON_ARABIC_RE_G, " ")
+            .replace(/\s+/g, " ")
+            .trim();
+    }
+
+    function splitStudentName(raw, existingAr) {
+        var s = String(raw == null ? "" : raw).replace(/\s+/g, " ").trim();
+        var arOnly = String(existingAr == null ? "" : existingAr).trim();
+        if (!s) return { name: "", nameAr: arOnly };
+        if (!ARABIC_BLOCK_RE.test(s)) return { name: s, nameAr: arOnly };
+        var english = cleanLatinNamePart(s);
+        var arabic = cleanArabicNamePart(s) || arOnly;
+        return { name: english || s, nameAr: arabic };
+    }
+
     /* Hard-coded school letterhead (spec) — printed at the top of every
        result sheet, alongside the school logo. */
     var SCHOOL = {
@@ -387,10 +421,17 @@
             var pct = termSlots
                 ? Math.round((grandTotal / termSlots) * 10) / 10
                 : 0;
+            /* One combined name cell -> English on the top line, Arabic on
+               the bottom line only (never the same combined text twice). */
+            var nameParts = splitStudentName(
+                st.name,
+                st.nameAr || st.name_ar || st.arabicName || ""
+            );
             return {
                 sn: st.sn,
                 adm: st.adm,
-                name: st.name,
+                name: nameParts.name,
+                nameAr: nameParts.nameAr,
                 scores: scores,
                 missingSubjects: st.missingSubjects || [],
                 incomplete: !!st.incomplete,
@@ -603,7 +644,10 @@
         students.forEach(function (st) {
             html += '<tr class="' + (st.incomplete ? "ttr-incomplete" : "") + '">';
             html += "<td>" + esc(st.sn) + "</td><td>" + esc(st.adm) + "</td>";
-            html += '<td class="ttr-name">' + esc(st.name) + "</td>";
+            var nameParts = splitStudentName(st.name, st.nameAr || "");
+            html += '<td class="ttr-name">' + esc(nameParts.name) +
+                (nameParts.nameAr ? '<div lang="ar" dir="rtl" style="font-weight:700; margin-top:2px; color:#0F3D2E;">' + esc(nameParts.nameAr) + "</div>" : "") +
+                "</td>";
             st.scores.forEach(function (sc) {
                 var cells = [
                     { v: sc.t1 },
@@ -723,21 +767,28 @@
             "</div>";
 
         /* Student name band (top of the sheet):
-           line 1 — "Student Name  <name>" pinned to the LEFT,
-           line 2 — "اسم الطلاب  <name>" pinned to the RIGHT (RTL).
-           A separate Arabic name is used when the workbook supplies one,
-           otherwise the same name is repeated on both lines. */
-        var nameAr = st.nameAr || st.name_ar || st.arabicName || st.name;
+           line 1 — "Student Name  <English name>" pinned to the LEFT,
+           line 2 — "اسم الطلاب  <Arabic name>" pinned to the RIGHT (RTL).
+           The one combined name cell from the workbook is split into the
+           two parts, so the result never shows the same name twice. */
+        var nameParts = splitStudentName(
+            st.name,
+            st.nameAr || st.name_ar || st.arabicName || ""
+        );
+        var nameEn = nameParts.name || st.name || "";
+        var nameAr = nameParts.nameAr || "";
         var nameBandHtml =
             '<div class="ttr-p-namebar">' +
             '<div class="ttr-p-name-row ttr-p-name-en">' +
             '<span class="ttr-p-name-k">Student Name</span>' +
-            '<span class="ttr-p-name-v">' + esc(st.name) + "</span>" +
+            '<span class="ttr-p-name-v">' + esc(nameEn) + "</span>" +
             "</div>" +
-            '<div class="ttr-p-name-row ttr-p-name-ar" dir="rtl" lang="ar">' +
-            '<span class="ttr-p-name-k">اسم الطلاب</span>' +
-            '<span class="ttr-p-name-v">' + esc(nameAr) + "</span>" +
-            "</div>" +
+            (nameAr
+                ? '<div class="ttr-p-name-row ttr-p-name-ar" dir="rtl" lang="ar">' +
+                  '<span class="ttr-p-name-k">اسم الطلاب</span>' +
+                  '<span class="ttr-p-name-v">' + esc(nameAr) + "</span>" +
+                  "</div>"
+                : "") +
             "</div>";
 
         return '<div class="ttr-page">' + decorationHtml +

@@ -107,6 +107,61 @@ function cellText(v) {
     return String(v).trim();
 }
 
+/* ------------------------------------------------------------------
+   Bilingual student name splitting.
+   The school workbook often keeps ONE "Student Name / اسم الطالب"
+   column with the English and Arabic spelling together, e.g.
+     "Adam Muhammad / آدم محمد"  or  "آدم محمد - Adam Muhammad".
+   The result sheet must show the English name on the TOP line and the
+   Arabic name on the BOTTOM line only. This helper extracts both parts
+   from that single combined cell (a separate Arabic-name column still
+   wins when the workbook supplies one).
+   ------------------------------------------------------------------ */
+const ARABIC_BLOCK_RE = /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]/;
+const ARABIC_BLOCK_RE_G = /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]/g;
+const NON_ARABIC_RE_G = /[^\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF\s]/g;
+
+function cleanLatinNamePart(s) {
+    return String(s || "")
+        .replace(ARABIC_BLOCK_RE_G, " ")
+        .replace(/\s+/g, " ")
+        .replace(/^[\s/|,;:()\[\]{}<>«»–—\-\u2011]+/, "")
+        .replace(/[\s/|,;:()\[\]{}<>«»–—\-\u2011]+$/, "")
+        .trim();
+}
+
+function cleanArabicNamePart(s) {
+    return String(s || "")
+        .replace(NON_ARABIC_RE_G, " ")
+        .replace(/\s+/g, " ")
+        .trim();
+}
+
+/* Returns { name, nameAr }. `name` is the English/left part shown at the
+   top and `nameAr` is the Arabic/right part shown at the bottom. */
+function splitStudentName(raw, existingAr) {
+    const s = String(raw == null ? "" : raw).replace(/\s+/g, " ").trim();
+    const arOnly = String(existingAr == null ? "" : existingAr).trim();
+    if (!s) return { name: "", nameAr: arOnly };
+
+    /* No Arabic in the cell at all -> it is already a single English name. */
+    if (!ARABIC_BLOCK_RE.test(s)) return { name: s, nameAr: arOnly };
+
+    const english = cleanLatinNamePart(s);
+    const arabic = cleanArabicNamePart(s) || arOnly;
+
+    /*
+      A combined cell always produces both parts; if the Arabic side came
+      through with punctuation only (rare), keep what the workbook gave us.
+      The English line falls back to the original only when there is no
+      English text at all, so a cell holding just Arabic still works.
+    */
+    return {
+        name: english || s,
+        nameAr: arabic
+    };
+}
+
 /* Normalised Arabic: strip tashkeel/tatweel, fold alef/teh/yeh variants,
    collapse whitespace. Used ONLY for matching labels - display text keeps
    its original spelling (with tashkeel). */
@@ -407,8 +462,15 @@ function parseWorkbook(buffer) {
             if (!row.some((c) => cellText(c) !== "")) continue;
 
             const adm = cellText(admCol < row.length ? row[admCol] : "");
-            const name = cellText(nameCol < row.length ? row[nameCol] : "");
-            const nameAr = nameArCol !== -1 && nameArCol < row.length ? cellText(row[nameArCol]) : "";
+            const nameRaw = cellText(nameCol < row.length ? row[nameCol] : "");
+            const nameArRaw = nameArCol !== -1 && nameArCol < row.length ? cellText(row[nameArCol]) : "";
+            /* Split one combined name cell into English (top) + Arabic
+               (bottom). A workbook that already has separate English and
+               Arabic columns is handled the same way: the Arabic column
+               wins for the bottom line. */
+            const nameParts = splitStudentName(nameRaw, nameArRaw);
+            const name = nameParts.name;
+            const nameAr = nameParts.nameAr;
             if (!adm && !name) continue;
 
             const admKey = normKey(adm);
@@ -624,8 +686,9 @@ function buildThirdTermWorkbook(classes, meta) {
         const n = subjects.length;
         const classSize = c.studentCount || students.length;
         /* Only the /100 columns are reported: T1, T2, T3, AVERAGE.
-           CA /40 and EXAM /60 are deliberately NOT exported. */
-        const width = 3 + n * 4 + 5; // S/N, Adm, Name + 4 cols/subject + GrandTotal, %, Students, Position, Status
+           CA /40 and EXAM /60 are deliberately NOT exported.
+           Name is split into English (top) and Arabic (bottom) columns. */
+        const width = 4 + n * 4 + 5; // S/N, Adm, Name EN, Name AR + 4 cols/subject + GrandTotal, %, Students, Position, Status
 
         const rows = [];
         rows.push([schoolName]);
@@ -638,15 +701,15 @@ function buildThirdTermWorkbook(classes, meta) {
         rows.push([]);
 
         // Subject band (names merged across their 4 sub-columns)
-        const band = ["S/N", "Adm No", "Student Name / اسم الطالب"];
-        const subBand = ["", "", ""];
+        const band = ["S/N", "Adm No", "Student Name (English) / اسم الطالب بالإنجليزية", "Student Name (Arabic) / اسم الطالب بالعربية"];
+        const subBand = ["", "", "", ""];
         const bandRow = rows.length;      // subject-name band row index
         const merges = [];
         for (let r = 0; r < rows.length; r++) {
             merges.push({ s: { r, c: 0 }, e: { r, c: width - 1 } });
         }
         subjects.forEach((sub, si) => {
-            const base = 3 + si * 4;
+            const base = 4 + si * 4;
             band.push(sub.name, "", "", "");
             subBand.push("T1 /100", "T2 /100", "T3 /100", "AVERAGE /100");
             merges.push({ s: { r: bandRow, c: base }, e: { r: bandRow, c: base + 3 } });
@@ -656,7 +719,7 @@ function buildThirdTermWorkbook(classes, meta) {
         rows.push(band, subBand);
 
         students.forEach((st) => {
-            const row = [st.sn, st.adm, st.name];
+            const row = [st.sn, st.adm, st.name || "", st.nameAr || ""];
             (st.scores || []).forEach((sc) => {
                 const avg = subjectAverage(sc);
                 row.push(
@@ -679,7 +742,7 @@ function buildThirdTermWorkbook(classes, meta) {
 
         const ws = XLSX.utils.aoa_to_sheet(rows);
         ws["!merges"] = merges;
-        ws["!cols"] = [{ wch: 6 }, { wch: 13 }, { wch: 32 }];
+        ws["!cols"] = [{ wch: 6 }, { wch: 13 }, { wch: 28 }, { wch: 28 }];
         for (let si = 0; si < n; si++) {
             for (let k = 0; k < 4; k++) ws["!cols"].push({ wch: 11 });
         }
