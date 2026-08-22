@@ -6930,7 +6930,7 @@ app.delete("/payroll/:id", requireLogin, requireAdmin, (req, res) => {
    Summary tab + one tab per class.
    ===================================================================== */
 
-app.post("/third-term-upload", requireLogin, writeRateLimit, uploadExcel.single("file"), (req, res) => {
+app.post("/third-term-upload", requireLogin, writeRateLimit, receiveThirdTermWorkbook, (req, res) => {
     if (!req.file) return res.status(400).json({ message: "No file uploaded." });
 
     let parsed;
