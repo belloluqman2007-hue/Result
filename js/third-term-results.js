@@ -241,6 +241,29 @@
         if (label) btn.innerHTML = label;
     }
 
+    /* FIX: never call r.json() on a non-JSON body. Multer used to reply
+       with plain text ("File too large") and Express HTML error pages —
+       JSON.parse threw, and the catch below reported a fake network error. */
+    function readResponseJson(r) {
+        return r.text().then(function (text) {
+            var d = {};
+            if (text) {
+                try {
+                    d = JSON.parse(text);
+                } catch (e) {
+                    d = {
+                        message: r.ok
+                            ? "The server sent an unexpected response while parsing the workbook."
+                            : ("Could not parse the workbook (HTTP " + r.status + ").")
+                    };
+                }
+            } else if (!r.ok) {
+                d = { message: "Could not parse the workbook (HTTP " + r.status + ")." };
+            }
+            return { ok: r.ok, d: d };
+        });
+    }
+
     /* ----------------------------------------------------------------
        1. Upload + parse
        ---------------------------------------------------------------- */
@@ -258,6 +281,10 @@
             notify("Please choose an .xlsx (or .xls) workbook.", "error");
             return;
         }
+        if (file.size > 20 * 1024 * 1024) {
+            notify("That workbook is larger than 20 MB. Save a smaller copy and try again.", "error");
+            return;
+        }
 
         var fd = new FormData();
         fd.append("file", file);
@@ -266,12 +293,12 @@
         setBtn(btn, true, "Parsing…");
 
         fetch("/third-term-upload", { method: "POST", credentials: "same-origin", body: fd })
-            .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, d: d }; }); })
+            .then(readResponseJson)
             .then(function (res) {
                 setBtn(btn, false, "&#128230; Upload &amp; Parse");
                 if (!res.ok) {
                     status.innerHTML = "";
-                    notify(res.d.message || "Could not parse the workbook.", "error", 7000);
+                    notify((res.d && res.d.message) || "Could not parse the workbook.", "error", 7000);
                     return;
                 }
                 var d = res.d;
@@ -300,10 +327,13 @@
                     " Now pick the classes and press <b>Generate Results</b>.";
                 notify("Workbook parsed: " + state.classes.length + " class sheet(s) found.", "success");
             })
-            .catch(function () {
+            .catch(function (err) {
                 setBtn(btn, false, "&#128230; Upload &amp; Parse");
                 status.innerHTML = "";
-                notify("Network error while parsing the workbook.", "error");
+                var msg = (err && err.name === "AbortError")
+                    ? "The upload timed out. Try a smaller workbook."
+                    : "Network error while parsing the workbook. Check your connection and try again.";
+                notify(msg, "error");
             });
     };
 
