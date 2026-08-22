@@ -740,14 +740,20 @@
         var addressHtml = address
             ? '<div class="ttr-p-address">' + esc(address) + "</div>"
             : "";
+        /* NEW (pack 100 - subject on the right): the official third-term
+           sheet now reads score columns first (T1, T2, T3, AVERAGE) and
+           the subject name last, on the right, right-aligned. The Arabic
+           subject cell keeps the .ttr-p-subj class which already enforces
+           direction:rtl + text-align:right + bold + emerald colour, so
+           the visual order on the printed sheet is now: scores -> subject. */
         st.scores.forEach(function (sc, i) {
             var sub = subjects[i] ? esc(subjects[i].name) : "";
             rows += "<tr>" +
-                "<td class=\"ttr-p-subj\" lang=\"ar\" dir=\"rtl\">" + sub + "</td>" +
                 "<td>" + (sc.t1 === null || sc.t1 === undefined ? "—" : fmt(sc.t1)) + "</td>" +
                 "<td>" + (sc.t2 === null || sc.t2 === undefined ? "—" : fmt(sc.t2)) + "</td>" +
                 "<td>" + (sc.total === null || sc.total === undefined ? "—" : fmt(sc.total)) + "</td>" +
                 "<td>" + (sc.average === null || sc.average === undefined ? "—" : fmt1(sc.average)) + "</td>" +
+                "<td class=\"ttr-p-subj\" lang=\"ar\" dir=\"rtl\">" + sub + "</td>" +
                 "</tr>";
         });
 
@@ -843,13 +849,18 @@
             '<div class="ttr-p-line"><span>' + bi("الفترة الدراسية", "Term") + "</span><span class=\"ttr-p-val\">3rd Term</span></div>" +
             "</div>" +
             "</div>" +
+            /* NEW (pack 100 - subject on the right): subject name is now
+               the LAST column on the printed third-term sheet. The four
+               score columns stay in their original order (T1, T2, T3,
+               AVERAGE); SUBJECT moves to the rightmost position so the
+               row reads left -> right as scores, then the subject name. */
             '<div class="ttr-p-tablewrap"><table class="ttr-p-table' + (subjects.length <= 8 ? " ttr-p-roomy" : "") + '">' +
             "<thead><tr>" +
-            "<th>" + bi("المواد الدراسية", "SUBJECT") + "</th>" +
             "<th>" + bi("الفترة الأولى", "T1 /100") + "</th>" +
             "<th>" + bi("الفترة الثانية", "T2 /100") + "</th>" +
             "<th>" + bi("الفترة الثالثة", "T3 /100") + "</th>" +
             "<th>" + bi("النسبة المئوية", "AVERAGE /100") + "</th>" +
+            "<th>" + bi("المواد الدراسية", "SUBJECT") + "</th>" +
             "</tr></thead><tbody>" + rows + "</tbody></table></div>" +
             '<div class="ttr-p-sum">' +
             '<div class="ttr-p-cell"><div class="ttr-p-k">' + bi("المجموع الكلي", "GRAND TOTAL") + '</div><div class="ttr-p-v">' + fmt1(st.grandTotal) + " / " + ((st.maxTotal != null) ? st.maxTotal : (res.subjects.length * 300)) + "</div></div>" +
