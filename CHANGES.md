@@ -1,5 +1,33 @@
 # UI Modernization — Change Log
 
+## Pack 99 — 2026-08-22
+
+Owner: apply the third-term Arabic wording table on the printed sheet, upload page, on-screen table and Excel export, then merge.
+
+Display-only. No score maths, ranking, upload parsing or database writes changed. The Excel *reader* still accepts the old workbook headings (`رقم القيد`, `الفصل الأول`, …) as well as the new ones.
+
+| Before | After |
+|---|---|
+| نتائج الفصل الثالث — كشف درجات | نتائج الفترة الثالثة — كشف الدرجات |
+| Student Name / اسم الطالب | Student Name: / اسم الطالب: |
+| رقم القيد | رقم القبول |
+| الفصل الدراسي | الفترة الدراسية |
+| المادة | المواد الدراسية |
+| الفصل الأول / الثاني / الثالث | الفترة الأولى / الثانية / الثالثة |
+| المعدل / المعدل العام | النسبة المئوية |
+| الترتيب في الفصل | الدرجة |
+| ينتهي الفصل في | تنتهي الفترة في |
+| عدد الطلاب في الفصل | عدد الطلاب في الفترة |
+
+| File | What happened |
+|---|---|
+| `js/third-term-results.js` | Printed A4 sheet + on-screen table labels updated to the table above. |
+| `third-term-results.html` | Upload-page titles and the Term Ends On field use الفترة. |
+| `third-term-parser.js` | Excel export titles/columns use the new wording. Reader also recognises `رقم القبول` (keeps `رقم القيد`). |
+| `sw.js` | Cache `v59 → v60` so devices pick up the new labels. |
+
+---
+
 ## Pack 97 — 2026-08-22
 
 Owner: third-term Excel upload failed with **"Network error while parsing the workbook"**.

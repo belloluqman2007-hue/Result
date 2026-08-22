@@ -221,13 +221,18 @@ function isStudentOrLabelHeader(v) {
         k === "الرقم" || k === "الترتيب" || k === "المسلسل" || k === "م" || k === "ت") return true;
     if (k === "adm" || k === "admno" || k === "adm/no" || k === "admission" ||
         k === "admissionno" || k === "admissionnumber" || k === "رقمالقيد" ||
-        k === "رقمالطالب" || k === "رقمالادميشن" || k === "القيد") return true;
+        k === "رقمالقبول" || k === "رقمالطالب" || k === "رقمالادميشن" ||
+        k === "القيد" || k === "القبول") return true;
     if (k === "name" || k === "names" || k === "studentname" || k === "fullname" ||
         k === "الاسم" || k === "اسمالطالب" || k === "اسمالتلميذ" ||
         k === "الاسمالكامل" || k === "الطلاب" || k === "التلميذ" || k === "الطالب") return true;
     if (k === "الصف" || k === "الفصل" || k === "الاستاذ" || k === "المعلم" ||
         k === "المعلمة" || k === "الاستاذه" || k === "الفصلالاول" ||
-        k === "الفصلالثاني" || k === "الفصلالثالث" || k === "الترمالاول" ||
+        k === "الفصلالثاني" || k === "الفصلالثالث" || k === "الفترهالدرسيه" ||
+        k === "الفترةالدراسية" || k === "الفترهالاولي" || k === "الفترةالاولى" ||
+        k === "الفترهالثانيه" || k === "الفترةالثانية" ||
+        k === "الفترهالثالثه" || k === "الفترةالثالثة" ||
+        k === "الترمالاول" ||
         k === "الترمالثاني" || k === "الترمالثالث" || k === "العامالدراسي" ||
         k === "الدراسة" || k === "البيان" || k === "كشفالدرجات" || k === "بيانالدرجات" ||
         k === "نتائجالامتحانات" || k === "الدرجات" || k === "العلامات" || k === "سجل") return true;
@@ -445,7 +450,7 @@ function parseWorkbook(buffer) {
                 if (!k) continue;
                 if (admCol === -1 && (k === "adm" || k === "admno" || k === "adm/no" ||
                     k === "admission" || k === "admissionno" || k === "admissionnumber" ||
-                    k === "رقمالقيد" || k === "رقمالطالب" || k.startsWith("adm"))) admCol = c;
+                    k === "رقمالقيد" || k === "رقمالقبول" || k === "رقمالطالب" || k.startsWith("adm"))) admCol = c;
                 else if (nameArCol === -1 && (k === "arabicname" || k === "namearabic" ||
                     k === "studentnamearabic" || k === "nameinarabic" ||
                     k === "namearab" || k === "arabic" || k === "اسمالطلاب" ||
@@ -651,7 +656,7 @@ function buildThirdTermWorkbook(classes, meta) {
     const m = meta || {};
     const termEndsOn = String(m.termEndsOn || "").trim();
     const newSessionStarts = String(m.newSessionStarts || "").trim();
-    const datesLine = "Term Ends On / \u064a\u0646\u062a\u0647\u064a \u0627\u0644\u0641\u0635\u0644 \u0641\u064a: " + (termEndsOn || "\u2014") +
+    const datesLine = "Term Ends On / تنتهي الفترة في: " + (termEndsOn || "\u2014") +
         "   |   New Session Starts / \u064a\u0628\u062f\u0623 \u0627\u0644\u0639\u0627\u0645 \u0627\u0644\u062c\u062f\u064a\u062f \u0641\u064a: " + (newSessionStarts || "\u2014");
     const XLSX = X();
     const wb = XLSX.utils.book_new();
@@ -667,11 +672,11 @@ function buildThirdTermWorkbook(classes, meta) {
     summaryRows.push([schoolName]);
     summaryRows.push([schoolNameAr]);
     if (contactLine) summaryRows.push([contactLine]);
-    summaryRows.push(["THIRD TERM RESULTS - Consolidated Export / نتائج الفصل الثالث - تصدير موحّد"]);
+    summaryRows.push(["THIRD TERM RESULTS - Consolidated Export / نتائج الفترة الثالثة - تصدير موحّد"]);
     summaryRows.push([datesLine]);
     const summaryBannerRows = summaryRows.length;
     summaryRows.push([]);
-    summaryRows.push(["Class / الصف", "Teacher / الأستاذ", "Students in Class / عدد الطلاب", "Subjects / المواد", "Generated / التاريخ"]);
+    summaryRows.push(["Class / الصف", "Teacher / الأستاذ", "Students in Class / عدد الطلاب في الفترة", "Subjects / المواد", "Generated / التاريخ"]);
     classes.forEach((c) => {
         summaryRows.push([
             c.className || c.sheet || "",
@@ -707,9 +712,9 @@ function buildThirdTermWorkbook(classes, meta) {
         rows.push([schoolName]);
         rows.push([schoolNameAr]);
         if (contactLine) rows.push([contactLine]);
-        rows.push(["THIRD TERM RESULTS / نتائج الفصل الثالث"]);
-        rows.push(["Class / الصف: " + (c.className || c.sheet || "") + "   |   Teacher / الأستاذ: " + (c.teacher || "") + "   |   Students in Class / عدد الطلاب: " + classSize]);
-        rows.push(["Term: 3rd Term / الفصل الثالث   |   Generated: " + today]);
+        rows.push(["THIRD TERM RESULTS / نتائج الفترة الثالثة"]);
+        rows.push(["Class / الصف: " + (c.className || c.sheet || "") + "   |   Teacher / الأستاذ: " + (c.teacher || "") + "   |   Students in Class / عدد الطلاب في الفترة: " + classSize]);
+        rows.push(["Term: 3rd Term / الفترة الثالثة   |   Generated: " + today]);
         rows.push([datesLine]);
         rows.push([]);
 
@@ -729,7 +734,7 @@ function buildThirdTermWorkbook(classes, meta) {
             subBand.push("T1 /100", "T2 /100", "T3 /100", "AVERAGE /100");
             merges.push({ s: { r: bandRow, c: base }, e: { r: bandRow, c: base + 3 } });
         });
-        band.push("Grand Total / المجموع الكلي", "Average / المعدل العام", "Students in Class / عدد الطلاب", "Position / الترتيب", "Status / الحالة");
+        band.push("Grand Total / المجموع الكلي", "Average / النسبة المئوية", "Students in Class / عدد الطلاب في الفترة", "Position / الدرجة", "Status / الحالة");
         subBand.push("", "", "", "", "");
         rows.push(band, subBand);
 
