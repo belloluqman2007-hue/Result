@@ -32,17 +32,24 @@
        matched, which is why Verify kept failing). Both methods covered:
        this meta tag + the file googlea6892f129dcb5282.html in the root. -->
   <meta name="google-site-verification" content="a6892f129dcb5282">
-  <link rel="canonical" href="https://result-production-69ea.up.railway.app/">
+  <!-- CHANGED (SEO fix): the canonical/OG/Twitter/JSON-LD URLs no longer
+       hardcode one deployment's domain. They carry the __AMS_SITE_URL__
+       placeholder and server.js rewrites it to the correct public URL
+       before the page is sent (SITE_URL env var, else the primary
+       deployment host, else the request's own host). This is what was
+       blocking Google from indexing the second deployment: the canonical
+       always pointed at the OTHER domain. -->
+  <link rel="canonical" href="__AMS_SITE_URL__/">
   <meta property="og:type" content="website">
   <meta property="og:site_name" content="Ameenullah School of Arabic and Islamic Studies">
   <meta property="og:title" content="Ameenullah School of Arabic and Islamic Studies | AMSAIS Ijebu-Ode">
   <meta property="og:description" content="Official website - Arabic &amp; Islamic studies (Knowledge and Worship). Check results in the Parent Portal, apply for admission, chat with the school.">
-  <meta property="og:url" content="https://result-production-69ea.up.railway.app/">
-  <meta property="og:image" content="https://result-production-69ea.up.railway.app/images/LOGO.JPG">
+  <meta property="og:url" content="__AMS_SITE_URL__/">
+  <meta property="og:image" content="__AMS_SITE_URL__/images/LOGO.JPG">
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="Ameenullah School of Arabic and Islamic Studies | Ijebu-Ode">
   <meta name="twitter:description" content="Official website - check results, apply for admission, chat with the school.">
-  <meta name="twitter:image" content="https://result-production-69ea.up.railway.app/images/LOGO.JPG">
+  <meta name="twitter:image" content="__AMS_SITE_URL__/images/LOGO.JPG">
   <script type="application/ld+json">
   {
     "@context": "https://schema.org",
@@ -50,9 +57,9 @@
     "name": "Ameenullah School of Arabic and Islamic Studies",
     "alternateName": "AMSAIS",
     "description": "Arabic and Islamic school in Ijebu-Ode, Ogun State, Nigeria - Preparatory (Tahdiri), Foundation (Ibtida'i), Middle (I'dadi) and Advanced (Thanawi) classes plus Tahfeedhul-Qur'an memorisation.", 
-    "url": "https://result-production-69ea.up.railway.app/",
-    "logo": "https://result-production-69ea.up.railway.app/images/LOGO.JPG",
-    "image": "https://result-production-69ea.up.railway.app/images/LOGO.JPG",
+    "url": "__AMS_SITE_URL__/",
+    "logo": "__AMS_SITE_URL__/images/LOGO.JPG",
+    "image": "__AMS_SITE_URL__/images/LOGO.JPG",
     "slogan": "Knowledge and Worship",
     "telephone": "+2348062445559",
     "email": "madrasatuameenillah22@gmail.com",

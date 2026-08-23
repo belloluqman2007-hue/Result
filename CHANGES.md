@@ -1,5 +1,44 @@
 # UI Modernization — Change Log
 
+## Pack 102 — 2026-08-23
+
+Owner: (1) the Render URL is not indexed in Google Search Console because the canonical tag points at the Railway URL — make the canonical follow the deployment dynamically / point at the primary domain, check index.html, SEO components and sitemap, and add a 301 between the two deployments; (2) Check Result now prints on two A4 pages — make it one; (3) change the "Average / المعدل" label to "النسبة المئوية"; (4) in the Student Information and Performance Summary headings put space between the English and Arabic — English on the left, Arabic on the right; (5) the 1st/2nd term per-subject average is not displaying — fix it.
+
+### Canonical / SEO (Google indexing fix)
+
+The `<link rel="canonical">` in `index.html` hardcoded `https://result-production-69ea.up.railway.app/`, so every copy of the homepage — including the one served by Render — told Google "the real page is on Railway" and the Render URL stopped being indexed.
+
+| File | What happened |
+|---|---|
+| `index.html` | Canonical, `og:url`, `og:image`, `twitter:image` and the JSON-LD `url`/`logo`/`image` now carry a `__AMS_SITE_URL__` placeholder instead of a hardcoded domain. |
+| `server.js` | New SEO block: the placeholder is rewritten per request to the correct public URL (`SITE_URL` env → else the primary host → else the request's own host, `http://host:port` for local dev). `robots.txt` and `sitemap.xml` are generated per request with the same base. **301 canonical redirect**: any HTML page navigation that arrives at the non-primary deployment is 301-redirected to the primary one (same path + query). Only GET/HEAD with an HTML Accept header is redirected — API and asset calls keep working on either host. Default primary: **Render** (`result-cfn8.onrender.com`); switch with `PRIMARY_HOST`, override the base with `SITE_URL`, disable the redirect with `AMS_CANONICAL_REDIRECT=off`. The index page is served `no-cache` so the new canonical reaches crawlers immediately. |
+| `sitemap.xml`, `robots.txt` | Fallback files now point at the Render (primary) domain; the live routes always emit the configured primary URL. |
+| `.env.example` | Documents `SITE_URL`, `PRIMARY_HOST`, `AMS_CANONICAL_REDIRECT`. |
+
+No SEO framework (next-seo / react-helmet) is involved — this is plain Express + static HTML, so the only canonical tag is the one in `index.html` (checked: no other page or component sets one, and the service worker never caches HTML — page navigations are network-first, so no stale canonical can linger).
+
+### Check Result: ONE A4 page
+
+| File | What happened |
+|---|---|
+| `js/report-card.js` | New `amsFitPrintZoomSync` (synchronous scale-to-fit measurement) + `beforeprint`/`afterprint` hooks: **every** print path — the "Print Result" button, Ctrl+P, the browser print menu and the phone print button — now scales the sheet to exactly one A4 page before the snapshot is taken. Previously only the explicit button applied the zoom. Offscreen PDF-capture stages are skipped, so class-ZIP / portal PDF flows are untouched. |
+| `css/style.css` | Print `min-height` 277mm → **276mm**: a box exactly the printable height can be rounded onto a phantom blank second sheet; 1mm of headroom kills it. Half a pixel of cell padding removed on the print score/info/summary tables (bilingual two-line headers made the sheet taller). No font size changed. |
+
+### 1st / 2nd term average now displays
+
+| File | What happened |
+|---|---|
+| `js/result.js`, `js/report-card.js` | Each subject row in the 1st/2nd term view shows its **percentage** in the Average column (was hardcoded `-`). 1st/2nd term totals are out of 100 (Exam /60 + CA /40), so the subject total IS its /100 percentage — the same basis the 3rd-term report uses. Applied to the staff Check Result page, the student portal and the class-ZIP / portal PDF cards (shared builder). |
+
+### Labels & heading layout
+
+| File | What happened |
+|---|---|
+| `js/result.js`, `js/report-card.js` | Summary row label changed from `Average / المعدل` to `Average / النسبة المئوية` (percentage), matching the column header. The 3rd-term `Cumulative Average / المعدل التراكمي` label is untouched. |
+| `css/style.css` | `.report-container h3` (the Student Information and Performance Summary headings) is now flex with `space-between` — English on the left, Arabic on the right, with the gap between them — on screen, in print and in the ZIP/PDF captures. |
+
+---
+
 ## Pack 101 — 2026-08-22
 
 Owner: restore the requested score-column order across every result output and add the per-subject three-term total.

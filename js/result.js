@@ -239,10 +239,19 @@ function searchResult() {
                 average = data.length > 0 ? Number((totalScore / (data.length * 3)).toFixed(2)) : 0;
 
             } else {
+                /* FIX (owner: "the average for 1st term and 2nd term is not
+                   displaying"): each subject row now shows its percentage in
+                   the Average column instead of "-". 1st/2nd term totals are
+                   out of 100 (Exam /60 + CA /40), so the subject's total IS
+                   its percentage - the same /100 basis the 3rd-term report
+                   uses for its term columns. */
                 data.forEach(result => {
+                    const subjectPct = (result.total !== null && result.total !== undefined && result.total !== "" && result.total !== "-")
+                        ? amsFmtScore(result.total)
+                        : "-";
                     table.innerHTML += `
                         <tr>
-                            <td>-</td>
+                            <td>${subjectPct}</td>
                             <td>${esc(result.grade)}</td>
                             <td>${amsFmtScore(result.total)}</td>
                             <td>${amsFmtScore(result.exam_score)}</td>
@@ -305,11 +314,14 @@ function searchResult() {
                     </tr>
                 `;
             } else {
+                /* CHANGED (owner): the summary label now reads
+                   "Average / النسبة المئوية" (percentage) to match the
+                   column header, instead of "Average / المعدل". */
                 table.innerHTML += `
                     <tr>
                         <td><strong>${amsFmtScore(average)}</strong></td>
                         <td></td>
-                        <td colspan="3"><strong>Average<br><span lang="ar">المعدل</span></strong></td>
+                        <td colspan="3"><strong>Average<br><span lang="ar">النسبة المئوية</span></strong></td>
                         <td></td>
                     </tr>
                 `;
