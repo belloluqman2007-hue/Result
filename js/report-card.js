@@ -170,13 +170,21 @@
             /* First and second term order: Average, Grade, Total, Exam, CA, Subject.
                CHANGED (owner request): same bilingual treatment as the 3rd term. */
             tableRows += `<tr><th>Average<br><span lang="ar">النسبة المئوية</span></th><th>Grade<br><span lang="ar">الدرجة</span></th><th>Total<br><span lang="ar">الدرجة الكلية</span></th><th>Exam<br><span lang="ar">الاختبار</span></th><th>CA<br><span lang="ar">التقييم المستمر</span></th><th>Subject<br><span lang="ar">المواد الدراسية</span></th></tr>`;
+            // FIX (owner: "the average for 1st term and 2nd term is not
+            // displaying"): mirror of the js/result.js fix - each subject
+            // row shows its /100 percentage (total) in the Average column.
             data.forEach(result => {
-                tableRows += `<tr><td>-</td><td>${esc(result.grade)}</td><td>${amsFmtScore(result.total)}</td><td>${amsFmtScore(result.exam_score)}</td><td>${amsFmtScore(result.ca_score)}</td><td>${esc(result.subject)}</td></tr>`;
+                const subjectPct = (result.total !== null && result.total !== undefined && result.total !== "" && result.total !== "-")
+                    ? amsFmtScore(result.total)
+                    : "-";
+                tableRows += `<tr><td>${subjectPct}</td><td>${esc(result.grade)}</td><td>${amsFmtScore(result.total)}</td><td>${amsFmtScore(result.exam_score)}</td><td>${amsFmtScore(result.ca_score)}</td><td>${esc(result.subject)}</td></tr>`;
                 totalScore += Number(result.total) || 0;
             });
             average = data.length > 0 ? Number((totalScore / data.length).toFixed(2)) : 0;
+            // CHANGED (owner): summary label reads "Average / النسبة المئوية"
+            // (percentage), matching the column header, instead of "المعدل".
             // Total, Exam and CA form the score span; Grade/Subject stay blank.
-            tableRows += `<tr><td><strong>${amsFmtScore(average)}</strong></td><td></td><td colspan="3"><strong>Average<br><span lang="ar">المعدل</span></strong></td><td></td></tr>`;
+            tableRows += `<tr><td><strong>${amsFmtScore(average)}</strong></td><td></td><td colspan="3"><strong>Average<br><span lang="ar">النسبة المئوية</span></strong></td><td></td></tr>`;
         }
 
         // Remarks - identical thresholds and wording to js/result.js
@@ -458,5 +466,60 @@
                 return 1;
             });
     };
+
+    /* ------------------------------------------------------------------
+       NEW (one-page fix): SYNCHRONOUS version of the fit measurement.
+       The async version above waits for images, which is fine for the
+       explicit "Print Result" button - but when the user prints with
+       Ctrl+P / the browser menu / the phone print button, no button
+       handler runs and the sheet printed at zoom 1 spilled onto a
+       second A4 page. beforeprint fires just before the browser takes
+       its print snapshot, at which point every image on the page is
+       already loaded, so a fully synchronous measure is safe there. */
+    window.amsFitPrintZoomSync = function (sourceEl) {
+        try {
+            const stage = amsMakeStage(718, "ams-fit-only");
+            document.body.appendChild(stage);
+            const clone = sourceEl.cloneNode(true);
+            clone.id = ""; // avoid a duplicate #reportContainer id in the DOM
+            stage.appendChild(clone);
+            const h = clone.getBoundingClientRect().height;
+            stage.remove();
+            if (!h) return 1;
+            const target = 1030; // A4 printable height, small safety margin
+            if (h <= target) return 1;
+            return Math.max(0.35, target / h);
+        } catch (e) {
+            return 1; // never let a measurement error block printing
+        }
+    };
+
+    /* Find a VISIBLE report sheet on the page (staff Check Result or the
+       portal). Offscreen PDF-capture stages are position:fixed, so their
+       offsetParent is null and they are skipped - the class-ZIP / portal
+       PDF flows are never disturbed. */
+    function amsFindVisibleReport() {
+        const el = document.getElementById("reportContainer");
+        if (el && el.offsetParent !== null) return el;
+        const all = document.querySelectorAll(".report-container");
+        for (let i = 0; i < all.length; i++) {
+            if (all[i].offsetParent !== null) return all[i];
+        }
+        return null;
+    }
+
+    /* NEW (one-page fix): scale-to-fit for EVERY print path - the
+       "Print Result" button, Ctrl+P, the browser print menu and phone
+       print all go through beforeprint, so the sheet is always zoomed
+       to exactly ONE A4 page before the snapshot is taken. */
+    window.addEventListener("beforeprint", function () {
+        const report = amsFindVisibleReport();
+        if (!report || !window.amsFitPrintZoomSync) return;
+        const zoom = window.amsFitPrintZoomSync(report);
+        document.documentElement.style.setProperty("--ams-print-zoom", String(zoom));
+    });
+    window.addEventListener("afterprint", function () {
+        document.documentElement.style.removeProperty("--ams-print-zoom");
+    });
 
 })();

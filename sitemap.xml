@@ -1,9 +1,13 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- NEW (pack 31): the public front door - every other page needs login -->
+<!-- NEW (pack 31): the public front door - every other page needs login.
+     CHANGED (canonical fix): this FILE is only a fallback - the server
+     (server.js /sitemap.xml route) serves a fresh copy whose <loc> always
+     matches the PRIMARY public URL, so the sitemap can never point at the
+     wrong deployment's domain again. -->
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url>
-    <loc>https://result-production-69ea.up.railway.app/</loc>
-    <lastmod>2026-07-25</lastmod>
+    <loc>https://result-cfn8.onrender.com/</loc>
+    <lastmod>2026-08-23</lastmod>
     <changefreq>weekly</changefreq>
     <priority>1.0</priority>
   </url>

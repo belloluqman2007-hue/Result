@@ -41,15 +41,105 @@ app.use(express.json({ limit: "25mb" })); // 25mb: Third Term Results export pos
 // Accept classic HTML form posts too, in case any page submits without JS.
 app.use(express.urlencoded({ extended: true }));
 
-// NEW (Pack 54/55): Explicit high-priority SEO routes for Google crawler & Search Console
+/* ======================================================================
+   SEO: one public URL to rule them all (canonical fix)
+   ----------------------------------------------------------------------
+   The app is deployed on TWO platforms running the SAME code:
+     - Render:  https://result-cfn8.onrender.com/
+     - Railway: https://result-production-69ea.up.railway.app/
+   Google Search Console showed one deployment was not being indexed
+   because the <link rel="canonical"> in index.html hardcoded the OTHER
+   deployment's domain. The fix (all overridable via environment vars):
+     1. index.html now carries __AMS_SITE_URL__ placeholders (canonical,
+        og:url, og:image, twitter:image, JSON-LD) that this server
+        rewrites to the correct base URL before the page is sent.
+     2. robots.txt and sitemap.xml are generated per request with the
+        same base (the old files hardcoded the Railway domain).
+     3. Any browser/crawler page navigation that arrives at the
+        NON-primary deployment gets a 301 redirect to the primary one,
+        so Google only ever indexes a single site.
+   Override on whichever platform you want as the canonical one:
+     SITE_URL=https://result-cfn8.onrender.com   (explicit public base)
+     PRIMARY_HOST=result-cfn8.onrender.com       (301 target host)
+     AMS_CANONICAL_REDIRECT=off                  (disable the 301)
+   ====================================================================== */
+const AMS_KNOWN_PUBLIC_HOSTS = [
+    "result-cfn8.onrender.com",
+    "result-production-69ea.up.railway.app"
+];
+function amsPrimaryHost() {
+    const fromEnv = String(process.env.PRIMARY_HOST || "").trim()
+        .replace(/^https?:\/\//, "").replace(/\/.*$/, "").toLowerCase();
+    return fromEnv || "result-cfn8.onrender.com"; // default: Render is the indexed domain
+}
+function amsRequestHost(req) {
+    return String(req.headers.host || "").split(":")[0].trim().toLowerCase();
+}
+/* Base public URL used for canonical/OG/sitemap: an explicit SITE_URL
+   env var wins; for the known public hosts we ALWAYS answer with the
+   primary host (never self-canonicalize the non-primary deployment);
+   unknown hosts (local development) fall back to the request's own
+   host so localhost previews still work. */
+function amsSiteBase(req) {
+    const explicit = String(process.env.SITE_URL || "").trim().replace(/\/+$/, "");
+    if (explicit) return explicit;
+    const host = amsRequestHost(req);
+    if (host && AMS_KNOWN_PUBLIC_HOSTS.indexOf(host) !== -1) {
+        return "https://" + amsPrimaryHost();
+    }
+    // Local development (localhost / 127.0.0.1): keep scheme + port so
+    // the canonical matches the address in the browser's bar.
+    if (host === "localhost" || host === "127.0.0.1" || host === "::1") {
+        return "http://" + String(req.headers.host || "localhost:3000");
+    }
+    return "https://" + (host || amsPrimaryHost());
+}
+function amsIndexHtml(req, res) {
+    fs.readFile(path.join(__dirname, "index.html"), "utf8", (err, html) => {
+        if (err) return res.status(500).send("Failed to load the website.");
+        res.type("html");
+        // no-cache: a canonical change must reach crawlers immediately.
+        res.set("Cache-Control", "no-cache");
+        res.send(html.split("__AMS_SITE_URL__").join(amsSiteBase(req)));
+    });
+}
+
+// 301: page navigations that arrive at the non-primary deployment jump
+// to the primary one (same path + query preserved). Only real HTML
+// requests are redirected - crawlers and browsers navigating; API and
+// asset fetches keep working on either host so nothing breaks.
+app.use((req, res, next) => {
+    if (String(process.env.AMS_CANONICAL_REDIRECT || "").toLowerCase() === "off") return next();
+    if (req.method !== "GET" && req.method !== "HEAD") return next();
+    const host = amsRequestHost(req);
+    if (!host || AMS_KNOWN_PUBLIC_HOSTS.indexOf(host) === -1) return next();
+    if (host === amsPrimaryHost()) return next();
+    if (String(req.headers.accept || "").indexOf("text/html") === -1) return next();
+    res.redirect(301, "https://" + amsPrimaryHost() + req.originalUrl);
+});
+
+// NEW (Pack 54/55 + canonical fix): Explicit high-priority SEO routes for
+// Google crawler & Search Console - the Sitemap line now always points
+// at the primary public URL instead of a hardcoded domain.
 app.get("/robots.txt", (req, res) => {
     res.type("text/plain");
-    res.send("User-agent: Googlebot\nAllow: /\nDisallow: /api/\nDisallow: /sql/\n\nUser-agent: *\nAllow: /\nDisallow: /api/\nDisallow: /sql/\n\nSitemap: https://result-production-69ea.up.railway.app/sitemap.xml\n");
+    res.send("User-agent: Googlebot\nAllow: /\nDisallow: /api/\nDisallow: /sql/\n\nUser-agent: *\nAllow: /\nDisallow: /api/\nDisallow: /sql/\n\nSitemap: " + amsSiteBase(req) + "/sitemap.xml\n");
 });
 
 app.get("/sitemap.xml", (req, res) => {
     res.type("application/xml");
-    res.sendFile(path.join(__dirname, "sitemap.xml"));
+    res.set("Cache-Control", "no-cache");
+    res.send(
+        '<?xml version="1.0" encoding="UTF-8"?>\n' +
+        "<urlset xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\">\n" +
+        "  <url>\n" +
+        "    <loc>" + amsSiteBase(req) + "/</loc>\n" +
+        "    <lastmod>2026-08-23</lastmod>\n" +
+        "    <changefreq>weekly</changefreq>\n" +
+        "    <priority>1.0</priority>\n" +
+        "  </url>\n" +
+        "</urlset>\n"
+    );
 });
 
 const isProduction = process.env.NODE_ENV === "production";
@@ -687,6 +777,12 @@ function backupStudentPhoto(studentId, filePath) {
     try { data = fs.readFileSync(filePath); } catch (e) { return; }
     connection.query("UPDATE students SET photo_data = ? WHERE student_id = ?", [data, studentId], () => {});
 }
+
+/* SEO fix (canonical): serve the public website with __AMS_SITE_URL__
+   rewritten to the correct public URL (resolver at the top of this
+   file). MUST come before express.static so the raw placeholder never
+   reaches the browser as-is. Covers both / and /index.html. */
+app.get(["/", "/index.html"], amsIndexHtml);
 
 app.use(express.static(__dirname));
 

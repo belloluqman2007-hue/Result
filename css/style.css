@@ -752,6 +752,14 @@ nav a{
   padding-left:10px;
   border-left:4px solid var(--gold);
   margin-bottom:12px;
+  /* CHANGED (owner: "space between the English and Arabic - English on
+     the left, Arabic on the right"): the section headings (Student
+     Information / Performance Summary) now spread their two labels to
+     opposite ends of the heading line. */
+  display:flex;
+  align-items:baseline;
+  justify-content:space-between;
+  column-gap:12px;
 }
 
 /* Student info table on the report */
@@ -1019,8 +1027,12 @@ nav a{
     max-width:100%;
     /* Fill the printable A4 area even when a student has only a few
        subjects. This keeps the official report looking like one complete
-       page instead of a small card at the top of otherwise blank paper. */
-    min-height:277mm;
+       page instead of a small card at the top of otherwise blank paper.
+       CHANGED (one-page fix): 276mm instead of exactly 277mm - a box that
+       is EXACTLY the printable height can be rounded up by the browser's
+       pagination engine onto a phantom blank second sheet. 1mm of headroom
+       is invisible but kills the "prints on two pages" bug. */
+    min-height:276mm;
     margin:0;
     padding:0;
     border:2px solid var(--emerald);
@@ -1107,21 +1119,25 @@ nav a{
     margin-top:12px !important;
   }
 
+  /* CHANGED (one-page fix): a half-pixel less cell padding on the score
+     table - the bilingual (English + Arabic) two-line headers made the
+     sheet taller, and this buys ~15px of headroom for long subjects
+     lists without any visible font change. */
   #resultTable td,
   #resultTable th{
-    padding:5px 8px;
+    padding:4.5px 8px;
     font-size:12px;
     line-height:1.3;
   }
 
   .student-info-table td{
-    padding:6px 10px;
+    padding:5px 10px;
     font-size:12px;
     line-height:1.3;
   }
 
   .summary-table td{
-    padding:6px 10px;
+    padding:5px 10px;
     font-size:12px;
     line-height:1.3;
   }
@@ -1219,8 +1235,11 @@ nav a{
     font-size:12px;
     margin-bottom:4px;
   }
+  /* CHANGED (one-page fix): see the note on #resultTable above - the
+     bilingual labels added height, so cells lose half a pixel of
+     padding to keep long sheets on ONE A4 page. */
   .student-info-table td{
-    padding:5px 9px;
+    padding:4.5px 9px;
     font-size:11.5px;
     line-height:1.25;
   }
@@ -1231,7 +1250,7 @@ nav a{
     margin-bottom:5px;
   }
   .summary-table td{
-    padding:5px 8px;
+    padding:4.5px 8px;
     font-size:11.5px;
     line-height:1.25;
   }
