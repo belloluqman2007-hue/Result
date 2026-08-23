@@ -671,7 +671,7 @@ function buildThirdTermWorkbook(classes, meta) {
     const termEndsOn = String(m.termEndsOn || "").trim();
     const newSessionStarts = String(m.newSessionStarts || "").trim();
     const datesLine = "Term Ends On / تنتهي الفترة في: " + (termEndsOn || "\u2014") +
-        "   |   New Session Starts / \u064a\u0628\u062f\u0623 \u0627\u0644\u0639\u0627\u0645 \u0627\u0644\u062c\u062f\u064a\u062f \u0641\u064a: " + (newSessionStarts || "\u2014");
+        "   |   New Session Starts On / \u064a\u0628\u062f\u0623 \u0627\u0644\u0639\u0627\u0645 \u0627\u0644\u062c\u062f\u064a\u062f \u0641\u064a: " + (newSessionStarts || "\u2014");
     const XLSX = X();
     const wb = XLSX.utils.book_new();
     const today = new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });

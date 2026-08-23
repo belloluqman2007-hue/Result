@@ -142,7 +142,7 @@
         tel: "08062445559, 08058306889",
         email: "madrasatuameenillah22@gmail.com",
         mottoEn: "KNOWLEDGE AND WORSHIP",
-        mottoAr: "الشَّعَارُ الْعِلْمُ وَالْعِبَادَةُ"
+        mottoAr: "الشعار: العلم والعبادة"
     };
 
     /* Format a number to one decimal place (averages + overall %). */
@@ -203,7 +203,7 @@
         if (d.termEndsOn || d.newSessionStarts) {
             status.innerHTML = "&#10003; Saved in this browser — printed on every result sheet." +
                 (d.termEndsOn ? " <b>Term Ends On:</b> " + esc(d.termEndsOn) + "." : "") +
-                (d.newSessionStarts ? " <b>New Session Starts:</b> " + esc(d.newSessionStarts) + "." : "");
+                (d.newSessionStarts ? " <b>New Session Starts On:</b> " + esc(d.newSessionStarts) + "." : "");
         } else {
             status.innerHTML = "Not set yet — the sheets will show a blank line for these two dates.";
         }
@@ -828,7 +828,7 @@
             '<div class="ttr-p-dates">' +
             '<div class="ttr-p-date">' + bi("تنتهي الفترة في", "Term Ends On") +
             '<span class="ttr-p-dval">' + (dates.termEndsOn ? esc(dates.termEndsOn) : blankLine) + "</span></div>" +
-            '<div class="ttr-p-date">' + bi("يبدأ العام الجديد في", "New Session Starts") +
+            '<div class="ttr-p-date">' + bi("يبدأ العام الجديد في", "New Session Starts On") +
             '<span class="ttr-p-dval">' + (dates.newSessionStarts ? esc(dates.newSessionStarts) : blankLine) + "</span></div>" +
             "</div>";
 

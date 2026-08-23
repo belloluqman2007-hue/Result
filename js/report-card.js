@@ -207,7 +207,7 @@
         <h1>AMEENULLAH SCHOOL OF ARABIC AND ISLAMIC STUDIES</h1>
         <p class="address">3, Temidire street, Off Ondo Road, Ijeb-Ode, Ogun State.</p>
         <p class="contact">Tel: 08062445559, 08058306889  |  Email: madrasatuameenillah22@gmail.com</p>
-        <p class="motto">MOTTO: KNOWLEDGE AND WORSHIP <span lang="ar">:الشِّعار الْعِلْمُ وَالْعِبَادَة</span></p>
+        <p class="motto">MOTTO: KNOWLEDGE AND WORSHIP <span lang="ar">الشعار: العلم والعبادة</span></p>
         <h2 class="school-line"> <span id="reportLevel">${esc(reportLevel)}</span></h2>
       </div>
       <img src="${esc(photoSrc)}" class="student-passport"
@@ -223,11 +223,11 @@
         <td><strong>Class:</strong> <span class="ar-lbl" lang="ar">الصف</span></td><td>${esc(first.class_name)}</td>
       </tr>
       <tr>
-        <td><strong>Student ID:</strong> <span class="ar-lbl" lang="ar">رقم الطالب</span></td><td>${esc(first.student_id)}</td>
+        <td><strong>Student Id:</strong> <span class="ar-lbl" lang="ar">رقم الطالب</span></td><td>${esc(first.student_id)}</td>
         <td><strong>Term:</strong> <span class="ar-lbl" lang="ar">الفترة</span></td><td>${esc(term)}${amsTermAr(term) ? ' <span class="ar-lbl" lang="ar">(' + amsTermAr(term) + ')</span>' : ''}</td>
       </tr>
       <tr>
-        <td><strong>Position:</strong> <span class="ar-lbl" lang="ar">الترتيب</span></td><td>${positionText}</td>
+        <td><strong>Position:</strong> <span class="ar-lbl" lang="ar">الدرجة</span></td><td>${positionText}</td>
         <td><strong>Session:</strong> <span class="ar-lbl" lang="ar">العام الدراسي</span></td><td>${esc(session)}</td>
       </tr>
     </table>

@@ -585,7 +585,8 @@ nav a{
   font-size:.85em;
   font-weight:600;
   color:#5B6B62;
-  margin-left:4px;
+  display:inline-block;
+  margin-left:8px;
 }
 .report-container #resultTable th .ar-lbl{
   color:#d8ecd9;
