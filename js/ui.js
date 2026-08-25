@@ -391,3 +391,25 @@
         injectDarkToggle();
     });
 })();
+
+/* ---------- Shared admin/teacher navigation ----------
+   Every staff section already loads ui.js. Load the role-aware navigation
+   from one central file so standalone pages and app-shell pages always show
+   the same complete sidebar and mobile quick icons. */
+(function loadSharedStaffNavigation() {
+    if (document.getElementById("amsStaffNavigationScript")) return;
+
+    var css = document.getElementById("amsStaffNavigationCss");
+    if (!css) {
+        css = document.createElement("link");
+        css.id = "amsStaffNavigationCss";
+        css.rel = "stylesheet";
+        css.href = "css/staff-navigation.css?v=106";
+        document.head.appendChild(css);
+    }
+
+    var script = document.createElement("script");
+    script.id = "amsStaffNavigationScript";
+    script.src = "js/staff-navigation.js?v=106";
+    document.head.appendChild(script);
+})();

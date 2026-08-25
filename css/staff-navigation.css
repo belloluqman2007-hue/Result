@@ -1,0 +1,332 @@
+/* ================================================================
+   Shared staff navigation
+   ----------------------------------------------------------------
+   Loaded by js/ui.js on every staff page. It gives admin/teacher
+   sections one complete, role-aware sidebar and the same mobile quick
+   icons, instead of each page carrying a different partial menu.
+   ================================================================ */
+
+:root{
+  --ams-nav-green:#0f3d2e;
+  --ams-nav-green-2:#1c5a42;
+  --ams-nav-jade:#2f9e6e;
+  --ams-nav-gold:#e9c53d;
+  --ams-nav-surface:var(--m-surface,#fff);
+  --ams-nav-border:var(--m-border,#d9e8e0);
+  --ams-nav-muted:var(--m-muted,#5f6e66);
+}
+
+/* Keep long menus usable on every screen. */
+.ams-sidebar[data-shared-navigation="true"],
+.ams-shared-drawer{
+  overflow-y:auto !important;
+  overscroll-behavior:contain;
+  -webkit-overflow-scrolling:touch;
+  scrollbar-width:thin;
+  scrollbar-color:rgba(255,255,255,.30) transparent;
+}
+.ams-sidebar[data-shared-navigation="true"]::-webkit-scrollbar,
+.ams-shared-drawer::-webkit-scrollbar{ width:6px; }
+.ams-sidebar[data-shared-navigation="true"]::-webkit-scrollbar-thumb,
+.ams-shared-drawer::-webkit-scrollbar-thumb{
+  background:rgba(255,255,255,.28);
+  border-radius:99px;
+}
+
+.ams-sidebar[data-shared-navigation="true"] .ams-side-brand,
+.ams-shared-drawer .ams-side-brand{
+  display:flex;
+  align-items:center;
+  gap:11px;
+  padding:16px 15px 14px;
+  border-bottom:1px solid rgba(255,255,255,.13);
+  flex:0 0 auto;
+}
+.ams-sidebar[data-shared-navigation="true"] .ams-side-brand img,
+.ams-shared-drawer .ams-side-brand img{
+  width:43px;
+  height:43px;
+  border-radius:50%;
+  padding:2px;
+  border:2px solid #67c996;
+  background:#fff;
+  object-fit:cover;
+  flex:0 0 43px;
+}
+.ams-sidebar[data-shared-navigation="true"] .ams-school-name,
+.ams-shared-drawer .ams-school-name{
+  color:#fff;
+  font:800 12px/1.3 'Cairo','Segoe UI',Arial,sans-serif;
+}
+.ams-sidebar[data-shared-navigation="true"] .ams-school-sub,
+.ams-shared-drawer .ams-school-sub{
+  color:#bfe3cf;
+  font:600 10.5px/1.35 'Cairo','Segoe UI',Arial,sans-serif;
+  margin-top:2px;
+}
+
+.ams-shared-nav-meta{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  padding:10px 13px 2px;
+  color:#dceee4;
+  font:600 11px/1.2 'Cairo','Segoe UI',Arial,sans-serif;
+}
+.ams-shared-role{
+  margin-left:auto;
+  border:1px solid rgba(233,197,61,.45);
+  border-radius:999px;
+  color:#f7e9b8;
+  padding:2px 8px;
+  text-transform:capitalize;
+  font-size:9.5px;
+  letter-spacing:.3px;
+}
+
+.ams-sidebar[data-shared-navigation="true"] .ams-side-nav,
+.ams-shared-drawer .ams-side-nav{
+  display:flex;
+  flex-direction:column;
+  gap:3px;
+  padding:9px 11px 14px;
+  flex:1 0 auto;
+}
+.ams-sidebar[data-shared-navigation="true"] .ams-nav-label,
+.ams-shared-drawer .ams-nav-label{
+  color:#9fc7b2;
+  padding:12px 11px 5px;
+  font:800 9.5px/1.2 'Cairo','Segoe UI',Arial,sans-serif;
+  letter-spacing:1.05px;
+  text-transform:uppercase;
+}
+.ams-sidebar[data-shared-navigation="true"] .ams-side-nav a,
+.ams-shared-drawer .ams-side-nav a{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  min-height:40px;
+  margin:0;
+  padding:9px 11px;
+  border-radius:10px;
+  color:#e2f0e8;
+  text-decoration:none;
+  font:650 13px/1.25 'Cairo','Segoe UI',Arial,sans-serif;
+  transition:background .18s ease,color .18s ease,transform .18s ease;
+}
+.ams-sidebar[data-shared-navigation="true"] .ams-side-nav a:hover,
+.ams-shared-drawer .ams-side-nav a:hover{
+  background:rgba(255,255,255,.11);
+  color:#fff;
+  transform:translateX(2px);
+}
+.ams-sidebar[data-shared-navigation="true"] .ams-side-nav a.ams-active,
+.ams-shared-drawer .ams-side-nav a.ams-active{
+  background:linear-gradient(135deg,var(--ams-nav-jade),#57ba82);
+  color:#fff;
+  box-shadow:0 6px 16px rgba(0,0,0,.20);
+}
+.ams-sidebar[data-shared-navigation="true"] .ams-side-nav svg,
+.ams-shared-drawer .ams-side-nav svg{
+  width:18px;
+  height:18px;
+  flex:0 0 18px;
+  opacity:.96;
+}
+.ams-shared-link-label{ min-width:0; }
+.ams-shared-badge{
+  display:none;
+  margin-left:auto;
+  min-width:19px;
+  padding:1px 6px;
+  border-radius:999px;
+  background:#c0392b;
+  color:#fff;
+  text-align:center;
+  font:800 9.5px/1.5 'Segoe UI',Arial,sans-serif;
+}
+
+.ams-sidebar[data-shared-navigation="true"] .ams-side-footer,
+.ams-shared-drawer .ams-side-footer{
+  padding:12px;
+  border-top:1px solid rgba(255,255,255,.13);
+  flex:0 0 auto;
+}
+.ams-shared-logout{
+  display:flex !important;
+  align-items:center;
+  justify-content:center;
+  gap:8px;
+  width:100% !important;
+  margin:0 !important;
+  padding:10px 13px !important;
+  border:1px solid rgba(255,255,255,.22) !important;
+  border-radius:10px !important;
+  background:rgba(255,255,255,.10) !important;
+  color:#fff !important;
+  font:800 12.5px/1.2 'Cairo','Segoe UI',Arial,sans-serif !important;
+  box-shadow:none !important;
+  cursor:pointer;
+}
+.ams-shared-logout:hover{ background:rgba(255,255,255,.18) !important; }
+.ams-shared-logout svg{ width:17px; height:17px; }
+
+/* Drawer used by staff pages that previously only had a Dashboard link. */
+.ams-shared-drawer{
+  position:fixed !important;
+  inset:0 auto 0 0 !important;
+  width:280px !important;
+  max-width:88vw;
+  height:100dvh !important;
+  margin:0 !important;
+  z-index:1002 !important;
+  display:flex !important;
+  flex-direction:column;
+  color:#eaf6ef;
+  background:linear-gradient(180deg,var(--ams-nav-green) 0%,var(--ams-nav-green-2) 72%,#17492f 100%) !important;
+  box-shadow:0 20px 55px rgba(4,28,18,.38);
+  transform:translateX(-106%);
+  transition:transform .24s ease;
+}
+html.ams-global-nav-open .ams-shared-drawer{ transform:none; }
+.ams-shared-nav-scrim{
+  position:fixed;
+  inset:0;
+  z-index:1001;
+  background:rgba(5,25,17,.52);
+  opacity:0;
+  pointer-events:none;
+  transition:opacity .22s ease;
+  backdrop-filter:blur(2px);
+  -webkit-backdrop-filter:blur(2px);
+}
+html.ams-global-nav-open .ams-shared-nav-scrim{
+  opacity:1;
+  pointer-events:auto;
+}
+html.ams-global-nav-open,
+html.ams-global-nav-open body{ overflow:hidden !important; }
+
+.ams-shared-menu-trigger{
+  flex:0 0 auto !important;
+  display:inline-flex !important;
+  align-items:center !important;
+  justify-content:center !important;
+  gap:7px !important;
+  min-width:40px !important;
+  min-height:40px !important;
+  width:auto !important;
+  margin:0 !important;
+  padding:8px 11px !important;
+  border:1px solid rgba(255,255,255,.24) !important;
+  border-radius:10px !important;
+  background:rgba(255,255,255,.13) !important;
+  color:#fff !important;
+  box-shadow:none !important;
+  font:800 12px/1 'Cairo','Segoe UI',Arial,sans-serif !important;
+  text-transform:none !important;
+  letter-spacing:0 !important;
+  cursor:pointer;
+}
+.ams-shared-menu-trigger:hover{ background:rgba(255,255,255,.22) !important; transform:none !important; }
+.ams-shared-menu-trigger svg{ width:19px; height:19px; }
+/* Light management headings need a dark version of the same control. */
+.mng-head > .ams-shared-menu-trigger,
+.ch-list-head > .ams-shared-menu-trigger{
+  color:var(--ams-nav-green) !important;
+  background:var(--ams-nav-surface) !important;
+  border-color:var(--ams-nav-border) !important;
+  box-shadow:0 4px 12px rgba(15,61,46,.08) !important;
+}
+/* Fallback when a special full-screen page has no header container. */
+.ams-shared-menu-trigger.ams-shared-menu-float{
+  position:fixed !important;
+  top:12px;
+  left:12px;
+  z-index:1000;
+  color:#fff !important;
+  background:linear-gradient(135deg,var(--ams-nav-green),var(--ams-nav-green-2)) !important;
+  box-shadow:0 7px 20px rgba(15,61,46,.28) !important;
+}
+
+/* One consistent mobile icon bar on every admin/teacher section. */
+.ams-shared-quicknav{ display:none; }
+@media (max-width:1024px){
+  .ams-shared-quicknav{
+    display:flex;
+    position:fixed;
+    left:0;
+    right:0;
+    bottom:0;
+    z-index:995;
+    justify-content:space-around;
+    padding:5px 2px calc(5px + env(safe-area-inset-bottom));
+    border-top:1px solid var(--ams-nav-border);
+    background:rgba(255,255,255,.97);
+    box-shadow:0 -6px 24px rgba(15,61,46,.13);
+    backdrop-filter:blur(14px);
+    -webkit-backdrop-filter:blur(14px);
+  }
+  html[data-theme="dark"] .ams-shared-quicknav{ background:rgba(20,33,25,.97); }
+  .ams-shared-qn-item{
+    flex:1 1 0;
+    min-width:0;
+    min-height:51px;
+    display:flex !important;
+    flex-direction:column;
+    align-items:center;
+    justify-content:center;
+    gap:3px;
+    margin:0 !important;
+    padding:4px 1px !important;
+    border:0 !important;
+    border-radius:10px !important;
+    background:none !important;
+    color:var(--ams-nav-muted) !important;
+    text-decoration:none !important;
+    box-shadow:none !important;
+    font:750 9.5px/1 'Cairo','Segoe UI',Arial,sans-serif !important;
+    letter-spacing:0 !important;
+    text-transform:none !important;
+    cursor:pointer;
+  }
+  .ams-shared-qn-item:hover,
+  .ams-shared-qn-item:active,
+  .ams-shared-qn-item[aria-current="page"]{
+    color:var(--ams-nav-green-2) !important;
+    background:rgba(47,158,110,.11) !important;
+    transform:none !important;
+  }
+  html[data-theme="dark"] .ams-shared-qn-item:hover,
+  html[data-theme="dark"] .ams-shared-qn-item:active,
+  html[data-theme="dark"] .ams-shared-qn-item[aria-current="page"]{ color:#80d4a4 !important; }
+  .ams-shared-qn-ico{ font-size:19px; line-height:1; }
+  .ams-shared-qn-lbl{
+    display:block;
+    max-width:100%;
+    overflow:hidden;
+    white-space:nowrap;
+    text-overflow:ellipsis;
+  }
+
+  body.ams-staff-navigation .mng-page,
+  body.ams-staff-navigation .sc-wrap,
+  body.ams-staff-navigation .nt-wrap,
+  body.ams-staff-navigation .nf-wrap,
+  body.ams-staff-navigation .ams-page-pad{ padding-bottom:88px !important; }
+  body.ams-staff-navigation .ch-app{ height:calc(100dvh - 62px) !important; }
+  body.ams-staff-navigation .ai-compose,
+  body.ams-staff-navigation .aig-compose{ margin-bottom:62px; }
+}
+
+@media (max-width:620px){
+  .ams-shared-menu-trigger .ams-shared-menu-text{ display:none; }
+  .ams-shared-menu-trigger{ padding:8px !important; }
+}
+
+@media print{
+  .ams-shared-drawer,
+  .ams-shared-nav-scrim,
+  .ams-shared-menu-trigger,
+  .ams-shared-quicknav{ display:none !important; }
+}

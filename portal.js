@@ -775,6 +775,13 @@ function ptWireSettings() {
    View router for the sidebar shell + the Notifications page builder.
    ========================================================================== */
 function ptShowView(name) {
+  /* A hash makes portal sections directly reachable from separate student
+     pages (for example AI Tutor -> portal.html#results). Ignore unknown
+     hashes so a typo can never leave the portal with a blank main area. */
+  var target = Array.prototype.find.call(document.querySelectorAll(".pt-view[data-view]"), function (view) {
+    return view.getAttribute("data-view") === String(name);
+  });
+  if (!target) return;
   document.querySelectorAll(".pt-view").forEach(function (v) {
     v.classList.toggle("pt-view-on", v.getAttribute("data-view") === name);
   });
@@ -783,6 +790,9 @@ function ptShowView(name) {
   });
   document.body.classList.remove("pt-nav-open");
   window.scrollTo({ top: 0 });
+  if (window.history && window.history.replaceState && location.hash !== "#" + name) {
+    window.history.replaceState(null, "", location.pathname + location.search + "#" + name);
+  }
   // lazy loaders: only touch the network when the parent actually opens it
   if (name === "chat") loadPortalMessages();
   if (name === "notifications") loadPortalNotifications();
