@@ -343,3 +343,71 @@
   .dd-modal{ width:100%; max-height:86vh; border-radius:20px 20px 0 0; }
 }
 /* ===================== end NEW (pack 40 modal) ===================== */
+
+/* ==========================================================================
+   NEW (Pack 105) MOBILE QUICK NAV - owner: "put like necessary seven quick
+   icons or more in the admin and teachers page for mobile".
+   --------------------------------------------------------------------------
+   A fixed bottom bar of one-tap shortcuts (Home, Students, Scores, Results,
+   Attendance, Chat, Finance[admin-only], Menu) that appears ONLY on small
+   screens (<=1024px), where the sidebar is a hidden drawer. Desktop keeps
+   the full sidebar so the bar stays hidden there. Uses the same --m-*
+   tokens as modern-ui.css so it follows dark mode automatically.
+   ========================================================================== */
+.ams-quicknav{ display:none; }
+
+@media (max-width:1024px){
+  .ams-quicknav{
+    display:flex;
+    position:fixed;
+    left:0; right:0; bottom:0;
+    z-index:44; /* below the drawer scrim (45) and sidebar (50) */
+    background:var(--m-surface);
+    border-top:1px solid var(--m-border);
+    box-shadow:0 -6px 24px rgba(15,61,46,.12);
+    padding:6px 2px calc(6px + env(safe-area-inset-bottom));
+    justify-content:space-around;
+  }
+  .ams-qn-item{
+    flex:1 1 0;
+    min-width:0;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    gap:3px;
+    background:none;
+    border:none;
+    box-shadow:none;
+    color:var(--m-muted);
+    text-decoration:none;
+    cursor:pointer;
+    font-family:'Cairo',sans-serif;
+    font-size:10px;
+    font-weight:700;
+    letter-spacing:0;
+    padding:5px 1px;
+    border-radius:12px;
+    text-transform:none;
+  }
+  .ams-qn-item:hover,
+  .ams-qn-item:active{
+    background:rgba(47,158,110,.12);
+    color:var(--m-emerald);
+    transform:none;
+    box-shadow:none;
+  }
+  .ams-qn-item[aria-current="page"]{ color:var(--m-emerald); }
+  .ams-qn-item[aria-current="page"] .ams-qn-ico{
+    text-shadow:0 0 12px rgba(47,158,110,.55);
+  }
+  .ams-qn-ico{ font-size:20px; line-height:1; }
+  .ams-qn-lbl{ line-height:1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:100%; }
+
+  /* leave room at the bottom so the bar never covers the last panel */
+  .ams-page-pad{ padding-bottom:88px; }
+}
+
+@media print{
+  .ams-quicknav{ display:none !important; }
+}
+/* ===================== end NEW (Pack 105 quick nav) ===================== */

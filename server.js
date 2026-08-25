@@ -4589,7 +4589,14 @@ setInterval(function () { // sweep expired buckets every 10 min (memory hygiene)
     Object.keys(aiAssistantHits).forEach(function (k) { if (aiAssistantHits[k].resetAt < now) delete aiAssistantHits[k]; });
 }, 600000).unref();
 
-app.post("/api/ai/assistant", requireLogin, async (req, res) => {
+/* CHANGED (Pack 105 - owner: "the ai at the public view is not working"):
+   this is the PUBLIC website assistant (visitors/parents who are NOT
+   logged in), so it must NOT sit behind requireLogin - that guard made
+   every anonymous question fail with 401 and the widget just said "could
+   not answer". It stays safe because it is already rate-limited per
+   visitor (20/hour) and only ever sends the visitor's question + the
+   fixed school facts to the AI service. */
+app.post("/api/ai/assistant", async (req, res) => {
     const cfg = await aiConfig(); // CHANGED (pack 29): in-app key counts too
     if (!cfg.key) return aiNotReady(res);
     const ip = req.ip || req.connection.remoteAddress || "?";

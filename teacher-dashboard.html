@@ -698,6 +698,43 @@
         <div id="moved-to-scores-page" style="display:none;"></div>
       </div>
     </main>
+
+    <!-- ============ NEW (Pack 105) MOBILE QUICK NAV ============
+         Owner: "put like necessary seven quick icons or more in the
+         admin and teachers page for mobile". A fixed bottom bar of one-tap
+         shortcuts to the most-used pages, so phones jump straight to them
+         without opening the sidebar drawer. Visible only on small screens
+         (<=1024px) where the sidebar is hidden behind the hamburger;
+         desktop keeps the full sidebar so the bar stays hidden there.
+         Finance carries data-admin-only so teachers see 7 icons and
+         admins see 8 (the existing role script hides it for teachers). -->
+    <nav class="ams-quicknav" aria-label="Quick links">
+      <a class="ams-qn-item" href="teacher-dashboard.html" aria-current="page">
+        <span class="ams-qn-ico">&#127968;</span><span class="ams-qn-lbl">Home</span>
+      </a>
+      <a class="ams-qn-item" href="students.html">
+        <span class="ams-qn-ico">&#128101;</span><span class="ams-qn-lbl">Students</span>
+      </a>
+      <a class="ams-qn-item" href="scores.html">
+        <span class="ams-qn-ico">&#9999;&#65039;</span><span class="ams-qn-lbl">Scores</span>
+      </a>
+      <a class="ams-qn-item" href="student-result.html">
+        <span class="ams-qn-ico">&#128202;</span><span class="ams-qn-lbl">Results</span>
+      </a>
+      <a class="ams-qn-item" href="attendance.html">
+        <span class="ams-qn-ico">&#128203;</span><span class="ams-qn-lbl">Attendance</span>
+      </a>
+      <a class="ams-qn-item" href="chat.html">
+        <span class="ams-qn-ico">&#128172;</span><span class="ams-qn-lbl">Chat</span>
+      </a>
+      <a class="ams-qn-item" href="finance.html" data-admin-only>
+        <span class="ams-qn-ico">&#128184;</span><span class="ams-qn-lbl">Finance</span>
+      </a>
+      <button class="ams-qn-item" type="button" aria-label="Open menu"
+              onclick="document.documentElement.classList.toggle('ams-nav-open')">
+        <span class="ams-qn-ico">&#9776;</span><span class="ams-qn-lbl">Menu</span>
+      </button>
+    </nav>
   </div>
 
   <!-- Scripts: ui.js (new helpers), then the ORIGINAL app.js +

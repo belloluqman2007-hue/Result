@@ -1,5 +1,28 @@
 # UI Modernization — Change Log
 
+## Pack 105 — 2026-08-25
+
+Owner: "put like necessary seven quick icons or more than that in the admin and teachers and student website page for mobile" + "the ai at the public view is not working".
+
+### Mobile quick icons on the admin/teacher dashboard + student portal
+
+| File | What happened |
+|---|---|
+| `teacher-dashboard.html` | NEW `<nav class="ams-quicknav">` fixed bottom bar with **8** one-tap shortcuts — 🏠 Home, 👥 Students, ✏️ Scores, 📊 Results, 📋 Attendance, 💬 Chat, 💰 Finance, ☰ Menu. Finance carries `data-admin-only`, so the existing role script hides it for teachers (teachers see 7 icons, admins see 8). The Menu button re-opens the sidebar drawer. The bar only shows on small screens (≤1024px) where the sidebar is a hidden drawer; desktop keeps the full sidebar. |
+| `css/dashboard-beauty.css` | NEW `.ams-quicknav` / `.ams-qn-item` skin (additive, end of file): emerald-tinted fixed bar using the same `--m-*` tokens as modern-ui.css so it follows dark mode automatically, safe-area bottom padding, gold-tinted active/hover state, `@media print` hides it, and `.ams-page-pad` gains bottom padding so the bar never covers the last panel. |
+| `portal.html` | NEW `<nav class="pt-quicknav" id="ptQuickNav">` fixed bottom bar with **7** shortcuts — 🏠 Home, 📊 Results, 💰 Fees, 💬 Chat, 🔔 Alerts, 🎓 AI Tutor, ☰ Menu. Home/Results/Fees/Chat/Alerts switch the same view router as the sidebar (`data-view` → `ptShowView`); AI Tutor links to `student-ai-tutor.html`; Menu re-opens the sidebar. Shown only ≤860px (the portal sidebar breakpoint); `@media print` hides it; `.pt-mainnew` gets extra bottom padding. |
+| `portal.html` (inline script) | NEW small wiring block after `js/portal.js`: clicks on `.pt-qn-item[data-view]` call `ptShowView`, the active icon is kept in sync by wrapping `ptShowView` (same pattern the file already uses for `ptShowViewExtra`), and `#ptQnMenu` toggles the drawer. |
+
+### Public-view AI assistant fix
+
+| File | What happened |
+|---|---|
+| `server.js` | `POST /api/ai/assistant` **no longer requires login**. This is the public website's chat bubble (index.html) used by visitors/parents who are NOT logged in, but the route sat behind `requireLogin` — so every anonymous question returned 401 and the widget said "could not answer". The route is already per-visitor rate-limited (20/hour) and only ever sends the question + fixed school facts to the AI service, so it stays safe. `/api/ai/status` was already public and now matches. |
+
+Verified against a running `node server.js`: `/` 200 with the AI bubble present; `/portal.html` 200 with `#ptQuickNav` present; `POST /api/ai/assistant` (anonymous) no longer returns 401 "Not logged in" — it reaches the CSRF layer (then the AI key check), confirming the login guard is gone. `teacher-dashboard.html` is login-gated as expected (staff page). `server.js` + `portal.js` pass `node --check`. Result calculations, grading, report cards, printing and every staff/portal query: completely untouched.
+
+---
+
 ## Pack 104 — 2026-08-25
 
 Owner: the quick-jump icons must be **on the page itself and visible** — pack 103 gated the dock behind `@media (max-width:760px)` with `.wb2-dock{display:none}` everywhere else, so on laptop/desktop widths (and any tablet wider than 760px) the icons never rendered at all. Confirmed live: `result-cfn8.onrender.com/css/website.css` was serving the `display:none` base rule. Not a caching issue — `sw.js` serves CSS/JS network-first.
