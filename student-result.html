@@ -5,6 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Check Result | Ameenullah School of Arabic and Islamic Studies</title>
   <link rel="stylesheet" href="css/style.css">
+  <!-- Role-aware: only signed-in staff receive this shared navigation. -->
+  <link rel="stylesheet" href="css/staff-navigation.css?v=106">
 
   <!-- NEW (PWA conversion): makes the site installable as a phone/desktop
        app with its own icon. Purely additive - no styling or behaviour
@@ -212,6 +214,9 @@ alt="Student Photo">
 </script>
 
 <script src="js/csrf.js"></script>
+  <!-- Directly load only the role-aware navigation here so the public result
+       design and parent/student behaviour remain untouched. -->
+  <script src="js/staff-navigation.js?v=106"></script>
   <!-- NEW (one-page print): shared report helpers (amsFitPrintZoom) so the
        staff "Print Result" / "Download PDF" sheet scales to ONE A4 page. -->
   <script src="js/report-card.js"></script>

@@ -851,7 +851,13 @@
       if (orig) orig(name);
       markActive(name);
     };
-    markActive("overview");
+    /* Open direct links from portal sub-pages, e.g. portal.html#results. */
+    var requested = (location.hash || "").slice(1);
+    var requestedExists = Array.prototype.some.call(document.querySelectorAll(".pt-view[data-view]"), function (view) {
+      return view.getAttribute("data-view") === requested;
+    });
+    if (requested && requestedExists) window.ptShowView(requested);
+    else markActive("overview");
   })();
   </script>
   <!-- PWA (unchanged) -->
