@@ -1298,6 +1298,19 @@ body{
   border-radius:10px; font-size:20px; cursor:pointer; line-height:1;
 }
 .ams-ai-x:hover{ background:rgba(255,255,255,.25); }
+/* NEW (pack 37 - owner: "add description for the AI that creates the
+   exam"): friendly explainer under the modal header - what the AI does
+   and that the teacher stays the examiner. */
+.ams-ai-desc{
+  background:#f4f8f3; border-bottom:1px solid #e3ede2; padding:13px 16px 14px;
+}
+.ams-ai-desc > b{ display:block; font-size:12px; text-transform:uppercase; letter-spacing:.04em; color:#0f6a44; margin-bottom:5px; }
+.ams-ai-desc-note b{ color:#0f6a44; }
+.ams-ai-desc p{ margin:0; font-size:13px; color:#41564a; line-height:1.55; }
+.ams-ai-desc p + p{ margin-top:8px; }
+.ams-ai-desc-note{
+  background:#fff; border:1px solid #dcead9; border-radius:10px; padding:8px 11px;
+}
 .ams-ai-body{ padding:16px; }
 .ams-ai-lbl{ display:block; font-size:12px; font-weight:700; color:#41564a; margin:0 0 4px; }
 .ams-ai-body input[type="text"], .ams-ai-body select{

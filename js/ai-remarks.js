@@ -295,7 +295,7 @@
         saveChat();
         col.appendChild(bubble("assistant", res.d.reply, Date.now()));
       } else {
-        var msg = (res.d && res.d.error) || "The AI stumbled - please try again in a moment.";
+        var msg = (res.d && res.d.error) || "The AI is busy right now - please try again in a moment.";
         col.appendChild(bubble("assistant", "\u26A0\uFE0E " + msg, Date.now(), { raw: true }));
         if (res.status === 503) setState(false); // key gone - show the switch-on card again
       }

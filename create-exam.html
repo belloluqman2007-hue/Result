@@ -145,7 +145,7 @@
              modal (subject + class taken from Step 1), the AI drafts
              numbered questions straight into the paper, teacher edits
              anything before printing. -->
-        <button type="button" class="ams-ai-btn" onclick="amsOpenAiModal()">&#10024; AI: Write Questions</button>
+        <button type="button" class="ams-ai-btn" onclick="amsOpenAiModal()" title="The AI writer drafts full numbered questions straight into this paper from a topic - you stay the examiner and edit before printing">&#10024; AI: Write Questions</button>
         <button type="button" onclick="saveExam()">Save Exam</button>
         <button type="button" onclick="openLoadPanel()">Open Saved Exam</button>
         <!-- CHANGED (auto pagination, request #1): this now inserts a Word-style
@@ -424,6 +424,14 @@
           <small id="amsAiFor">for this exam</small>
         </div>
         <button type="button" class="ams-ai-x" onclick="amsCloseAiModal()" aria-label="Close">&times;</button>
+      </div>
+      <!-- NEW (pack 37 - owner: "add description for the AI that creates
+           the exam"): the teacher sees at a glance what this AI does,
+           what it CANNOT do and who stays in charge. -->
+      <div class="ams-ai-desc">
+        <b>How this AI works</b>
+        <p>Type a topic (e.g. <em>&ldquo;Fractions&rdquo;, &ldquo;Tawheed&rdquo;, &ldquo;Surah Al-Fatihah&rdquo;</em>) and the AI writes complete, numbered questions straight into this paper for the class and subject chosen in Step 1. You choose how many questions (5&ndash;20), the style &mdash; <b>Theory</b> (write answers), <b>Objective</b> (A&ndash;D) or <b>Mixed</b> &mdash; and how many marks each question carries.</p>
+        <p class="ams-ai-desc-note"><b>You stay the examiner:</b> everything the AI writes is ordinary editable text on your paper &mdash; read it through, change, reorder or delete anything, then print. The AI drafts; you approve.</p>
       </div>
       <div class="ams-ai-body">
         <label class="ams-ai-lbl" for="amsAiTopic">Topic (what should the questions cover?)</label>

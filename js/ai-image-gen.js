@@ -1,7 +1,10 @@
 /* ==========================================================================
-   js/ai-image-gen.js  (AI-Image pack)
+   js/ai-image-gen.js  (AI-Image pack - REWRITTEN, pack 37)
    Frontend logic for the AI Image Generator page.
    Talks to POST /api/ai/generate-image — API key is NEVER in this file.
+   NEW: style preset + shape picker are sent with the prompt; the server
+   enhances the prompt, draws with the best available engine and returns
+   the professional art direction + which engine it used.
    Stores last 8 generated images in localStorage for the history strip.
    ========================================================================== */
 "use strict";
@@ -13,6 +16,7 @@ var imgBtn         = null;
 var imgSpinner     = null;
 var imgResult      = null;
 var imgEl          = null;
+var imgEngine      = null;
 var imgRevisedWrap = null;
 var imgRevisedText = null;
 var imgDownload    = null;
@@ -20,10 +24,12 @@ var imgNew         = null;
 var imgError       = null;
 var imgHistoryWrap = null;
 var imgHistoryList = null;
+var imgAspect      = null;
 
 var MAX_PROMPT     = 1000;
 var HISTORY_KEY    = "amsAiImgHistory";
 var MAX_HISTORY    = 8;
+var selectedStyle  = "poster";
 
 /* ---------- boot ---------- */
 document.addEventListener("DOMContentLoaded", function () {
@@ -33,6 +39,7 @@ document.addEventListener("DOMContentLoaded", function () {
     imgSpinner     = document.getElementById("imgSpinner");
     imgResult      = document.getElementById("imgResult");
     imgEl          = document.getElementById("imgGenerated");
+    imgEngine      = document.getElementById("imgEngine");
     imgRevisedWrap = document.getElementById("imgRevisedWrap");
     imgRevisedText = document.getElementById("imgRevisedText");
     imgDownload    = document.getElementById("imgDownload");
@@ -40,6 +47,7 @@ document.addEventListener("DOMContentLoaded", function () {
     imgError       = document.getElementById("imgError");
     imgHistoryWrap = document.getElementById("imgHistoryWrap");
     imgHistoryList = document.getElementById("imgHistoryList");
+    imgAspect      = document.getElementById("imgAspect");
 
     if (imgPrompt) {
         imgPrompt.addEventListener("input", onPromptInput);
@@ -51,8 +59,23 @@ document.addEventListener("DOMContentLoaded", function () {
     if (imgNew)      imgNew.addEventListener("click", resetForm);
     if (imgDownload) imgDownload.addEventListener("click", downloadImage);
 
+    bindStyleChips();
     renderHistory();
 });
+
+/* ---------- style selector (radio-like chips) ---------- */
+function bindStyleChips() {
+    var wrap = document.getElementById("imgStyleChips");
+    if (!wrap) return;
+    wrap.querySelectorAll("button[data-style]").forEach(function (chip) {
+        chip.addEventListener("click", function () {
+            selectedStyle = chip.getAttribute("data-style");
+            wrap.querySelectorAll("button[data-style]").forEach(function (c) {
+                c.classList.toggle("aig-chip-on", c === chip);
+            });
+        });
+    });
+}
 
 /* ---------- character counter ---------- */
 function onPromptInput() {
@@ -77,7 +100,11 @@ function generateImage() {
         method: "POST",
         credentials: "same-origin",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt: prompt })
+        body: JSON.stringify({
+            prompt: prompt,
+            style: selectedStyle,
+            aspect: imgAspect ? imgAspect.value : "square"
+        })
     })
     .then(function (r) {
         return r.json().then(function (d) { return { ok: r.ok, status: r.status, d: d }; });
@@ -88,7 +115,12 @@ function generateImage() {
             showError(res.d.error || "Could not generate image. Please try again.");
             return;
         }
-        showImage(res.d.b64, res.d.revisedPrompt || prompt, prompt);
+        showImage(res.d.b64, res.d.revisedPrompt || prompt, prompt, {
+            mime: res.d.mime,
+            engine: res.d.engine,
+            width: res.d.width,
+            height: res.d.height
+        });
     })
     .catch(function () {
         setLoading(false);
@@ -97,16 +129,29 @@ function generateImage() {
 }
 
 /* ---------- display ---------- */
-function showImage(b64, revisedPrompt, originalPrompt) {
-    var src = "data:image/png;base64," + b64;
+function showImage(b64, revisedPrompt, originalPrompt, meta) {
+    meta = meta || {};
+    var mime = meta.mime || "image/png";
+    var src = "data:" + mime + ";base64," + b64;
 
     if (imgEl) {
         imgEl.src = src;
         imgEl.alt = originalPrompt;
     }
 
-    /* Store b64 for download */
-    if (imgDownload) imgDownload.dataset.b64 = b64;
+    /* Store b64 + mime for download */
+    if (imgDownload) {
+        imgDownload.dataset.b64 = b64;
+        imgDownload.dataset.mime = mime;
+    }
+
+    /* Which engine drew it + exact size */
+    if (imgEngine) {
+        var bits = [];
+        if (meta.engine) bits.push("<b>" + escHtml(meta.engine) + "</b>");
+        if (meta.width && meta.height) bits.push(meta.width + " × " + meta.height + " px");
+        imgEngine.innerHTML = bits.join(" &middot; ") || "";
+    }
 
     /* Show revised prompt only if it differs meaningfully */
     if (imgRevisedWrap && imgRevisedText) {
@@ -119,23 +164,31 @@ function showImage(b64, revisedPrompt, originalPrompt) {
     if (imgResult) imgResult.scrollIntoView({ behavior: "smooth", block: "start" });
 
     /* Save to history */
-    saveHistory({ prompt: originalPrompt, b64: b64, ts: Date.now() });
+    saveHistory({ prompt: originalPrompt, b64: b64, mime: mime, engine: meta.engine || "", ts: Date.now() });
     renderHistory();
+}
+
+function escHtml(v) {
+    return String(v == null ? "" : v).replace(/[&<>"']/g, function (c) {
+        return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
+    });
 }
 
 /* ---------- download ---------- */
 function downloadImage() {
     var b64 = imgDownload && imgDownload.dataset.b64;
     if (!b64) return;
+    var mime = (imgDownload && imgDownload.dataset.mime) || "image/png";
+    var ext = mime.indexOf("png") !== -1 ? "png" : "jpg";
     try {
         var byteStr = atob(b64);
         var arr = new Uint8Array(byteStr.length);
         for (var i = 0; i < byteStr.length; i++) arr[i] = byteStr.charCodeAt(i);
-        var blob = new Blob([arr], { type: "image/png" });
+        var blob = new Blob([arr], { type: mime });
         var url  = URL.createObjectURL(blob);
         var a    = document.createElement("a");
         a.href   = url;
-        a.download = "amsais-ai-image-" + Date.now() + ".png";
+        a.download = "amsais-ai-image-" + Date.now() + "." + ext;
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
@@ -149,7 +202,8 @@ function downloadImage() {
 function resetForm() {
     if (imgResult) imgResult.style.display = "none";
     if (imgEl) imgEl.src = "";
-    if (imgDownload) imgDownload.dataset.b64 = "";
+    if (imgEngine) imgEngine.innerHTML = "";
+    if (imgDownload) { imgDownload.dataset.b64 = ""; imgDownload.dataset.mime = "image/png"; }
     if (imgRevisedWrap) imgRevisedWrap.style.display = "none";
     clearError();
     if (imgPrompt) { imgPrompt.value = ""; imgPrompt.focus(); onPromptInput(); }
@@ -181,13 +235,14 @@ function renderHistory() {
         card.className = "aig-hist-card";
 
         if (h.b64) {
+            var mime = h.mime || "image/png";
             var thumb = document.createElement("img");
             thumb.className = "aig-hist-thumb";
-            thumb.src = "data:image/png;base64," + h.b64;
+            thumb.src = "data:" + mime + ";base64," + h.b64;
             thumb.alt = h.prompt || "Generated image";
             thumb.addEventListener("click", function () {
                 if (imgResult) imgResult.style.display = "none";
-                showImage(h.b64, h.prompt, h.prompt);
+                showImage(h.b64, h.prompt, h.prompt, { mime: h.mime, engine: h.engine });
                 window.scrollTo({ top: 0, behavior: "smooth" });
             });
             card.appendChild(thumb);
@@ -214,7 +269,7 @@ function renderHistory() {
 
 /* ---------- helpers ---------- */
 function setLoading(on) {
-    if (imgBtn)     { imgBtn.disabled = on; imgBtn.textContent = on ? "Generating…" : "✨ Generate Image"; }
+    if (imgBtn)     { imgBtn.disabled = on; imgBtn.textContent = on ? "Designing…" : "✨ Generate Image"; }
     if (imgSpinner) imgSpinner.style.display = on ? "flex" : "none";
     if (on && imgResult) imgResult.style.display = "none";
 }

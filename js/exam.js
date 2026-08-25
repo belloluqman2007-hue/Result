@@ -2072,7 +2072,7 @@ window.amsGenerateAiQuestions = function () {
         .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, d: d }; }); })
         .then(function (res) {
             if (!res.ok) {
-                st.textContent = res.d && res.d.error ? res.d.error : "The AI stumbled - try again.";
+                st.textContent = res.d && res.d.error ? res.d.error : "The AI is busy right now - please wait a moment and try again.";
                 st.className = "ams-ai-status err";
                 return;
             }
