@@ -117,22 +117,50 @@
       margin-top: 4px;
     }
 
-    /* ── Suggestions ── */
-    .aig-suggestions { margin-top: 10px; }
-    .aig-suggest-label { font-size: 12px; color: #7d9488; margin-bottom: 6px; }
+    /* ── Style + shape pickers (NEW) ── */
+    .aig-options {
+      margin-top: 14px;
+      background: #f7faf7;
+      border: 1.5px solid #e2ece3;
+      border-radius: 12px;
+      padding: 12px 13px 13px;
+    }
+    .aig-optgroup + .aig-optgroup { margin-top: 12px; }
+    .aig-optgroup .aig-label { font-size: 11.5px; text-transform: uppercase; letter-spacing: .05em; color: #55705f; }
     .aig-chips { display: flex; flex-wrap: wrap; gap: 6px; }
     .aig-chip {
-      background: #eaf3ec;
-      border: 1px solid #b8d5be;
+      background: #fff;
+      border: 1.5px solid #c8d6ca;
       border-radius: 20px;
-      padding: 5px 11px;
-      font-size: 12px;
+      padding: 6px 12px;
+      font-size: 12.5px;
       color: #1d4a30;
       cursor: pointer;
       transition: background .15s, border-color .15s;
       line-height: 1.3;
+      font-weight: 600;
     }
     .aig-chip:hover { background: #d3ebd8; border-color: #2f7a4e; }
+    .aig-chip.aig-chip-on {
+      background: linear-gradient(135deg, #1d4a30, #2f7a4e);
+      border-color: #1d4a30;
+      color: #fff;
+      box-shadow: 0 2px 6px rgba(29,74,48,.25);
+    }
+    .aig-aspect select {
+      width: 100%;
+      padding: 9px 11px;
+      border: 1.5px solid #c8d6ca;
+      border-radius: 10px;
+      font-family: inherit;
+      font-size: 13.5px;
+      background: #fff;
+      color: #1f2d26;
+    }
+
+    /* ── Suggestions ── */
+    .aig-suggestions { margin-top: 12px; }
+    .aig-suggest-label { font-size: 12px; color: #7d9488; margin-bottom: 6px; }
 
     /* ── Button ── */
     .aig-btn {
@@ -207,7 +235,7 @@
       overflow: hidden;
       background: #1f2d26;
       text-align: center;
-      margin-bottom: 14px;
+      margin-bottom: 10px;
       box-shadow: 0 4px 18px rgba(0,0,0,.14);
     }
     .aig-img-wrap img {
@@ -215,6 +243,25 @@
       max-width: 100%;
       display: block;
       border-radius: 12px;
+    }
+    .aig-eng {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px;
+      justify-content: center;
+      font-size: 11.5px;
+      color: #55705f;
+      margin-bottom: 12px;
+    }
+    .aig-eng b {
+      background: #eaf3ec;
+      border: 1px solid #b8d5be;
+      color: #1d4a30;
+      border-radius: 999px;
+      padding: 3px 11px;
+      font-size: 11px;
+      font-weight: 800;
     }
     .aig-revised {
       display: none;
@@ -328,6 +375,34 @@
       ></textarea>
       <div class="aig-charcount" id="imgCharCount">0 / 1000</div>
 
+      <!-- NEW (REWRITE): style + shape presets - the two big quality
+           levers. The server bakes school branding into every style and
+           draws at the exact shape needed (poster, certificate, banner). -->
+      <div class="aig-options">
+        <div class="aig-optgroup">
+          <label class="aig-label">Style</label>
+          <div class="aig-chips" id="imgStyleChips">
+            <button type="button" class="aig-chip aig-chip-on" data-style="poster">🖼 Poster</button>
+            <button type="button" class="aig-chip" data-style="certificate">📜 Certificate</button>
+            <button type="button" class="aig-chip" data-style="logo">🏵 Logo / Badge</button>
+            <button type="button" class="aig-chip" data-style="islamic">🕌 Islamic Art</button>
+            <button type="button" class="aig-chip" data-style="watercolor">🎨 Watercolour</button>
+            <button type="button" class="aig-chip" data-style="cartoon">🧸 Cartoon</button>
+            <button type="button" class="aig-chip" data-style="3d">🧊 3D Render</button>
+            <button type="button" class="aig-chip" data-style="photo">📷 Photo</button>
+          </div>
+        </div>
+        <div class="aig-optgroup aig-aspect">
+          <label class="aig-label" for="imgAspect">Shape / Size</label>
+          <select id="imgAspect">
+            <option value="square">Square · 1024 × 1024 (posters, social)</option>
+            <option value="portrait">Portrait · 1024 × 1536 (flyers, cards)</option>
+            <option value="landscape">Landscape · 1536 × 1024 (headers)</option>
+            <option value="wide">Wide · 1536 × 864 (banners, WhatsApp)</option>
+          </select>
+        </div>
+      </div>
+
       <!-- Quick suggestion chips -->
       <div class="aig-suggestions">
         <p class="aig-suggest-label">✦ Quick suggestions — tap to use:</p>
@@ -335,7 +410,7 @@
       </div>
 
       <button class="aig-btn" id="imgBtn" type="button">✨ Generate Image</button>
-      <p class="aig-hint">Press Ctrl+Enter to generate · Free AI · Up to 5 images per hour</p>
+      <p class="aig-hint">Press Ctrl+Enter to generate · Free AI · Up to 6 images per hour</p>
 
       <!-- Error -->
       <div class="aig-error" id="imgError"></div>
@@ -344,8 +419,8 @@
     <!-- ── Spinner ── -->
     <div class="aig-card aig-spinner" id="imgSpinner">
       <div class="aig-spinner-ring"></div>
-      <p>Generating your image…</p>
-      <small>DALL-E 3 is drawing — this usually takes 10–20 seconds</small>
+      <p>Designing your image…</p>
+      <small>The AI is polishing your description into professional art direction, then drawing it. This usually takes 15–40 seconds.</small>
     </div>
 
     <!-- ── Result card ── -->
@@ -359,15 +434,18 @@
         <img id="imgGenerated" src="" alt="Generated image" loading="lazy">
       </div>
 
-      <!-- Revised prompt (DALL-E 3 sometimes improves the prompt) -->
+      <!-- Which engine drew it + exact dimensions -->
+      <div class="aig-eng" id="imgEngine"></div>
+
+      <!-- Revised prompt (the AI's professional art direction) -->
       <div class="aig-revised" id="imgRevisedWrap">
         <strong>ℹ AI enhanced your description to:</strong>
         <span id="imgRevisedText"></span>
       </div>
 
       <div class="aig-actions">
-        <button class="aig-btn" id="imgDownload" type="button" data-b64="">
-          ⬇ Download PNG
+        <button class="aig-btn" id="imgDownload" type="button" data-b64="" data-mime="image/png">
+          ⬇ Download Image
         </button>
         <button class="aig-btn aig-btn-secondary" id="imgNew" type="button">
           🔄 Generate Another
@@ -391,11 +469,11 @@
         Tips for Great Results
       </h2>
       <ul class="aig-tips-list">
+        <li><b>Pick the right style first</b> — poster, certificate, logo, Islamic art… the AI then draws in that style automatically.</li>
         <li>Include the school name and motto: <em>"Ameenullah School — Knowledge and Worship"</em></li>
-        <li>Mention colours: <em>"dark green and gold"</em> to match school branding</li>
-        <li>Specify the style: <em>"professional poster", "Islamic geometric pattern", "watercolour illustration"</em></li>
+        <li>Mention colours: <em>"dark green and gold"</em> — they match the school branding.</li>
+        <li>Say exactly what text the image must show, <em>in quotation marks</em>, and keep it short — the AI spells short text best.</li>
         <li>Add the purpose: <em>"admission poster", "graduation certificate border", "newsletter header"</em></li>
-        <li>Be specific about content: <em>"Arabic calligraphy, open Quran, crescent moon"</em></li>
         <li>The more detail you give, the better the result. You can always generate another!</li>
       </ul>
     </div>

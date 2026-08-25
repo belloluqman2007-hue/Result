@@ -563,6 +563,15 @@ app.get("/notices.html", requireLogin, (req, res) => {
 app.get("/ai-remarks.html", requireLogin, (req, res) => {
     res.sendFile(path.join(__dirname, "ai-remarks.html"));
 });
+// NEW (pack 37 - owner: "give students AI chat for learning at home"):
+// the AI Learning Tutor page. Only people signed in to the Student &
+// Parent Portal (student ID + surname) - or staff - may open it.
+app.get("/student-ai-tutor.html", (req, res) => {
+    if (!req.session || (!req.session.portalStudentId && !req.session.userId)) {
+        return res.redirect("/portal-login.html");
+    }
+    res.sendFile(path.join(__dirname, "student-ai-tutor.html"));
+});
 
 app.get("/teacher-dashboard.html", requireLogin, (req, res) => {
     res.sendFile(path.join(__dirname, "teacher-dashboard.html"));
@@ -4365,7 +4374,7 @@ app.post("/api/ai/exam-questions", requireLogin, async (req, res) => {
         res.json({ questions: cleaned });
     } catch (e) {
         console.log("AI exam-questions error:", e && e.message);
-        res.status(502).json({ error: "The AI stumbled - please try again in a moment." });
+        res.status(502).json({ error: "The AI is busy right now \u2014 please wait a moment and try again. If it keeps happening after a few tries, today's free limit may be finished (it resets daily)." });
     }
 });
 
@@ -4419,11 +4428,87 @@ app.post("/api/ai/chat", requireLogin, async (req, res) => {
         res.json({ reply: got.text.trim().slice(0, 4000) });
     } catch (e) {
         console.log("AI chat error:", e && e.message);
-        const out = { error: "The AI stumbled - please try again in a moment." };
+        const out = { error: "The AI is busy right now \u2014 please wait a moment and try again. If it keeps happening after a few tries, today's free limit may be finished (it resets daily)." };
         if (req.session && req.session.role === "admin") {
             out.detail = String(e && e.message || "unknown").slice(0, 200); // FIX (pack 30): the office can see WHY
         }
         res.status(502).json(out);
+    }
+});
+
+/* ---------- AI FEATURE 2b: STUDENT LEARNING TUTOR (pack 37) ----------
+   The child's own AI chat for learning at home - opened from the Student
+   & Parent Portal. Same friendly chat UI as the staff AI, but the AI
+   becomes a PATIENT TUTOR: it explains lessons step by step, gives
+   practice questions, quizzes gently and helps with homework - in simple
+   English or Arabic, sized to the student's class. It never shows
+   private records (results, fees, attendance) - it only teaches.
+   Portal login required. 20 chats per hour per student keeps the free
+   AI quota safe; the message is limited so one child cannot drain it. */
+const aiStudentHits = Object.create(null); // studentId -> { count, resetAt }
+setInterval(function () { // sweep expired buckets (memory hygiene)
+    const now = Date.now();
+    Object.keys(aiStudentHits).forEach(function (k) { if (aiStudentHits[k].resetAt < now) delete aiStudentHits[k]; });
+}, 600000).unref();
+
+app.post("/api/ai/student-chat", async (req, res) => {
+    const cfg = await aiConfig();
+    if (!cfg.key) {
+        return res.status(503).json({ error: "The AI tutor is not switched on yet. The school office can switch it on in one minute - please try again soon." });
+    }
+    const sid = req.session && req.session.portalStudentId;
+    const staff = req.session && req.session.userId;
+    if (!sid && !staff) return res.status(401).json({ error: "Please log in to the Student & Parent Portal first." });
+
+    const who = sid ? ("student:" + sid) : ("staff:" + String(req.session.username || staff));
+    const now = Date.now();
+    let bucket = aiStudentHits[who];
+    if (!bucket || bucket.resetAt < now) bucket = aiStudentHits[who] = { count: 0, resetAt: now + 3600000 };
+    if (++bucket.count > 20) {
+        return res.status(429).json({ error: "You have chatted with the AI tutor a lot this hour - take a short break and continue in a little while (the limit resets every hour)." });
+    }
+
+    const hist = (Array.isArray(req.body.messages) ? req.body.messages : [])
+        .slice(-20).map(function (m) {
+            const role = m && m.role === "assistant" ? "assistant" : "user";
+            return { role: role, content: String(m && m.content || "").slice(0, 3000) };
+        }).filter(function (m) { return m.content; });
+    if (!hist.length) return res.status(400).json({ error: "Type something first." });
+
+    /* Know the child's name + class so the tutor can talk at the right
+       level (e.g. "Basic 4", "JSS 2", "Tahdiri"). Never sent to the AI
+       as raw records - only the friendly labels below. */
+    const studentRow = await new Promise(function (resolve) {
+        if (!sid) return resolve(null);
+        connection.query("SELECT full_name, class_name FROM students WHERE student_id = ? LIMIT 1", [sid], function (err, rows) {
+            if (err || !rows || !rows.length) return resolve(null);
+            resolve(rows[0]);
+        });
+    });
+    const kidFirst = studentRow && studentRow.full_name ? String(studentRow.full_name).trim().split(/\s+/)[0] : "";
+    const kidClass = studentRow && studentRow.class_name ? String(studentRow.class_name).trim() : "";
+    const kidIntro = (kidFirst ? " You are talking with " + kidFirst + ", a student of Ameenullah School" +
+        (kidClass ? " in " + kidClass + "." : ".") : " You are talking with a student of Ameenullah School.");
+
+    const sys =
+        "You are Ustaadh AI - the friendly private tutor of Ameenullah School of Arabic and Islamic Studies (AMSAIS), Lagos, Nigeria. " +
+        "Motto: Knowledge and Worship. Your only job is to help one child learn at home." + kidIntro +
+        " How you help: explain any school lesson step by step in very simple English (or in simple Arabic when the child asks - this is an Arabic/Islamic school), " +
+        "break hard ideas into small easy steps, use everyday examples, give clear working for Maths, gently correct mistakes with encouragement, " +
+        "make short practice questions and little quizzes on any topic, help with homework by GUIDING and teaching - never just give the answer first, " +
+        "help memorise and understand the Qur'an, Arabic grammar, Tawheed, Fiqh, Seerah and general subjects. " +
+        "Style: short friendly messages, kind and encouraging, a few numbered steps or a small example when helpful; use **bold** for key words; " +
+        "keep answers age-appropriate (the child's class is " + (kidClass || "not known") + "); end with one small question so the child keeps thinking. " +
+        "Rules: NEVER invent marks, results, fees, dates or private school records - you only teach, you cannot see the child's results; " +
+        "if the child asks about them, kindly say to ask the class teacher or check Results in the portal. " +
+        "Never give private information about other students. Keep the tone clean, respectful and full of adab. A short Islamic greeting is fine.";
+
+    try {
+        const got = await aiChatSmart([{ role: "system", content: sys }].concat(hist), { maxTokens: 2048, temperature: 0.65 }, cfg);
+        res.json({ reply: got.text.trim().slice(0, 4000), student: { first: kidFirst, className: kidClass } });
+    } catch (e) {
+        console.log("AI student tutor error:", e && e.message);
+        res.status(502).json({ error: "The AI tutor is taking a short break - please try again in a moment." });
     }
 });
 
@@ -4566,11 +4651,27 @@ app.post("/api/ai/assistant", requireLogin, async (req, res) => {
    ========================================================================== */
 
 /* ==========================================================================
-   AI IMAGE GENERATOR
-   POST /api/ai/generate-image  (requireLogin — admins and teachers)
-   GET  /ai-image-generator.html
-   Uses Pollinations AI — completely free, no API key needed.
-   Rate limit: 5 images per user per hour (in-memory, resets on restart).
+   REWRITTEN (owner: "the AI is stumbling / generating rubbish images"):
+   AI IMAGE GENERATOR - studio-quality pipeline.
+   --------------------------------------------------------------------------
+   What changed:
+     1. PROMPT ENHANCEMENT - when the school AI key is on, a text-model call
+        first turns the teacher's idea into professional art direction
+        (style, colours, lighting, text, composition) plus a negative list.
+        With no key, a built-in professional template does the job instead.
+     2. BETTER ENGINE - with a Google AI key it draws through Google's own
+        image model (Gemini Flash Image / Nano Banana) which is excellent at
+        posters with correct text and Islamic artwork. If that is not
+        available (or the free image quota is finished) it automatically
+        falls back to Pollinations FLUX - still completely free, no key.
+     3. STYLE PRESETS + SHAPE - the teacher chooses a style (poster,
+        certificate, logo, islamic-art, watercolour, cartoon, 3D, photo)
+        and a shape (square / portrait / landscape / wide); the server bakes
+        the school branding into the prompt for every style.
+     4. HONEST ERRORS - quota / model / busy problems now say exactly what
+        happened instead of a vague "service is busy".
+   Endpoints: POST /api/ai/generate-image (requireLogin)
+              GET  /ai-image-generator.html
    ========================================================================== */
 const aiImgHits = Object.create(null);
 setInterval(function () {
@@ -4580,69 +4681,272 @@ setInterval(function () {
     });
 }, 600000).unref();
 
-function openAiGenerateImage(prompt, attempt) {
+/* ---- style presets (labels are sent by the page; hints are added to the
+        prompt so every image carries the school's look) ---------------- */
+const AI_IMG_STYLES = {
+    poster: "A professional school poster design, clean strong typography, clear readable headline, balanced layout with a bold focal point, school branding colours dark emerald green (#1d4a30) and gold (#d9a419).",
+    certificate: "An elegant certificate / award border design, fine Islamic geometric corner ornamentation, dark emerald green and gold palette, large clean empty centre panel for the student name, formal and dignified.",
+    logo: "A flat vector-style emblem or badge logo, crisp minimal design, dark emerald green and gold colour scheme, Islamic geometric or crescent motif, white or transparent-style background, sharp clean edges, no watermark.",
+    islamic: "A beautiful Islamic artwork, elegant Arabic calligraphy, intricate Islamic geometric patterns, mosque or crescent and star motifs, rich dark emerald green and gold palette, serene and respectful.",
+    watercolor: "A soft watercolour illustration, gentle washes of dark green and gold, delicate details, light warm background, artistic and graceful.",
+    cartoon: "A friendly colourful children's cartoon illustration, cheerful characters, bright safe colours with touches of school green and gold, simple readable design, wholesome and fun.",
+    "3d": "A polished 3D render, soft studio lighting, realistic materials, subtle depth of field, dark emerald and gold highlights, premium modern look.",
+    photo: "A realistic professional photograph, natural lighting, sharp focus, high detail, candid warm atmosphere."
+};
+function aiImgStyleHint(style) {
+    return AI_IMG_STYLES[style] || AI_IMG_STYLES.poster;
+}
+
+/* ---- aspect ratios: page requests a friendly name -------------------- */
+const AI_IMG_ASPECTS = {
+    square:   { label: "Square",              gem: "1:1",  w: 1024, h: 1024 },
+    portrait: { label: "Portrait",            gem: "3:4",  w: 1024, h: 1536 },
+    landscape:{ label: "Landscape",           gem: "4:3",  w: 1536, h: 1024 },
+    wide:     { label: "Wide banner",         gem: "16:9", w: 1536, h: 864  }
+};
+function aiImgAspect(name) {
+    return AI_IMG_ASPECTS[name] || AI_IMG_ASPECTS.square;
+}
+
+/* ---- built-in professional prompt (used when no AI key is available,
+        and as the safety net if the enhancement call fails) ------------ */
+function aiImgBuiltin(prompt, style) {
+    const SCHOOL = "Ameenullah School of Arabic and Islamic Studies";
+    const MOTTO = "Knowledge and Worship";
+    return {
+        prompt: prompt +
+            ". School context: " + SCHOOL + ", motto \"" + MOTTO + "\". " +
+            aiImgStyleHint(style) +
+            " Spell ALL text exactly as quoted and keep every word of text correct and readable. High resolution, crisp, professional finish.",
+        negative: "blurry, low quality, distorted text, misspelled words, gibberish text, extra fingers, warped faces, watermark, logo of other brands, cluttered composition, low contrast, smudged colours, cropped important elements"
+    };
+}
+
+/* ---- AI prompt enhancement (school AI key on): rough idea -> pro art
+        direction + negative list. Returns null if the AI can't help. --- */
+function aiEnhanceImagePrompt(userPrompt, style, cfg) {
+    const fallback = aiImgBuiltin(userPrompt, style);
+    if (!cfg || !cfg.key) return Promise.resolve(fallback);
+    const sys =
+        "You are a professional graphic designer who directs an AI image model for Ameenullah School " +
+        "of Arabic and Islamic Studies (motto: Knowledge and Worship - colours: dark emerald green #1d4a30 and gold #d9a419). " +
+        "You take a plain idea and return ONE polished image prompt plus a negative prompt. " +
+        "Rules: never invent people's names; spell quoted text EXACTLY as given; keep text short and legible; " +
+        "mention composition, lighting, colours, style and mood; avoid clich\u00e9s like generic 'artificial intelligence' robots. " +
+        "Reply with JSON only - no fences, no commentary: " +
+        "{\"prompt\":\"...\",\"negative\":\"...\"}";
+    const usr =
+        "Idea: \"" + userPrompt + "\"\n" +
+        "Style direction: " + aiImgStyleHint(style) + "\n" +
+        "Generate the enhanced prompt (max 140 words) and a short negative prompt (what to avoid).";
+    return aiChatSmart(
+        [{ role: "system", content: sys }, { role: "user", content: usr }],
+        { maxTokens: 500, temperature: 0.55 },
+        cfg
+    ).then(function (got) {
+        try {
+            const d = aiParseJson(got.text);
+            const p = String(d && (d.prompt || d.enhanced_prompt) || "").trim();
+            const n = String(d && (d.negative || d.negative_prompt) || "").trim();
+            if (!p) throw new Error("no prompt");
+            return { prompt: p, negative: n || fallback.negative, enhanced: true };
+        } catch (e) {
+            return fallback;
+        }
+    }, function () {
+        return fallback;
+    });
+}
+
+/* ---- Engine 1: Google's own image model (needs the AI key + Google
+        base URL). Returns raw base64 + mime or throws. ------------------ */
+const AI_IMG_GEMINI_MODELS = ["gemini-2.5-flash-image", "gemini-3.1-flash-image"];
+function aiGeminiImage(prompt, cfg, aspect) {
+    if (!cfg || !cfg.key || cfg.base.indexOf("generativelanguage.googleapis.com") === -1) {
+        return Promise.reject(new Error("gemini-off"));
+    }
+    /* The saved base may be the OpenAI-compatible ".../v1beta/openai"
+       address; the NATIVE image endpoint is ".../v1beta/models/M:generateContent",
+       so drop a trailing "/openai" when it is there. */
+    const nativeBase = cfg.base.replace(/\/openai$/i, "").replace(/\/+$/, "");
+    const models = [String(process.env.AI_IMAGE_MODEL || "").trim()]
+        .concat(AI_IMG_GEMINI_MODELS)
+        .filter(function (v, i, a) { return v && a.indexOf(v) === i; });
+    let attempt = 0;
+    function tryOne() {
+        if (attempt >= models.length) return Promise.reject(new Error("Gemini image models unavailable for this key"));
+        const model = models[attempt++];
+        return new Promise(function (resolve, reject) {
+            const body = JSON.stringify({
+                contents: [{ parts: [{ text: prompt }] }],
+                generationConfig: {
+                    responseModalities: ["TEXT", "IMAGE"],
+                    imageConfig: { aspectRatio: aspect.gem }
+                }
+            });
+            let u;
+            try {
+                u = new URL(nativeBase + "/models/" + encodeURIComponent(model) + ":generateContent");
+            } catch (e) { return reject(new Error("bad URL")); }
+            const lib = u.protocol === "http:" ? require("http") : require("https");
+            const req = lib.request({
+                method: "POST",
+                hostname: u.hostname,
+                port: u.port || (u.protocol === "http:" ? 80 : 443),
+                path: u.pathname + u.search,
+                headers: {
+                    "Content-Type": "application/json",
+                    "x-goog-api-key": cfg.key,
+                    "Content-Length": Buffer.byteLength(body)
+                }
+            }, function (r) {
+                let raw = "";
+                r.on("data", function (c) { raw += c; if (raw.length > 12 * 1024 * 1024) req.destroy(new Error("image too large")); });
+                r.on("end", function () {
+                    let d = null;
+                    try { d = JSON.parse(raw); } catch (e) { return reject(new Error("Gemini reply was not JSON")); }
+                    if (r.statusCode >= 400) {
+                        const m = d && d.error && d.error.message ? d.error.message : ("Gemini error " + r.statusCode);
+                        return reject(new Error(model + ": " + m));
+                    }
+                    const cand = d && d.candidates && d.candidates[0];
+                    if (!cand) return reject(new Error(model + ": no candidate"));
+                    if (cand.promptFeedback && cand.promptFeedback.blockReason) {
+                        return reject(new Error("blocked: " + cand.promptFeedback.blockReason));
+                    }
+                    const parts = (cand.content && cand.content.parts) || [];
+                    for (let i = 0; i < parts.length; i++) {
+                        const inl = parts[i] && parts[i].inlineData;
+                        if (inl && inl.data) {
+                            return resolve({ b64: inl.data, mime: inl.mimeType || "image/png", engine: "Gemini " + model });
+                        }
+                    }
+                    reject(new Error(model + ": no image returned"));
+                });
+            });
+            req.setTimeout(120000, function () { req.destroy(new Error(model + " took too long")); });
+            req.on("error", function (e) { reject(e); });
+            req.write(body);
+            req.end();
+        }).catch(function (e) {
+            const msg = String(e && e.message || "");
+            // model/unsupported/quota errors -> try the next Gemini model;
+            // anything else is a real problem -> let the caller fall back.
+            if (attempt < models.length && /model|not found|unsupported|invalid|quota|rate|429|resource|permission|403|blocked|404/i.test(msg)) {
+                return tryOne();
+            }
+            throw e;
+        });
+    }
+    return tryOne();
+}
+
+/* ---- Engine 2: Pollinations FLUX (free, works with NO key). Uses the
+        new gen.pollinations.ai endpoint with negative prompt + enhance,
+        then retries on the legacy host. --------------------------------- */
+function pollinationsImage(prompt, negative, aspect, attempt) {
     attempt = attempt || 1;
     return new Promise(function (resolve, reject) {
         const https = require("https");
         const seed = Math.floor(Math.random() * 999999);
-        const encoded = encodeURIComponent(prompt);
-        const url = "https://image.pollinations.ai/prompt/" + encoded +
-            "?width=1024&height=1024&nologo=true&model=flux&seed=" + seed;
+        const enc = encodeURIComponent(prompt);
+        const neg = encodeURIComponent(negative || "");
+        const base = attempt <= 2
+            ? "https://gen.pollinations.ai/image/"
+            : "https://image.pollinations.ai/prompt/";
+        const url = base + enc +
+            "?width=" + aspect.w + "&height=" + aspect.h +
+            "&model=flux&seed=" + seed + "&nologo=true&private=true&safe=true" +
+            "&enhance=true" +
+            (neg ? "&negative_prompt=" + neg : "");
 
-        const req = https.get(url, function (res) {
+        const req = https.get(url, { headers: { "User-Agent": "AMSAIS-School-App" } }, function (res) {
             if (res.statusCode === 429 || res.statusCode >= 500) {
                 res.resume();
                 if (attempt < 3) {
                     setTimeout(function () {
-                        openAiGenerateImage(prompt, attempt + 1).then(resolve).catch(reject);
+                        pollinationsImage(prompt, negative, aspect, attempt + 1).then(resolve).catch(reject);
                     }, 3000 * attempt);
                 } else {
-                    reject(new Error("Image service is busy — please try again in a moment"));
+                    reject(new Error("The free image service is busy right now - please wait a minute and try again."));
                 }
                 return;
             }
             if (res.statusCode !== 200) {
                 res.resume();
-                return reject(new Error("Image service returned error " + res.statusCode));
+                if (attempt < 3) {
+                    setTimeout(function () {
+                        pollinationsImage(prompt, negative, aspect, attempt + 1).then(resolve).catch(reject);
+                    }, 1500);
+                } else {
+                    reject(new Error("The image service returned error " + res.statusCode + " - please try again."));
+                }
+                return;
             }
             const chunks = [];
-            res.on("data", function (c) { chunks.push(c); });
+            const maxBytes = 12 * 1024 * 1024;
+            let size = 0;
+            res.on("data", function (c) { size += c.length; if (size > maxBytes) { req.destroy(); reject(new Error("Image too large")); return; } chunks.push(c); });
             res.on("end", function () {
-                const buffer = Buffer.concat(chunks);
-                if (buffer.length < 1000) {
-                    // Got a tiny response — likely an error page, retry
+                const buf = Buffer.concat(chunks);
+                if (buf.length < 1500) {
                     if (attempt < 3) {
                         setTimeout(function () {
-                            openAiGenerateImage(prompt, attempt + 1).then(resolve).catch(reject);
+                            pollinationsImage(prompt, negative, aspect, attempt + 1).then(resolve).catch(reject);
                         }, 3000 * attempt);
                     } else {
-                        reject(new Error("Image service returned empty image"));
+                        reject(new Error("The image service returned an empty image - please try again."));
                     }
                     return;
                 }
-                resolve({ b64: buffer.toString("base64"), revisedPrompt: prompt });
+                const mime = buf[0] === 0x89 && buf[1] === 0x50 ? "image/png" : "image/jpeg";
+                resolve({ b64: buf.toString("base64"), mime: mime, engine: "Pollinations FLUX" });
             });
         });
-        req.setTimeout(90000, function () {
+        req.setTimeout(120000, function () {
             req.destroy();
             if (attempt < 3) {
                 setTimeout(function () {
-                    openAiGenerateImage(prompt, attempt + 1).then(resolve).catch(reject);
+                    pollinationsImage(prompt, negative, aspect, attempt + 1).then(resolve).catch(reject);
                 }, 2000);
             } else {
-                reject(new Error("Image service took too long — please try again"));
+                reject(new Error("The free image service took too long - please try again."));
             }
         });
         req.on("error", function (e) {
             if (attempt < 3) {
                 setTimeout(function () {
-                    openAiGenerateImage(prompt, attempt + 1).then(resolve).catch(reject);
+                    pollinationsImage(prompt, negative, aspect, attempt + 1).then(resolve).catch(reject);
                 }, 2000);
             } else {
                 reject(e);
             }
         });
     });
+}
+
+/* ---- the full pipeline: enhance -> Gemini (if key) -> Pollinations --- */
+async function aiGenerateImage(userPrompt, style, aspectName, cfg) {
+    const aspect = aiImgAspect(aspectName);
+    const enhanced = await aiEnhanceImagePrompt(userPrompt, style, cfg);
+    let gemErr = null;
+    if (cfg && cfg.key) {
+        try {
+            const g = await aiGeminiImage(enhanced.prompt, cfg, aspect);
+            return { b64: g.b64, mime: g.mime, engine: g.engine, revisedPrompt: enhanced.prompt, negativePrompt: enhanced.negative, width: aspect.w, height: aspect.h };
+        } catch (e) {
+            gemErr = String(e && e.message || "");
+            console.log("AI image Gemini fallback:", gemErr.slice(0, 160));
+        }
+    }
+    try {
+        const p = await pollinationsImage(enhanced.prompt, enhanced.negative, aspect);
+        return { b64: p.b64, mime: p.mime, engine: p.engine, revisedPrompt: enhanced.prompt, negativePrompt: enhanced.negative, width: aspect.w, height: aspect.h };
+    } catch (e) {
+        const msg = String(e && e.message || "");
+        if (gemErr) throw new Error(msg + " (also tried Gemini: " + gemErr.slice(0, 120) + ")");
+        throw e;
+    }
 }
 
 app.get("/ai-image-generator.html", requireLogin, (req, res) => {
@@ -4654,23 +4958,29 @@ app.post("/api/ai/generate-image", requireLogin, async (req, res) => {
     const now = Date.now();
     let bucket = aiImgHits[who];
     if (!bucket || bucket.resetAt < now) bucket = aiImgHits[who] = { count: 0, resetAt: now + 3600000 };
-    if (++bucket.count > 5) {
+    if (++bucket.count > 6) {
         return res.status(429).json({
-            error: "You have generated 5 images this hour. Please wait before generating more."
+            error: "You have generated 6 images this hour. Take a short break - the AI image quotas reset every hour."
         });
     }
 
     const prompt = String(req.body.prompt || "").trim();
     if (!prompt) return res.status(400).json({ error: "Please describe the image you want." });
     if (prompt.length > 1000) return res.status(400).json({ error: "Description is too long (max 1000 characters)." });
+    const style = /^(poster|certificate|logo|islamic|watercolor|cartoon|3d|photo)$/.test(String(req.body.style || "")) ? req.body.style : "poster";
+    const aspectName = /^(square|portrait|landscape|wide)$/.test(String(req.body.aspect || "")) ? req.body.aspect : "square";
 
     try {
-        const result = await openAiGenerateImage(prompt);
-        return res.json({ b64: result.b64, revisedPrompt: result.revisedPrompt });
+        const cfg = await aiConfig();
+        const result = await aiGenerateImage(prompt, style, aspectName, cfg);
+        return res.json(result);
     } catch (e) {
         const msg = String(e && e.message || "");
         console.log("AI image error:", msg);
-        return res.status(502).json({ error: "Could not generate the image right now. Please try again shortly." });
+        if (/quota|rate|429|limit|resource/i.test(msg)) {
+            return res.status(429).json({ error: "The AI image quota for today/hour is finished. It resets automatically - please try again later." });
+        }
+        return res.status(502).json({ error: "Could not generate the image right now. " + msg });
     }
 });
 
