@@ -291,30 +291,52 @@
 })();
 
 /* ==========================================================================
-   NEW (pack 103 - owner: "add like 5/6/7/8/9 icons at the bottom of the
-   website that can take you to the section if pressed for mobile and
-   appear in every section. It is just quick click."):
-   MOBILE QUICK-JUMP DOCK polish (#wb2Dock in index.html).
+   CHANGED (pack 104 - owner: the icons must be ON the page itself and
+   visible; pack 103 hid the dock above 760px so desktops saw nothing):
+   QUICK-JUMP polish for BOTH rows of section shortcuts.
 
-   The dock itself is plain HTML links, so jumping works with no
-   JavaScript at all. This block only adds two niceties:
-     1. Hides the icon of a section that is not on the page (the Honour
-        Roll keeps itself hidden until results exist) and brings it back
-        the moment that section is published.
-     2. Highlights (gold) the icon of the section you are in right now.
+   The quick-jump icons now live in TWO rows:
+     1. #wb2Dock  - the floating dock pinned to the bottom of the screen
+                    (full-width bar on phones, centred glass pill on wider
+                    screens - css/website.css shows it at every width now);
+     2. #wb2Jump  - the same 7 shortcuts INSIDE the page itself, in the
+                    normal flow just above the footer.
+
+   Both rows are plain HTML links, so jumping works with no JavaScript at
+   all. This block only adds three niceties:
+     1. Hides the icons of a section that is not on the page (the Honour
+        Roll keeps itself hidden until results exist) IN BOTH ROWS and
+        brings them back the moment that section is published.
+     2. Highlights (gold) the icons of the section you are in right now.
+        Pack 103 matched one link element, so with two rows only one row
+        lit up; pack 104 matches by href, so the dock icon AND the
+        in-page icon of the same section turn gold together.
+     3. Tapping a shortcut on EITHER row folds the AI chat away.
    Nothing here touches results, scores, admissions or any request.
    ========================================================================== */
 (function () {
   "use strict";
-  var dock = document.getElementById("wb2Dock");
-  if (!dock) return;
+  var rows = [];
+  ["wb2Dock", "wb2Jump"].forEach(function (id) {
+    var r = document.getElementById(id);
+    if (r) rows.push(r);
+  });
+  if (!rows.length) return;
 
-  var links = Array.prototype.slice.call(dock.querySelectorAll(".wb2-dock-item"));
+  var links = [];
+  rows.forEach(function (row) {
+    links = links.concat(Array.prototype.slice.call(row.querySelectorAll("a[href^='#']")));
+  });
   if (!links.length) return;
 
-  var targets = links.map(function (a) {
+  /* one entry per unique href target, listing the links in BOTH rows */
+  var targets = [];
+  links.forEach(function (a) {
     var id = (a.getAttribute("href") || "").replace("#", "");
-    return { link: a, el: id ? document.getElementById(id) : null };
+    var t = null;
+    for (var i = 0; i < targets.length; i++) { if (targets[i].href === id) { t = targets[i]; break; } }
+    if (!t) { t = { href: id, el: id ? document.getElementById(id) : null, links: [] }; targets.push(t); }
+    t.links.push(a);
   });
 
   /* ---- 1. only show icons for sections that are really on the page ---- */
@@ -323,8 +345,11 @@
   }
   function syncIcons() {
     targets.forEach(function (t) {
-      if (sectionHidden(t.el)) t.link.setAttribute("data-dock-off", "");
-      else t.link.removeAttribute("data-dock-off");
+      var off = sectionHidden(t.el);
+      t.links.forEach(function (a) {
+        if (off) a.setAttribute("data-dock-off", "");
+        else a.removeAttribute("data-dock-off");
+      });
     });
   }
   syncIcons();
@@ -336,7 +361,8 @@
   }
   window.addEventListener("resize", syncIcons);
 
-  /* ---- 2. highlight the section you are in ---- */
+  /* ---- 2. highlight the section you are in (matched by href, so BOTH
+          rows light up together) ---- */
   var pending = 0;
   function mark() {
     pending = 0;
@@ -350,7 +376,8 @@
     });
     if (!current && window.pageYOffset < line) current = targets[0];   // hero / very top
     links.forEach(function (a) {
-      a.classList.toggle("is-active", !!current && current.link === a);
+      var href = (a.getAttribute("href") || "").replace("#", "");
+      a.classList.toggle("is-active", !!current && current.href === href);
     });
   }
   function onScroll() {
@@ -362,9 +389,11 @@
 
   /* tapping a shortcut while the AI chat is open: fold the chat away so the
      section you asked for is not sitting behind the conversation panel. */
-  dock.addEventListener("click", function () {
-    var panel = document.getElementById("wb2AiPanel");
-    var close = document.getElementById("wb2AiClose");
-    if (panel && close && panel.classList.contains("wb2-ai-open")) close.click();
+  rows.forEach(function (row) {
+    row.addEventListener("click", function () {
+      var panel = document.getElementById("wb2AiPanel");
+      var close = document.getElementById("wb2AiClose");
+      if (panel && close && panel.classList.contains("wb2-ai-open")) close.click();
+    });
   });
 })();

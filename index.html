@@ -322,6 +322,30 @@
     </div>
   </section>
 
+  <!-- ============ NEW (pack 104) QUICK JUMP INSIDE THE PAGE ============
+       Owner: the quick-jump icons must be ON the page itself and visible,
+       not only a floating bar. Same 7 shortcuts as #wb2Dock (Home, About,
+       Programs, Notices, Honour, Login, Apply), in the normal page flow
+       just above the footer - "Quick Jump - Go Straight to a Section".
+       Plain in-page links: they jump even with JavaScript switched off;
+       js/website.js highlights the section you are in on BOTH rows
+       (matched by href) and hides the Honour icon here too while that
+       section is unpublished. -->
+  <section class="wb2-jump" id="wb2Jump" aria-label="Quick jump to a section">
+    <div class="wb2-wrap">
+      <div class="wb2-jump-head">Quick Jump &middot; Go Straight to a Section</div>
+      <nav class="wb2-jump-row">
+        <a class="wb2-jump-item" href="#top"><span class="ico" aria-hidden="true">&#127968;</span><span class="lbl">Home</span></a>
+        <a class="wb2-jump-item" href="#about"><span class="ico" aria-hidden="true">&#128332;</span><span class="lbl">About</span></a>
+        <a class="wb2-jump-item" href="#programs"><span class="ico" aria-hidden="true">&#128218;</span><span class="lbl">Programs</span></a>
+        <a class="wb2-jump-item" href="#notices"><span class="ico" aria-hidden="true">&#128226;</span><span class="lbl">Notices</span></a>
+        <a class="wb2-jump-item" href="#honour"><span class="ico" aria-hidden="true">&#127942;</span><span class="lbl">Honour</span></a>
+        <a class="wb2-jump-item" href="#login"><span class="ico" aria-hidden="true">&#128273;</span><span class="lbl">Login</span></a>
+        <a class="wb2-jump-item" href="#admission"><span class="ico" aria-hidden="true">&#127979;</span><span class="lbl">Apply</span></a>
+      </nav>
+    </div>
+  </section>
+
   <!-- ========================== FOOTER ========================== -->
   <footer class="wb2-foot">
     <div class="wb2-wrap">
@@ -341,12 +365,16 @@
 
        A fixed row of section shortcuts that rides at the bottom of the
        screen while you are in EVERY section - one tap glides straight to
-       that part of the page. Phones/tablets only: above 760px the normal
-       header nav is on screen, so the dock hides itself there.
+       that part of the page. CHANGED (pack 104): visible at EVERY width -
+       phones/tablets (<=760px) get the full-width bottom bar; wider
+       screens get the same icons as a centred glass pill floating above
+       the bottom edge (pack 103 hid it there entirely - owner could not
+       see any icons on a laptop). The same 7 icons also live inside the
+       page itself just above the footer (#wb2Jump, pack 104).
        These are plain in-page links, so the dock still works with
        JavaScript switched off (js/website.js only adds the highlight of
-       the section you are in and hides the Honour icon when that section
-       is not published yet). -->
+       the section you are in - on both rows - and hides the Honour icon
+       when that section is not published yet). -->
   <nav class="wb2-dock" id="wb2Dock" aria-label="Jump to a section">
     <a class="wb2-dock-item" href="#top"><span class="ico" aria-hidden="true">&#127968;</span><span class="lbl">Home</span></a>
     <a class="wb2-dock-item" href="#about"><span class="ico" aria-hidden="true">&#128332;</span><span class="lbl">About</span></a>

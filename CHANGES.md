@@ -1,5 +1,24 @@
 # UI Modernization — Change Log
 
+## Pack 104 — 2026-08-25
+
+Owner: the quick-jump icons must be **on the page itself and visible** — pack 103 gated the dock behind `@media (max-width:760px)` with `.wb2-dock{display:none}` everywhere else, so on laptop/desktop widths (and any tablet wider than 760px) the icons never rendered at all. Confirmed live: `result-cfn8.onrender.com/css/website.css` was serving the `display:none` base rule. Not a caching issue — `sw.js` serves CSS/JS network-first.
+
+### Quick-jump icons visible at every width + inside the page
+
+| File | What happened |
+|---|---|
+| `css/website.css` | The `.wb2-dock{display:none}` base rule is **gone**; the fixed flex bar styles moved out of the 760px query so the dock renders at **every** width. Phones/tablets (≤760px) keep the full-width bottom bar with the AI-bubble lift and body bottom padding exactly as pack 103 shipped them. Wider screens (≥761px) get a NEW block: the same 7 icons as a centred glass pill floating 14px above the bottom edge (rounded, gold hairline, hover state, gold underline on the current section), plus 86px of body bottom padding so the footer copyright stays readable. NEW in-page skin: `.wb2-jump` emerald band above the footer with a "Quick Jump · Go Straight to a Section" heading and 7 glass chips; `.wb2-jump-item.is-active` turns gold in both rows, `[data-dock-off]` hides a chip in both rows. |
+| `index.html` | NEW `<section class="wb2-jump" id="wb2Jump">` in the normal page flow **just above the footer** — the same 7 plain in-page links (`#top`, `#about`, `#programs`, `#notices`, `#honour`, `#login`, `#admission`) as `#wb2Dock`, so the shortcuts are part of the website itself, not only a floating bar. Still plain links — jumps with JavaScript off. The dock comment was updated; nothing else in the page moved or changed. |
+| `js/website.js` | The dock block now manages **both rows** and matches by `href` instead of by element — pack 103's element match meant that with two rows only one icon lit up (caught by the DOM run below). Now the dock icon **and** the in-page icon of the section you are in turn gold together; the Honour icon hides/returns in **both** rows with its section (same `MutationObserver` on `#honour`); tapping a shortcut on either row folds the AI chat away. No request, result, score or admission path touched. |
+| `sw.js` | Cache v64 so phones pick up the new CSS/JS instead of the cached copy. |
+
+Verified: real `index.html` + real `js/website.js` in a DOM run with simulated layout — 38/38 checks passed in both Honour Roll states: 7 pinned + 7 in-page icons present, in-page row confirmed to sit before the footer, both Honour icons hide/return with their section, the current section highlighted in **both** rows while scrolling (Home/About/Programs/Notices/Honour/Login/Admission), AI panel folds from either row, no uncaught errors. CSS walk: `.wb2-dock` is `display:flex` with no `display:none` base rule anywhere. HTTP checks against a running server: `/` 200 with `#wb2Dock` and `#wb2Jump` present. Not verifiable here: a real browser screenshot — no browser binary in this sandbox (downloads limited to the npm registry).
+
+Result calculations, grading, positions, report card generation, printing and every staff/portal query: completely untouched.
+
+---
+
 ## Pack 103 — 2026-08-25
 
 Owner: "Can you add like 5/6/7/8/9 icons at the bottom of the website that can take you to the section if pressed for mobile and appear in every section. It is just quick click."
