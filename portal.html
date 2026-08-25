@@ -139,8 +139,48 @@
       body.pt-nav-open .pt-sidenav{ transform:none; }
       .pt-mainnew{ padding:14px 12px 60px; }
     }
+
+    /* ---------- NEW (Pack 105) mobile bottom quick-nav ----------
+       Seven one-tap shortcuts that jump to a view (same router as the
+       sidebar) without opening the drawer. Hidden on wide screens where
+       the sidebar is always visible. */
+    .pt-quicknav{ display:none; }
+    @media (max-width:860px){
+      .pt-quicknav{
+        display:flex;
+        position:fixed; left:0; right:0; bottom:0; z-index:48; /* below scrim (49) + sidenav (50) */
+        background:rgba(255,255,255,.97);
+        backdrop-filter:blur(14px);
+        -webkit-backdrop-filter:blur(14px);
+        border-top:1px solid #d7e0da;
+        box-shadow:0 -6px 24px rgba(0,0,0,.08);
+        padding:5px 2px calc(5px + env(safe-area-inset-bottom));
+        justify-content:space-around;
+      }
+      .pt-qn-item{
+        flex:1 1 0; min-width:0;
+        display:flex; flex-direction:column; align-items:center; gap:2px;
+        background:none; border:none; box-shadow:none;
+        color:#5B6B62; text-decoration:none; cursor:pointer;
+        font-family:inherit; font-size:9.5px; font-weight:700;
+        letter-spacing:0; text-transform:none;
+        padding:4px 1px; border-radius:10px;
+      }
+      .pt-qn-item:hover, .pt-qn-item:active{
+        background:rgba(29,74,48,.08); color:#1d4a30;
+        transform:none; box-shadow:none;
+      }
+      .pt-qn-item.pt-qn-on{ color:#1d4a30; }
+      .pt-qn-item.pt-qn-on .pt-qn-ico{ text-shadow:0 0 12px rgba(29,74,48,.35); }
+      .pt-qn-ico{ font-size:19px; line-height:1; }
+      .pt-qn-lbl{ line-height:1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:100%; }
+
+      /* leave room at the bottom so the bar never covers the last card */
+      .pt-mainnew{ padding:14px 12px 88px; }
+    }
+
     @media print{
-      .pt-sidenav, .pt-maintop, .pt-ham, .pt-scrim{ display:none !important; }
+      .pt-sidenav, .pt-maintop, .pt-ham, .pt-scrim, .pt-quicknav{ display:none !important; }
       .pt-mainnew{ padding:0; max-width:none; }
     }
   </style>
@@ -739,6 +779,37 @@
 
     </main>
   </div>
+
+  <!-- ============ NEW (Pack 105) MOBILE QUICK NAV ============
+       Owner: "put like necessary seven quick icons or more in the student
+       page for mobile". A fixed bottom bar of one-tap shortcuts that jump
+       straight to a portal view (same router as the sidebar) without
+       opening the drawer. Visible only on small screens (<=860px) where
+       the sidebar is hidden behind the hamburger. The AI Tutor item links
+       to the learning tutor page; the Menu item re-opens the sidebar. -->
+  <nav class="pt-quicknav" id="ptQuickNav" aria-label="Quick links">
+    <button class="pt-qn-item" type="button" data-view="overview">
+      <span class="pt-qn-ico">&#127968;</span><span class="pt-qn-lbl">Home</span>
+    </button>
+    <button class="pt-qn-item" type="button" data-view="results">
+      <span class="pt-qn-ico">&#128202;</span><span class="pt-qn-lbl">Results</span>
+    </button>
+    <button class="pt-qn-item" type="button" data-view="fees">
+      <span class="pt-qn-ico">&#128184;</span><span class="pt-qn-lbl">Fees</span>
+    </button>
+    <button class="pt-qn-item" type="button" data-view="chat">
+      <span class="pt-qn-ico">&#128172;</span><span class="pt-qn-lbl">Chat</span>
+    </button>
+    <button class="pt-qn-item" type="button" data-view="notifications">
+      <span class="pt-qn-ico">&#128276;</span><span class="pt-qn-lbl">Alerts</span>
+    </button>
+    <a class="pt-qn-item" href="student-ai-tutor.html">
+      <span class="pt-qn-ico">&#127891;</span><span class="pt-qn-lbl">AI Tutor</span>
+    </a>
+    <button class="pt-qn-item" id="ptQnMenu" type="button" aria-label="Open menu">
+      <span class="pt-qn-ico">&#9776;</span><span class="pt-qn-lbl">Menu</span>
+    </button>
+  </nav>
 </div>
 
   <!-- NEW (pack 15): PDF libs + fee statement maker + calendar renderer -->
@@ -752,6 +823,37 @@
   <!-- NEW (pack 13): portal logic -->
   <script src="js/ams-push.js"></script>
   <script src="js/portal.js"></script>
+  <!-- NEW (Pack 105): wire the mobile bottom quick-nav to the same view
+       router (ptShowView) the sidebar uses, and keep its active icon in
+       sync. The Menu item re-opens the sidebar drawer. -->
+  <script>
+  (function () {
+    var bar = document.getElementById("ptQuickNav");
+    if (!bar) return;
+    function markActive(name) {
+      bar.querySelectorAll(".pt-qn-item[data-view]").forEach(function (el) {
+        el.classList.toggle("pt-qn-on", el.getAttribute("data-view") === name);
+      });
+    }
+    bar.querySelectorAll(".pt-qn-item[data-view]").forEach(function (el) {
+      el.addEventListener("click", function () {
+        if (typeof window.ptShowView === "function") {
+          window.ptShowView(el.getAttribute("data-view"));
+        }
+      });
+    });
+    var menu = document.getElementById("ptQnMenu");
+    if (menu) menu.addEventListener("click", function () {
+      document.body.classList.toggle("pt-nav-open");
+    });
+    var orig = window.ptShowView;
+    window.ptShowView = function (name) {
+      if (orig) orig(name);
+      markActive(name);
+    };
+    markActive("overview");
+  })();
+  </script>
   <!-- PWA (unchanged) -->
   <script src="js/pwa.js" defer></script>
 </body>
