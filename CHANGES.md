@@ -1,5 +1,26 @@
 # UI Modernization — Change Log
 
+## Pack 103 — 2026-08-25
+
+Owner: "Can you add like 5/6/7/8/9 icons at the bottom of the website that can take you to the section if pressed for mobile and appear in every section. It is just quick click."
+
+### Mobile quick-jump dock (public website)
+
+A fixed row of section shortcuts now rides at the bottom of the phone screen, so it is on screen in **every** section — one tap glides straight to that part of the page. Icons: 🏠 Home, 🕌 About, 📚 Programs, 📢 Notices, 🏆 Honour, 🔑 Login, 🎓 Apply (7 icons, or 6 while the Honour Roll has no results to show — that icon hides itself with its section and comes back the moment results are published).
+
+| File | What happened |
+|---|---|
+| `index.html` | NEW `<nav class="wb2-dock" id="wb2Dock">` after the footer: 7 plain in-page links (`#top`, `#about`, `#programs`, `#notices`, `#honour`, `#login`, `#admission`), each an emoji icon + a short label — so the dock still jumps with JavaScript switched off. The hero section gained `id="top"` for the Home tap (presentation only; no other code reads that id). Every existing id, link, form field and section is untouched. |
+| `css/website.css` | NEW dock skin (additive, at the end of the file): emerald glass bar pinned to the bottom with a gold hairline, hidden above 760px where the header nav is already on screen. The section you are in gets the gold pill + a small gold tab. `#top` added to the existing `scroll-margin-top:84px` rule so a tap never hides a section top under the sticky header. Mobile-only lifts so the dock covers nothing: page gets 56px of bottom padding (footer copyright stays readable) and the AI bubble/chat panel sit above the dock, both with `env(safe-area-inset-bottom)` clearance. `prefers-reduced-motion` now jumps instead of gliding. |
+| `js/website.js` | NEW additive block for the dock: (1) hides the icon of any section that is not on the page — a `MutationObserver` on `#honour` brings the Honour icon back the instant that section publishes itself; (2) highlights the icon of the section under the reader (rAF-throttled scroll listener, Home at the very top); (3) tapping a shortcut folds the AI chat panel away so the section is not sitting behind it. No request, result, score or admission path touched. |
+| `sw.js` | Cache v63 so phones pick up the new CSS/JS instead of the cached copy. |
+
+Verified: page served by `node server.js` (200, dock markup present); the real `index.html` + real `js/website.js` driven through a DOM run with simulated phone layout — 32/32 checks passed in both Honour Roll states (icon hidden with an unpublished section, shown once `/honour-roll` returns data), correct single highlighted icon while scrolling through About/Programs/Notices/Login/Admission, Home highlighted at the top, AI panel folding on tap, no uncaught script errors; `css/website.css` parses cleanly with all 9 dock rules inside the 760px media query. Not verifiable here: an actual phone screenshot — this sandbox has no browser binary (downloads are limited to the npm registry), so the visual look is code-reviewed, not eyeballed.
+
+Result calculations, grading, positions, report card generation, printing and every staff/portal query: completely untouched.
+
+---
+
 ## Pack 102 — 2026-08-23
 
 Owner: (1) the Render URL is not indexed in Google Search Console because the canonical tag points at the Railway URL — make the canonical follow the deployment dynamically / point at the primary domain, check index.html, SEO components and sitemap, and add a 301 between the two deployments; (2) Check Result now prints on two A4 pages — make it one; (3) change the "Average / المعدل" label to "النسبة المئوية"; (4) in the Student Information and Performance Summary headings put space between the English and Arabic — English on the left, Arabic on the right; (5) the 1st/2nd term per-subject average is not displaying — fix it.

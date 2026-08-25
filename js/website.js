@@ -289,3 +289,82 @@
     })
     .catch(function () { /* stay hidden - public site must look perfect even offline */ });
 })();
+
+/* ==========================================================================
+   NEW (pack 103 - owner: "add like 5/6/7/8/9 icons at the bottom of the
+   website that can take you to the section if pressed for mobile and
+   appear in every section. It is just quick click."):
+   MOBILE QUICK-JUMP DOCK polish (#wb2Dock in index.html).
+
+   The dock itself is plain HTML links, so jumping works with no
+   JavaScript at all. This block only adds two niceties:
+     1. Hides the icon of a section that is not on the page (the Honour
+        Roll keeps itself hidden until results exist) and brings it back
+        the moment that section is published.
+     2. Highlights (gold) the icon of the section you are in right now.
+   Nothing here touches results, scores, admissions or any request.
+   ========================================================================== */
+(function () {
+  "use strict";
+  var dock = document.getElementById("wb2Dock");
+  if (!dock) return;
+
+  var links = Array.prototype.slice.call(dock.querySelectorAll(".wb2-dock-item"));
+  if (!links.length) return;
+
+  var targets = links.map(function (a) {
+    var id = (a.getAttribute("href") || "").replace("#", "");
+    return { link: a, el: id ? document.getElementById(id) : null };
+  });
+
+  /* ---- 1. only show icons for sections that are really on the page ---- */
+  function sectionHidden(el) {
+    return !el || el.offsetParent === null;   // display:none / not laid out
+  }
+  function syncIcons() {
+    targets.forEach(function (t) {
+      if (sectionHidden(t.el)) t.link.setAttribute("data-dock-off", "");
+      else t.link.removeAttribute("data-dock-off");
+    });
+  }
+  syncIcons();
+
+  /* the Honour Roll section switches itself on after /honour-roll answers */
+  var honour = document.getElementById("honour");
+  if (honour && "MutationObserver" in window) {
+    new MutationObserver(syncIcons).observe(honour, { attributes: true, attributeFilter: ["style"] });
+  }
+  window.addEventListener("resize", syncIcons);
+
+  /* ---- 2. highlight the section you are in ---- */
+  var pending = 0;
+  function mark() {
+    pending = 0;
+    var line = (window.innerHeight || 640) * 0.34;   // "you are here" line
+    var current = null;
+    targets.forEach(function (t) {
+      if (sectionHidden(t.el)) return;
+      var r = t.el.getBoundingClientRect();
+      // the section that covers the line (started above it, still not gone)
+      if (r.top - line <= 0 && r.bottom > 0) current = t;
+    });
+    if (!current && window.pageYOffset < line) current = targets[0];   // hero / very top
+    links.forEach(function (a) {
+      a.classList.toggle("is-active", !!current && current.link === a);
+    });
+  }
+  function onScroll() {
+    if (!pending) pending = (window.requestAnimationFrame || function (f) { setTimeout(f, 60); })(mark);
+  }
+  window.addEventListener("scroll", onScroll, { passive: true });
+  window.addEventListener("resize", onScroll);
+  mark();
+
+  /* tapping a shortcut while the AI chat is open: fold the chat away so the
+     section you asked for is not sitting behind the conversation panel. */
+  dock.addEventListener("click", function () {
+    var panel = document.getElementById("wb2AiPanel");
+    var close = document.getElementById("wb2AiClose");
+    if (panel && close && panel.classList.contains("wb2-ai-open")) close.click();
+  });
+})();
