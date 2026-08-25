@@ -95,7 +95,9 @@
   </header>
 
   <!-- ============================ HERO ============================ -->
-  <section class="wb2-hero">
+  <!-- CHANGED (pack 103): id="top" added so the mobile quick-jump dock has
+       a Home target. Presentation only - nothing else reads this id. -->
+  <section class="wb2-hero" id="top">
     <div class="wb2-wrap wb2-hero-in">
       <img class="wb2-hero-logo" src="images/LOGO.JPG" alt="Ameenullah School Logo">
       <div class="wb2-hero-badge-line">&#11088; Knowledge &amp; Worship &#11088;</div>
@@ -331,6 +333,29 @@
       <div class="wb2-foot-copy">&copy; <span id="scYear"></span> AMEENULLAH SCHOOL OF ARABIC AND ISLAMIC STUDIES. All rights reserved. <!-- CHANGED (pack 35) --></div>
     </div>
   </footer>
+
+  <!-- ============ NEW (pack 103) MOBILE QUICK-JUMP DOCK ============
+       Owner: "add like 5/6/7/8/9 icons at the bottom of the website that
+       can take you to the section if pressed for mobile and appear in
+       every section. It is just quick click."
+
+       A fixed row of section shortcuts that rides at the bottom of the
+       screen while you are in EVERY section - one tap glides straight to
+       that part of the page. Phones/tablets only: above 760px the normal
+       header nav is on screen, so the dock hides itself there.
+       These are plain in-page links, so the dock still works with
+       JavaScript switched off (js/website.js only adds the highlight of
+       the section you are in and hides the Honour icon when that section
+       is not published yet). -->
+  <nav class="wb2-dock" id="wb2Dock" aria-label="Jump to a section">
+    <a class="wb2-dock-item" href="#top"><span class="ico" aria-hidden="true">&#127968;</span><span class="lbl">Home</span></a>
+    <a class="wb2-dock-item" href="#about"><span class="ico" aria-hidden="true">&#128332;</span><span class="lbl">About</span></a>
+    <a class="wb2-dock-item" href="#programs"><span class="ico" aria-hidden="true">&#128218;</span><span class="lbl">Programs</span></a>
+    <a class="wb2-dock-item" href="#notices"><span class="ico" aria-hidden="true">&#128226;</span><span class="lbl">Notices</span></a>
+    <a class="wb2-dock-item" href="#honour"><span class="ico" aria-hidden="true">&#127942;</span><span class="lbl">Honour</span></a>
+    <a class="wb2-dock-item" href="#login"><span class="ico" aria-hidden="true">&#128273;</span><span class="lbl">Login</span></a>
+    <a class="wb2-dock-item" href="#admission"><span class="ico" aria-hidden="true">&#127979;</span><span class="lbl">Apply</span></a>
+  </nav>
 
   <!-- ================== AI ASSISTANT (pack 27 - NEW) ==================
        A floating chat bubble (bottom-right) where visitors/parents ask the

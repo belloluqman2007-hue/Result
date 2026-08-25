@@ -139,8 +139,9 @@ body.wb2-body{
   text-shadow:0 3px 22px rgba(0,0,0,.4);
   animation:wb2-rise .8s .1s ease both;
 }
-/* anchor jumps must not hide section tops under the sticky header */
-.wb2-sec, #about, #programs, #notices, #howto, #login, #admission{ scroll-margin-top:84px; }
+/* anchor jumps must not hide section tops under the sticky header
+   CHANGED (pack 103): #top added for the mobile quick-jump dock's Home tap */
+.wb2-sec, #top, #about, #programs, #notices, #howto, #login, #admission{ scroll-margin-top:84px; }
 /* dark sections: force white titles (same app-theme collision as the hero) */
 .wb2-board .wb2-title, .wb2-login .wb2-title, .wb2-login h2, .wb2-board h2{ color:#fff !important; }
 .wb2-hero-ar{
@@ -515,3 +516,67 @@ body.wb2-body{
   background:#D8EEE2; padding:3px 12px; border-radius:999px;
 }
 /* ===================== end NEW (pack 40 honour) ===================== */
+
+/* ==========================================================================
+   NEW (pack 103): MOBILE QUICK-JUMP DOCK
+   Owner: "add like 5/6/7/8/9 icons at the bottom of the website that can
+   take you to the section if pressed for mobile and appear in every
+   section. It is just quick click."
+
+   One fixed row of section shortcuts pinned to the bottom of the phone
+   screen, so it is on screen in EVERY section - Home, About, Programs,
+   Notices, Honour Roll, Login, Apply. One tap glides to that section
+   (the existing html{scroll-behavior:smooth} + scroll-margin-top do the
+   work, so the dock is just links - it still jumps with JS switched off).
+   js/website.js only adds: the gold highlight of the section you are in,
+   and hiding the Honour icon while that section is not published yet.
+   Hidden above 760px, where the header nav is already on screen.
+========================================================================== */
+.wb2-dock{ display:none; }           /* desktop: header nav covers it */
+
+@media (max-width:760px){
+  .wb2-dock{
+    position:fixed; left:0; right:0; bottom:0; z-index:895;
+    display:flex; align-items:stretch;
+    padding:5px 3px calc(5px + env(safe-area-inset-bottom));
+    background:rgba(8,35,26,.94);
+    backdrop-filter:blur(12px); -webkit-backdrop-filter:blur(12px);
+    border-top:1px solid rgba(231,197,91,.30);
+    box-shadow:0 -10px 26px rgba(8,35,26,.30);
+  }
+  .wb2-dock-item{
+    position:relative; flex:1 1 0; min-width:0;
+    display:flex; flex-direction:column; align-items:center; justify-content:center; gap:2px;
+    padding:4px 1px 3px; border-radius:12px; text-decoration:none;
+    color:#C9DED2; font-size:9.5px; font-weight:800; letter-spacing:.2px;
+    transition:background .18s ease, color .18s ease;
+    -webkit-tap-highlight-color:transparent;
+  }
+  .wb2-dock-item .ico{ font-size:19px; line-height:1; filter:drop-shadow(0 2px 3px rgba(0,0,0,.35)); }
+  .wb2-dock-item .lbl{
+    max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+  }
+  .wb2-dock-item:active{ background:rgba(255,255,255,.12); }
+  /* the section you are in right now */
+  .wb2-dock-item.is-active{ color:#F3D77A; background:rgba(201,162,39,.16); }
+  .wb2-dock-item.is-active::before{
+    content:""; position:absolute; top:-5px; left:50%; transform:translateX(-50%);
+    width:20px; height:3px; border-radius:0 0 3px 3px;
+    background:linear-gradient(90deg,var(--wb-gold),var(--wb-gold-soft));
+  }
+  /* set by js/website.js when the target section is not on the page
+     (the Honour Roll stays hidden until results exist) */
+  .wb2-dock-item[data-dock-off]{ display:none; }
+
+  /* the dock must never cover the footer or the AI bubble */
+  body.wb2-body{ padding-bottom:calc(56px + env(safe-area-inset-bottom)); }
+  .wb2-ai-fab{ right:14px; bottom:calc(64px + env(safe-area-inset-bottom)); }
+  .wb2-ai-panel{
+    right:8px; left:8px; width:auto;
+    bottom:calc(132px + env(safe-area-inset-bottom)); height:min(60vh,520px);
+  }
+}
+
+/* phones that ask for less motion: jump instead of glide */
+@media (prefers-reduced-motion:reduce){ html{ scroll-behavior:auto; } }
+/* ===================== end NEW (pack 103 dock) ===================== */
