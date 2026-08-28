@@ -44,6 +44,7 @@ function calSyncEditingChip() {
 }
 
 function initCalendarPage() {
+  calBindPrintFit();       // NEW (A4 fix pack): one-page print guard
   amsFetchSignatureMap(function (map) {
     calSigMap = map;
     calNew();          // fills the editor with the school's real template
@@ -157,7 +158,46 @@ function calPreview() {
   var wrap = document.getElementById("calPreviewWrap");
   wrap.innerHTML = "";
   wrap.appendChild(amsBuildCalendarSheet(calReadDoc(), calSigMap));
+  calFitPreview();          // NEW (A4 fix pack): keep it on ONE page
   calSyncEditingChip();
+}
+
+/* ==========================================================================
+   NEW (A4 fix pack - owner report: "the print calendar goes beyond A4")
+   --------------------------------------------------------------------------
+   Measures the rendered letterhead at the EXACT geometry the printer uses
+   (.cal-printfit = 190mm wide, 8mm/10mm padding, desktop layout with the two
+   signatures side by side) and lets amsFitCalendarSheet() shrink it - first by
+   tightening the typography, then by scaling - until it is guaranteed to fit
+   one A4 page. The density classes stay on the sheet (so the preview is what
+   prints); the measuring class comes straight back off.
+   ========================================================================== */
+function calFitPreview() {
+  var wrap = document.getElementById("calPreviewWrap");
+  if (!wrap || !window.amsFitCalendarSheet) return null;
+  var sheet = wrap.querySelector(".cal-sheet");
+  if (!sheet) return null;
+
+  sheet.classList.add("cal-printfit");
+  var fit = window.amsFitCalendarSheet(sheet, {
+    widthMm: 190,   /* sheet width the printer gets */
+    heightMm: 279,  /* A4 297mm - 2 x 8mm @page margin, minus 2mm of slack */
+    sizer: wrap
+  });
+  sheet.classList.remove("cal-printfit");
+  return fit;
+}
+
+/* Re-fit when the paper is about to be used: the print dialog, and any
+   rotation/resize that changes the layout. */
+function calBindPrintFit() {
+  window.addEventListener("beforeprint", calFitPreview);
+  window.addEventListener("afterprint", calFitPreview);
+  var t = null;
+  window.addEventListener("resize", function () {
+    clearTimeout(t);
+    t = setTimeout(calFitPreview, 200);
+  });
 }
 
 /* ---------------------------- save / list --------------------------- */

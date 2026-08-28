@@ -43,6 +43,15 @@
     var sheet = document.createElement("div");
     sheet.className = "cal-sheet" + (opts.compact ? " cal-compact" : "");
 
+    /* ---------- letterhead frame: four gold corner accents ----------
+       NEW (A4 fix pack): decorative only - absolutely positioned, they
+       take part in no flow so the sheet height is unchanged. */
+    ["tl", "tr", "bl", "br"].forEach(function (p) {
+      var corner = document.createElement("span");
+      corner.className = "cal-corner cal-corner-" + p;
+      sheet.appendChild(corner);
+    });
+
     /* ---------- header ---------- */
     var head = document.createElement("div");
     head.className = "cal-head";
@@ -56,6 +65,12 @@
         '<div class="cal-motto"><b>' + esc(SCHOOL.motto) + '</b> <span lang="ar">' + esc(SCHOOL.mottoAr) + "</span></div>" +
       "</div>";
     sheet.appendChild(head);
+
+    /* ---------- letterhead rule: emerald + gold double rule ---------- */
+    var rule = document.createElement("div");
+    rule.className = "cal-head-rule";
+    rule.innerHTML = '<span class="cal-head-diamond"></span>';
+    sheet.appendChild(rule);
 
     /* ---------- refs ---------- */
     var refs = document.createElement("div");
@@ -176,9 +191,104 @@
     }).catch(function () { cb({}); });
   };
 
+  /* ==========================================================================
+     ONE shared "fits on a single A4 page" helper.
+     --------------------------------------------------------------------------
+     A calendar with many week rows / lesson rows can grow taller than an A4
+     page. This shrinks the rendered sheet until it fits, in two steps:
+
+       1. TYPOGRAPHY  - step the sheet through .cal-dense / .cal-xdense, which
+          tighten paddings, margins and font sizes only. Nothing is clipped and
+          html2canvas still captures crisp text, so this is always tried first.
+       2. SCALE       - if the content is STILL too tall, scale the whole sheet
+          down. Preferred mechanism is CSS `zoom` (the same one the report card
+          one-page fix uses) because it shrinks the layout box itself, so the
+          page cannot grow; engines without zoom fall back to a transform plus
+          an exactly-reserved wrapper height.
+
+     Callers: the studio print preview (calFitPreview in js/calendar-editor.js,
+     sizer = the preview wrapper) and the PDF builder (allowScale: false -
+     html2canvas is unreliable with scaled elements, so the PDF relies on step 1
+     inside a fixed A4 capture box plus jsPDF's own proportional fit).
+     ========================================================================== */
+  var CAL_PX_PER_MM = 96 / 25.4;
+
+  window.amsFitCalendarSheet = function (sheet, opts) {
+    var out = { scale: 1, density: "", mode: "none", naturalPx: 0, widthPx: 0, heightPx: 0 };
+    if (!sheet) return out;
+    opts = opts || {};
+
+    var targetWpx = (opts.widthMm || 190) * CAL_PX_PER_MM;
+    var targetHpx = (opts.heightMm || 281) * CAL_PX_PER_MM;
+    var allowScale = opts.allowScale !== false;
+    var levels = ["", " cal-dense", " cal-xdense"];
+
+    /* "auto" prefers zoom (same mechanism the report card one-page fix uses -
+       it shrinks the layout box itself, so the page cannot grow), and only
+       falls back to transform + a reserved wrapper height on engines without
+       zoom. "none" = typography steps only (that is what the PDF capture
+       wants, because html2canvas and transforms do not mix). */
+    var mode = opts.mode || "auto";
+    if (mode === "auto") {
+      mode = (typeof sheet.style.zoom === "string" || "zoom" in sheet.style) ? "zoom" : "transform";
+    }
+    if (!allowScale) mode = "none";
+
+    /* keep whatever classes the caller set (cal-pdf / cal-printfit / cal-compact)
+       and only swap the density step */
+    var base = (" " + sheet.className + " ")
+      .replace(/\s cal-dense\s/g, " ").replace(/\s cal-xdense\s/g, " ").trim();
+
+    var sizer = opts.sizer || sheet.parentElement;
+
+    var natural = 0;
+    for (var i = 0; i < levels.length; i++) {
+      sheet.className = base + levels[i];
+      /* always measure UNSCALED, whatever a previous fit left behind */
+      sheet.style.transform = "";
+      sheet.style.zoom = "";
+      if (sizer) sizer.style.height = "";
+      /* scrollHeight reports the real content height even when the sheet has a
+         fixed height + overflow:hidden (the PDF capture box). */
+      natural = Math.max(sheet.scrollHeight || 0, sheet.offsetHeight || 0);
+      /* No layout engine (headless DOM in a test) - leave the sheet alone
+         rather than guessing and tightening it for nothing. */
+      if (!natural) { sheet.className = base; out.density = ""; break; }
+      out.density = levels[i].trim();
+      if (natural <= targetHpx) break;
+    }
+
+    var scale = 1;
+    if (natural > targetHpx && mode !== "none") {
+      scale = Math.min(1, targetHpx / natural, targetWpx / Math.max(sheet.offsetWidth || 1, 1));
+      if (mode === "zoom") {
+        sheet.style.zoom = String(scale);
+      } else {
+        sheet.style.transform = "scale(" + scale.toFixed(4) + ")";
+        sheet.style.transformOrigin = "top center";
+        /* transform does not shrink the layout box, so reserve the scaled
+           height on the wrapper: the printed page stops right here. */
+        if (sizer && natural) sizer.style.height = Math.ceil(natural * scale) + "px";
+      }
+    }
+
+    out.mode = mode;
+    out.scale = scale;
+    out.naturalPx = natural;
+    out.widthPx = (sheet.offsetWidth || 0) * scale;
+    out.heightPx = natural * scale;
+    return out;
+  };
+
   /* ONE shared full-page PDF builder for the portal card, staff dashboard and admin studio.
-     Renders the FULL letterhead sheet (never compact), preloads images, captures cleanly
-     without screen drop-shadows, and fits proportionally onto an A4 page preserving aspect ratio. */
+     Renders the FULL letterhead sheet (never compact) inside a FIXED A4-proportioned
+     capture box, preloads images, captures cleanly without screen drop-shadows, and
+     drops the result on ONE A4 page filling the printable area.
+
+     A4 = 210 x 297 mm. With a 14pt (~4.9mm) margin the printable area is
+     200.1 x 287.1 mm, so a 190mm-wide sheet is captured 272.6mm tall: exactly the
+     same aspect ratio as the printable area, which is why the result always fills
+     the page instead of leaving a short strip at the bottom. */
   window.amsCalendarPDF = function (data, sigMap, done, filename) {
     if (!window.html2canvas || !window.jspdf) {
       alert("PDF generator is still loading - try again in a moment.");
@@ -186,20 +296,34 @@
       return;
     }
 
+    var SHEET_W_MM = 190;
+    var SHEET_H_MM = 272.6;
+
     var stage = document.createElement("div");
-    stage.style.cssText = "position:fixed; left:-10000px; top:0; width:190mm; background:#ffffff; padding:0; margin:0;";
+    stage.style.cssText = "position:fixed; left:-10000px; top:0; width:" + SHEET_W_MM + "mm; background:#ffffff; padding:0; margin:0;";
 
     var sheet = amsBuildCalendarSheet(data, sigMap); // FULL letterhead
-    // Strip web drop-shadows and ensure clean 190mm width for A4 PDF capture
-    sheet.style.boxShadow = "none";
+    /* .cal-pdf pins the DESKTOP letterhead layout (two signatures SIDE BY SIDE,
+       lesson times on one line) whatever the phone screen width is - viewport
+       media queries would otherwise restyle this off-screen copy. */
+    sheet.className += " cal-pdf";
+    sheet.style.width = SHEET_W_MM + "mm";
+    sheet.style.height = SHEET_H_MM + "mm";
+    sheet.style.maxWidth = "none";
     sheet.style.margin = "0";
-    sheet.style.width = "190mm";
-    sheet.style.maxWidth = "100%";
+    sheet.style.boxShadow = "none";
     sheet.style.border = "1px solid #C9A227";
     sheet.style.boxSizing = "border-box";
+    sheet.style.overflow = "hidden";
 
     stage.appendChild(sheet);
     document.body.appendChild(stage);
+
+    /* Shrink the typography until the content is inside the capture box, so
+       nothing is clipped by overflow:hidden and nothing is squashed later. */
+    window.amsFitCalendarSheet(sheet, {
+      widthMm: SHEET_W_MM, heightMm: SHEET_H_MM, allowScale: false
+    });
 
     function waitForImages(container) {
       var imgs = Array.from(container.querySelectorAll("img"));
@@ -228,37 +352,22 @@
       stage.remove();
 
       var pdf = new window.jspdf.jsPDF({ unit: "pt", format: "a4" });
-      var pageW = 595.28; // A4 width pt (210mm)
-      var pageH = 841.89; // A4 height pt (297mm)
-      var margin = 14;    // 14pt (~5mm) margin
+      var pageW = pdf.internal.pageSize.getWidth();   // 595.28 pt
+      var pageH = pdf.internal.pageSize.getHeight();  // 841.89 pt
+      var margin = 14;                                // ~4.9mm
 
-      var maxW = pageW - margin * 2; // 567.28 pt
-      var maxH = pageH - margin * 2; // 813.89 pt
+      var maxW = pageW - margin * 2;
+      var maxH = pageH - margin * 2;
 
-      var canvasW = canvas.width;
-      var canvasH = canvas.height;
+      /* ONE page, always: shrink to the printable area, never crop, never spill. */
+      var scale = Math.min(maxW / canvas.width, maxH / canvas.height);
+      var imgW = canvas.width * scale;
+      var imgH = canvas.height * scale;
 
-      // Calculate height at full printable width
-      var naturalH = (canvasH * maxW) / canvasW;
-
-      var imgW, imgH, x, y;
-
-      if (naturalH <= maxH) {
-        // Fits comfortably on single A4 page with natural aspect ratio preserved
-        imgW = maxW;
-        imgH = naturalH;
-        x = margin;
-        y = Math.max(margin, (pageH - imgH) / 2); // Vertically centered
-      } else {
-        // Slightly taller than page; scale down proportionally so it fits on 1 page without clipping
-        var scale = Math.min(maxW / canvasW, maxH / canvasH);
-        imgW = canvasW * scale;
-        imgH = canvasH * scale;
-        x = (pageW - imgW) / 2;
-        y = (pageH - imgH) / 2;
-      }
-
-      pdf.addImage(canvas.toDataURL("image/jpeg", 0.96), "JPEG", x, y, imgW, imgH);
+      pdf.addImage(
+        canvas.toDataURL("image/jpeg", 0.96), "JPEG",
+        (pageW - imgW) / 2, (pageH - imgH) / 2, imgW, imgH
+      );
       pdf.save(filename || "school-calendar.pdf");
       if (done) done();
     }).catch(function (err) {

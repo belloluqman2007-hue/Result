@@ -416,15 +416,50 @@
   background-size:160px 160px;
 }
 .cal-sheet > *{ position:relative; z-index:1; }
+/* NEW (A4 fix pack) - a hairline gold frame inside the sheet edge, so the
+   letterhead reads as a designed document rather than a plain table. */
+.cal-sheet::after{
+  content:""; position:absolute; top:3.5mm; right:3.5mm; bottom:3.5mm; left:3.5mm;
+  pointer-events:none; z-index:0;
+  border:1px solid rgba(201,162,39,.38); border-radius:4px;
+}
+
+/* letterhead corner accents (rendered by js/calendar-render.js) */
+.cal-corner{
+  position:absolute; width:26px; height:26px; pointer-events:none; z-index:3;
+  opacity:.85;
+}
+.cal-corner-tl{ top:6px; left:6px; border-top:2.5px solid #C9A227; border-left:2.5px solid #C9A227; border-top-left-radius:8px; }
+.cal-corner-tr{ top:6px; right:6px; border-top:2.5px solid #C9A227; border-right:2.5px solid #C9A227; border-top-right-radius:8px; }
+.cal-corner-bl{ bottom:6px; left:6px; border-bottom:2.5px solid #C9A227; border-left:2.5px solid #C9A227; border-bottom-left-radius:8px; }
+.cal-corner-br{ bottom:6px; right:6px; border-bottom:2.5px solid #C9A227; border-right:2.5px solid #C9A227; border-bottom-right-radius:8px; }
 
 .cal-head{
-  position:relative; padding-left:78px; padding-bottom:6px;
+  position:relative;
+  padding:7px 12px 8px 104px;
+  background:
+    radial-gradient(circle at 12px 12px, rgba(201,162,39,.18), transparent 55%),
+    linear-gradient(180deg, rgba(251,243,217,.9), rgba(255,255,255,.35));
+  border:1px solid rgba(201,162,39,.5);
+  border-radius:12px 12px 6px 6px;
+  box-shadow:0 2px 10px rgba(15,61,46,.07);
 }
+/* The crest is a little WIDER than before (92 x 78 instead of 66 x 66) with a
+   double gold ring, so the masthead has a proper seal instead of a small dot. */
 .cal-logo{
-  position:absolute; left:0; top:2px; width:66px; height:66px;
-  object-fit:cover; border-radius:50%;
+  position:absolute; left:10px; top:8px; width:92px; height:78px;
+  object-fit:cover; object-position:center; border-radius:50%;
   background:#fff; padding:3px; border:2.5px solid #C9A227;
-  box-shadow:0 0 0 3px rgba(201,162,39,.25), 0 6px 16px rgba(0,0,0,.15);
+  box-shadow:0 0 0 3px rgba(201,162,39,.22), 0 0 0 5px #fff, 0 6px 16px rgba(0,0,0,.15);
+}
+/* emerald + gold double rule closing the masthead */
+.cal-head-rule{
+  position:relative; height:3px; margin:10px 0 0;
+  border-top:2px solid #0F3D2E; border-bottom:1px solid #C9A227;
+}
+.cal-head-diamond{
+  position:absolute; left:50%; top:-4.5px; width:9px; height:9px; margin-left:-4.5px;
+  transform:rotate(45deg); background:#C9A227; border:1px solid #0F3D2E;
 }
 .cal-head-text{ text-align:center; }
 .cal-bismillah{ height:32px; display:block; margin:0 auto 4px; }
@@ -568,12 +603,16 @@
   background:linear-gradient(90deg,transparent,#C9A227 30%,#E9C53D 50%,#C9A227 70%,transparent);
 }
 
-/* Print: ONLY the calendar sheet, one page */
+/* Print: ONLY the calendar sheet, ONE A4 page.
+   The sheet is measured + scaled to fit by js/calendar-render.js
+   (amsFitCalendarSheet) before the dialog opens, and the wrapper keeps the
+   scaled height, so there is no second page. */
 @media print{
   @page{
     size:A4 portrait;
     margin:8mm;
   }
+  html, body{ min-height:0 !important; height:auto !important; }
   body > .mng-page:not(#reportContainer){
     display:block !important; margin:0 !important; padding:0 !important; background:#fff !important;
   }
@@ -586,7 +625,7 @@
     margin:0 auto !important;
     box-shadow:none !important;
     border:1px solid #C9A227 !important;
-    width:100% !important; max-width:190mm !important; padding:6mm 4mm 0 !important;
+    width:100% !important; max-width:190mm !important; padding:8mm 10mm 0 !important;
     page-break-inside:avoid !important;
     break-inside:avoid !important;
   }
@@ -595,13 +634,20 @@
 /* ------------------------- COMPACT on screen --------------------- */
 @media screen{
   .cal-compact .cal-head,
+  .cal-compact .cal-head-rule,
   .cal-compact .cal-refs,
   .cal-compact .cal-bottom-band{ display:none; }
   .cal-compact{ padding-top:18px; box-shadow:0 4px 22px rgba(15,61,46,.12); }
 }
 
-/* ------------------------- PHONE TUNING -------------------------- */
-@media (max-width:640px){
+/* ------------------------- PHONE TUNING --------------------------
+   SCOPED TO `screen` ON PURPOSE. This block used to be a bare
+   @media (max-width:640px), so it also matched while PRINTING and while the
+   off-screen PDF copy was being captured: the two signatures stacked on top of
+   each other, the lesson times wrapped, and the calendar spilled onto a second
+   A4 page. Print + PDF now always use the desktop letterhead (see the
+   .cal-pdf / .cal-printfit locks in css/school.css). */
+@media screen and (max-width:640px){
   .mcb-card{ padding:20px 16px 18px; }
   .mcb-actions{ flex-direction:column; }
   .mcb-actions .mcb-btn{ width:100%; justify-content:center; }
