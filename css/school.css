@@ -369,13 +369,14 @@ table.mg-table tr:last-child td{ border-bottom:none; }
   body > .mng-page:not(#reportContainer){
     display:block !important; margin:0 !important; padding:0 !important; background:#fff !important;
   }
-  .mng-head, .mg-card, .mng-page > h3, .mg-msg{ display:none !important; }
+  .mng-head, .mg-card, .mcb-card, .mng-page > h3, .mcb-hero, .mcb-card-ribbon, .mcb-preview-bar, .mcb-msg, .mg-msg, .mcb-actions, .mcb-section, .mcb-toolbar{ display:none !important; }
   #calPreviewWrap:not(#reportContainer){
     display:block !important; margin:0 !important; padding:0 !important; overflow:visible !important;
   }
+  .mcb-preview-stage{ background:none !important; border:none !important; padding:0 !important; margin:0 !important; box-shadow:none !important; }
   .cal-sheet{
     margin:0 auto !important; box-shadow:none !important;
-    width:auto !important; padding:4mm 1mm 0 !important;
+    width:100% !important; max-width:190mm !important; padding:4mm 1mm 0 !important;
   }
 }
 
