@@ -308,22 +308,56 @@
        media queries would otherwise restyle this off-screen copy. */
     sheet.className += " cal-pdf";
     sheet.style.width = SHEET_W_MM + "mm";
-    sheet.style.height = SHEET_H_MM + "mm";
     sheet.style.maxWidth = "none";
     sheet.style.margin = "0";
     sheet.style.boxShadow = "none";
     sheet.style.border = "1px solid #C9A227";
     sheet.style.boxSizing = "border-box";
-    sheet.style.overflow = "hidden";
 
     stage.appendChild(sheet);
     document.body.appendChild(stage);
 
-    /* Shrink the typography until the content is inside the capture box, so
-       nothing is clipped by overflow:hidden and nothing is squashed later. */
-    window.amsFitCalendarSheet(sheet, {
+    /* Shrink the typography until the content fits inside the target A4 area.
+       We measure with natural height first (no fixed height, no overflow:hidden)
+       so scrollHeight reports the true content size. */
+    var fitResult = window.amsFitCalendarSheet(sheet, {
       widthMm: SHEET_W_MM, heightMm: SHEET_H_MM, allowScale: false
     });
+
+    /* After typography fitting, measure the actual content height.
+       Then stretch the table to fill the ENTIRE A4 capture box so there is
+       no blank space at the bottom of the downloaded PDF. */
+    var targetHPx = SHEET_H_MM * (96 / 25.4);
+    var contentPx = sheet.scrollHeight || sheet.offsetHeight || 0;
+    var extraPx = targetHPx - contentPx;
+
+    /* Lock the sheet to exactly the A4 capture height */
+    sheet.style.height = SHEET_H_MM + "mm";
+    sheet.style.overflow = "hidden";
+    sheet.style.boxSizing = "border-box";
+
+    /* Distribute the extra vertical space evenly among the table body rows
+       as additional padding so the table fills the page. This preserves the
+       native table layout (column widths, borders, alignment) while
+       stretching the content vertically. */
+    if (extraPx > 0) {
+      var table = sheet.querySelector(".cal-table");
+      if (table) {
+        var bodyRows = Array.from(table.querySelectorAll("tbody tr"));
+        var rowCount = bodyRows.length;
+        if (rowCount > 0) {
+          var extraPerRow = extraPx / rowCount;
+          var extraPerCell = extraPerRow / 2; /* split between top and bottom */
+          bodyRows.forEach(function (tr) {
+            Array.from(tr.querySelectorAll("td")).forEach(function (td) {
+              var currentPad = parseFloat(getComputedStyle(td).paddingTop) || 6;
+              td.style.paddingTop = (currentPad + extraPerCell) + "px";
+              td.style.paddingBottom = (currentPad + extraPerCell) + "px";
+            });
+          });
+        }
+      }
+    }
 
     function waitForImages(container) {
       var imgs = Array.from(container.querySelectorAll("img"));
