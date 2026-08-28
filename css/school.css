@@ -326,7 +326,7 @@ table.mg-table tr:last-child td{ border-bottom:none; }
 /* A4 FIX PACK - the crest is now a little WIDER than the old 56x56 dot
    (80x68) and the masthead text keeps clear of it. */
 .cal-head{ position:relative; padding-left:92px; }
-.cal-logo{ position:absolute; left:0; top:2px; width:80px; height:68px; object-fit:cover; border-radius:50%; }
+.cal-logo{ position:absolute; left:0; top:50%; transform:translateY(-50%); width:80px; height:68px; object-fit:contain; border-radius:50%; background:#fff; padding:2px; z-index:2; }
 .cal-head-text{ text-align:center; }
 /* A4 FIX PACK - letterhead dressing: gold corner accents + a double rule
    under the masthead. Purely decorative, absolutely positioned / zero-flow,
@@ -441,13 +441,19 @@ table.mg-table tr:last-child td{ border-bottom:none; }
 .cal-sheet.cal-printfit{
   width:190mm !important; max-width:190mm !important;
   padding:8mm 10mm 0 !important; margin:0 !important; box-shadow:none !important;
+  display:flex !important;
+  flex-direction:column !important;
+  box-sizing:border-box !important;
+  overflow:hidden !important;
 }
 .cal-sheet.cal-pdf{ margin:0 !important; }
 .cal-sheet.cal-printfit{ margin:0 auto !important; }
+.cal-sheet.cal-pdf .cal-table,
+.cal-sheet.cal-printfit .cal-table{ flex:1 !important; }
 .cal-sheet.cal-pdf .cal-head,
 .cal-sheet.cal-printfit .cal-head{ padding-left:104px !important; padding-right:12px !important; }
 .cal-sheet.cal-pdf .cal-logo,
-.cal-sheet.cal-printfit .cal-logo{ left:10px !important; top:8px !important; width:92px !important; height:78px !important; }
+.cal-sheet.cal-printfit .cal-logo{ left:10px !important; top:50% !important; transform:translateY(-50%) !important; width:92px !important; height:78px !important; }
 .cal-sheet.cal-pdf .cal-name-band,
 .cal-sheet.cal-printfit .cal-name-band{ font-size:18px !important; letter-spacing:1.2px !important; padding:6px 12px !important; }
 .cal-sheet.cal-pdf .cal-title,
@@ -476,7 +482,16 @@ table.mg-table tr:last-child td{ border-bottom:none; }
   .mcb-preview-stage{ background:none !important; border:none !important; padding:0 !important; margin:0 !important; box-shadow:none !important; }
   .cal-sheet{
     margin:0 auto !important; box-shadow:none !important;
-    width:100% !important; max-width:190mm !important; padding:8mm 10mm 0 !important;
+    width:100% !important; max-width:190mm !important;
+    height:279mm !important;
+    padding:8mm 10mm 0 !important;
+    display:flex !important;
+    flex-direction:column !important;
+    box-sizing:border-box !important;
+    overflow:hidden !important;
+  }
+  .cal-sheet .cal-table{
+    flex:1 !important;
   }
   /* the wrapper height is set inline by amsFitCalendarSheet() to the scaled
      sheet height, so the sheet stops exactly at the bottom of page 1 */
