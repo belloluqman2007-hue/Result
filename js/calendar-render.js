@@ -176,40 +176,94 @@
     }).catch(function () { cb({}); });
   };
 
-  /* NEW (pack 17 - owner: "the calendar PDF download is shrinking, let it
-     fill the page from up to down"): ONE shared full-page PDF builder for
-     the portal card, the staff dashboard card and the admin studio.
-     Always renders the FULL letterhead sheet (even when the on-screen
-     card is compact), photographs it, and stretches it to FILL the whole
-     A4 page (top to bottom) with just a thin even margin - no more small
-     shrunken calendar floating in a sea of white. */
+  /* ONE shared full-page PDF builder for the portal card, staff dashboard and admin studio.
+     Renders the FULL letterhead sheet (never compact), preloads images, captures cleanly
+     without screen drop-shadows, and fits proportionally onto an A4 page preserving aspect ratio. */
   window.amsCalendarPDF = function (data, sigMap, done, filename) {
     if (!window.html2canvas || !window.jspdf) {
       alert("PDF generator is still loading - try again in a moment.");
       if (done) done();
       return;
     }
+
     var stage = document.createElement("div");
-    stage.style.cssText = "position:fixed; left:-10000px; top:0; width:210mm; background:#ffffff;";
+    stage.style.cssText = "position:fixed; left:-10000px; top:0; width:190mm; background:#ffffff; padding:0; margin:0;";
+
     var sheet = amsBuildCalendarSheet(data, sigMap); // FULL letterhead
+    // Strip web drop-shadows and ensure clean 190mm width for A4 PDF capture
+    sheet.style.boxShadow = "none";
+    sheet.style.margin = "0";
+    sheet.style.width = "190mm";
+    sheet.style.maxWidth = "100%";
+    sheet.style.border = "1px solid #C9A227";
+    sheet.style.boxSizing = "border-box";
+
     stage.appendChild(sheet);
     document.body.appendChild(stage);
+
+    function waitForImages(container) {
+      var imgs = Array.from(container.querySelectorAll("img"));
+      var promises = imgs.map(function (img) {
+        if (img.complete && img.naturalWidth !== 0) {
+          return img.decode ? img.decode().catch(function () {}) : Promise.resolve();
+        }
+        return new Promise(function (resolve) {
+          img.onload = resolve;
+          img.onerror = resolve;
+        });
+      });
+      return Promise.all(promises);
+    }
+
     var fontsReady = (document.fonts && document.fonts.ready) || Promise.resolve();
-    fontsReady.then(function () {
-      return window.html2canvas(sheet, { scale: 2, backgroundColor: "#ffffff", useCORS: true });
+
+    Promise.all([fontsReady, waitForImages(sheet)]).then(function () {
+      return window.html2canvas(sheet, {
+        scale: 2,
+        backgroundColor: "#ffffff",
+        useCORS: true,
+        logging: false
+      });
     }).then(function (canvas) {
       stage.remove();
+
       var pdf = new window.jspdf.jsPDF({ unit: "pt", format: "a4" });
-      var pageW = 595.28, pageH = 841.89, margin = 14;
-      // FILL the page top to bottom: width AND height stretch to the sheet
-      // (like Word's "fill page") - the table design tolerates the stretch.
-      var imgW = pageW - margin * 2;
-      var imgH = pageH - margin * 2;
-      pdf.addImage(canvas.toDataURL("image/jpeg", 0.95), "JPEG", margin, margin, imgW, imgH);
+      var pageW = 595.28; // A4 width pt (210mm)
+      var pageH = 841.89; // A4 height pt (297mm)
+      var margin = 14;    // 14pt (~5mm) margin
+
+      var maxW = pageW - margin * 2; // 567.28 pt
+      var maxH = pageH - margin * 2; // 813.89 pt
+
+      var canvasW = canvas.width;
+      var canvasH = canvas.height;
+
+      // Calculate height at full printable width
+      var naturalH = (canvasH * maxW) / canvasW;
+
+      var imgW, imgH, x, y;
+
+      if (naturalH <= maxH) {
+        // Fits comfortably on single A4 page with natural aspect ratio preserved
+        imgW = maxW;
+        imgH = naturalH;
+        x = margin;
+        y = Math.max(margin, (pageH - imgH) / 2); // Vertically centered
+      } else {
+        // Slightly taller than page; scale down proportionally so it fits on 1 page without clipping
+        var scale = Math.min(maxW / canvasW, maxH / canvasH);
+        imgW = canvasW * scale;
+        imgH = canvasH * scale;
+        x = (pageW - imgW) / 2;
+        y = (pageH - imgH) / 2;
+      }
+
+      pdf.addImage(canvas.toDataURL("image/jpeg", 0.96), "JPEG", x, y, imgW, imgH);
       pdf.save(filename || "school-calendar.pdf");
       if (done) done();
-    }).catch(function () {
+    }).catch(function (err) {
       stage.remove();
+      console.error("Calendar PDF error:", err);
       alert("Could not build the PDF on this device.");
       if (done) done();
     });

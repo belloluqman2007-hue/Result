@@ -570,18 +570,25 @@
 
 /* Print: ONLY the calendar sheet, one page */
 @media print{
+  @page{
+    size:A4 portrait;
+    margin:8mm;
+  }
   body > .mng-page:not(#reportContainer){
     display:block !important; margin:0 !important; padding:0 !important; background:#fff !important;
   }
-  .mng-head, .mg-card, .mng-page > h3, .mcb-hero, .mcb-card-ribbon, .mcb-preview-bar, .mg-msg{ display:none !important; }
+  .mng-head, .mg-card, .mcb-card, .mng-page > h3, .mcb-hero, .mcb-card-ribbon, .mcb-preview-bar, .mcb-msg, .mg-msg, .mcb-actions, .mcb-section, .mcb-toolbar{ display:none !important; }
   #calPreviewWrap:not(#reportContainer){
     display:block !important; margin:0 !important; padding:0 !important; overflow:visible !important;
   }
-  .mcb-preview-stage{ background:none !important; border:none !important; padding:0 !important; }
+  .mcb-preview-stage{ background:none !important; border:none !important; padding:0 !important; margin:0 !important; box-shadow:none !important; }
   .cal-sheet{
     margin:0 auto !important;
-    box-shadow:0 0 0 1px #C9A227, 0 0 0 7px var(--cb-paper) !important;
-    width:auto !important; padding:6mm 4mm 0 !important;
+    box-shadow:none !important;
+    border:1px solid #C9A227 !important;
+    width:100% !important; max-width:190mm !important; padding:6mm 4mm 0 !important;
+    page-break-inside:avoid !important;
+    break-inside:avoid !important;
   }
 }
 
