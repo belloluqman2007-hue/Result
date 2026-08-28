@@ -1,10 +1,16 @@
 /* ==========================================================================
-   NEW FILE (pack 15) - js/calendar-editor.js
-   Editor for the madrasah term calendar: build rows/lessons, live preview
-   (official letterhead via js/calendar-render.js), save, publish ONE at a
-   time, print on one page, download as PDF.
+   js/calendar-editor.js  (BEAUTY UPGRADE)
+   -------------------------------------------------------------------------- 
+   Editor for the madrasah term calendar. Renders rows/lessons, live
+   preview (official letterhead via js/calendar-render.js), save, publish
+   ONE at a time, print on one page, download as PDF.
+
    Endpoints: GET /calendars, POST /calendar, POST /calendar-publish,
    DELETE /calendar/:id (saves are admin-only).
+
+   This file is the BINDING layer between the new .mcb-* classes in
+   manage-calendars.html / css/calendar-beauty.css and the underlying
+   API. The render logic itself lives in js/calendar-render.js.
    ========================================================================== */
 "use strict";
 
@@ -13,9 +19,28 @@ var calCache = []; // saved calendars
 
 function calNotify(text, ok) {
   var msg = document.getElementById("calMsg");
-  msg.textContent = text;
-  msg.className = "mg-msg " + (ok ? "ok" : "err");
-  setTimeout(function () { msg.className = "mg-msg"; }, 4500);
+  var txt = document.getElementById("calMsgText");
+  if (!msg || !txt) return;
+  txt.textContent = text;
+  msg.className = "mcb-msg " + (ok ? "ok" : "err");
+  // swap icon depending on state
+  var svg = msg.querySelector("svg");
+  if (svg && ok) {
+    svg.innerHTML = '<path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><path d="M22 4 12 14.01l-3-3"/>';
+  } else if (svg) {
+    svg.innerHTML = '<circle cx="12" cy="12" r="10"/><path d="M12 8v4"/><path d="M12 16h.01"/>';
+  }
+  clearTimeout(calNotify._t);
+  calNotify._t = setTimeout(function () { msg.className = "mcb-msg"; }, 4500);
+}
+
+/* Keep the hero "Now editing" chip in sync with the editor title. */
+function calSyncEditingChip() {
+  var t = document.getElementById("calEditorTitle");
+  var chip = document.getElementById("mcbEditingTitle");
+  if (t && chip) chip.textContent = t.textContent || "New Calendar";
+  var name = document.getElementById("calName");
+  if (name && chip && name.value) chip.textContent = name.value;
 }
 
 function initCalendarPage() {
@@ -32,12 +57,12 @@ function calAddRow(r) {
   var tr = document.createElement("tr");
   r = r || { w: "", act: "", days: "", date: "" };
   tr.innerHTML =
-    '<td><input class="calW" type="text" value=""></td>' +
+    '<td><input class="mcb-week" type="text" value=""></td>' +
     '<td><input class="calA" type="text" value=""></td>' +
     '<td><input class="calD" type="text" value=""></td>' +
     '<td><input class="calT" type="text" value=""></td>' +
-    '<td><button class="mg-btn-light mg-btn-danger" type="button" title="Remove row">\u00D7</button></td>';
-  tr.querySelector(".calW").value = r.w || "";
+    '<td><button class="mcb-del" type="button" title="Remove row">&times;</button></td>';
+  tr.querySelector(".calW, .mcb-week").value = r.w || "";
   tr.querySelector(".calA").value = r.act || "";
   tr.querySelector(".calD").value = r.days || "";
   tr.querySelector(".calT").value = r.date || "";
@@ -53,7 +78,7 @@ function calAddLesson(l) {
   tr.innerHTML =
     '<td><input class="lesT" type="text" value=""></td>' +
     '<td><input class="lesV" type="text" value=""></td>' +
-    '<td><button class="mg-btn-light mg-btn-danger" type="button" title="Remove row">\u00D7</button></td>';
+    '<td><button class="mcb-del" type="button" title="Remove row">&times;</button></td>';
   tr.querySelector(".lesT").value = l.text || "";
   tr.querySelector(".lesV").value = l.time || "";
   tr.querySelector("button").addEventListener("click", function () { tr.remove(); calPreview(); });
@@ -65,8 +90,8 @@ function calReadDoc() {
   var rows = [];
   document.querySelectorAll("#calRowsTable tbody tr").forEach(function (tr) {
     rows.push({
-      w: tr.querySelector(".calW").value.trim(),
-      act: tr.querySelector(".calA").value.trim(),
+      w:    (tr.querySelector(".mcb-week") || tr.querySelector(".calW")).value.trim(),
+      act:  tr.querySelector(".calA").value.trim(),
       days: tr.querySelector(".calD").value.trim(),
       date: tr.querySelector(".calT").value.trim()
     });
@@ -116,6 +141,8 @@ function calFillEditor(data) {
   (data.rows || []).forEach(calAddRow);
   document.querySelector("#calLessonsTable tbody").innerHTML = "";
   (data.lessons || []).forEach(calAddLesson);
+
+  calSyncEditingChip();
 }
 
 function calNew() {
@@ -130,6 +157,7 @@ function calPreview() {
   var wrap = document.getElementById("calPreviewWrap");
   wrap.innerHTML = "";
   wrap.appendChild(amsBuildCalendarSheet(calReadDoc(), calSigMap));
+  calSyncEditingChip();
 }
 
 /* ---------------------------- save / list --------------------------- */
@@ -144,6 +172,8 @@ function calSave() {
     document.getElementById("calName").value = title;
   }
 
+  calNotify("Saving…", true);
+
   fetch("/calendar", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -156,9 +186,10 @@ function calSave() {
     .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, d: d }; }); })
     .then(function (res) {
       if (res.ok) {
-        calNotify("\u2705 Calendar saved: " + title, true);
+        calNotify("Calendar saved: " + title, true);
         if (res.d.id) document.getElementById("calId").value = res.d.id;
         document.getElementById("calEditorTitle").textContent = title;
+        calSyncEditingChip();
         loadCalendars();
       } else {
         calNotify(res.d.message || "Could not save (admin account required).", false);
@@ -167,14 +198,41 @@ function calSave() {
     .catch(function () { calNotify("Network error - NOT saved.", false); });
 }
 
+/* Tiny helper to build a pill-style icon button. */
+function calMakeBtn(opts) {
+  var btn = document.createElement("button");
+  btn.type = "button";
+  btn.className = "mcb-icbtn " + (opts.cls || "");
+  btn.title = opts.title || opts.label || "";
+  if (opts.svg) btn.innerHTML = opts.svg;
+  if (opts.label) btn.appendChild(document.createTextNode(" " + opts.label));
+  btn.addEventListener("click", opts.onClick);
+  return btn;
+}
+
+var ICONS = {
+  edit:   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>',
+  unlock: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 9.9-1"/></svg>',
+  lock:   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>',
+  trash:  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M19 6 18 20a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>'
+};
+
 function loadCalendars() {
   var tbody = document.querySelector("#calListTable tbody");
+  var countChip = document.getElementById("mcbCountChip");
   fetch("/calendars")
     .then(function (r) { return r.ok ? r.json() : []; })
     .then(function (rows) {
       calCache = Array.isArray(rows) ? rows : [];
+      if (countChip) {
+        countChip.textContent = calCache.length + (calCache.length === 1 ? " saved" : " saved");
+      }
       if (!calCache.length) {
-        tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; color:#5B6B62;">No calendars saved yet. Edit the template below and press "Save Calendar".</td></tr>';
+        tbody.innerHTML =
+          '<tr><td colspan="4"><div class="mcb-empty">' +
+            '<span class="ico">&#128193;</span>' +
+            'No calendars saved yet. Edit the template above and press <b>Save Calendar</b>.' +
+          '</div></td></tr>';
         return;
       }
       tbody.innerHTML = "";
@@ -182,8 +240,13 @@ function loadCalendars() {
         var tr = document.createElement("tr");
 
         var td1 = document.createElement("td");
+        td1.className = "mcb-name";
         var b = document.createElement("b"); b.textContent = row.title;
         td1.appendChild(b);
+        var small = document.createElement("small");
+        var d = (row.doc && (function(){ try { return JSON.parse(row.doc).doc_date || ""; } catch(e){ return ""; } })()) || "";
+        small.textContent = d ? "Document date: " + d : "—";
+        td1.appendChild(small);
         tr.appendChild(td1);
 
         var td2 = document.createElement("td");
@@ -191,79 +254,92 @@ function loadCalendars() {
         tr.appendChild(td2);
 
         var td3 = document.createElement("td");
-        td3.innerHTML = Number(row.published) === 1
-          ? '<span class="sc-chip sc-chip-live">Live on portal</span>'
-          : '<span class="sc-chip sc-chip-soon">Not published</span>';
+        if (Number(row.published) === 1) {
+          td3.innerHTML = '<span class="mcb-chip mcb-chip-live"><span class="mcb-chip-dot"></span>Live on portal</span>';
+        } else {
+          td3.innerHTML = '<span class="mcb-chip mcb-chip-soon"><span class="mcb-chip-dot" style="background:#C9A227;box-shadow:0 0 0 3px rgba(201,162,39,.18);"></span>Not published</span>';
+        }
         tr.appendChild(td3);
 
         var td4 = document.createElement("td");
-        td4.style.whiteSpace = "nowrap";
+        td4.style.textAlign = "right";
+        var cell = document.createElement("div");
+        cell.className = "mcb-actions-cell";
+        cell.style.justifyContent = "flex-end";
 
-        function mkBtn(txt, cls, fn, ml) {
-          var btn = document.createElement("button");
-          btn.type = "button";
-          btn.className = cls;
-          btn.style.padding = "7px 11px";
-          if (ml) btn.style.marginLeft = "6px";
-          btn.textContent = txt;
-          btn.addEventListener("click", fn);
-          return btn;
-        }
-
-        td4.appendChild(mkBtn("\u270F Edit", "mg-btn-light", function () {
-          document.getElementById("calId").value = row.id;
-          document.getElementById("calName").value = row.title;
-          document.getElementById("calEditorTitle").textContent = row.title;
-          var data = {};
-          try { data = JSON.parse(row.doc || "{}"); } catch (e) { data = {}; }
-          calFillEditor(Object.keys(data).length ? data : amsDefaultCalendarDoc());
-          document.getElementById("calName").value = row.title;
-          calPreview();
-          window.scrollTo({ top: document.querySelector(".mg-card:nth-of-type(2)").offsetTop - 10, behavior: "smooth" });
+        cell.appendChild(calMakeBtn({
+          cls: "mcb-icbtn-edit",
+          label: "Edit",
+          svg: ICONS.edit,
+          onClick: function () {
+            document.getElementById("calId").value = row.id;
+            document.getElementById("calName").value = row.title;
+            document.getElementById("calEditorTitle").textContent = row.title;
+            var data = {};
+            try { data = JSON.parse(row.doc || "{}"); } catch (e) { data = {}; }
+            calFillEditor(Object.keys(data).length ? data : amsDefaultCalendarDoc());
+            document.getElementById("calName").value = row.title;
+            calPreview();
+            calSyncEditingChip();
+            var firstCard = document.querySelectorAll(".mcb-card")[1];
+            if (firstCard) window.scrollTo({ top: firstCard.offsetTop - 10, behavior: "smooth" });
+          }
         }));
 
-        td4.appendChild(mkBtn(Number(row.published) === 1 ? "\u{1F512} Unpublish" : "\u{1F4E2} Publish", "mg-btn", function () {
-          fetch("/calendar-publish", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ id: row.id, published: Number(row.published) === 1 ? 0 : 1 })
-          })
-            .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, d: d }; }); })
-            .then(function (res) {
-              calNotify(res.d.message || (res.ok ? "Done." : "Failed."), res.ok);
-              loadCalendars();
+        cell.appendChild(calMakeBtn({
+          cls: Number(row.published) === 1 ? "mcb-icbtn-unpub" : "mcb-icbtn-pub",
+          label: Number(row.published) === 1 ? "Unpublish" : "Publish",
+          svg: Number(row.published) === 1 ? ICONS.lock : ICONS.unlock,
+          onClick: function () {
+            calNotify(Number(row.published) === 1 ? "Unpublishing…" : "Publishing…", true);
+            fetch("/calendar-publish", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ id: row.id, published: Number(row.published) === 1 ? 0 : 1 })
             })
-            .catch(function () { calNotify("Network error.", false); });
-        }, true));
+              .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, d: d }; }); })
+              .then(function (res) {
+                calNotify(res.d.message || (res.ok ? "Done." : "Failed."), res.ok);
+                loadCalendars();
+              })
+              .catch(function () { calNotify("Network error.", false); });
+          }
+        }));
 
-        td4.appendChild(mkBtn("\u{1F5D1}", "mg-btn-light mg-btn-danger", function () {
-          if (!confirm("Delete calendar '" + row.title + "'? It disappears from the parent portal too.")) return;
-          fetch("/calendar/" + row.id, { method: "DELETE" })
-            .then(function (r) {
-              if (r.ok) { calNotify("Calendar deleted.", true); loadCalendars(); }
-              else calNotify("Could not delete (admin account required).", false);
-            })
-            .catch(function () { calNotify("Network error.", false); });
-        }, true));
+        cell.appendChild(calMakeBtn({
+          cls: "mcb-icbtn-del",
+          title: "Delete",
+          svg: ICONS.trash,
+          onClick: function () {
+            if (!confirm("Delete calendar '" + row.title + "'? It disappears from the parent portal too.")) return;
+            calNotify("Deleting…", true);
+            fetch("/calendar/" + row.id, { method: "DELETE" })
+              .then(function (r) {
+                if (r.ok) { calNotify("Calendar deleted.", true); loadCalendars(); }
+                else calNotify("Could not delete (admin account required).", false);
+              })
+              .catch(function () { calNotify("Network error.", false); });
+          }
+        }));
 
+        td4.appendChild(cell);
         tr.appendChild(td4);
         tbody.appendChild(tr);
       });
     })
     .catch(function () {
-      tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; color:#B3261E;">Could not load calendars.</td></tr>';
+      tbody.innerHTML =
+        '<tr><td colspan="4"><div class="mcb-empty" style="border-color:#F0C4C0;color:#B3261E;">' +
+          '<span class="ico">&#9888;</span>Could not load calendars. Pull to retry.' +
+        '</div></td></tr>';
     });
 }
 
 /* --------------------------- download PDF --------------------------- */
 function calDownloadPDF() {
-  // CHANGED (pack 17 - owner: "the calendar PDF is shrinking, let it fill
-  // the page from up to down"): the studio now uses the SAME shared
-  // builder as the portal/dashboard - FULL letterhead, FILLS the whole
-  // A4 page. File name stays the calendar's own name.
   var name = (document.getElementById("calName").value || "calendar").replace(/[^a-zA-Z0-9\-_ ]/g, "").trim() || "calendar";
-  calNotify("Building PDF...", true);
+  calNotify("Building PDF…", true);
   amsCalendarPDF(calReadDoc(), calSigMap || {}, function () {
-    calNotify("\u2705 PDF downloaded (fills the whole page).", true);
+    calNotify("PDF downloaded (fills the whole page).", true);
   }, name.replace(/\s+/g, "-") + ".pdf");
 }
