@@ -1,0 +1,612 @@
+/* ==========================================================================
+   NEW FILE - css/calendar-beauty.css
+   -------------------------------------------------------------------------- 
+   A complete, additive beauty layer for the Madrasah Calendar studio
+   (manage-calendars.html) AND the printed/PDF letterhead that
+   js/calendar-render.js produces. Loaded ONLY by manage-calendars.html
+   (and the calendar-render family), so nothing else in the app changes.
+
+   Design system used:
+     - Emerald / gold / parchment palette
+     - The same Islamic star-lattice + glow-bar motif as the public site
+     - Sectioned cards with ornamental top ribbons
+     - Polished inputs, segmented control, glass chips
+     - A4 letterhead with ornament dividers, week chips and graceful
+       signature boxes that still print on ONE page
+
+   All rules are namespaced with .cal-* and .mcb-* to be 100% additive.
+   ========================================================================== */
+
+:root{
+  --cb-emerald-1:#07271C;
+  --cb-emerald-2:#0F3D2E;
+  --cb-emerald-3:#1C5A42;
+  --cb-jade:#2F9E6E;
+  --cb-gold:#C9A227;
+  --cb-gold-soft:#E9C53D;
+  --cb-paper:#FBF7EE;
+  --cb-paper-2:#F4EEDF;
+  --cb-ink:#10231A;
+  --cb-muted:#5B6B62;
+  --cb-border:#D9E8E0;
+  --cb-bg:#F2F8F5;
+  --cb-danger:#B3261E;
+  --cb-radius:16px;
+  --cb-radius-sm:10px;
+  --cb-shadow-1:0 2px 6px rgba(15,61,46,.06), 0 1px 2px rgba(15,61,46,.04);
+  --cb-shadow-2:0 14px 36px rgba(15,61,46,.10);
+  --cb-shadow-3:0 28px 70px rgba(7,39,28,.30);
+  --cb-ease:cubic-bezier(.22,.61,.36,1);
+  --cb-speed:.22s;
+}
+
+/* ------------------------------ HERO ----------------------------- */
+.mcb-hero{
+  position:relative; overflow:hidden;
+  border-radius:24px;
+  padding:34px 36px 38px;
+  color:#fff;
+  background:
+    radial-gradient(700px 280px at 96% -20%, rgba(63,179,126,.30), transparent 60%),
+    radial-gradient(520px 280px at -2% 120%, rgba(201,162,39,.22), transparent 55%),
+    linear-gradient(155deg,#07271C 0%, #0F3D2E 45%, #1C5A42 100%);
+  box-shadow:var(--cb-shadow-3);
+  margin-bottom:24px;
+  display:grid;
+  grid-template-columns:auto 1fr auto;
+  gap:24px;
+  align-items:center;
+}
+.mcb-hero::before{
+  content:""; position:absolute; inset:0; opacity:.09; pointer-events:none;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='72' height='72' viewBox='0 0 72 72'%3E%3Cpath d='M36 4l7 25 25 7-25 7-7 25-7-25-25-7 25-7z' fill='none' stroke='%23E7C55B' stroke-width='1'/%3E%3Ccircle cx='36' cy='36' r='4' fill='%23E7C55B'/%3E%3C/svg%3E");
+  background-size:72px 72px;
+}
+.mcb-hero::after{
+  content:""; position:absolute; left:0; right:0; bottom:0; height:5px;
+  background:linear-gradient(90deg,transparent,#C9A227 30%,#F3D77A 50%,#C9A227 70%,transparent);
+}
+.mcb-hero-crest{
+  width:84px; height:84px; border-radius:50%; object-fit:cover;
+  background:#fff; padding:4px; flex:none;
+  border:3px solid #C9A227;
+  box-shadow:0 0 0 3px rgba(255,255,255,.85), 0 12px 28px rgba(0,0,0,.32);
+  position:relative; z-index:1;
+}
+.mcb-hero-text{ position:relative; z-index:1; min-width:0; }
+.mcb-hero-tag{
+  display:inline-block;
+  font-family:'Cairo',sans-serif; font-size:11px; font-weight:800; letter-spacing:2.6px;
+  text-transform:uppercase; color:#F3D77A; margin-bottom:6px;
+  text-shadow:0 1px 3px rgba(0,0,0,.4);
+}
+.mcb-hero h1{
+  margin:0 0 6px; font-size:30px; color:#fff !important;
+  letter-spacing:.3px; text-shadow:0 2px 12px rgba(0,0,0,.35);
+  display:flex; align-items:center; gap:10px;
+}
+.mcb-hero p{
+  margin:0; color:rgba(255,255,255,.9); font-size:14.5px; line-height:1.6;
+  max-width:62ch;
+}
+.mcb-hero-actions{
+  display:flex; flex-direction:column; gap:10px; align-items:flex-end;
+  position:relative; z-index:1;
+}
+.mcb-hero-stat{
+  background:rgba(255,255,255,.10); border:1px solid rgba(233,197,61,.40);
+  backdrop-filter:blur(3px);
+  border-radius:14px; padding:10px 16px; min-width:160px; text-align:right;
+}
+.mcb-hero-stat b{ display:block; font-size:18px; color:#F3D77A; letter-spacing:.3px; }
+.mcb-hero-stat small{ font-size:10.5px; font-weight:800; letter-spacing:1.4px; color:rgba(255,255,255,.85); text-transform:uppercase; }
+
+@media (max-width:820px){
+  .mcb-hero{ grid-template-columns:1fr; padding:24px 22px 26px; text-align:center; }
+  .mcb-hero-crest{ margin:0 auto; }
+  .mcb-hero-actions{ align-items:center; }
+  .mcb-hero-stat{ text-align:center; }
+  .mcb-hero h1{ font-size:24px; justify-content:center; }
+}
+
+/* --------------------------- CARDS ------------------------------ */
+.mcb-card{
+  position:relative;
+  background:#fff;
+  border:1px solid var(--cb-border);
+  border-radius:20px;
+  box-shadow:var(--cb-shadow-2);
+  padding:26px 28px 24px;
+  margin-bottom:24px;
+  animation:mcbRise .35s var(--cb-ease) both;
+}
+@keyframes mcbRise{
+  from{ opacity:0; transform:translateY(10px); }
+  to{ opacity:1; transform:translateY(0); }
+}
+/* ornamental top ribbon on each card */
+.mcb-card-ribbon{
+  position:absolute; top:0; left:18px; right:18px; height:3px; border-radius:0 0 6px 6px;
+  background:linear-gradient(90deg,#1C5A42,#2F9E6E 55%,#C9A227);
+  opacity:.85;
+}
+.mcb-card-head{
+  display:flex; align-items:center; gap:14px; flex-wrap:wrap;
+  margin-bottom:18px; padding-bottom:14px;
+  border-bottom:1px dashed #E1EBE5;
+}
+.mcb-card-ico{
+  width:46px; height:46px; flex:0 0 46px; border-radius:14px;
+  display:flex; align-items:center; justify-content:center;
+  color:#fff;
+  background:linear-gradient(140deg,#1C5A42,#2F9E6E);
+  box-shadow:0 8px 18px rgba(15,61,46,.22);
+}
+.mcb-card-ico.gold{ background:linear-gradient(140deg,#8a6d1d,#C9A227); box-shadow:0 8px 18px rgba(163,130,30,.30); }
+.mcb-card-ico.brick{ background:linear-gradient(140deg,#8C3B2E,#C05A3C); box-shadow:0 8px 18px rgba(140,59,46,.30); }
+.mcb-card-ico svg{ width:22px; height:22px; }
+.mcb-card-title{ font-size:19px; color:var(--cb-emerald-2); margin:0; letter-spacing:.2px; }
+.mcb-card-sub{ color:var(--cb-muted); font-size:12.5px; margin:0; max-width:64ch; }
+.mcb-card-head .mcb-spacer{ flex:1; }
+.mcb-card-count{
+  background:linear-gradient(135deg,#1C5A42,#2F9E6E); color:#fff;
+  font-size:11.5px; font-weight:800; letter-spacing:.6px;
+  padding:5px 12px; border-radius:999px;
+  text-transform:uppercase;
+}
+
+/* ------------------------ SECTION DIVIDERS ----------------------- */
+.mcb-section{
+  display:flex; align-items:center; gap:10px; margin:22px 0 14px;
+  font-size:11.5px; font-weight:800; letter-spacing:1.6px; text-transform:uppercase;
+  color:#1C5A42;
+}
+.mcb-section::after{
+  content:""; flex:1; height:1px;
+  background:linear-gradient(90deg,var(--cb-border),transparent);
+}
+.mcb-section svg{ width:15px; height:15px; color:#2F9E6E; }
+
+/* ------------------------- FORM GRID ----------------------------- */
+.mcb-toolbar{
+  display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr));
+  gap:14px 16px; margin-bottom:6px;
+}
+.mcb-field{ display:flex; flex-direction:column; gap:6px; min-width:0; }
+.mcb-field.mcb-span2{ grid-column:span 2; }
+@media (max-width:640px){ .mcb-field.mcb-span2{ grid-column:span 1; } }
+.mcb-field label{
+  font-size:11.5px; font-weight:800; color:var(--cb-emerald-2);
+  letter-spacing:.5px; text-transform:uppercase;
+  display:flex; align-items:center; gap:7px;
+}
+.mcb-field label .mcb-tag{
+  font-size:9.5px; font-weight:800; letter-spacing:1px; color:#7A5A00;
+  background:#FBF3D9; padding:1px 7px; border-radius:999px; text-transform:uppercase;
+}
+.mcb-field input, .mcb-field select, .mcb-field textarea{
+  width:100%; box-sizing:border-box;
+  padding:12px 13px;
+  border:1.5px solid var(--cb-border);
+  border-radius:12px; font-size:14px; font-family:inherit;
+  background:#F6FAF8; color:var(--cb-ink);
+  transition:border-color var(--cb-speed), box-shadow var(--cb-speed), background var(--cb-speed);
+}
+.mcb-field input:focus, .mcb-field select:focus, .mcb-field textarea:focus{
+  outline:none; border-color:var(--cb-jade);
+  background:#fff; box-shadow:0 0 0 4px rgba(47,158,110,.14);
+}
+.mcb-field input::placeholder, .mcb-field textarea::placeholder{ color:#9CB1A6; font-weight:500; }
+.mcb-field select{
+  background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'><path d='M1 1l5 5 5-5' fill='none' stroke='%231C5A42' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/></svg>");
+  background-repeat:no-repeat; background-position:right 14px center; background-size:12px 8px;
+  appearance:none; -webkit-appearance:none; padding-right:36px;
+}
+
+/* -------------------------- BUTTONS ----------------------------- */
+.mcb-actions{ display:flex; gap:10px; flex-wrap:wrap; margin-top:20px; }
+.mcb-btn{
+  display:inline-flex; align-items:center; gap:8px;
+  padding:11px 18px; border:none; border-radius:12px;
+  font:inherit; font-weight:800; font-size:13.5px; letter-spacing:.2px;
+  cursor:pointer; text-decoration:none; line-height:1;
+  color:#fff;
+  background:linear-gradient(140deg,var(--cb-emerald-3),var(--cb-jade));
+  box-shadow:0 8px 20px rgba(15,61,46,.22);
+  transition:transform var(--cb-speed) var(--cb-ease), box-shadow var(--cb-speed) var(--cb-ease), filter var(--cb-speed);
+}
+.mcb-btn:hover{ transform:translateY(-2px); box-shadow:0 14px 28px rgba(15,61,46,.28); }
+.mcb-btn:active{ transform:translateY(0); }
+.mcb-btn:disabled{ opacity:.55; cursor:default; transform:none; }
+.mcb-btn svg{ width:16px; height:16px; }
+
+.mcb-btn-gold{
+  background:linear-gradient(140deg,#8a6d1d,#C9A227 55%,#E9C53D);
+  color:#231a02; box-shadow:0 8px 20px rgba(163,130,30,.30);
+}
+.mcb-btn-gold:hover{ box-shadow:0 14px 28px rgba(163,130,30,.42); }
+
+.mcb-btn-ghost{
+  background:transparent; color:var(--cb-emerald-2);
+  border:1.5px solid var(--cb-border); box-shadow:none;
+}
+.mcb-btn-ghost:hover{ background:#F6FAF8; box-shadow:var(--cb-shadow-1); }
+
+.mcb-btn-danger{
+  background:linear-gradient(140deg,#8C3B2E,#C05A3C);
+  box-shadow:0 8px 20px rgba(140,59,46,.22);
+}
+.mcb-btn-danger:hover{ box-shadow:0 14px 28px rgba(140,59,46,.32); }
+
+.mcb-btn-sm{ padding:8px 13px; font-size:12.5px; border-radius:10px; }
+.mcb-btn-pill{ border-radius:999px; padding:9px 15px; }
+
+/* ----------------------- SAVED CALENDARS TABLE ------------------- */
+.mcb-listwrap{
+  overflow-x:auto; border:1px solid var(--cb-border); border-radius:14px;
+  background:#fff;
+}
+.mcb-table{ width:100%; border-collapse:collapse; font-size:13.5px; }
+.mcb-table thead th{
+  text-align:left;
+  background:linear-gradient(135deg,#123B2A,#1D5C3F 60%,#2F7A52);
+  color:#F3E7C3;
+  font-size:11px; letter-spacing:1px; text-transform:uppercase; font-weight:800;
+  padding:12px 14px; white-space:nowrap;
+  border-bottom:2px solid #C9A227;
+}
+.mcb-table thead th:first-child{ border-top-left-radius:13px; }
+.mcb-table thead th:last-child{ border-top-right-radius:13px; }
+.mcb-table td{
+  padding:12px 14px; border-bottom:1px solid #EDF3F0; vertical-align:middle;
+}
+.mcb-table tbody tr{ transition:background var(--cb-speed); }
+.mcb-table tbody tr:hover{ background:#F4FAF7; }
+.mcb-table tbody tr:last-child td{ border-bottom:none; }
+.mcb-table td.mcb-name b{ color:var(--cb-emerald-2); font-size:14.5px; }
+.mcb-table td.mcb-name small{ display:block; color:var(--cb-muted); font-weight:600; font-size:11.5px; margin-top:2px; }
+
+.mcb-chip{
+  display:inline-block; font-size:10.5px; font-weight:800; letter-spacing:.6px;
+  text-transform:uppercase; padding:4px 10px; border-radius:999px; white-space:nowrap;
+}
+.mcb-chip-live{ background:linear-gradient(135deg,#E2F4EA,#C6E8D4); color:#0E7A40; border:1px solid #B6DEC1; }
+.mcb-chip-soon{ background:linear-gradient(135deg,#FBF3D9,#F4E4AC); color:#8a6a08; border:1px solid #E7D08B; }
+.mcb-chip-dot{
+  display:inline-block; width:7px; height:7px; border-radius:50%;
+  background:#1C5A42; margin-right:5px; box-shadow:0 0 0 3px rgba(47,158,110,.18);
+}
+.mcb-chip-live .mcb-chip-dot{ background:#0E7A40; box-shadow:0 0 0 3px rgba(14,122,64,.22); }
+
+.mcb-actions-cell{ display:flex; gap:6px; flex-wrap:wrap; align-items:center; }
+.mcb-icbtn{
+  display:inline-flex; align-items:center; gap:6px;
+  padding:7px 12px; border-radius:999px;
+  font-size:12px; font-weight:800; cursor:pointer; line-height:1;
+  border:1.5px solid var(--cb-border); background:#fff; color:var(--cb-emerald-3);
+  transition:transform var(--cb-speed), box-shadow var(--cb-speed), background var(--cb-speed);
+}
+.mcb-icbtn:hover{ transform:translateY(-1px); box-shadow:var(--cb-shadow-1); background:#F4FAF7; }
+.mcb-icbtn svg{ width:13px; height:13px; }
+.mcb-icbtn-edit{ border-color:#C4DFD1; background:#EBF8F2; color:#0F3D2E; }
+.mcb-icbtn-edit:hover{ background:#D8EEE2; }
+.mcb-icbtn-pub{ border-color:#C9A227; background:linear-gradient(135deg,#FBEFC5,#F4E4AC); color:#7A5A00; }
+.mcb-icbtn-pub:hover{ background:linear-gradient(135deg,#F4E4AC,#EBD79A); }
+.mcb-icbtn-unpub{ border-color:#C4DFD1; background:#EBF8F2; color:#0F3D2E; }
+.mcb-icbtn-del{ border-color:#F0C4C0; background:#FBE9E7; color:var(--cb-danger); }
+.mcb-icbtn-del:hover{ background:#F8D7D3; }
+
+.mcb-empty{
+  padding:30px 18px; text-align:center; color:var(--cb-muted); font-size:13.5px;
+  background:repeating-linear-gradient(135deg,#FAFCFB 0 12px,#F4F8F6 12px 24px);
+  border-radius:12px; border:1.5px dashed var(--cb-border);
+}
+.mcb-empty .ico{ font-size:34px; display:block; margin-bottom:6px; }
+
+/* ------------------- EDITOR ACTIVITIES / LESSONS ---------------- */
+.mcb-gridwrap{
+  overflow-x:auto; border:1px solid var(--cb-border); border-radius:14px; background:#fff;
+  box-shadow:inset 0 0 0 1px rgba(255,255,255,.5);
+}
+.mcb-edit-table{ width:100%; border-collapse:collapse; font-size:13.5px; }
+.mcb-edit-table thead th{
+  text-align:left; background:#F2F8F5; color:var(--cb-emerald-2);
+  font-size:11px; letter-spacing:1px; text-transform:uppercase; font-weight:800;
+  padding:11px 12px; white-space:nowrap;
+  border-bottom:2px solid var(--cb-border);
+}
+.mcb-edit-table thead th:first-child{ border-top-left-radius:13px; }
+.mcb-edit-table thead th:last-child{ border-top-right-radius:13px; }
+.mcb-edit-table td{
+  padding:8px 10px; border-bottom:1px solid #EDF3F0; vertical-align:middle;
+  background:#fff;
+}
+.mcb-edit-table tbody tr:hover td{ background:#F8FCFA; }
+.mcb-edit-table tbody tr:last-child td{ border-bottom:none; }
+.mcb-edit-table input, .mcb-edit-table select{
+  width:100%; box-sizing:border-box;
+  padding:9px 11px; border:1.4px solid #E1EBE5; border-radius:10px;
+  font:inherit; font-size:13.5px; background:#F8FCFA;
+  transition:border-color var(--cb-speed), background var(--cb-speed);
+}
+.mcb-edit-table input:focus{
+  outline:none; border-color:var(--cb-jade); background:#fff;
+  box-shadow:0 0 0 3px rgba(47,158,110,.12);
+}
+.mcb-edit-table .mcb-week{ font-weight:800; text-align:center; max-width:90px; }
+.mcb-edit-table .mcb-del{
+  border:none; background:#FBE9E7; color:var(--cb-danger);
+  width:32px; height:32px; border-radius:9px; cursor:pointer; font-size:16px; font-weight:900;
+  display:inline-flex; align-items:center; justify-content:center;
+  transition:background var(--cb-speed), transform var(--cb-speed);
+}
+.mcb-edit-table .mcb-del:hover{ background:#F8D7D3; transform:scale(1.05); }
+
+.mcb-addrow{
+  display:inline-flex; align-items:center; gap:6px;
+  margin-top:10px; padding:9px 15px; border-radius:999px;
+  border:1.5px dashed #C4DFD1; background:#F4FAF7; color:var(--cb-emerald-3);
+  font-weight:800; font-size:13px; cursor:pointer;
+  transition:background var(--cb-speed), border-color var(--cb-speed);
+}
+.mcb-addrow:hover{ background:#EAF6EE; border-color:#2F9E6E; }
+
+/* -------------------------- STATUS MESSAGE ----------------------- */
+.mcb-msg{
+  display:none; font-size:13px; font-weight:700; padding:11px 14px;
+  border-radius:12px; margin-top:14px; align-items:center; gap:9px;
+  border:1.5px solid transparent;
+}
+.mcb-msg.ok{ display:inline-flex; background:#E2F4EA; color:#0E7A40; border-color:#B6DEC1; }
+.mcb-msg.err{ display:inline-flex; background:#FBE9E7; color:var(--cb-danger); border-color:#F0C4C0; }
+.mcb-msg svg{ width:15px; height:15px; flex:none; }
+
+/* ---------------------- PREVIEW SECTION STAGE -------------------- */
+.mcb-preview-bar{
+  display:flex; align-items:center; gap:14px; flex-wrap:wrap;
+  background:linear-gradient(135deg,#FBF7EE,#F4EEDF);
+  border:1.5px solid #E5D9B3; border-radius:14px;
+  padding:14px 18px; margin:0 0 14px;
+  box-shadow:0 1px 3px rgba(163,130,30,.08);
+}
+.mcb-preview-bar .mcb-eye{
+  width:36px; height:36px; border-radius:11px; display:flex; align-items:center; justify-content:center;
+  background:linear-gradient(140deg,#8a6d1d,#C9A227); color:#fff; box-shadow:0 6px 14px rgba(163,130,30,.28);
+}
+.mcb-preview-bar h3{ margin:0; font-size:16px; color:#7A5A00; }
+.mcb-preview-bar p{ margin:0; font-size:12.5px; color:#8B7A45; }
+.mcb-preview-stage{
+  background:
+    radial-gradient(circle at 20% 0%, rgba(201,162,39,.10), transparent 50%),
+    radial-gradient(circle at 80% 100%, rgba(47,158,110,.08), transparent 50%),
+    repeating-linear-gradient(45deg,#EEF3EF 0 14px,#E6EDE9 14px 28px);
+  border:1px solid var(--cb-border); border-radius:18px;
+  padding:22px; overflow-x:auto;
+}
+
+/* ===================================================================
+   LETTERHEAD STYLES (rebuilt look-and-feel for .cal-sheet)
+   These REPLACE the old school.css .cal-* rules ONLY for the calendar
+   sheet, because the new file is loaded AFTER school.css in
+   manage-calendars.html (and the editor). Portal/dashboard still ship
+   with school.css alone and keep the original look.
+   =================================================================== */
+.cal-sheet{
+  width:190mm; max-width:100%;
+  margin:0 auto;
+  background:
+    radial-gradient(circle at 0% 0%, rgba(201,162,39,.08), transparent 40%),
+    radial-gradient(circle at 100% 100%, rgba(47,158,110,.06), transparent 50%),
+    var(--cb-paper);
+  color:var(--cb-ink);
+  font-family:"Times New Roman", Georgia, serif;
+  border:1px solid #D6C99B;
+  box-shadow:
+    0 4px 22px rgba(15,61,46,.14),
+    0 0 0 6px var(--cb-paper),
+    0 0 0 7px #C9A227;
+  box-sizing:border-box;
+  position:relative; overflow:hidden;
+  padding:11mm 12mm 0;
+}
+/* very subtle paper grain so the sheet feels like real paper */
+.cal-sheet::before{
+  content:""; position:absolute; inset:0; pointer-events:none; opacity:.35;
+  background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160' viewBox='0 0 160 160'><g fill='%23b29a4f' fill-opacity='0.04'><circle cx='22' cy='32' r='1.3'/><circle cx='120' cy='80' r='1.1'/><circle cx='60' cy='130' r='1.4'/><circle cx='140' cy='30' r='0.9'/><circle cx='40' cy='90' r='0.8'/></g></svg>");
+  background-size:160px 160px;
+}
+.cal-sheet > *{ position:relative; z-index:1; }
+
+.cal-head{
+  position:relative; padding-left:78px; padding-bottom:6px;
+}
+.cal-logo{
+  position:absolute; left:0; top:2px; width:66px; height:66px;
+  object-fit:cover; border-radius:50%;
+  background:#fff; padding:3px; border:2.5px solid #C9A227;
+  box-shadow:0 0 0 3px rgba(201,162,39,.25), 0 6px 16px rgba(0,0,0,.15);
+}
+.cal-head-text{ text-align:center; }
+.cal-bismillah{ height:32px; display:block; margin:0 auto 4px; }
+.cal-name-ar{
+  font-size:19px; line-height:1.25; color:#0F3D2E;
+  font-weight:700; margin-bottom:4px;
+  text-shadow:0 1px 0 rgba(201,162,39,.18);
+}
+.cal-name-band{
+  background:linear-gradient(135deg,#0F3D2E 0%, #1C5A42 55%, #2F7A52 100%);
+  color:#fff; font-weight:800; letter-spacing:1.2px;
+  font-size:18px; padding:6px 12px; margin:6px 0 4px;
+  text-transform:uppercase;
+  border-radius:4px;
+  box-shadow:0 2px 8px rgba(15,61,46,.20);
+  position:relative;
+}
+.cal-name-band::before, .cal-name-band::after{
+  content:""; position:absolute; top:50%; transform:translateY(-50%);
+  width:18px; height:2px; background:linear-gradient(90deg,transparent,#E9C53D);
+}
+.cal-name-band::before{ left:0; }
+.cal-name-band::after{ right:0; background:linear-gradient(90deg,#E9C53D,transparent); }
+.cal-contact{ font-size:10.5px; line-height:1.5; color:#2B3D33; margin-top:2px; }
+.cal-motto{
+  display:inline-block; margin-top:6px; padding:3px 14px 4px;
+  background:transparent;
+  border-top:2px solid #0F3D2E; border-bottom:2px solid #0F3D2E;
+  font-weight:800; letter-spacing:.8px; font-size:12px; color:#0F3D2E;
+  text-transform:uppercase;
+}
+.cal-motto span[lang="ar"]{ font-family:'Amiri','Cairo',serif; font-weight:700; }
+
+.cal-refs{
+  display:flex; justify-content:space-between; gap:10px;
+  font-size:12px; color:#1C5A42; font-weight:700;
+  border-top:2px solid #0F3D2E; border-bottom:1px solid #0F3D2E;
+  margin-top:12px; padding:7px 2px;
+}
+.cal-refs span{ display:inline-flex; align-items:center; gap:5px; }
+.cal-refs b{ color:#0F3D2E; }
+
+.cal-title{
+  position:relative;
+  text-align:center; font-weight:800; font-size:14.5px; text-transform:uppercase;
+  text-decoration:none; margin:14px 0 10px; letter-spacing:.5px; color:#0F3D2E;
+  padding:0 56px;
+}
+.cal-title-text{
+  display:inline-block; padding:5px 16px; background:#FBF3D9; border-radius:6px;
+  border:1px solid #E7D08B;
+}
+.cal-title::before, .cal-title::after{
+  content:""; position:absolute; top:50%; transform:translateY(-50%);
+  width:42px; height:1.5px; background:#0F3D2E;
+}
+.cal-title::before{ left:0; }
+.cal-title::after{ right:0; }
+
+.cal-table{
+  width:100%; border-collapse:collapse; font-size:12.5px;
+  border:2px solid #0F3D2E;
+}
+.cal-table th, .cal-table td{
+  border:1.4px solid #1C5A42; padding:6px 9px;
+  text-align:left; vertical-align:middle;
+}
+.cal-table thead th{
+  background:linear-gradient(135deg,#0F3D2E,#1C5A42);
+  color:#fff; font-weight:800; text-transform:uppercase; letter-spacing:.4px;
+  font-size:12px; text-align:center; border-bottom:2px solid #C9A227;
+}
+.cal-table thead th:first-child{ text-align:center; }
+.cal-table thead th:last-child{ text-align:center; }
+.cal-table .w{ width:11%; font-weight:800; text-align:center; }
+.cal-table .d{ width:26%; text-align:center; }
+.cal-table tbody tr:nth-child(even) td{ background:rgba(201,162,39,.06); }
+.cal-table tbody tr:nth-child(odd) td{ background:rgba(47,158,110,.03); }
+
+.cal-week-tag{
+  display:inline-block; min-width:24px; padding:1px 7px;
+  background:#FBF3D9; border:1px solid #C9A227; border-radius:99px;
+  font-size:11px; font-weight:800; color:#7A5A00; letter-spacing:.3px;
+}
+
+.cal-note-row td{
+  background:linear-gradient(135deg,#FBF7EE,#F2ECDA) !important;
+  font-size:12.5px; border-top:2px solid #0F3D2E;
+}
+.cal-note-row b{ color:#0F3D2E; }
+
+.cal-lessons{
+  margin-top:14px; font-size:12.5px; padding:10px 12px;
+  background:rgba(201,162,39,.06); border:1px solid #E7D08B; border-radius:6px;
+}
+.cal-lessons-title{
+  font-weight:800; text-decoration:underline; margin-bottom:8px; color:#0F3D2E;
+  font-size:12.5px; letter-spacing:.4px;
+}
+.cal-lesson-row{
+  display:flex; justify-content:space-between; gap:14px; margin:6px 0; line-height:1.4;
+  padding-bottom:5px; border-bottom:1px dashed #E1D6B0;
+}
+.cal-lesson-row:last-child{ border-bottom:none; padding-bottom:0; }
+.cal-lesson-row span{ flex:1; color:#1C5A42; }
+.cal-lesson-row b{
+  min-width:220px; text-align:right; font-weight:800; color:#0F3D2E;
+  letter-spacing:.3px;
+}
+
+.cal-sigs{
+  display:flex; justify-content:space-between; gap:40px;
+  margin:30px 6% 0; padding-top:8px;
+}
+.cal-sig-box{ flex:1; text-align:center; }
+.cal-sig-img{ height:46px; display:block; margin:0 auto -8px; }
+.cal-sig-blank{ display:block; height:46px; }
+.cal-sig-line{
+  border-top:2.5px solid #0F3D2E; margin:0 14%;
+  position:relative;
+}
+.cal-sig-line::before, .cal-sig-line::after{
+  content:""; position:absolute; top:-4px; width:6px; height:6px; border-radius:50%;
+  background:#C9A227;
+}
+.cal-sig-line::before{ left:-10px; }
+.cal-sig-line::after{ right:-10px; }
+.cal-sig-title{
+  font-size:11.5px; letter-spacing:1.2px; margin-top:5px;
+  text-transform:uppercase; color:#1C5A42; font-weight:800;
+}
+
+.cal-bottom-band{
+  height:14px; margin-top:16px;
+  background:
+    linear-gradient(90deg, #0F3D2E 0%, #1C5A42 30%, #2F7A52 50%, #1C5A42 70%, #0F3D2E 100%);
+  position:relative;
+}
+.cal-bottom-band::after{
+  content:""; position:absolute; left:0; right:0; bottom:-3px; height:1.5px;
+  background:linear-gradient(90deg,transparent,#C9A227 30%,#E9C53D 50%,#C9A227 70%,transparent);
+}
+
+/* Print: ONLY the calendar sheet, one page */
+@media print{
+  body > .mng-page:not(#reportContainer){
+    display:block !important; margin:0 !important; padding:0 !important; background:#fff !important;
+  }
+  .mng-head, .mg-card, .mng-page > h3, .mcb-hero, .mcb-card-ribbon, .mcb-preview-bar, .mg-msg{ display:none !important; }
+  #calPreviewWrap:not(#reportContainer){
+    display:block !important; margin:0 !important; padding:0 !important; overflow:visible !important;
+  }
+  .mcb-preview-stage{ background:none !important; border:none !important; padding:0 !important; }
+  .cal-sheet{
+    margin:0 auto !important;
+    box-shadow:0 0 0 1px #C9A227, 0 0 0 7px var(--cb-paper) !important;
+    width:auto !important; padding:6mm 4mm 0 !important;
+  }
+}
+
+/* ------------------------- COMPACT on screen --------------------- */
+@media screen{
+  .cal-compact .cal-head,
+  .cal-compact .cal-refs,
+  .cal-compact .cal-bottom-band{ display:none; }
+  .cal-compact{ padding-top:18px; box-shadow:0 4px 22px rgba(15,61,46,.12); }
+}
+
+/* ------------------------- PHONE TUNING -------------------------- */
+@media (max-width:640px){
+  .mcb-card{ padding:20px 16px 18px; }
+  .mcb-actions{ flex-direction:column; }
+  .mcb-actions .mcb-btn{ width:100%; justify-content:center; }
+  .mcb-actions-cell{ flex-direction:column; align-items:stretch; }
+  .mcb-actions-cell .mcb-icbtn{ width:100%; justify-content:center; }
+  .mcb-edit-table thead th, .mcb-edit-table td{ padding:8px 8px; }
+  .mcb-preview-stage{ padding:12px; }
+  .cal-sheet{ padding:8mm 6mm 0; }
+  .cal-name-band{ font-size:15px; letter-spacing:.6px; }
+  .cal-title{ font-size:13px; padding:0 30px; }
+  .cal-title::before, .cal-title::after{ width:18px; }
+  .cal-lesson-row{ flex-direction:column; gap:3px; }
+  .cal-lesson-row b{ min-width:0; text-align:left; }
+  .cal-sigs{ flex-direction:column; gap:18px; margin:24px 0 0; }
+}
