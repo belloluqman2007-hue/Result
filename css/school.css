@@ -318,10 +318,26 @@ table.mg-table tr:last-child td{ border-bottom:none; }
   font-family:"Times New Roman", Georgia, serif;
   box-shadow:0 4px 22px rgba(15,61,46,.14);
   box-sizing:border-box;
+  /* A4 FIX PACK: the new corner accents are absolutely positioned, so the
+     sheet has to be their containing block on EVERY page (calendar-beauty.css
+     already did this for the studio; the portal only loads this file). */
+  position:relative; overflow:hidden;
 }
-.cal-head{ position:relative; padding-left:66px; }
-.cal-logo{ position:absolute; left:0; top:2px; width:56px; height:56px; object-fit:cover; border-radius:50%; }
+/* A4 FIX PACK - the crest is now a little WIDER than the old 56x56 dot
+   (80x68) and the masthead text keeps clear of it. */
+.cal-head{ position:relative; padding-left:92px; }
+.cal-logo{ position:absolute; left:0; top:2px; width:80px; height:68px; object-fit:cover; border-radius:50%; }
 .cal-head-text{ text-align:center; }
+/* A4 FIX PACK - letterhead dressing: gold corner accents + a double rule
+   under the masthead. Purely decorative, absolutely positioned / zero-flow,
+   so they add no height to the sheet. */
+.cal-corner{ position:absolute; width:22px; height:22px; pointer-events:none; opacity:.5; }
+.cal-corner-tl{ top:4px; left:4px; border-top:2px solid #111; border-left:2px solid #111; }
+.cal-corner-tr{ top:4px; right:4px; border-top:2px solid #111; border-right:2px solid #111; }
+.cal-corner-bl{ bottom:4px; left:4px; border-bottom:2px solid #111; border-left:2px solid #111; }
+.cal-corner-br{ bottom:4px; right:4px; border-bottom:2px solid #111; border-right:2px solid #111; }
+.cal-head-rule{ position:relative; height:3px; margin-top:8px; border-top:2px solid #111; border-bottom:1px solid #C9A227; }
+.cal-head-diamond{ position:absolute; left:50%; top:-4px; width:7px; height:7px; margin-left:-3.5px; transform:rotate(45deg); background:#C9A227; }
 .cal-bismillah{ height:30px; display:block; margin:0 auto 2px; }
 .cal-name-ar{ font-size:17px; line-height:1.2; }
 .cal-name-band{
@@ -363,6 +379,90 @@ table.mg-table tr:last-child td{ border-bottom:none; }
   background:linear-gradient(to right, #000 0%, #000 100%);
 }
 
+/* ==========================================================================
+   A4 FIT PACK (shared by the studio, the parent portal and the teacher card)
+   --------------------------------------------------------------------------
+   1. .cal-printfit  = the exact box the printer uses, applied on screen too so
+      js/calendar-render.js can measure the sheet BEFORE the print dialog opens.
+   2. .cal-dense / .cal-xdense = progressive typography tightening. The renderer
+      steps through them until the sheet is short enough for one A4 page.
+   3. .cal-pdf = layout lock for the off-screen PDF capture copy. The capture
+      sheet is 190mm wide but the PHONE viewport still triggers the small-screen
+      rules, which used to stack the two signatures on top of each other and
+      stretch the download. These !important rules pin the desktop layout.
+   ========================================================================== */
+.cal-sheet.cal-dense .cal-head{ padding-top:4px !important; padding-bottom:5px !important; }
+.cal-sheet.cal-dense .cal-bismillah{ height:26px !important; margin-bottom:2px !important; }
+.cal-sheet.cal-dense .cal-name-ar{ font-size:17px !important; margin-bottom:2px !important; }
+.cal-sheet.cal-dense .cal-name-band{ font-size:16.5px !important; padding:4px 10px !important; margin:4px 0 3px !important; }
+.cal-sheet.cal-dense .cal-contact{ font-size:10px !important; line-height:1.35 !important; }
+.cal-sheet.cal-dense .cal-motto{ margin-top:3px !important; font-size:11.5px !important; padding:2px 12px 3px !important; }
+.cal-sheet.cal-dense .cal-head-rule{ margin-top:6px !important; }
+.cal-sheet.cal-dense .cal-refs{ margin-top:7px !important; padding:4px 2px !important; }
+.cal-sheet.cal-dense .cal-title{ margin:8px 0 6px !important; }
+.cal-sheet.cal-dense .cal-table th,
+.cal-sheet.cal-dense .cal-table td{ padding:3.5px 7px !important; }
+.cal-sheet.cal-dense .cal-lessons{ margin-top:8px !important; padding:7px 10px !important; }
+.cal-sheet.cal-dense .cal-lessons-title{ margin-bottom:5px !important; }
+.cal-sheet.cal-dense .cal-lesson-row{ margin:3px 0 !important; padding-bottom:3px !important; }
+.cal-sheet.cal-dense .cal-sigs{ margin-top:16px !important; padding-top:4px !important; }
+.cal-sheet.cal-dense .cal-sig-img,
+.cal-sheet.cal-dense .cal-sig-blank{ height:38px !important; }
+.cal-sheet.cal-dense .cal-bottom-band{ margin-top:10px !important; }
+
+.cal-sheet.cal-xdense .cal-head{ padding-top:2px !important; padding-bottom:3px !important; }
+.cal-sheet.cal-xdense .cal-bismillah{ height:20px !important; margin-bottom:1px !important; }
+.cal-sheet.cal-xdense .cal-name-ar{ font-size:15px !important; margin-bottom:1px !important; }
+.cal-sheet.cal-xdense .cal-name-band{ font-size:14.5px !important; padding:3px 8px !important; margin:3px 0 2px !important; }
+.cal-sheet.cal-xdense .cal-contact{ font-size:9.5px !important; line-height:1.25 !important; }
+.cal-sheet.cal-xdense .cal-motto{ margin-top:2px !important; font-size:10.5px !important; padding:1px 10px 2px !important; }
+.cal-sheet.cal-xdense .cal-head-rule{ margin-top:4px !important; }
+.cal-sheet.cal-xdense .cal-refs{ margin-top:5px !important; padding:3px 2px !important; font-size:10.5px !important; }
+.cal-sheet.cal-xdense .cal-title{ margin:6px 0 4px !important; font-size:13px !important; }
+.cal-sheet.cal-xdense .cal-table{ font-size:11px !important; }
+.cal-sheet.cal-xdense .cal-table th,
+.cal-sheet.cal-xdense .cal-table td{ padding:2.5px 6px !important; }
+.cal-sheet.cal-xdense .cal-note-row td{ font-size:11px !important; }
+.cal-sheet.cal-xdense .cal-lessons{ margin-top:6px !important; padding:5px 9px !important; font-size:11px !important; }
+.cal-sheet.cal-xdense .cal-lessons-title{ margin-bottom:3px !important; font-size:11px !important; }
+.cal-sheet.cal-xdense .cal-lesson-row{ margin:2px 0 !important; padding-bottom:2px !important; line-height:1.25 !important; }
+.cal-sheet.cal-xdense .cal-lesson-row b{ min-width:180px !important; }
+.cal-sheet.cal-xdense .cal-sigs{ margin-top:10px !important; padding-top:2px !important; gap:30px !important; }
+.cal-sheet.cal-xdense .cal-sig-img,
+.cal-sheet.cal-xdense .cal-sig-blank{ height:30px !important; }
+.cal-sheet.cal-xdense .cal-sig-title{ font-size:10.5px !important; margin-top:2px !important; }
+.cal-sheet.cal-xdense .cal-bottom-band{ margin-top:6px !important; height:10px !important; }
+
+/* PDF capture copy AND the print preview copy: ALWAYS the desktop A4
+   letterhead, whatever the device. Without this the phone rules below
+   (stacked signatures, wrapped lesson times) leaked into the download and
+   into the printed page and pushed the calendar onto a second sheet. */
+.cal-sheet.cal-pdf,
+.cal-sheet.cal-printfit{
+  width:190mm !important; max-width:190mm !important;
+  padding:8mm 10mm 0 !important; margin:0 !important; box-shadow:none !important;
+}
+.cal-sheet.cal-pdf{ margin:0 !important; }
+.cal-sheet.cal-printfit{ margin:0 auto !important; }
+.cal-sheet.cal-pdf .cal-head,
+.cal-sheet.cal-printfit .cal-head{ padding-left:104px !important; padding-right:12px !important; }
+.cal-sheet.cal-pdf .cal-logo,
+.cal-sheet.cal-printfit .cal-logo{ left:10px !important; top:8px !important; width:92px !important; height:78px !important; }
+.cal-sheet.cal-pdf .cal-name-band,
+.cal-sheet.cal-printfit .cal-name-band{ font-size:18px !important; letter-spacing:1.2px !important; padding:6px 12px !important; }
+.cal-sheet.cal-pdf .cal-title,
+.cal-sheet.cal-printfit .cal-title{ font-size:14.5px !important; padding:0 56px !important; }
+.cal-sheet.cal-pdf .cal-title::before,
+.cal-sheet.cal-pdf .cal-title::after,
+.cal-sheet.cal-printfit .cal-title::before,
+.cal-sheet.cal-printfit .cal-title::after{ width:42px !important; }
+.cal-sheet.cal-pdf .cal-lesson-row,
+.cal-sheet.cal-printfit .cal-lesson-row{ flex-direction:row !important; gap:14px !important; }
+.cal-sheet.cal-pdf .cal-lesson-row b,
+.cal-sheet.cal-printfit .cal-lesson-row b{ min-width:220px !important; text-align:right !important; }
+.cal-sheet.cal-pdf .cal-sigs,
+.cal-sheet.cal-printfit .cal-sigs{ flex-direction:row !important; gap:40px !important; margin:26px 6% 0 !important; }
+
 /* Print: ONLY the calendar sheet, one page (outranks the frozen
    style.css print rule - the wrapper is not #reportContainer). */
 @media print{
@@ -376,8 +476,12 @@ table.mg-table tr:last-child td{ border-bottom:none; }
   .mcb-preview-stage{ background:none !important; border:none !important; padding:0 !important; margin:0 !important; box-shadow:none !important; }
   .cal-sheet{
     margin:0 auto !important; box-shadow:none !important;
-    width:100% !important; max-width:190mm !important; padding:4mm 1mm 0 !important;
+    width:100% !important; max-width:190mm !important; padding:8mm 10mm 0 !important;
   }
+  /* the wrapper height is set inline by amsFitCalendarSheet() to the scaled
+     sheet height, so the sheet stops exactly at the bottom of page 1 */
+  #calPreviewWrap{ break-after:avoid !important; page-break-after:avoid !important; }
+  .cal-sheet{ break-inside:avoid !important; page-break-inside:avoid !important; }
 }
 
 /* NEW (pack 17): slim scroll box keeps the per-student attendance
@@ -392,6 +496,7 @@ table.mg-table tr:last-child td{ border-bottom:none; }
    rules never touch downloads). */
 @media screen{
   .cal-compact .cal-head,
+  .cal-compact .cal-head-rule,
   .cal-compact .cal-refs,
   .cal-compact .cal-bottom-band{ display:none; }
   .cal-compact{ padding-top:14px; }
