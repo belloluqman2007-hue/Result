@@ -2489,8 +2489,24 @@ app.get("/recent-activity", requireLogin, async (req, res) => {
 // (Named /students to complement - not replace - the existing
 //  single-student route /student/:studentId, which is untouched.)
 app.get("/students", requireLogin, (req, res) => {
+    const status = String(req.query.status || "").trim().toLowerCase();
+    let sql = "SELECT * FROM students";
+    const params = [];
+
+    /* Attendance and other pickers can request only active students. NULL
+       is treated as active for records created before student statuses were
+       introduced, matching the attendance register's roster rule. */
+    if (status === "active") {
+        sql += " WHERE status IS NULL OR LOWER(TRIM(status)) = 'active'";
+    } else if (status) {
+        sql += " WHERE LOWER(TRIM(status)) = ?";
+        params.push(status);
+    }
+    sql += " ORDER BY class_name, full_name";
+
     connection.query(
-        "SELECT * FROM students ORDER BY class_name, full_name",
+        sql,
+        params,
         (err, rows) => {
             if (err) {
                 console.log(err);
@@ -6644,11 +6660,17 @@ app.get("/attendance/class", requireLogin, (req, res) => {
     connection.query(
         `SELECT s.student_id, s.full_name, s.gender, a.status
          FROM students s
-         LEFT JOIN attendance a ON a.student_id = s.student_id AND a.att_date = ?
+         LEFT JOIN attendance a
+           ON a.student_id = s.student_id
+          AND a.att_date = ?
+          AND LOWER(TRIM(a.class_name)) = LOWER(TRIM(?))
          WHERE LOWER(TRIM(s.class_name)) = LOWER(TRIM(?))
-           AND (s.status IS NULL OR s.status = 'active')
+           AND (s.status IS NULL OR LOWER(TRIM(s.status)) = 'active')
          ORDER BY s.full_name`,
-        [date, className],
+        /* The roster is always selected from the student's current class.
+           Keeping the historical class check in the LEFT JOIN means an old
+           attendance row can never remove a current student from the list. */
+        [date, className, className],
         (err, rows) => {
             if (err) { console.log(err); return res.status(500).json({ message: "Database error" }); }
             res.json(rows);
@@ -6694,9 +6716,13 @@ app.get("/attendance/report", requireLogin, (req, res) => {
                 COUNT(*) AS marked
          FROM attendance a
          JOIN students s ON s.student_id = a.student_id
-         WHERE a.class_name = ? AND a.att_date BETWEEN ? AND ?
+         WHERE LOWER(TRIM(a.class_name)) = LOWER(TRIM(?))
+           AND a.att_date BETWEEN ? AND ?
          GROUP BY a.student_id, s.full_name
          ORDER BY s.full_name`,
+        /* Reports deliberately use the class saved with each attendance
+           record, not the student's current class, so moves and renames do
+           not rewrite or hide historical attendance. */
         [className, from, to],
         (err, rows) => {
             if (err) { console.log(err); return res.status(500).json({ message: "Database error" }); }
