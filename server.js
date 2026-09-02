@@ -6637,23 +6637,106 @@ app.get("/portal/attendance", (req, res) => {
     );
 });
 
+/* ================= Attendance: ONE shared "same class" rule =============
+   FIX (pack 107 - Mark Register vs Report mismatch): the register looked pupils up
+   through students.class_name while the report looked them up through
+   attendance.class_name, each with its own comparison rule. As soon as a
+   pupil was moved to another class - or a class was renamed - after
+   attendance had already been taken, the SAME picked class could list pupils
+   in the Report that the Mark Register never showed.
+
+   The rule everywhere in this feature from now on:
+     * a class name always compares as LOWER(TRIM(...)) on BOTH sides, and
+       attSameClass() below is the exact JS twin of that SQL, so the dropdown
+       value, a pupil's current class and the class written on old attendance
+       rows are all matched the same way;
+     * the Mark Register is driven ONLY by the CURRENT class on the students
+       table; the day's saved mark is attached by student_id + date and is
+       never filtered by the class name written on that mark;
+     * the Report stays driven by attendance.class_name (the class the day was
+       really taken in) so history never moves class, and it LEFT JOINs
+       students so a mark for a pupil who has since been removed from the
+       students table still reports;
+     * nothing in the attendance table is rewritten, moved or deleted by any
+       of this - old rows keep the class name they were saved with.
+   ====================================================================== */
+const attNormClass = v => String(v == null ? "" : v).trim().toLowerCase();
+const attSameClass = (a, b) => attNormClass(a) === attNormClass(b);
+/* students.status is added by a guarded boot migration, and the student pages
+   already read a missing/blank status as "active" - keep that reading. */
+const attIsActiveStatus = v => { const s = attNormClass(v); return s === "" || s === "active"; };
+const ATT_ACTIVE_ONLY_SQL = "AND (s.status IS NULL OR LOWER(TRIM(s.status)) IN ('', 'active'))";
+
 app.get("/attendance/class", requireLogin, (req, res) => {
     const className = (req.query.class_name || "").trim();
     const date = (req.query.date || "").trim();
     if (!className || !date) return res.status(400).json({ message: "class_name and date are required." });
-    connection.query(
+
+    /* FIX (pack 107): the roster is every pupil whose CURRENT class (students.class_name)
+       is the picked class - full stop. The LEFT JOIN attaches that date's
+       saved mark by student_id + date ONLY, so a pupil who was moved into this
+       class (or whose class was renamed) after that day was marked still shows
+       up here WITH the status already given, instead of staying invisible
+       while the Report keeps listing them. marked_class / marked_elsewhere are
+       extra fields so the page can explain a mark saved under an older class
+       name; no attendance row is touched.
+       Fallbacks: students.status and attendance.marked_by are added by guarded
+       migrations, so an older/warming-up database steps down to a simpler
+       SELECT instead of returning an empty register (ER_BAD_FIELD_ERROR). */
+    const variants = [
+        `SELECT s.student_id, s.full_name, s.gender, s.class_name,
+                a.status, a.class_name AS marked_class, a.marked_by
+         FROM students s
+         LEFT JOIN attendance a ON a.student_id = s.student_id AND a.att_date = ?
+         WHERE LOWER(TRIM(s.class_name)) = LOWER(TRIM(?))
+           ${ATT_ACTIVE_ONLY_SQL}
+         ORDER BY s.full_name`,
+        `SELECT s.student_id, s.full_name, s.gender, s.class_name,
+                a.status, a.class_name AS marked_class, a.marked_by
+         FROM students s
+         LEFT JOIN attendance a ON a.student_id = s.student_id AND a.att_date = ?
+         WHERE LOWER(TRIM(s.class_name)) = LOWER(TRIM(?))
+         ORDER BY s.full_name`,
         `SELECT s.student_id, s.full_name, s.gender, a.status
          FROM students s
          LEFT JOIN attendance a ON a.student_id = s.student_id AND a.att_date = ?
          WHERE LOWER(TRIM(s.class_name)) = LOWER(TRIM(?))
-           AND (s.status IS NULL OR s.status = 'active')
-         ORDER BY s.full_name`,
-        [date, className],
-        (err, rows) => {
-            if (err) { console.log(err); return res.status(500).json({ message: "Database error" }); }
-            res.json(rows);
-        }
-    );
+         ORDER BY s.full_name`
+    ];
+
+    function runVariant(i) {
+        connection.query(variants[i], [date, className], (err, rows) => {
+            if (err) {
+                if (err.code === "ER_BAD_FIELD_ERROR" && i + 1 < variants.length) return runVariant(i + 1);
+                console.log(err);
+                return res.status(500).json({ message: "Database error" });
+            }
+            /* One row per pupil, always: the uniq_student_day key normally
+               guarantees it, but a database that predates that key could hold
+               two marks for one day and would otherwise list the pupil twice. */
+            const byId = new Map();
+            (rows || []).forEach(r => {
+                const marked = r.status || null;
+                const row = {
+                    student_id: r.student_id,
+                    full_name: r.full_name,
+                    gender: r.gender == null ? "" : r.gender,
+                    class_name: r.class_name == null ? className : r.class_name,
+                    status: marked,
+                    marked_by: r.marked_by || null,
+                    marked_class: r.marked_class || null,
+                    /* true when the saved mark for this date was written while
+                       the pupil sat in a different (older/renamed) class. */
+                    marked_elsewhere: marked ? !attSameClass(r.marked_class, className) : false
+                };
+                const prev = byId.get(String(r.student_id));
+                if (!prev || (!prev.status && row.status)) byId.set(String(r.student_id), row);
+            });
+            res.json([...byId.values()]);
+        });
+    }
+
+    runVariant(0);
 });
 
 app.post("/attendance/save", requireLogin, (req, res) => {
@@ -6686,23 +6769,86 @@ app.get("/attendance/report", requireLogin, (req, res) => {
     const from = (req.query.from || "").trim();
     const to = (req.query.to || "").trim();
     if (!className || !from || !to) return res.status(400).json({ message: "class_name, from and to are required." });
-    connection.query(
+
+    /* FIX (pack 107): history is STILL read from attendance.class_name - the class the
+       day was actually taken in - so no saved row moves and nothing is
+       rewritten. Two things changed:
+         1. the class name is matched with the SAME LOWER(TRIM(...)) rule the
+            Mark Register uses, so one dropdown pick means one class in both
+            tabs (a stray leading space or a different case can no longer pull
+            the two lists apart);
+         2. LEFT JOIN students + a display-name fallback, so marks for a pupil
+            who has since been removed from the students table still report
+            instead of silently dropping out of the class totals.
+       current_class / current_status / moved / removed / inactive are extra
+       fields that let the page explain WHY a pupil in this report is not in
+       today's Mark Register (they moved class, left the school, or their
+       profile is gone). The counts themselves are exactly the saved rows. */
+    const variants = [
         `SELECT a.student_id, s.full_name,
                 SUM(a.status = 'present') AS present,
                 SUM(a.status = 'absent')  AS absent,
                 SUM(a.status = 'late')    AS late,
-                COUNT(*) AS marked
+                COUNT(*) AS marked,
+                MAX(s.class_name) AS current_class,
+                MAX(s.status)     AS current_status
          FROM attendance a
-         JOIN students s ON s.student_id = a.student_id
-         WHERE a.class_name = ? AND a.att_date BETWEEN ? AND ?
+         LEFT JOIN students s ON s.student_id = a.student_id
+         WHERE LOWER(TRIM(a.class_name)) = LOWER(TRIM(?))
+           AND a.att_date BETWEEN ? AND ?
          GROUP BY a.student_id, s.full_name
-         ORDER BY s.full_name`,
-        [className, from, to],
-        (err, rows) => {
-            if (err) { console.log(err); return res.status(500).json({ message: "Database error" }); }
-            res.json(rows);
-        }
-    );
+         ORDER BY COALESCE(NULLIF(TRIM(s.full_name), ''), a.student_id)`,
+        /* older database: students.status still warming up from its guarded
+           migration - report the same rows without the status column. */
+        `SELECT a.student_id, s.full_name,
+                SUM(a.status = 'present') AS present,
+                SUM(a.status = 'absent')  AS absent,
+                SUM(a.status = 'late')    AS late,
+                COUNT(*) AS marked,
+                MAX(s.class_name) AS current_class
+         FROM attendance a
+         LEFT JOIN students s ON s.student_id = a.student_id
+         WHERE LOWER(TRIM(a.class_name)) = LOWER(TRIM(?))
+           AND a.att_date BETWEEN ? AND ?
+         GROUP BY a.student_id, s.full_name
+         ORDER BY COALESCE(NULLIF(TRIM(s.full_name), ''), a.student_id)`
+    ];
+
+    function runVariant(i) {
+        connection.query(variants[i], [className, from, to], (err, rows) => {
+            if (err) {
+                if (err.code === "ER_BAD_FIELD_ERROR" && i + 1 < variants.length) return runVariant(i + 1);
+                console.log(err);
+                return res.status(500).json({ message: "Database error" });
+            }
+            res.json((rows || []).map(r => {
+                const name = r.full_name && String(r.full_name).trim() ? String(r.full_name).trim() : "";
+                const cur = r.current_class === undefined ? null : r.current_class;
+                const hasCur = cur != null && String(cur).trim() !== "";
+                const status = r.current_status === undefined ? null : (r.current_status || null);
+                /* no students row left for this pupil - the marks are kept and
+                   reported anyway, they just cannot appear in a register. */
+                const removed = !name && cur === null && status === null;
+                return {
+                    student_id: r.student_id,
+                    full_name: name || ("Student " + r.student_id),
+                    present: Number(r.present) || 0,
+                    absent: Number(r.absent) || 0,
+                    late: Number(r.late) || 0,
+                    marked: Number(r.marked) || 0,
+                    current_class: hasCur ? cur : null,
+                    current_status: status,
+                    removed: removed,
+                    /* moved class since these rows were saved (the rows stay
+                       with the class they were taken in, by design). */
+                    moved: !removed && hasCur && !attSameClass(cur, className),
+                    inactive: !removed && status != null && !attIsActiveStatus(status)
+                };
+            }));
+        });
+    }
+
+    runVariant(0);
 });
 
 /* ---------- Staff attendance + weekly evaluations ------------------- */
@@ -7028,6 +7174,11 @@ app.get("/attendance/summary", requireLogin, (req, res) => {
     const date = (req.query.date || "").trim();
     if (!className || !date) return res.status(400).json({ message: "class_name and date are required." });
     connection.query(
+        /* FIX (pack 107): same LOWER(TRIM(...)) class rule as the register and
+           the report, so the "already taken" banner counts the very same class
+           the register is showing (a differently-cased or padded class name no
+           longer reports 0 while the register loads saved marks). Read-only:
+           no attendance row is changed. */
         `SELECT COUNT(*) AS total,
                 SUM(status = 'present') AS present,
                 SUM(status = 'absent')  AS absent,
@@ -7035,7 +7186,7 @@ app.get("/attendance/summary", requireLogin, (req, res) => {
                 MAX(marked_by) AS marked_by,
                 MAX(created_at) AS saved_at
          FROM attendance
-         WHERE class_name = ? AND att_date = ?`,
+         WHERE LOWER(TRIM(class_name)) = LOWER(TRIM(?)) AND att_date = ?`,
         [className, date],
         (err, rows) => {
             if (err) { console.log(err); return res.status(500).json({ message: "Database error" }); }

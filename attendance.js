@@ -11,6 +11,63 @@ var attState = {}; // student_id -> status (present/absent/late)
 var attRegisterRows = [];
 var attReportRows = [];
 
+/* ==================== FIX (pack 107) ==================================
+   "Is this pupil in the picked class?" used to be answered three different
+   ways on this page: the Mark Register asked the server (students.class_name,
+   matched case- and space-insensitively), the Report asked for
+   attendance.class_name with a strict compare, and the student-history picker
+   compared s.class_name === cls with NO status filter at all. So a pupil who
+   moved class - or a class that was renamed after attendance had already been
+   taken - could show up in one list and not in the others.
+   The helpers below are the client twin of the server rule (attSameClass /
+   attIsActiveStatus in server.js), and every list on this page now filters
+   exactly the way the Mark Register does:
+     * the register roster = pupils whose CURRENT class is the picked one
+       (never filtered by the class name written on their old attendance rows);
+     * the report keeps reporting the saved rows through attendance.class_name
+       (history stays where it was taken) and simply EXPLAINS the pupils it
+       shows that today's register no longer lists;
+     * the picker below offers exactly the register's pupils.
+   ==================================================================== */
+function attNormClass(v) { return String(v == null ? "" : v).trim().toLowerCase(); }
+function attSameClass(a, b) { return attNormClass(a) === attNormClass(b); }
+function attIsActiveStudent(s) {
+  var st = attNormClass(s && s.status);
+  return st === "" || st === "active"; // blank/missing status counts as active (same as the server)
+}
+/* The Mark Register's roster, worked out the same way the server works it out
+   (and in the register's own name order, so both lists line up row by row). */
+function attRegisterRoster(list, cls) {
+  return (Array.isArray(list) ? list : []).filter(function (s) {
+    return s && attIsActiveStudent(s) && (!cls || attSameClass(s.class_name, cls));
+  }).sort(function (a, b) {
+    var an = attNormClass(a.full_name), bn = attNormClass(b.full_name);
+    if (an !== bn) return an < bn ? -1 : 1;
+    var ai = String(a.student_id), bi = String(b.student_id);
+    return ai < bi ? -1 : ai > bi ? 1 : 0;
+  });
+}
+/* Why a pupil in the Report may be missing from today's Mark Register. The
+   server sends moved / removed / current_class / current_status for this;
+   the counts themselves are untouched saved data. */
+function attReportRowNote(row) {
+  if (!row) return "";
+  if (row.removed) return "no longer on the student list - saved marks kept";
+  var bits = [];
+  if (row.moved && row.current_class) bits.push("now in " + row.current_class);
+  var st = attNormClass(row.current_status);
+  if (st && st !== "active") bits.push(st); // withdrawn / graduated
+  return bits.join(" \u00b7 ");
+}
+/* Small amber note line under a name in either table. */
+function attNoteDiv(text) {
+  var d = document.createElement("div");
+  d.className = "att-row-note";
+  d.style.cssText = "font-size:11px; line-height:1.35; font-weight:600; color:#B26A00;";
+  d.textContent = text;
+  return d;
+}
+
 function attNotify(text, ok) {
   var msg = document.getElementById("attMsg");
   msg.textContent = text;
@@ -84,7 +141,13 @@ function loadRegister() {
       attRegisterRows = rows; // NEW (pack 14): kept for the PDF
       loadTakenSummary(className, date); // NEW (pack 14): "already taken" warning
       if (!rows.length) {
-        tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; color:#5B6B62;">No students in this class yet.</td></tr>';
+        /* FIX (pack 107): an empty roster is nearly always a class that was
+           renamed or emptied after its attendance was taken - say so, because
+           the Report tab still shows those saved days (they belong to the class
+           name written on them). */
+        tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; color:#5B6B62;">No students in this class yet.' +
+          '<div style="font-size:12px; margin-top:4px; color:#7C8C82;">If this class was renamed, or its pupils moved to another class, ' +
+          'the Report tab still shows the attendance that was saved for them.</div></td></tr>';
         return;
       }
       tbody.innerHTML = "";
@@ -100,6 +163,14 @@ function loadRegister() {
         var b = document.createElement("b");
         b.textContent = row.full_name || "-";
         tdName.appendChild(b);
+        /* FIX (pack 107): the saved mark for this date may have been written
+           while this pupil sat in a different class (they moved, or the class
+           was renamed). The register still lists the pupil AND loads that
+           saved mark - it only says where the mark came from, so nobody is
+           invisible here while the Report keeps showing them. */
+        if (row.marked_elsewhere && row.marked_class) {
+          tdName.appendChild(attNoteDiv("saved mark taken in " + row.marked_class));
+        }
         tr.appendChild(tdName);
 
         var tdId = document.createElement("td");
@@ -187,17 +258,37 @@ function loadAttReport() {
         return;
       }
       tbody.innerHTML = "";
+      /* FIX (pack 107): the numbers stay exactly the saved attendance rows -
+         still reported from attendance.class_name, the class each day was
+         really taken in, so history never moves and nothing is recalculated.
+         What is new is a note on the pupils this report shows that today's
+         Mark Register does not (moved class, left the school, or profile
+         removed), so the two tabs no longer look like they disagree. */
+      var offRegister = 0;
       rows.forEach(function (row) {
         var marked = Number(row.marked) || 0;
         var pct = marked ? Math.round((Number(row.present) + 0.5 * Number(row.late)) / marked * 100) : 0;
         var tr = document.createElement("tr");
-        [row.full_name, row.student_id, row.present, row.absent, row.late, row.marked, pct + "%"].forEach(function (v) {
+        var note = attReportRowNote(row);
+        if (note) offRegister++;
+        [row.full_name, row.student_id, row.present, row.absent, row.late, row.marked, pct + "%"].forEach(function (v, ci) {
           var td = document.createElement("td");
           td.textContent = v == null ? "-" : v;
+          if (ci === 0 && note) td.appendChild(attNoteDiv(note));
           tr.appendChild(td);
         });
         tbody.appendChild(tr);
       });
+      if (offRegister) {
+        var foot = document.createElement("tr");
+        var footTd = document.createElement("td");
+        footTd.colSpan = 7;
+        footTd.style.cssText = "font-size:12px; color:#5B6B62;";
+        footTd.textContent = offRegister + " of these pupil(s) are not in today's Mark Register for " + className +
+          " - they moved class, left the school, or their profile was removed. Their saved attendance is still counted here.";
+        foot.appendChild(footTd);
+        tbody.appendChild(foot);
+      }
     })
     .catch(function () {
       tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; color:#B3261E;">Could not load report.</td></tr>';
@@ -286,15 +377,27 @@ function attFillStudentPick() {
   var cls = document.getElementById("attClass").value;
   attEnsureStudents(function (list) {
     var cur = sel.value;
+    /* FIX (pack 107): this fetched /students with NO status filter and used a
+       plain `s.class_name === cls`, so the picker could offer pupils the Mark
+       Register never lists (withdrawn/graduated, or a class name saved with a
+       different case or one extra space) while missing pupils the register
+       does show. It now uses attRegisterRoster() - the register's own rule. */
+    var roster = attRegisterRoster(list, cls);
     sel.innerHTML = '<option value="">Pick a student</option>';
-    list
-      .filter(function (s) { return !cls || s.class_name === cls; })
-      .forEach(function (s) {
-        var opt = document.createElement("option");
-        opt.value = s.student_id;
-        opt.textContent = (s.full_name || s.student_id) + " (" + s.student_id + ")";
-        sel.appendChild(opt);
-      });
+    if (!roster.length) {
+      var none = document.createElement("option");
+      none.value = "";
+      none.disabled = true;
+      none.textContent = cls ? "No active pupil in this class" : "Pick a class first";
+      sel.appendChild(none);
+      return;
+    }
+    roster.forEach(function (s) {
+      var opt = document.createElement("option");
+      opt.value = s.student_id;
+      opt.textContent = (s.full_name || s.student_id) + " (" + s.student_id + ")";
+      sel.appendChild(opt);
+    });
     if (cur) sel.value = cur;
   });
 }
@@ -317,11 +420,15 @@ function loadStudentHistory() {
     .then(function (rows) {
       rows = Array.isArray(rows) ? rows : [];
       attStuRows = rows;
-      var picked = (attStudentsCache || []).find(function (s) { return s.student_id === sid; }) || {};
+      var picked = (attStudentsCache || []).find(function (s) { return String(s.student_id) === String(sid); }) || {};
       attStuMeta = {
         name: rows[0] && rows[0].full_name ? rows[0].full_name : (picked.full_name || sid),
         id: sid,
-        className: (rows[0] && rows[0].class_name) || picked.class_name || document.getElementById("attClass").value || "-"
+        /* FIX (pack 107): the header shows the pupil's CURRENT class - the one
+           the picker filtered on - because the class stored on each old row can
+           be an older/renamed one. Every saved row below keeps its own date and
+           status exactly as it was written. */
+        className: picked.class_name || (rows[0] && rows[0].class_name) || document.getElementById("attClass").value || "-"
       };
 
       var p = 0, a = 0, l = 0;
