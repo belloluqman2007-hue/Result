@@ -281,16 +281,26 @@ function downloadReportPDF() {
    student, dates in compact rows + a matching PDF download.
    Route: GET /attendance/student (created in pack 17).
    ==================================================================== */
-var attStudentsCache = null; // all students (for the picker)
+var attStudentsCache = null; // active students (for the picker)
 var attStuRows = [];         // last history rows (for the PDF)
 var attStuMeta = null;       // { name, id, className }
 
+function attNormalizeClassName(value) {
+  return String(value == null ? "" : value).trim().toLowerCase();
+}
+
+function attIsActiveStudent(student) {
+  return student && (student.status == null || attNormalizeClassName(student.status) === "active");
+}
+
 function attEnsureStudents(cb) {
   if (attStudentsCache) { cb(attStudentsCache); return; }
-  fetch("/students")
+  fetch("/students?status=active")
     .then(function (r) { return r.ok ? r.json() : []; })
     .then(function (rows) {
-      attStudentsCache = Array.isArray(rows) ? rows : [];
+      /* Keep the client-side status check for compatibility with servers
+         that do not yet honour the query parameter. */
+      attStudentsCache = (Array.isArray(rows) ? rows : []).filter(attIsActiveStudent);
       cb(attStudentsCache);
     })
     .catch(function () { cb([]); });
@@ -299,12 +309,14 @@ function attEnsureStudents(cb) {
 function attFillStudentPick() {
   var sel = document.getElementById("attStuPick");
   if (!sel) return;
-  var cls = document.getElementById("attClass").value;
+  var cls = attNormalizeClassName(document.getElementById("attClass").value);
   attEnsureStudents(function (list) {
     var cur = sel.value;
     sel.innerHTML = '<option value="">Pick a student</option>';
     list
-      .filter(function (s) { return !cls || s.class_name === cls; })
+      .filter(function (s) {
+        return !cls || attNormalizeClassName(s.class_name) === cls;
+      })
       .forEach(function (s) {
         var opt = document.createElement("option");
         opt.value = s.student_id;
