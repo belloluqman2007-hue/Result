@@ -6664,8 +6664,9 @@ app.get("/attendance/class", requireLogin, (req, res) => {
            ON a.student_id = s.student_id
           AND a.att_date = ?
           AND LOWER(TRIM(a.class_name)) = LOWER(TRIM(?))
-         WHERE LOWER(TRIM(s.class_name)) = LOWER(TRIM(?))
-           AND (s.status IS NULL OR LOWER(TRIM(s.status)) = 'active')
+         WHERE CONVERT(s.class_name USING utf8mb4) COLLATE utf8mb4_unicode_ci
+               = CONVERT(? USING utf8mb4) COLLATE utf8mb4_unicode_ci
+           AND (s.status IS NULL OR s.status = 'active')
          ORDER BY s.full_name`,
         /* The roster is always selected from the student's current class.
            Keeping the historical class check in the LEFT JOIN means an old
@@ -6716,7 +6717,8 @@ app.get("/attendance/report", requireLogin, (req, res) => {
                 COUNT(*) AS marked
          FROM attendance a
          JOIN students s ON s.student_id = a.student_id
-         WHERE LOWER(TRIM(a.class_name)) = LOWER(TRIM(?))
+         WHERE CONVERT(a.class_name USING utf8mb4) COLLATE utf8mb4_unicode_ci
+               = CONVERT(? USING utf8mb4) COLLATE utf8mb4_unicode_ci
            AND a.att_date BETWEEN ? AND ?
          GROUP BY a.student_id, s.full_name
          ORDER BY s.full_name`,
@@ -7061,7 +7063,9 @@ app.get("/attendance/summary", requireLogin, (req, res) => {
                 MAX(marked_by) AS marked_by,
                 MAX(created_at) AS saved_at
          FROM attendance
-         WHERE class_name = ? AND att_date = ?`,
+         WHERE CONVERT(class_name USING utf8mb4) COLLATE utf8mb4_unicode_ci
+               = CONVERT(? USING utf8mb4) COLLATE utf8mb4_unicode_ci
+           AND att_date = ?`,
         [className, date],
         (err, rows) => {
             if (err) { console.log(err); return res.status(500).json({ message: "Database error" }); }
