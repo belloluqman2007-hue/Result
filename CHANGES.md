@@ -1,5 +1,23 @@
 # UI Modernization — Change Log
 
+## Pack 106 — 2026-09-03
+
+Owner: "The public AI is saying 'The assistant is taking a short break - please try again in a moment' to every question. Fix and merge fast."
+
+### Root cause
+
+The public website assistant (`POST /api/ai/assistant`) only shows that "short break" bubble when the AI call itself fails — and the live `/api/ai/status` confirmed the key **is** switched on. The failure sat in the model chain. Same disease as packs 30/31 (Google retires free Gemini model IDs): the automatic fallback list was still **entirely 2.5-era** (`gemini-2.5-flash`, `gemini-2.5-flash-lite`, `gemini-flash-latest`). Google has announced the end of the 2.5-flash family (reports of 2.5 calls erroring ahead of the date), so when the saved model died there was **not one current free model left to try** — every question, from the "Admission" chip to any other, exhausted the chain and came back 502 with the vague "short break" text.
+
+### The fix
+
+| File | What happened |
+|---|---|
+| `server.js` | `AI_FALLBACK_MODELS` now also carries the **current-generation FREE models that work on the same AI Studio key**: `gemini-3.1-flash-lite` (current free Flash-Lite) and `gemini-3.8-flash` (newest free Flash, shipped 2026-09-02), keeping `gemini-2.5-flash`, `gemini-2.5-flash-lite` and the live `gemini-flash-latest` alias. The caller's configured model is still tried first; every entry only costs one extra attempt when the previous one fails, and each model has its own free daily quota, so the longer chain also multiplies the school's daily AI capacity (pack-31 principle). FIX (honest messages): the public assistant and the student tutor no longer blame a "short break" for lasting causes — they say the AI is busy / today's free limit may be finished (it resets daily), point visitors to the contact details at the bottom of the page, and a logged-in admin now receives the real underlying reason in `detail` (same pattern as the staff AI chat). |
+
+Verified against the extracted real code with a mocked AI service: (1) dead `gemini-2.0-flash` → chain walks 2.5-flash → answers from `gemini-2.5-flash-lite`; (2) **entire 2.5 family dead (the reported case) → the assistant now answers via `gemini-3.1-flash-lite`** instead of returning "short break"; dedupe keeps the configured model tried exactly once. `node --check` passes. Result calculations, grading, positions, report cards, printing and every staff/portal query: completely untouched.
+
+---
+
 ## Pack 105 — 2026-08-25
 
 Owner: "put like necessary seven quick icons or more than that in the admin and teachers and student website page for mobile" + "the ai at the public view is not working".
