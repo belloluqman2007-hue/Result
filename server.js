@@ -4175,7 +4175,9 @@ app.get("/voice/:id", (req, res) => {
    values (Render dashboard -> Environment):
      AI_API_KEY  = the secret key (free one: aistudio.google.com -> Get API key)
      AI_BASE_URL = default https://generativelanguage.googleapis.com/v1beta/openai
-     AI_MODEL    = default gemini-2.5-flash (Google retired 2.0-flash June 2026)
+     AI_MODEL    = default gemini-2.5-flash. When the configured model is
+                   retired/unavailable the automatic fallback chain below
+                   keeps working (CHANGED pack 106 - see AI_FALLBACK_MODELS)
    With no key set, every AI endpoint answers a friendly "not switched on
    yet" message and the rest of the system is completely unaffected.
    Privacy: only the prompt text (e.g. a topic, or an average score) is
@@ -4282,8 +4284,26 @@ function aiChat(messages, opts, cfg) {
    the caller's model is tried first, then these current FREE models in
    order - whichever answers becomes the working one. Only "model problem"
    errors move on to the next model; real errors (bad key, quota, network)
-   are reported immediately. */
-const AI_FALLBACK_MODELS = ["gemini-2.5-flash", "gemini-2.5-flash-lite", "gemini-flash-latest"];
+   are reported immediately.
+   CHANGED (pack 106 - owner: "the public AI is saying 'The assistant is
+   taking a short break - please try again in a moment' to every question"):
+   the whole list was still 2.5-era. Google has announced the end of the
+   2.5-flash family (and 2.5 calls were already erroring for some projects
+   ahead of the date), so when the saved model died there was NOT a single
+   current free model left in the chain and every AI feature - including
+   the public website assistant - answered with the vague "short break".
+   Added the current-generation FREE models that work on the same AI
+   Studio key (gemini-3.1-flash-lite, gemini-3.8-flash) plus the live
+   alias. Each entry only costs one extra attempt when the previous one
+   fails, and every model has its OWN free daily quota, so the longer
+   chain also multiplies how many chats the school can do per day. */
+const AI_FALLBACK_MODELS = [
+    "gemini-2.5-flash",       // today's free workhorse (retirement announced for later in 2026)
+    "gemini-2.5-flash-lite",  // cheapest free model - its own free quota
+    "gemini-3.1-flash-lite",  // current-generation free Flash-Lite - its own free quota
+    "gemini-flash-latest",    // Google's live alias - always points at the newest GA flash
+    "gemini-3.8-flash"        // newest free Flash (September 2026) - its own free quota
+];
 function aiModelErr(e) {
     const m = String(e && e.message || e || "");
     /* CHANGED (pack 31 - owner: "can it handle much task"): free-tier
@@ -4524,7 +4544,14 @@ app.post("/api/ai/student-chat", async (req, res) => {
         res.json({ reply: got.text.trim().slice(0, 4000), student: { first: kidFirst, className: kidClass } });
     } catch (e) {
         console.log("AI student tutor error:", e && e.message);
-        res.status(502).json({ error: "The AI tutor is taking a short break - please try again in a moment." });
+        // CHANGED (pack 106): "taking a short break" implied the app was
+        // broken even when the cause was permanent (model retired / the
+        // school's free daily AI quota finished). Say what is true instead.
+        const out = { error: "The AI tutor is busy right now \u2014 please wait a moment and try again. If it keeps happening after a few tries, today's free AI limit may be finished (it resets daily)." };
+        if (req.session && req.session.role === "admin") {
+            out.detail = String(e && e.message || "unknown").slice(0, 200); // the office can see WHY
+        }
+        res.status(502).json(out);
     }
 });
 
@@ -4660,7 +4687,18 @@ app.post("/api/ai/assistant", async (req, res) => {
             res.json({ reply: got.text.trim().slice(0, 1200) });
         } catch (e) {
             console.log("AI assistant error:", e && e.message);
-            res.status(502).json({ error: "The assistant is taking a short break - please try again in a moment." });
+            /* FIX (pack 106 - owner: "the public AI is saying The assistant is
+               taking a short break"): the old message blamed a "short break"
+               even for lasting causes (retired model, free daily quota
+               finished), so visitors thought the site itself was broken.
+               Say what is true, point to the office contact for urgent
+               questions, and let a logged-in admin see the underlying
+               reason (same pattern the staff AI chat already uses). */
+            const out = { error: "The AI is busy right now \u2014 please wait a moment and try again. If it keeps happening after a few tries, today's free AI limit may be finished (it resets daily). For urgent questions, please use the contact details at the bottom of the page." };
+            if (req.session && req.session.role === "admin") {
+                out.detail = String(e && e.message || "unknown").slice(0, 200); // the office can see WHY
+            }
+            res.status(502).json(out);
         }
     });
 });
