@@ -6654,18 +6654,20 @@ app.delete("/admission-enquiry/:id", requireLogin, requireAdmin, (req, res) => {
    This fixes the attendance mark register showing empty when class names
    in students table don't exactly match the classes table entries. */
 app.get("/api/distinct-classes", requireLogin, (req, res) => {
-    /* FIX: cast both sides of the UNION to one charset/collation so older
-       databases (where the `classes` table was created latin1 but `students`
-       was later converted to utf8mb4) do NOT throw "Illegal mix of
-       collations" and leave the register class dropdown empty. */
+    /* The students table comes FIRST in the UNION so the dropdown option
+       values are exactly the bytes stored in students.class_name - the same
+       value the register query compares against (Arabic names in the
+       `classes` table can differ byte-for-byte from students.class_name).
+       TRIM only - no CONVERT/COLLATE wrapper - so the raw bytes survive,
+       and only active students' classes are listed from the students side. */
     connection.query(
-        `SELECT class_name FROM (
-           SELECT CONVERT(class_name USING utf8mb4) COLLATE utf8mb4_unicode_ci AS class_name
-             FROM classes WHERE class_name IS NOT NULL AND class_name != ''
-           UNION
-           SELECT DISTINCT CONVERT(class_name USING utf8mb4) COLLATE utf8mb4_unicode_ci
-             FROM students WHERE class_name IS NOT NULL AND class_name != ''
-         ) AS combined ORDER BY class_name`,
+        `SELECT DISTINCT TRIM(class_name) AS class_name FROM students
+           WHERE class_name IS NOT NULL AND class_name != ''
+             AND (status IS NULL OR status = 'active')
+         UNION
+         SELECT DISTINCT TRIM(class_name) FROM classes
+           WHERE class_name IS NOT NULL AND class_name != ''
+         ORDER BY class_name`,
         (err, rows) => {
             if (err) { console.log(err); return res.status(500).json({ message: "Database error" }); }
             res.json(rows.map(function(r){ return { class_name: r.class_name }; }));
@@ -6702,9 +6704,8 @@ app.get("/attendance/class", requireLogin, (req, res) => {
            ON a.student_id = s.student_id
           AND a.att_date = ?
           AND LOWER(TRIM(a.class_name)) = LOWER(TRIM(?))
-         WHERE CONVERT(s.class_name USING utf8mb4) COLLATE utf8mb4_unicode_ci
-               = CONVERT(? USING utf8mb4) COLLATE utf8mb4_unicode_ci
-           AND (s.status IS NULL OR s.status = 'active')
+         WHERE TRIM(s.class_name) = TRIM(?)
+           AND (s.status IS NULL OR LOWER(TRIM(s.status)) = 'active')
          ORDER BY s.full_name`,
         /* The roster is always selected from the student's current class.
            Keeping the historical class check in the LEFT JOIN means an old

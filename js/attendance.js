@@ -85,7 +85,7 @@ function initAttendance() {
 }
 
 function loadRegister() {
-  var className = document.getElementById("attClass").value;
+  var className = attNormalizeClassName(document.getElementById("attClass").value);
   var date = document.getElementById("attDate").value;
   if (!className || !date) { attNotify("Pick a class and a date first.", false); return; }
 
@@ -286,7 +286,9 @@ var attStuRows = [];         // last history rows (for the PDF)
 var attStuMeta = null;       // { name, id, className }
 
 function attNormalizeClassName(value) {
-  return String(value == null ? "" : value).trim().toLowerCase();
+  /* trim() only: Arabic has no lowercase, and lowercasing Arabic
+     characters in some JavaScript engines can corrupt them. */
+  return String(value == null ? "" : value).trim();
 }
 
 function attIsActiveStudent(student) {
