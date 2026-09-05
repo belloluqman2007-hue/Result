@@ -18,6 +18,39 @@ function attNotify(text, ok) {
   setTimeout(function () { msg.className = "mg-msg"; }, 4000);
 }
 
+/* ======================== FIX (QUIC follow-up) ========================
+   A failed load used to be indistinguishable from an empty class: any
+   non-array response fell into "Array.isArray(rows) ? rows : []" and the
+   page claimed "No students in this class yet." even when the real
+   problem was an expired login (401) or a server/database error (500).
+   These helpers surface the REAL reason — and send the user back to the
+   login page when the session expired. */
+function attRequireOk(r) {
+  if (r.status === 401) {
+    var authErr = new Error("Your login session expired. Opening the login page...");
+    authErr.auth = true;
+    throw authErr;
+  }
+  if (!r.ok) {
+    throw new Error("The server answered with an error (status " + r.status + "). Please try again.");
+  }
+  return r.json();
+}
+
+function attShowLoadError(err, tbody, colspan, what) {
+  if (err && err.auth) {
+    tbody.innerHTML = '<tr><td colspan="' + colspan + '" style="text-align:center; color:#B3261E;"><b>' +
+      err.message + "</b></td></tr>";
+    setTimeout(function () { window.location.href = "login.html"; }, 1600);
+    return;
+  }
+  tbody.innerHTML = '<tr><td colspan="' + colspan + '" style="text-align:center; color:#B3261E;">' +
+    what + " " + (err && err.message
+      ? err.message
+      : "The connection dropped before the data arrived (this is what net::ERR_QUIC_PROTOCOL_ERROR in the console means). Press the Load button again.") +
+    "</td></tr>";
+}
+
 function todayStr() {
   var d = new Date();
   return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
@@ -93,7 +126,7 @@ function loadRegister() {
   tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; color:#5B6B62;">Loading...</td></tr>';
 
   fetch("/attendance/class?class_name=" + encodeURIComponent(className) + "&date=" + encodeURIComponent(date))
-    .then(function (r) { return r.json(); })
+    .then(attRequireOk)
     .then(function (rows) {
       rows = Array.isArray(rows) ? rows : [];
       attState = {};
@@ -144,8 +177,8 @@ function loadRegister() {
         tbody.appendChild(tr);
       });
     })
-    .catch(function () {
-      tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; color:#B3261E;">Could not load. Check your internet.</td></tr>';
+    .catch(function (err) {
+      attShowLoadError(err, tbody, 4, "Could not load the register.");
     });
 }
 
@@ -194,7 +227,7 @@ function loadAttReport() {
 
   fetch("/attendance/report?class_name=" + encodeURIComponent(className) +
         "&from=" + encodeURIComponent(from) + "&to=" + encodeURIComponent(to))
-    .then(function (r) { return r.json(); })
+    .then(attRequireOk)
     .then(function (rows) {
       rows = Array.isArray(rows) ? rows : [];
       attReportRows = rows; // NEW (pack 14)
@@ -215,8 +248,8 @@ function loadAttReport() {
         tbody.appendChild(tr);
       });
     })
-    .catch(function () {
-      tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; color:#B3261E;">Could not load report.</td></tr>';
+    .catch(function (err) {
+      attShowLoadError(err, tbody, 7, "Could not load the report.");
     });
 }
 
@@ -343,7 +376,7 @@ function loadStudentHistory() {
   tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; color:#5B6B62;">Loading...</td></tr>';
 
   fetch("/attendance/student?student_id=" + encodeURIComponent(sid))
-    .then(function (r) { return r.json(); })
+    .then(attRequireOk)
     .then(function (rows) {
       rows = Array.isArray(rows) ? rows : [];
       attStuRows = rows;
@@ -385,8 +418,8 @@ function loadStudentHistory() {
         tbody.appendChild(tr);
       });
     })
-    .catch(function () {
-      tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; color:#B3261E;">Could not load history. Check your internet.</td></tr>';
+    .catch(function (err) {
+      attShowLoadError(err, tbody, 4, "Could not load the history.");
     });
 }
 
