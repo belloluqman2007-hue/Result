@@ -1,5 +1,62 @@
 # UI Modernization — Change Log
 
+## Pack 108 - 2026-09-05
+
+Owner: "About the attendance you recently fixed for me the students is still not displaying about I selected class to mark register. But I saw that the mistake is in csrf.js:52 again - 500 internal server error. And where the student should display I am seeing 'Could not load register. The server answered with an error (status 500). Please try again.' Fix and merge."
+
+### Root cause
+
+Pack 107 was a real fix for a real problem (the QUIC drop), and it did one more useful thing: it stopped hiding the truth. The page now prints the status code the server actually sent - and that is how we finally saw it: **the register request really was answered with 500**, so no amount of retrying in `csrf.js` could ever help. Line 52 is again only the wrapper's own `nativeFetch(url, options)` call, i.e. the spot the browser attributes the failing network call to - the culprit is the SQL behind `GET /attendance/class`:
+
+```sql
+LEFT JOIN attendance a
+  ON a.student_id = s.student_id
+ AND a.att_date = ?
+ AND LOWER(TRIM(a.class_name)) = LOWER(TRIM(?))
+WHERE TRIM(s.class_name) = TRIM(?)
+  AND (s.status IS NULL OR LOWER(TRIM(s.status)) = 'active')
+```
+
+Four column references on tables that grew over 100+ packs, any one of which is a hard 500 on a real school database:
+
+* `attendance` is provisioned with `CREATE TABLE IF NOT EXISTS`, which **never upgrades a table that already exists** - a school whose attendance table predates pack 13 has no `class_name` / `marked_by` column -> `ER_BAD_FIELD_ERROR` -> 500 -> no students.
+* `attendance` can be absent altogether (fresh Railway/Render database, or a boot where the add-on block never finished) -> `ER_NO_SUCH_TABLE` -> 500.
+* `students.status` arrived later too - which is exactly why the class dropdown was quietly served by the `/classes` fallback: that endpoint 500'd for the same reason and swallowed it.
+* `attendance` and `classes` are **not** in `COLLATION_FIX_TABLES`, so where tables carry different default collations the cross-table comparison/UNION dies with `ER_CANT_AGGREGATE_2COLLATIONS` ("Illegal mix of collations").
+* and the empty-list half of the report ("no students in this class"): the pupils were typed as `SS  1` (double space) while the dropdown says `SS 1`, and `TRIM()` only strips the ends.
+
+### The fix
+
+| File | What happened |
+|---|---|
+| `server.js` | The attendance section stopped **assuming** the schema and started **reading** it. New `attSchema()` asks `information_schema` which tables/columns/indexes actually exist (60s cache) and every attendance query is built from what is really there. `GET /attendance/class` no longer touches `attendance.class_name` at all: it loads the roster, then loads the day's marks by `(student_id, date)` in its own tiny query and merges them in JS - so no cross-table string comparison survives and no collation clash is possible (attendance keeps exactly one row per pupil per day, so the class condition in the old JOIN never changed the answer). If the marks half still fails, the register **still returns the class list** and explains the rest through a new `X-AMS-Notice` response header. A zero-row roster is retried once with whitespace/invisible-character folding, so `SS  1` and `SS 1` are the same class. Junk or missing dates are refused with a 400 sentence instead of reaching MySQL. **No attendance route answers a bare 500 "Database error" any more** - `attDbFail()` passes the database's own sentence to the page. `/attendance/save`, `/attendance/summary`, `/attendance/report`, `/attendance/student` and `/api/distinct-classes` got the same treatment (the UNION that feeds the class dropdown now casts both sides to one collation, so it works instead of falling back); when the unique `(student_id, att_date)` key is missing, a re-save replaces the day's rows instead of piling a second copy of every pupil onto it. |
+| `server.js` (boot) | New guarded `ensureAttendanceSchema()`: creates the `attendance` table if it is missing, appends only the columns a legacy copy lacks (`class_name`, `att_date`, `marked_by`, `status`...), and adds the one-row-per-pupil-per-day key when the table holds no duplicates. Same pattern as the other pack migrations - own short-lived connection, `information_schema` consulted first, retried while the DB warms up, silent and harmless without ALTER rights. Nothing renamed, converted or deleted; existing marks untouched. |
+| `js/attendance.js` | The table is now **never left empty by one bad answer**: `loadRegister()` renders through a shared `attRenderRegister()`, and any failure (500, 503, dropped connection) goes to `attRecoverRegister()`, which draws the same class from the pupil list the history picker already uses, defaults everyone to Present, prints the reason in an amber row above it, and still saves normally. `attRequireOk()` reads the server's JSON `message` so the teacher sees "Unknown column 'a.class_name'..." instead of "status 500", survives a non-JSON error page, and a lost login (401) still redirects to `login.html` - it is never papered over with a pretend register. `attEnsureStudents()` falls back to the plain `/students` list when `?status=active` is not supported, and class matching uses the same folding as the server. |
+| `csrf.js`, `js/csrf.js` | FIX 5 so the console never blames this file again: every server error is logged with **its own URL and method** (`[fetch] GET /attendance/class?... -> HTTP 500`), idempotent GET/HEAD retries are no longer limited to transport failures - a 500/502/503/504 *answer* is retried on the same budget (that is exactly Render/Aiven cold start and "database still waking up") - a rejected 403 drops the cached token, exempt paths match on absolute URLs and `Request` objects, and a caller's own `credentials` mode is never downgraded. `POST/PUT/DELETE/PATCH` are still sent exactly once, always. |
+| `attendance.js` (root copy) | Synced with `js/` so the legacy duplicate cannot mislead a future fix. |
+| `sw.js` | Cache `v66` -> `v67` so phones drop the old register code on the first tap. |
+| `test/attendance-500-test.js` | NEW. Boots the real `server.js` against a fake MySQL that behaves like MySQL about schema (missing table -> `ER_NO_SUCH_TABLE`, missing column -> `ER_BAD_FIELD_ERROR`, mixed collations -> `ER_CANT_AGGREGATE_2COLLATIONS`), and runs six scenarios **twice** - once on `git show HEAD:server.js` (the code the school runs today) and once on the fix - asserting the pupils are drawn every time. |
+| `test/attendance-page-client-test.js` | NEW. Runs `js/csrf.js` + `js/attendance.js` in a VM with a fake DOM/fetch: recovery from a 500, marks honoured, notice shown, 401 never faked, HTML escaped, retries and single-send writes. |
+
+### Measured, not claimed
+
+`npm test` (all 6 register scenarios + 24 browser assertions, all PASS):
+
+| scenario | `GET /attendance/class` before | after |
+|---|---|---|
+| healthy database | 200, 3 pupils, saved marks | 200, 3 pupils, saved marks - **unchanged** |
+| no `attendance` table | **500** | 200, class list + notice; save answers 503 with a sentence naming the fix |
+| `attendance` predates pack 13 (no `class_name`/`marked_by`) | **500** | 200, 3 pupils **with** Aisha=Absent, Bilal=Present restored; the INSERT writes only the columns that exist |
+| `students` has no `status` column | **500** (and the dropdown only worked via the `/classes` fallback) | 200, 4 pupils; dropdown 200 |
+| mixed default collations | **500** on the register, the dropdown, the report and the history | 200 on all four |
+| pupils typed `SS  1`, dropdown `SS 1` | 200 with **0 pupils** ("No students in this class yet.") | 200, 3 pupils, marks restored |
+| junk/missing date | 500 or a confusing empty list | 400 "Pick a real date (YYYY-MM-DD) for the register." |
+
+Result calculations, grading, positions, report cards, printing, fees and every staff/portal query: completely untouched. Only the attendance routes in `server.js` were edited; no table was renamed, converted or deleted.
+
+---
+
+
 ## Pack 107 — 2026-09-05
 
 Owner: "About the attendance you recently fixed for me the students is still not displaying about I selected class to mark register. But I saw that the mistake is in csrf.js:69 — net::ERR_QUIC_PROTOCOL_ERROR 200 (OK). Fix and merge."
