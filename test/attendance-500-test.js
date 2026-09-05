@@ -55,35 +55,35 @@ const SCENARIOS = {
   "ok": {
     label: "healthy database - the normal path must not change",
     cols: { users: ["id", "username", "password_hash", "role"], students: ["student_id", "full_name", "gender", "class_name", "status"], classes: ["id", "class_name"], attendance: FULL_ATT },
-    uniqueDayKey: true, expectRows: 3, expectMarks: { A101: "absent", A102: "present", A103: null }
+    uniqueDayKey: true, expectRows: 3, expectMarks: { A101: "absent", A102: "present", A103: null }, expectHistoryDays: 1, expectSummary: { taken: true, total: 2 }, expectReport: [{ id: "A101", present: 0, absent: 1, late: 0, marked: 1 }, { id: "A102", present: 1, absent: 0, late: 0, marked: 1 }]
   },
   "no-attendance-table": {
     label: "attendance table missing (fresh Railway/Render DB, add-on boot never finished)",
     cols: { users: ["id", "username", "password_hash", "role"], students: ["student_id", "full_name", "gender", "class_name", "status"], classes: ["id", "class_name"], attendance: null },
-    uniqueDayKey: false, expectRows: 3, expectNotice: true, expectSaveStatus: 503
+    uniqueDayKey: false, expectRows: 3, expectNotice: true, expectSaveStatus: 503, expectReport: [], expectHistoryDays: 0, expectSummary: { taken: false, total: 0 }
   },
   "legacy-attendance": {
     label: "attendance table predates pack 13 - no class_name, no marked_by, no unique key",
     cols: { users: ["id", "username", "password_hash", "role"], students: ["student_id", "full_name", "gender", "class_name", "status"], classes: ["id", "class_name"],
       attendance: ["id", "student_id", "att_date", "status"] },
-    uniqueDayKey: false, expectRows: 3, expectMarks: { A101: "absent", A102: "present", A103: null }, expectNoClassInInsert: true
+    uniqueDayKey: false, expectRows: 3, expectMarks: { A101: "absent", A102: "present", A103: null }, expectNoClassInInsert: true, expectHistoryDays: 1, expectSummary: { taken: true, total: 2 }, expectReport: [{ id: "A101", present: 0, absent: 1, late: 0, marked: 1 }, { id: "A102", present: 1, absent: 0, late: 0, marked: 1 }]
   },
   "no-student-status": {
     label: "students table predates the status column (this is what also broke the class dropdown)",
     cols: { users: ["id", "username", "password_hash", "role"], students: ["student_id", "full_name", "gender", "class_name"], classes: ["id", "class_name"], attendance: FULL_ATT },
     /* with no status column at all nobody can be filtered out as withdrawn -
        the honest reading of a database that never had one. */
-    uniqueDayKey: true, expectRows: 4, expectMarks: { A101: "absent", A102: "present", A104: null }
+    uniqueDayKey: true, expectRows: 4, expectMarks: { A101: "absent", A102: "present", A104: null }, expectHistoryDays: 1, expectSummary: { taken: true, total: 2 }, expectReport: [{ id: "A101", present: 0, absent: 1, late: 0, marked: 1 }, { id: "A102", present: 1, absent: 0, late: 0, marked: 1 }]
   },
   "mixed-collation": {
     label: "tables built with different default collations - illegal mix on cross-table class_name work",
     cols: { users: ["id", "username", "password_hash", "role"], students: ["student_id", "full_name", "gender", "class_name", "status"], classes: ["id", "class_name"], attendance: FULL_ATT },
-    uniqueDayKey: true, illegalMix: true, expectRows: 3, expectMarks: { A101: "absent", A102: "present", A103: null }
+    uniqueDayKey: true, illegalMix: true, expectRows: 3, expectMarks: { A101: "absent", A102: "present", A103: null }, expectHistoryDays: 1, expectSummary: { taken: true, total: 2 }, expectReport: [{ id: "A101", present: 0, absent: 1, late: 0, marked: 1 }, { id: "A102", present: 1, absent: 0, late: 0, marked: 1 }]
   },
   "sloppy-class-name": {
     label: "pupils saved as \"SS  1\" (double space) while the dropdown says \"SS 1\" - the 'no students' report",
     cols: { users: ["id", "username", "password_hash", "role"], students: ["student_id", "full_name", "gender", "class_name", "status"], classes: ["id", "class_name"], attendance: FULL_ATT },
-    uniqueDayKey: true, sloppyClass: true, expectRows: 3, expectMarks: { A101: "absent", A102: "present", A103: null }
+    uniqueDayKey: true, sloppyClass: true, expectRows: 3, expectMarks: { A101: "absent", A102: "present", A103: null }, expectHistoryDays: 1, expectSummary: { taken: true, total: 2 }, expectReport: [{ id: "A101", present: 0, absent: 1, late: 0, marked: 1 }, { id: "A102", present: 1, absent: 0, late: 0, marked: 1 }]
   }
 };
 
@@ -193,11 +193,20 @@ function makeConnection(scenario, log) {
       const t = alias[m[1].toLowerCase()];
       if (!t || !colsOf(t)) continue;
       if (!colsOf(t).has(m[2].toLowerCase())) {
-        return { err: mkErr("ER_BAD_FIELD_ERROR", "Unknown column '" + m[1] + "." + m[2] + "' in 'field list'") };
+          return { err: mkErr("ER_BAD_FIELD_ERROR", "Unknown column '" + m[1] + "." + m[2] + "' in 'field list'") };
       }
     }
     if (uniq.length === 1 && !/^\s*INSERT/i.test(sql)) {
-      const bare = sql.replace(/`?([a-z])`?\.`?([a-z_]+)`?/gi, " ");
+      /* Drop alias-qualified refs AND the `NULL AS x` output aliases before
+         looking for a column the table does not have. `NULL AS marked_by` is a
+         literal with a label, not a column reference - MySQL accepts it even
+         on a table that has no marked_by, and the summary emits exactly that
+         when the column is absent. Flagging it invented an ER_BAD_FIELD_ERROR
+         that no real database would ever throw, and read as "banner says not
+         taken" on every pre-pack-13 attendance table. */
+      const bare = sql
+        .replace(/`?([a-z])`?\.`?([a-z_]+)`?/gi, " ")
+        .replace(/\bNULL\s+AS\s+[a-z_]+/gi, " ");
       for (const c of SUSPECT) {
         const cre = new RegExp("[^a-z_.]" + c + "[^a-z_]", "i");
         if (cre.test(bare) && !colsOf(uniq[0]).has(c)) {
@@ -205,14 +214,33 @@ function makeConnection(scenario, log) {
         }
       }
     }
-    /* Mixed default collations only bite where class_name is COMPARED across
-       the two tables; statements that pin COLLATE on both sides (which is
-       what this codebase does in the report/summary) stay legal in MySQL. */
-    if (scenario.illegalMix && /(UNION|\bJOIN\b)/i.test(sql) && (sql.match(/COLLATE/gi) || []).length < 2) {
-      const clause = (sql.split(/\bWHERE\b|\bON\b/i)[1] || "");
-      if (/class_name/i.test(clause)) {
-        return { err: mkErr("ER_CANT_AGGREGATE_2COLLATIONS",
-          "Illegal mix of collations (utf8mb4_unicode_ci,IMPLICIT) and (utf8mb4_0900_ai_ci,IMPLICIT) for operation '='") };
+    /* Mixed default collations bite on ANY comparison that puts a string
+       column of one table next to one of another - not only class_name. The
+       rule here used to require the clause to mention class_name, which is
+       exactly why this harness reported PASS for the "Load report" 500 the
+       owner hit: the statement that died was
+
+         FROM attendance a JOIN students s ON s.student_id = a.student_id
+
+       pinned with COLLATE around the *class_name* test while the JOIN KEY
+       itself mixed utf8mb4_0900_ai_ci with utf8mb4_unicode_ci. Real MySQL
+       refuses that, so now every ON/WHERE/UNION fragment is inspected on its
+       own and a fragment that reaches into two tables without pinning a
+       collation is the error MySQL would have thrown. */
+    if (scenario.illegalMix) {
+      const fragments = sql.split(/\bWHERE\b|\bON\b|\bUNION\b/i).slice(1);
+      for (const frag of fragments) {
+        const seen = new Set();
+        const qre2 = /`?([a-z])`?\s*\.\s*`?([a-z_]+)`?/gi;
+        let q;
+        while ((q = qre2.exec(frag))) {
+          const t = alias[q[1].toLowerCase()];
+          if (t) seen.add(t);
+        }
+        if (seen.size >= 2 && !/COLLATE/i.test(frag)) {
+          return { err: mkErr("ER_CANT_AGGREGATE_2COLLATIONS",
+            "Illegal mix of collations (utf8mb4_unicode_ci,IMPLICIT) and (utf8mb4_0900_ai_ci,IMPLICIT) for operation '='") };
+        }
       }
     }
 
@@ -256,7 +284,20 @@ function makeConnection(scenario, log) {
     }
     if (/FROM attendance/i.test(sql) && /COUNT\(\*\)/i.test(sql)) {
       const dateParam = params.filter(function (v) { return /^\d{4}-\d{2}-\d{2}$/.test(String(v)); })[0];
-      const rows = MARKS.filter(function (r) { return r.att_date === dateParam; });
+      let rows = MARKS.filter(function (r) { return r.att_date === dateParam; });
+      /* pack 109 counts the day for one class by pupil id instead of joining
+         to `students`, so the id list has to be honoured here too. */
+      const cWhere = (sql.split(/\bWHERE\b/i)[1] || "");
+      const cIds = /student_id IN \(\?\)/i.test(cWhere)
+        ? (Array.isArray(params[1]) ? params[1] : []).map(String)
+        : null;
+      const cCls = /class_name/i.test(cWhere) && !cIds
+        /* the class can be either param depending on which branch built the
+           statement, so take the one that is not a date */
+        ? String(params.filter(function (v) { return !/^\d{4}-\d{2}-\d{2}$/.test(String(v)); })[0])
+        : null;
+      if (cIds) rows = rows.filter(function (r) { return cIds.indexOf(String(r.student_id)) !== -1; });
+      if (cCls != null) rows = rows.filter(function (r) { return String(r.class_name).trim() === cCls.trim(); });
       return { rows: [{
         total: rows.length,
         present: rows.filter(function (r) { return r.status === "present"; }).length,
@@ -267,8 +308,18 @@ function makeConnection(scenario, log) {
       }] };
     }
     if (/FROM attendance/i.test(sql) && /GROUP BY/i.test(sql)) {
+      /* The pre-pack-109 report aggregated in SQL. Honour its class filter and
+         its date range the way MySQL would have, so the baseline column is a
+         fair reading of the old code rather than a gift. */
+      const range = /BETWEEN \? AND \?/i.test(sql);
+      const lo = range ? String(params[0]) : null;
+      const hi = range ? String(params[1]) : null;
+      const clsParam = params.filter(function (v) { return !/^\d{4}-\d{2}-\d{2}$/.test(String(v)); })[0];
+      const byClass = /class_name/i.test(sql) && clsParam != null;
       const by = {};
       MARKS.forEach(function (r) {
+        if (range && !(r.att_date >= lo && r.att_date <= hi)) return;
+        if (byClass && r.class_name.trim() !== String(clsParam).trim()) return;
         const e = by[r.student_id] || (by[r.student_id] = {
           student_id: r.student_id, full_name: nameOf(r.student_id), class_name: r.class_name,
           present: 0, absent: 0, late: 0, marked: 0
@@ -276,6 +327,32 @@ function makeConnection(scenario, log) {
         e.marked++; e[r.status]++;
       });
       return { rows: Object.keys(by).map(function (k) { return by[k]; }) };
+    }
+    /* pack 109 report: marks read from the attendance table ALONE (no join),
+       either for a class_name or for a list of pupil ids, over a date range.
+       NOTE: only the WHERE half may be inspected for class_name - the column
+       also appears in the SELECT list of the unfiltered read, and treating
+       that as a filter silently empties the report. */
+    if (/FROM attendance/i.test(sql) && /att_date BETWEEN \? AND \?/i.test(sql)) {
+      const lo = String(params[0]), hi = String(params[1]);
+      const wherePart = (sql.split(/\bWHERE\b/i)[1] || "");
+      const ids = /student_id IN \(\?\)/i.test(wherePart)
+        ? (Array.isArray(params[2]) ? params[2] : []).map(String)
+        : null;
+      const cls = /class_name/i.test(wherePart) ? String(params[2]) : null;
+      return { rows: MARKS.filter(function (r) {
+        if (!(r.att_date >= lo && r.att_date <= hi)) return false;
+        if (ids && ids.indexOf(String(r.student_id)) === -1) return false;
+        if (cls != null && String(r.class_name).trim() !== cls.trim()) return false;
+        return true;
+      }) };
+    }
+    /* One pupil's history (pack 109 reads it without the LEFT JOIN). Without
+       this the catch-all below hands back EVERY pupil's marks and labels them
+       with one name, which is not what MySQL does. */
+    if (/FROM attendance/i.test(sql) && /ORDER BY att_date DESC/i.test(sql)) {
+      const rows = MARKS.filter(function (r) { return String(r.student_id) === String(params[0]); });
+      return { rows: rows.slice().sort(function (a, b) { return a.att_date < b.att_date ? 1 : -1; }) };
     }
     if (/FROM attendance/i.test(sql) && /att_date = \? AND student_id IN/i.test(sql)) {
       const ids = (Array.isArray(params[1]) ? params[1] : []).map(String);
@@ -492,8 +569,60 @@ function report(name, scenario, r) {
   }
   if (after.dropdown.status !== 200) { console.log("    RESULT: FAIL - class dropdown answers " + after.dropdown.status); return 1; }
   if (after.summary.status !== 200) { console.log("    RESULT: FAIL - summary answers " + after.summary.status); return 1; }
+  /* NEW (pack 109): the banner must still count THIS CLASS after its join to
+     `students` was removed - a total of 0 here means the class was lost, and
+     a whole-school total means it was widened. Both are asserted. */
+  if (scenario.expectSummary) {
+    const sm = after.summary.json || {};
+    if (!!sm.taken !== !!scenario.expectSummary.taken || Number(sm.total) !== Number(scenario.expectSummary.total)) {
+      console.log("    RESULT: FAIL - banner should read taken=" + scenario.expectSummary.taken +
+        ", total=" + scenario.expectSummary.total + " for this class; got taken=" + sm.taken + ", total=" + sm.total);
+      return 1;
+    }
+  }
   if (after.report.status !== 200) { console.log("    RESULT: FAIL - report answers " + after.report.status); return 1; }
+  /* NEW (pack 109): the report is the endpoint the owner's "Load report"
+     button calls, so assert its CONTENTS, not just its status code. A 200
+     with one pupil missing was how this bug hid for so long. */
+  if (scenario.expectReport) {
+    const rp = Array.isArray(after.report.json) ? after.report.json : null;
+    if (!rp) { console.log("    RESULT: FAIL - report did not return a list of pupils"); return 1; }
+    if (rp.length !== scenario.expectReport.length) {
+      console.log("    RESULT: FAIL - report should list " + scenario.expectReport.length +
+        " pupil(s) with marks in the range, got " + rp.length + " [" +
+        rp.map(function (x) { return x.student_id; }).join(", ") + "]");
+      return 1;
+    }
+    for (const want of scenario.expectReport) {
+      const got = rp.find(function (x) { return String(x.student_id) === want.id; });
+      if (!got) { console.log("    RESULT: FAIL - report is missing " + want.id); return 1; }
+      if (!got.full_name) { console.log("    RESULT: FAIL - report has no name for " + want.id); return 1; }
+      for (const k of ["present", "absent", "late", "marked"]) {
+        if (want[k] != null && Number(got[k]) !== want[k]) {
+          console.log("    RESULT: FAIL - report " + want.id + "." + k + " should be " + want[k] + ", got " + got[k]);
+          return 1;
+        }
+      }
+    }
+  }
   if (after.history.status !== 200) { console.log("    RESULT: FAIL - history answers " + after.history.status); return 1; }
+  /* NEW (pack 109): the history is one pupil's own days, read without the
+     LEFT JOIN - so it must be exactly that pupil's rows, still named. */
+  if (scenario.expectHistoryDays != null) {
+    const hi2 = Array.isArray(after.history.json) ? after.history.json : null;
+    if (!hi2) { console.log("    RESULT: FAIL - history did not return a list"); return 1; }
+    if (hi2.length !== scenario.expectHistoryDays) {
+      console.log("    RESULT: FAIL - history should hold " + scenario.expectHistoryDays +
+        " day(s) for A101, got " + hi2.length);
+      return 1;
+    }
+    if (hi2.length && !hi2[0].full_name) {
+      console.log("    RESULT: FAIL - history lost the pupil's name when the JOIN went"); return 1;
+    }
+    if (hi2.some(function (d) { return String(d.student_id) !== "A101"; })) {
+      console.log("    RESULT: FAIL - history returned another pupil's days"); return 1;
+    }
+  }
   const beforeStatus = r.before && r.before.register ? r.before.register.status : "?";
   console.log("    RESULT: PASS (the same request was " + beforeStatus + " before, " + after.register.status +
     " with the class list now; " + rows.length + " pupils drawn, saved marks honoured)");

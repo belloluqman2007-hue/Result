@@ -1092,7 +1092,18 @@ const COLLATION_FIX_TABLES = [
     // Pack 65/84 add-on tables (student-facing portal + clinic/library/remarks)
     "homework", "student_health", "transport_routes", "transport_assignments",
     "school_gallery", "leave_requests", "broadcasts", "clinic_visits",
-    "vaccinations", "library_books", "library_loans", "term_remarks"
+    "vaccinations", "library_books", "library_loans", "term_remarks",
+    /* NEW (pack 109): `attendance`, `classes` and `staff_attendance` were the
+       three add-on tables still missing from this list, and that omission is
+       the whole of the "Illegal mix of collations ... for operation '='" 500
+       behind Load Report. They are created WITHOUT a pinned collation, so on a
+       MySQL 8 database they inherit utf8mb4_0900_ai_ci while `students` and
+       `users` are utf8mb4_unicode_ci — and ANY equality between a column of
+       the two (not just class_name: the student_id / staff_username JOIN keys
+       are strings too) is refused. The attendance routes no longer join
+       across tables at all, so they survive even where this ALTER is not
+       permitted; converting the tables heals every other query as well. */
+    "attendance", "classes", "staff_attendance"
 ];
 COLLATION_FIX_TABLES.forEach(function (tbl) {
     connection.query(`ALTER TABLE ${tbl} CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`, () => {});
@@ -7096,10 +7107,163 @@ app.post("/attendance/save", requireLogin, (req, res) => {
     });
 });
 
-/* DATE-RANGE REPORT. NEW (pack 108): the class is matched through a
-   collation both sides agree on, and on databases whose attendance table
-   has no class_name column the report falls back to the pupils currently
-   in that class rather than dying with 1054/1267. */
+/* ---------- pack 109: report helpers (single-table, collation-immune) -----
+   Each of these reads ONE table. None of them can raise "Illegal mix of
+   collations", because that error needs two columns from two tables to meet
+   in one comparison — which is exactly what the old JOIN did. */
+
+/* Which pupils belong to this class? Same two-tier rule the register uses:
+   exact trimmed match first, folded match (double spaces, non-breaking
+   spaces, Latin case) only when that finds nobody. `pupils` is the
+   id -> full_name map used later to label the rows. */
+function attReportClassIds(schema, className, done) {
+    const pick = function (rows) {
+        const pupils = {};
+        const ids = [];
+        (rows || []).forEach(function (s) {
+            const id = String(s.student_id == null ? "" : s.student_id).trim();
+            if (!id) return;
+            pupils[id] = s.full_name == null ? null : s.full_name;
+            ids.push(id);
+        });
+        return { ids: ids, pupils: pupils };
+    };
+    /* Last resort (no readable class_name column): whole students table,
+       filtered in JS. Needs no column guarantees and no collation agreement. */
+    const fromJs = function () {
+        connection.query("SELECT * FROM students", function (e3, r3) {
+            if (e3) return done(e3, null);
+            const want = attFoldClass(className);
+            const list = (r3 || []).filter(function (s) {
+                const st = s.status == null ? "active" : attFoldClass(s.status);
+                return (st === "active" || st === "") && attFoldClass(s.class_name) === want;
+            });
+            done(null, pick(list));
+        });
+    };
+    if (!attTable(schema, "students") || !attHas(schema, "students", "class_name")) return fromJs();
+    connection.query(attRosterSql(schema), [className], function (err, rows) {
+        if (err) {
+            console.log("[attendance] report class list failed, matching in JS:", err.code || err.sqlMessage || err.message);
+            return fromJs();
+        }
+        const exact = pick(rows);
+        if (exact.ids.length) return done(null, exact);
+        /* Zero rows is usually one invisible space of disagreement, not an
+           empty class — retry with the folded comparison. */
+        fromJs();
+    });
+}
+
+/* Every mark in the range for those pupils, from the attendance table alone.
+   When the table carries class_name it is used to widen the read (a pupil who
+   changed class still keeps the days marked under the old name); the pupil id
+   list is the floor in both cases. */
+function attReportMarks(schema, className, ids, from, to, done) {
+    const hasClassCol = attHas(schema, "attendance", "class_name");
+    const want = attFoldClass(className);
+    const collect = function (rows) {
+        const keep = {};
+        ids.forEach(function (id) { keep[id] = true; });
+        const marks = [];
+        (rows || []).forEach(function (r) {
+            const id = String(r.student_id == null ? "" : r.student_id).trim();
+            if (!id) return;
+            /* Rows reached through the class_name side must belong to a pupil
+               of this class too — the id list stays authoritative. */
+            if (!keep[id]) return;
+            marks.push({ student_id: id, status: r.status });
+        });
+        return marks;
+    };
+    if (!hasClassCol) {
+        return connection.query(
+            "SELECT student_id, status FROM attendance WHERE att_date BETWEEN ? AND ? AND student_id IN (?)",
+            [from, to, ids],
+            function (err, rows) { if (err) return done(err, null); done(null, collect(rows)); }
+        );
+    }
+    connection.query(
+        "SELECT student_id, status, class_name FROM attendance WHERE att_date BETWEEN ? AND ?",
+        [from, to],
+        function (err, rows) {
+            if (err) {
+                console.log("[attendance] report marks read failed, retrying by pupil id:", err.code || err.sqlMessage || err.message);
+                return connection.query(
+                    "SELECT student_id, status FROM attendance WHERE att_date BETWEEN ? AND ? AND student_id IN (?)",
+                    [from, to, ids],
+                    function (e2, r2) { if (e2) return done(e2, null); done(null, collect(r2)); }
+                );
+            }
+            /* The class column may be stored under a differently-spelled copy
+               of the same name, so fold it the same way the roster does. */
+            const inClass = (rows || []).filter(function (r) { return attFoldClass(r.class_name) === want; });
+            done(null, collect(inClass.length ? inClass : rows));
+        }
+    );
+}
+
+/* One row per pupil that has at least one mark in the range (unchanged
+   behaviour: the old GROUP BY only ever returned pupils with marks), sorted
+   by name like the old ORDER BY s.full_name did. */
+function attReportNames(pupils, marks, done) {
+    const by = {};
+    (marks || []).forEach(function (m) {
+        const e = by[m.student_id] || (by[m.student_id] = {
+            student_id: m.student_id, full_name: pupils[m.student_id] == null ? m.student_id : pupils[m.student_id],
+            present: 0, absent: 0, late: 0, marked: 0
+        });
+        e.marked++;
+        if (m.status === "present") e.present++;
+        else if (m.status === "absent") e.absent++;
+        else if (m.status === "late") e.late++;
+    });
+    const rows = Object.keys(by).map(function (k) { return by[k]; });
+    /* Names for pupils the roster did not supply (a pupil who left the class
+       but still has marks in the range) — a single-table read, not a JOIN. */
+    const missing = rows.filter(function (r) { return pupils[r.student_id] == null; }).map(function (r) { return r.student_id; });
+    const finish = function () {
+        rows.sort(function (a, b) { return String(a.full_name || "").localeCompare(String(b.full_name || "")); });
+        done(null, rows);
+    };
+    if (!missing.length) return finish();
+    connection.query(
+        "SELECT student_id, full_name FROM students WHERE student_id IN (?)",
+        [missing],
+        function (err, r2) {
+            if (!err) {
+                const named = {};
+                (r2 || []).forEach(function (s) { named[String(s.student_id)] = s.full_name; });
+                rows.forEach(function (r) { if (named[r.student_id] != null) r.full_name = named[r.student_id]; });
+            }
+            finish();
+        }
+    );
+}
+
+/* DATE-RANGE REPORT.
+   REWRITTEN (pack 109) — same URL, same JSON fields (student_id, full_name,
+   present, absent, late, marked), so attendance.js and the A4 PDF are
+   untouched.
+
+   WHY: "Load report" died with
+     Illegal mix of collations (utf8mb4_unicode_ci,IMPLICIT) and
+     (utf8mb4_0900_ai_ci,IMPLICIT) for operation '='
+   The old query read
+     FROM attendance a JOIN students s ON s.student_id = a.student_id
+   and pack 108 had pinned COLLATE only on the *class_name* comparison. But
+   `attendance` is created without a pinned collation, so on MySQL 8 its
+   student_id carries utf8mb4_0900_ai_ci while `students` carries
+   utf8mb4_unicode_ci — the JOIN KEY ITSELF is the illegal mix. That is why
+   the retry did not help either: it used the very same JOIN, so the route
+   failed twice and the second failure became the 500 the page showed.
+
+   THE FIX follows what this module already proved on the register (pack 108):
+   read each table on its own and merge in JavaScript. Every statement below
+   touches exactly ONE table, so no two collations ever meet and the report
+   works whether or not the boot-time CONVERT was allowed to run.
+   Names are fetched for the pupils that actually have marks (a small IN
+   list), never by joining. */
 app.get("/attendance/report", requireLogin, (req, res) => {
     const className = attClassName(req.query.class_name);
     const from = attDateOnly(req.query.from);
@@ -7112,48 +7276,56 @@ app.get("/attendance/report", requireLogin, (req, res) => {
             attNotice(res, "There is no readable attendance table yet, so the report is empty.");
             return res.json([]);
         }
-        const agg = `SELECT a.student_id, s.full_name,
-                SUM(a.status = 'present') AS present,
-                SUM(a.status = 'absent')  AS absent,
-                SUM(a.status = 'late')    AS late,
-                COUNT(*) AS marked`;
-        const tail = " GROUP BY a.student_id, s.full_name ORDER BY s.full_name";
-        const join = " FROM attendance a JOIN students s ON s.student_id = a.student_id";
-        const byClass = attHas(schema, "attendance", "class_name")
-            ? `CONVERT(a.class_name USING utf8mb4) COLLATE utf8mb4_unicode_ci = CONVERT(? USING utf8mb4) COLLATE utf8mb4_unicode_ci`
-            : `CONVERT(TRIM(s.class_name) USING utf8mb4) COLLATE utf8mb4_unicode_ci = CONVERT(TRIM(?) USING utf8mb4) COLLATE utf8mb4_unicode_ci`;
-        const sql = agg + join + " WHERE " + byClass + " AND a.att_date BETWEEN ? AND ?" + tail;
-        connection.query(sql, [className, from, to], (err, rows) => {
-            if (err) {
-                console.log("[attendance] report failed, retrying without the class filter:", err.code || err.sqlMessage || err.message);
-                /* Collation or a missing column on the class comparison: the
-                   marks themselves are still readable, so report the whole
-                   date range for the pupils of that class matched in JS. */
-                return connection.query(
-                    "SELECT a.student_id, a.status, a.att_date, s.full_name, s.class_name" + join + " WHERE a.att_date BETWEEN ? AND ?",
-                    [from, to],
-                    (e2, r2) => {
-                        if (e2) return attDbFail(res, e2, "build the attendance report");
-                        const by = {};
-                        (r2 || []).forEach(function (r) {
-                            if (attClassName(r.class_name) !== className) return;
-                            const k = String(r.student_id);
-                            const e = by[k] || (by[k] = { student_id: r.student_id, full_name: r.full_name, present: 0, absent: 0, late: 0, marked: 0 });
-                            e.marked++;
-                            if (r.status === "present") e.present++;
-                            else if (r.status === "absent") e.absent++;
-                            else if (r.status === "late") e.late++;
-                        });
-                        res.json(Object.keys(by).map(function (k) { return by[k]; }).sort(function (a, b) {
-                            return String(a.full_name || "").localeCompare(String(b.full_name || ""));
-                        }));
-                    }
-                );
-            }
-            res.json(rows || []);
+        attReportClassIds(schema, className, function (cErr, matched) {
+            if (cErr) return attDbFail(res, cErr, "build the attendance report");
+            const ids = matched.ids;
+            /* A class with no pupils at all is an honest empty report. */
+            if (!ids.length) return res.json([]);
+            attReportMarks(schema, className, ids, from, to, function (mErr, marks) {
+                if (mErr) return attDbFail(res, mErr, "build the attendance report");
+                attReportNames(matched.pupils, marks, function (nErr, rows) {
+                    if (nErr) return attDbFail(res, nErr, "build the attendance report");
+                    res.json(rows);
+                });
+            });
         });
     });
 });
+
+/* ---------- pack 109: shared single-table readers -------------------------
+   The "Illegal mix of collations" 500 behind Load Report came from comparing
+   a string column of `attendance` with one of `students` inside a JOIN. These
+   two readers keep the summary and the per-pupil history on ONE table at a
+   time, so no two collations can meet no matter how the tables were built. */
+
+/* The banner's honest answer when nothing could be read. */
+function attEmptySummary() {
+    return { taken: false, total: 0, present: 0, absent: 0, late: 0, marked_by: null, saved_at: null };
+}
+
+/* Count one day for one class without joining: take the class's pupil ids
+   (exact match first, folded match as the retry), then count that day inside
+   the attendance table alone. */
+function attDaySummaryByClass(schema, select, className, date, answer) {
+    attReportClassIds(schema, className, function (err, matched) {
+        if (err) return answer(err, null);
+        const ids = (matched && matched.ids) || [];
+        if (!ids.length) return answer(null, [attEmptySummary()]);
+        connection.query(select + " FROM attendance WHERE att_date = ? AND student_id IN (?)", [date, ids], answer);
+    });
+}
+
+/* Read one pupil's name from `students` on its own (the history below used to
+   LEFT JOIN for it). A failure costs the name only, never the history. */
+function attStudentName(sid, done) {
+    connection.query("SELECT full_name FROM students WHERE student_id = ? LIMIT 1", [sid], function (err, rows) {
+        if (err) {
+            console.log("[attendance] name lookup failed:", err.code || err.sqlMessage || err.message);
+            return done(null);
+        }
+        done(rows && rows[0] ? rows[0].full_name : null);
+    });
+}
 
 /* "Already taken for this date" banner (pack 14). NEW (pack 108): a missing
    or half-built attendance table simply means "not taken yet" — it must
@@ -7164,66 +7336,76 @@ app.get("/attendance/summary", requireLogin, (req, res) => {
     if (!className || !date) return res.status(400).json({ message: "class_name and date are required." });
 
     attSchema(function (schema) {
-        if (!attTable(schema, "attendance") || !attHas(schema, "attendance", "att_date")) {
-            return res.json({ taken: false, total: 0, present: 0, absent: 0, late: 0, marked_by: null, saved_at: null });
-        }
+        if (!attTable(schema, "attendance") || !attHas(schema, "attendance", "att_date")) return res.json(attEmptySummary());
         const hasStatus = attHas(schema, "attendance", "status");
         const hasMarkedBy = attHas(schema, "attendance", "marked_by");
         const hasCreatedAt = attHas(schema, "attendance", "created_at");
-        /* The banner must count THIS CLASS only. When the attendance table
-           carries no class_name (pre-pack-13 databases), the class comes from
-           the pupil's own row instead of silently counting the whole school. */
-        const viaAttendance = attHas(schema, "attendance", "class_name");
-        const viaStudents = !viaAttendance && attTable(schema, "students") && attHas(schema, "students", "class_name");
-        const fromAndWhere = viaAttendance
-            ? " FROM attendance WHERE CONVERT(class_name USING utf8mb4) COLLATE utf8mb4_unicode_ci = CONVERT(? USING utf8mb4) COLLATE utf8mb4_unicode_ci AND att_date = ?"
-            : (viaStudents
-                ? " FROM attendance a JOIN students s ON s.student_id = a.student_id WHERE a.att_date = ? AND CONVERT(TRIM(s.class_name) USING utf8mb4) COLLATE utf8mb4_unicode_ci = CONVERT(TRIM(?) USING utf8mb4) COLLATE utf8mb4_unicode_ci"
-                : " FROM attendance WHERE att_date = ?");
-        const params = viaAttendance || viaStudents ? [className, date] : [date];
-        if (viaStudents) params.reverse();
-        connection.query(
-            `SELECT COUNT(*) AS total,
+        const select = `SELECT COUNT(*) AS total,
                     ${hasStatus ? "SUM(status = 'present') AS present, SUM(status = 'absent') AS absent, SUM(status = 'late') AS late," : "0 AS present, 0 AS absent, 0 AS late,"}
                     ${hasMarkedBy ? "MAX(marked_by) AS marked_by," : "NULL AS marked_by,"}
                     ${hasCreatedAt ? "MAX(created_at) AS saved_at" : "NULL AS saved_at"}
-             ` + fromAndWhere,
-            params,
-            (err, rows) => {
-                if (err) {
-                    console.log("[attendance] summary failed:", err.code || err.sqlMessage || err.message);
-                    return res.json({ taken: false, total: 0, present: 0, absent: 0, late: 0, marked_by: null, saved_at: null });
-                }
-                const r = (rows && rows[0]) || {};
-                res.json({
-                    taken: Number(r.total) > 0,
-                    total: Number(r.total) || 0,
-                    present: Number(r.present) || 0,
-                    absent: Number(r.absent) || 0,
-                    late: Number(r.late) || 0,
-                    marked_by: r.marked_by || null,
-                    saved_at: r.saved_at || null
-                });
+             `;
+        const answer = function (err, rows) {
+            if (err) {
+                console.log("[attendance] summary failed:", err.code || err.sqlMessage || err.message);
+                return res.json(attEmptySummary());
             }
-        );
+            const r = (rows && rows[0]) || {};
+            res.json({
+                taken: Number(r.total) > 0,
+                total: Number(r.total) || 0,
+                present: Number(r.present) || 0,
+                absent: Number(r.absent) || 0,
+                late: Number(r.late) || 0,
+                marked_by: r.marked_by || null,
+                saved_at: r.saved_at || null
+            });
+        };
+        /* The banner must count THIS CLASS only - and on no account the whole
+           school, which is what a bare `att_date = ?` would do.
+           NEW (pack 109): this used to branch on whether the attendance table
+           carries class_name, matching it either through a pinned COLLATE
+           string comparison or through a JOIN to `students`. Both are gone:
+             - the JOIN compared attendance.student_id with
+               students.student_id, two string columns from tables built with
+               different default collations, so on MySQL 8 it raised the very
+               same "Illegal mix of collations ... for operation '='" that
+               killed Load Report. Here the error was swallowed, so the banner
+               quietly read "not taken yet" and a class could be marked twice;
+             - the COLLATE comparison was still an exact string match, so a
+               class saved as "SS  1" (double space) never matched the "SS 1"
+               in the dropdown either.
+           The class is now resolved to its pupil ids by the same two-tier
+           matcher the register and the report use, and the day is counted
+           inside the attendance table alone. One table per statement, so no
+           two collations can meet, and the folding makes the banner agree
+           with what the register shows. */
+        /* No readable class list at all resolves to an empty id list inside
+           attDaySummaryByClass, which answers "not taken" - honest, and never
+           the whole-school count a bare `att_date = ?` would have produced. */
+        attDaySummaryByClass(schema, select, className, date, answer);
     });
 });
 
 /* Per-pupil history (pack 17) — same guards, an unreadable table reads as
-   "no history yet" instead of a 500. */
+   "no history yet" instead of a 500.
+   NEW (pack 109): the LEFT JOIN on students.student_id = attendance.student_id
+   is gone for the same reason the report's JOIN went - two string columns from
+   tables with different default collations cannot be compared on MySQL 8. The
+   history comes from `attendance` alone and the pupil's name is read
+   separately; the JSON keeps its full_name field. */
 app.get("/attendance/student", requireLogin, (req, res) => {
     const sid = (req.query.student_id || "").trim();
     if (!sid) return res.status(400).json({ message: "student_id is required." });
     attSchema(function (schema) {
         if (!attTable(schema, "attendance") || !attHas(schema, "attendance", "att_date")) return res.json([]);
-        const extra = (attHas(schema, "attendance", "class_name") ? ", a.class_name" : "") +
-            (attHas(schema, "attendance", "status") ? ", a.status" : "");
+        const extra = (attHas(schema, "attendance", "class_name") ? ", class_name" : "") +
+            (attHas(schema, "attendance", "status") ? ", status" : "");
         connection.query(
-            `SELECT a.att_date${extra}, s.full_name
-             FROM attendance a
-             LEFT JOIN students s ON s.student_id = a.student_id
-             WHERE a.student_id = ?
-             ORDER BY a.att_date DESC
+            `SELECT att_date${extra}
+             FROM attendance
+             WHERE student_id = ?
+             ORDER BY att_date DESC
              LIMIT 366`,
             [sid],
             (err, rows) => {
@@ -7231,7 +7413,11 @@ app.get("/attendance/student", requireLogin, (req, res) => {
                     console.log("[attendance] history failed:", err.code || err.sqlMessage || err.message);
                     return res.json([]);
                 }
-                res.json(rows || []);
+                rows = rows || [];
+                if (!rows.length) return res.json(rows);
+                attStudentName(sid, function (name) {
+                    res.json(rows.map(function (r) { r.full_name = name; return r; }));
+                });
             }
         );
     });
@@ -7246,7 +7432,9 @@ app.get("/attendance/student", requireLogin, (req, res) => {
        marked_by are the two that break the register on older databases);
      - adds the (student_id, att_date) unique key when the table holds no
        duplicate day rows, because the register's upsert depends on it.
-   Nothing is renamed, converted or deleted — existing marks are untouched. */
+   No row is renamed or deleted and no mark is rewritten — existing data is
+   untouched. (ensureAttendanceCollation() below is the one exception: it may
+   re-state the table's comparison rules, never its values.) */
 function ensureAttendanceSchema(attempt) {
     const conn = addonConnection();
     conn.connect((err) => {
@@ -7303,6 +7491,47 @@ function ensureAttendanceSchema(attempt) {
                     conn.end();
                     ensureAttendanceDayKey();
                 }
+            }
+        );
+    });
+}
+
+/* NEW (pack 109): heal the collation drift itself, where that is allowed.
+   `attendance` is created without a pinned collation on databases that
+   predate the pack-108 CREATE, so on MySQL 8 its string columns inherit
+   utf8mb4_0900_ai_ci while `students` is utf8mb4_unicode_ci. Every attendance
+   route now reads one table at a time and works regardless, but converting the
+   table also protects the rest of the app (exports, admin queries, anything
+   that still joins attendance to students). Guarded exactly like the other
+   boot migrations: information_schema is asked first, the ALTER runs only
+   when the collation really differs, and a refusal (no ALTER right, locked
+   table, MariaDB without utf8mb4_0900_ai_ci) is logged and skipped - the
+   routes do not depend on it. No row values change; only the comparison rules
+   for student_id / class_name are agreed with `students`. */
+function ensureAttendanceCollation() {
+    const conn = addonConnection();
+    conn.connect((err) => {
+        if (err) { conn.destroy(); return; }
+        conn.query(
+            `SELECT TABLE_COLLATION AS tc FROM information_schema.TABLES
+              WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'attendance'`,
+            (tErr, rows) => {
+                if (tErr || !rows || !rows.length) { conn.end(); return; }
+                const current = String(rows[0].tc || "").toLowerCase();
+                if (!current || current === "utf8mb4_unicode_ci") { conn.end(); return; }
+                conn.query(
+                    "ALTER TABLE attendance CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci",
+                    (aErr) => {
+                        conn.end();
+                        if (aErr) {
+                            console.log("[attendance] boot repair skipped (collation):", aErr.code || aErr.message);
+                            console.log("  -> Not fatal: every attendance query now reads one table at a time, so no two collations meet.");
+                            return;
+                        }
+                        attSchemaCache = null;
+                        console.log("Attendance collation healed (was " + current + ", now utf8mb4_unicode_ci) - cross-table comparisons are safe again.");
+                    }
+                );
             }
         );
     });
@@ -7370,6 +7599,7 @@ function attBootRetry(attempt, err) {
 }
 
 ensureAttendanceSchema(1);
+ensureAttendanceCollation();
 
 /* ---------- Staff attendance + weekly evaluations ------------------- */
 app.get("/staff-list", requireLogin, (req, res) => {
@@ -7383,9 +7613,17 @@ app.get("/staff-attendance", requireLogin, (req, res) => {
     const date = (req.query.date || "").trim();
     if (!date) return res.status(400).json({ message: "date is required." });
     connection.query(
+        /* COLLATE hint (pack 109): `staff_attendance` is created without a
+           pinned collation, so on MySQL 8 its staff_username is
+           utf8mb4_0900_ai_ci while `users` (converted at boot) is
+           utf8mb4_unicode_ci - the same illegal mix that broke Load Report,
+           on the staff register instead. Pinning the join key keeps the two
+           sides agreeing without touching the stored text. */
         `SELECT u.username, u.role, sa.status
          FROM users u
-         LEFT JOIN staff_attendance sa ON sa.staff_username = u.username AND sa.att_date = ?
+         LEFT JOIN staff_attendance sa
+                ON sa.staff_username = u.username COLLATE utf8mb4_unicode_ci
+               AND sa.att_date = ?
          ORDER BY u.username`,
         [date],
         (err, rows) => {
