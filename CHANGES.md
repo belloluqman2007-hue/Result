@@ -1,5 +1,25 @@
 # UI Modernization — Change Log
 
+## Pack 107 — 2026-09-05
+
+Owner: "About the attendance you recently fixed for me the students is still not displaying about I selected class to mark register. But I saw that the mistake is in csrf.js:69 — net::ERR_QUIC_PROTOCOL_ERROR 200 (OK). Fix and merge."
+
+### Root cause
+
+`csrf.js:69` is **not a bug in the file** — that line is just `nativeFetch(url, options)`, i.e. the exact spot where the browser *attributes* the real network call in the console. `net::ERR_QUIC_PROTOCOL_ERROR 200 (OK)` means the **HTTP/3 (QUIC) transport** between the teacher's browser and the server broke *mid-response*: the server had already answered `200 OK`, then the QUIC stream aborted (typical on mobile data / Chrome's QUIC racing). When that happens `fetch()` **rejects**, `loadRegister()`'s catch fires, and the Mark Register table shows nothing — "students not displaying" even though the class list itself loads. The app had **zero retry**, so one transport hiccup killed the whole register. Worse, any error that *did* answer (expired session 401, DB 500) fell into `Array.isArray(rows) ? rows : []` and was reported as **"No students in this class yet."** — the wrong diagnosis entirely.
+
+### The fix
+
+| File | What happened |
+|---|---|
+| `js/csrf.js` | FIX 4: idempotent **GET/HEAD requests are now retried automatically** (2 extra tries, 500ms/1500ms backoff) when the transport itself fails (QUIC/HTTP3 stream reset, connection drop, offline blip). After a failed QUIC stream Chrome marks QUIC broken for the site and the retry goes over plain TCP — which almost always succeeds, so the register loads on its own. Safety rules: `fetch()` only rejects on transport failures, so a real HTTP answer (200/401/500, anything) is returned untouched and **nothing is ever executed twice**; **POST/PUT/DELETE/PATCH are never auto-retried** (not idempotent — no risk of a double-save); the CSRF-token preflight uses the same retry. All previous fixes (cookie forwarding, Headers handling, double-include guard) unchanged. |
+| `js/attendance.js` | Honest register errors: `attRequireOk()` throws on 401 (expired session → "Your login session expired. Opening the login page…" then redirects to `login.html`) and on any other non-OK status (→ "The server answered with an error (status N). Please try again.") instead of rendering "No students in this class yet." `attShowLoadError()` renders the real reason in the table (and explains the QUIC console line when the connection truly dropped — "Press the Load button again"). Applied to the **Mark Register** load, the **class dropdown**, the **range report** and the **student history** loaders. |
+| `csrf.js`, `attendance.js` (root copies) | Synced with the live `js/` versions so the unused legacy duplicates can't mislead a future fix again. |
+
+Verified with a mocked flaky network against the real wrapper: (1) GET failing twice with `ERR_QUIC_PROTOCOL_ERROR` **recovers on the 3rd attempt**; (2) POST is sent **exactly once** and rejects (never auto-retried); (3) a 500 response is returned untouched (no duplicate requests); (4) the retry budget is respected (1 + 2); (5) `credentials:"same-origin"` still forwards the session cookie on every request. `node --check` passes on all four files. Server routes, saving, reports, PDFs, result calculations: completely untouched.
+
+---
+
 ## Pack 106 — 2026-09-03
 
 Owner: "The public AI is saying 'The assistant is taking a short break - please try again in a moment' to every question. Fix and merge fast."
