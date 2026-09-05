@@ -32,9 +32,67 @@ function attRequireOk(r) {
     throw authErr;
   }
   if (!r.ok) {
-    throw new Error("The server answered with an error (status " + r.status + "). Please try again.");
+    /* FIX (pack 108): the server now sends the REAL reason as JSON
+       ({ message: "Could not load ... - database said: Unknown column ..." }),
+       so read it instead of showing the bare status code. A page that is
+       not JSON at all (a proxy error page) is still reported safely. */
+    return r.text().then(function (txt) {
+      var msg = "";
+      try {
+        var d = JSON.parse(txt || "{}");
+        if (d && d.message) msg = String(d.message);
+      } catch (e) {
+        if (txt && txt.length < 200 && txt.indexOf("<") === -1) msg = txt;
+      }
+      var err = new Error((msg ? msg + " " : "The server answered with an error ") +
+        "(status " + r.status + ")" + (msg ? "" : ". Please try again."));
+      err.status = r.status;
+      throw err;
+    }, function () {
+      var err2 = new Error("The server answered with an error (status " + r.status + "). Please try again.");
+      err2.status = r.status;
+      throw err2;
+    });
   }
-  return r.json();
+  return r.json().then(function (data) { return data; }, function () {
+    throw new Error("The server's answer could not be read (status " + r.status +
+      ") - it sent something that is not the usual data. Press the Load button again.");
+  });
+}
+
+/* The register route answers with a plain ARRAY (that contract is unchanged,
+   so the PDFs and every older page keep working). Anything the server wants
+   the teacher to KNOW but not lose - e.g. "your saved marks could not be
+   read" - rides along on the X-AMS-Notice header, which this picks up. */
+function attRequireOkWithNotice(r) {
+  var notice = null;
+  try { if (r.headers && r.headers.get) notice = r.headers.get("X-AMS-Notice"); } catch (e) {}
+  return attRequireOk(r).then(function (data) { return { data: data, notice: notice }; });
+}
+
+function attErrorText(err) {
+  var t = err && err.message ? String(err.message) : "";
+  return t.length > 260 ? t.slice(0, 260) + "..." : t;
+}
+
+function attEscapeHtml(v) {
+  return String(v == null ? "" : v)
+    .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+}
+
+/* Class names are typed by hand in two tables, so "SS 1", "SS  1" and a
+   trailing non-breaking space are the same class. Folded the same way the
+   server folds it; only ASCII is case-mapped (lowercasing Arabic has
+   corrupted it in some engines). */
+function attSameClass(a, b) {
+  var fold = function (v) {
+    return String(v == null ? "" : v)
+      .replace(/[\u00A0\u2007\u202F\u200B\uFEFF]/g, " ")
+      .replace(/\s+/g, " ").trim()
+      .replace(/[A-Z]/g, function (c) { return c.toLowerCase(); });
+  };
+  return fold(a) === fold(b);
 }
 
 function attShowLoadError(err, tbody, colspan, what) {
@@ -126,60 +184,103 @@ function loadRegister() {
   tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; color:#5B6B62;">Loading...</td></tr>';
 
   fetch("/attendance/class?class_name=" + encodeURIComponent(className) + "&date=" + encodeURIComponent(date))
-    .then(attRequireOk)
-    .then(function (rows) {
-      rows = Array.isArray(rows) ? rows : [];
-      attState = {};
-      attRegisterRows = rows; // NEW (pack 14): kept for the PDF
-      loadTakenSummary(className, date); // NEW (pack 14): "already taken" warning
-      if (!rows.length) {
-        tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; color:#5B6B62;">No students in this class yet.</td></tr>';
-        return;
-      }
-      tbody.innerHTML = "";
-      rows.forEach(function (row, i) {
-        attState[row.student_id] = row.status || "present"; // default present
-        var tr = document.createElement("tr");
-
-        var tdNum = document.createElement("td");
-        tdNum.textContent = i + 1;
-        tr.appendChild(tdNum);
-
-        var tdName = document.createElement("td");
-        var b = document.createElement("b");
-        b.textContent = row.full_name || "-";
-        tdName.appendChild(b);
-        tr.appendChild(tdName);
-
-        var tdId = document.createElement("td");
-        tdId.textContent = row.student_id;
-        tr.appendChild(tdId);
-
-        var tdSeg = document.createElement("td");
-        var seg = document.createElement("div");
-        seg.className = "seg";
-        [["present", "P"], ["absent", "A"], ["late", "L"]].forEach(function (pair) {
-          var btn = document.createElement("button");
-          btn.type = "button";
-          btn.textContent = pair[1];
-          btn.title = pair[0];
-          updateSegBtn(btn, pair[0], attState[row.student_id]);
-          btn.addEventListener("click", function () {
-            attState[row.student_id] = pair[0];
-            seg.querySelectorAll("button").forEach(function (b2) {
-              updateSegBtn(b2, b2.title, attState[row.student_id]);
-            });
-          });
-          seg.appendChild(btn);
-        });
-        tdSeg.appendChild(seg);
-        tr.appendChild(tdSeg);
-        tbody.appendChild(tr);
-      });
+    .then(attRequireOkWithNotice)
+    .then(function (out) {
+      attRenderRegister(Array.isArray(out.data) ? out.data : [], out.notice, className, date);
     })
     .catch(function (err) {
-      attShowLoadError(err, tbody, 4, "Could not load the register.");
+      /* FIX (pack 108): one bad answer must never leave an empty table in
+         front of a class of children waiting to be marked. */
+      attRecoverRegister(className, date, err, tbody);
     });
+}
+
+/* Draws the register from rows of {student_id, full_name, status}. Shared by
+   the normal path and by the recovery path below, so the marking buttons,
+   the PDF and the save flow behave identically either way. */
+function attRenderRegister(rows, notice, className, date) {
+  var tbody = document.querySelector("#attTable tbody");
+  attState = {};
+  attRegisterRows = rows; // kept for the PDF
+  loadTakenSummary(className, date); // "already taken" warning
+  if (!rows.length) {
+    tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; color:#5B6B62;">' +
+      (notice ? attEscapeHtml(notice) : "No students in this class yet. Add pupils on the Students page, then press Load again.") +
+      "</td></tr>";
+    return;
+  }
+  tbody.innerHTML = "";
+  if (notice) {
+    var warn = document.createElement("tr");
+    var wtd = document.createElement("td");
+    wtd.colSpan = 4;
+    wtd.style.cssText = "background:#FFF6E5; color:#8A5300; font-size:12.5px; line-height:1.45;";
+    wtd.innerHTML = "\u26A0\uFE0F " + attEscapeHtml(notice);
+    warn.appendChild(wtd);
+    tbody.appendChild(warn);
+  }
+  rows.forEach(function (row, i) {
+    attState[row.student_id] = row.status || "present"; // default present, saved mark wins
+    var tr = document.createElement("tr");
+
+    var tdNum = document.createElement("td");
+    tdNum.textContent = i + 1;
+    tr.appendChild(tdNum);
+
+    var tdName = document.createElement("td");
+    var b = document.createElement("b");
+    b.textContent = row.full_name || "-";
+    tdName.appendChild(b);
+    tr.appendChild(tdName);
+
+    var tdId = document.createElement("td");
+    tdId.textContent = row.student_id;
+    tr.appendChild(tdId);
+
+    var tdSeg = document.createElement("td");
+    var seg = document.createElement("div");
+    seg.className = "seg";
+    [["present", "P"], ["absent", "A"], ["late", "L"]].forEach(function (pair) {
+      var btn = document.createElement("button");
+      btn.type = "button";
+      btn.textContent = pair[1];
+      btn.title = pair[0];
+      updateSegBtn(btn, pair[0], attState[row.student_id]);
+      btn.addEventListener("click", function () {
+        attState[row.student_id] = pair[0];
+        seg.querySelectorAll("button").forEach(function (b2) {
+          updateSegBtn(b2, b2.title, attState[row.student_id]);
+        });
+      });
+      seg.appendChild(btn);
+    });
+    tdSeg.appendChild(seg);
+    tr.appendChild(tdSeg);
+    tbody.appendChild(tr);
+  });
+}
+
+/* Recovery: the class list and the attendance table are two DIFFERENT
+   queries, so when the register endpoint fails for any reason the pupils are
+   taken from the class list the rest of the page already uses, everyone
+   defaults to Present, and saving still works. A lost login (401) is never
+   papered over - that goes to the login page as before. */
+function attRecoverRegister(className, date, err, tbody) {
+  if (err && err.auth) { attShowLoadError(err, tbody, 4, "Could not load the register."); return; }
+  attEnsureStudents(function (list) {
+    var rows = (list || [])
+      .filter(function (s) { return attSameClass(s.class_name, className); })
+      .map(function (s) {
+        return { student_id: s.student_id, full_name: s.full_name, gender: s.gender, status: null };
+      });
+    if (!rows.length) { attShowLoadError(err, tbody, 4, "Could not load the register."); return; }
+    attRenderRegister(rows,
+      "The saved marks could not be read (" + (attErrorText(err) || "the connection dropped") +
+      "), so this register was built from the class list instead: everyone starts as PRESENT. " +
+      "Change whoever is Absent or Late and press Save Attendance as usual - your marks are stored normally.",
+      className, date);
+    attNotify("Register loaded from the class list - check the marks before saving.", false);
+  });
 }
 
 function updateSegBtn(btn, status, current) {
@@ -197,7 +298,7 @@ function markAllPresent() {
 }
 
 function saveRegister() {
-  var className = document.getElementById("attClass").value;
+  var className = attNormalizeClassName(document.getElementById("attClass").value);
   var date = document.getElementById("attDate").value;
   var records = Object.keys(attState).map(function (sid) { return { student_id: sid, status: attState[sid] }; });
   if (!className || !date || !records.length) { attNotify("Load the register first.", false); return; }
@@ -330,13 +431,23 @@ function attIsActiveStudent(student) {
 
 function attEnsureStudents(cb) {
   if (attStudentsCache) { cb(attStudentsCache); return; }
+  function fill(rows) {
+    /* Keep the client-side status check for compatibility with servers
+       that do not yet honour the query parameter. */
+    attStudentsCache = (Array.isArray(rows) ? rows : []).filter(attIsActiveStudent);
+    cb(attStudentsCache);
+  }
+  /* FIX (pack 108): /students?status=active answers 500 on a database whose
+     students table predates the status column, which used to leave BOTH the
+     history picker and the recovered register empty. Fall back to the plain
+     list, which every version of this server has always answered. */
   fetch("/students?status=active")
-    .then(function (r) { return r.ok ? r.json() : []; })
+    .then(function (r) { return r.ok ? r.json() : null; })
     .then(function (rows) {
-      /* Keep the client-side status check for compatibility with servers
-         that do not yet honour the query parameter. */
-      attStudentsCache = (Array.isArray(rows) ? rows : []).filter(attIsActiveStudent);
-      cb(attStudentsCache);
+      if (rows && rows.length) return fill(rows);
+      return fetch("/students")
+        .then(function (r2) { return r2.ok ? r2.json() : []; })
+        .then(fill);
     })
     .catch(function () { cb([]); });
 }
@@ -350,7 +461,7 @@ function attFillStudentPick() {
     sel.innerHTML = '<option value="">Pick a student</option>';
     list
       .filter(function (s) {
-        return !cls || attNormalizeClassName(s.class_name) === cls;
+        return !cls || attSameClass(s.class_name, cls);
       })
       .forEach(function (s) {
         var opt = document.createElement("option");

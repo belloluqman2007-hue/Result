@@ -6650,29 +6650,317 @@ app.delete("/admission-enquiry/:id", requireLogin, requireAdmin, (req, res) => {
 });
 
 /* ---------- Student attendance -------------------------------------- */
-/* Distinct class names from BOTH classes table AND students table.
-   This fixes the attendance mark register showing empty when class names
-   in students table don't exactly match the classes table entries. */
-app.get("/api/distinct-classes", requireLogin, (req, res) => {
-    /* The students table comes FIRST in the UNION so the dropdown option
-       values are exactly the bytes stored in students.class_name - the same
-       value the register query compares against (Arabic names in the
-       `classes` table can differ byte-for-byte from students.class_name).
-       TRIM only - no CONVERT/COLLATE wrapper - so the raw bytes survive,
-       and only active students' classes are listed from the students side. */
+/* ==================================================================
+   PACK 108 — the register 500 killer (owner: "the students are still
+   not displaying after I select a class to mark the register; the
+   mistake is in csrf.js:52 again; 500 internal server error; the page
+   says 'Could not load the register. The server answered with an error
+   (status 500)'").
+
+   csrf.js:52 is again only where the browser ATTRIBUTES the failed
+   call — it is the wrapper's own `nativeFetch(url, options)` line. This
+   time the server genuinely answered 500, and the only thing that can
+   answer 500 here is the SQL inside GET /attendance/class:
+
+       LEFT JOIN attendance a
+         ON a.student_id = s.student_id
+        AND a.att_date = ?
+        AND LOWER(TRIM(a.class_name)) = LOWER(TRIM(?))
+       WHERE TRIM(s.class_name) = TRIM(?)
+         AND (s.status IS NULL OR LOWER(TRIM(s.status)) = 'active')
+
+   Four column references on tables that grew over 100+ packs, any one
+   of which is a hard 500 on a real school database:
+     * `attendance` is provisioned with CREATE TABLE IF NOT EXISTS — it
+       NEVER upgrades a table that already exists. A school whose
+       attendance table predates pack 13 has no class_name / marked_by
+       column → ER_BAD_FIELD_ERROR → 500 → empty register.
+     * `attendance` may not exist yet at all (fresh Railway/Render DB, or
+       a boot where the add-on block never finished) → ER_NO_SUCH_TABLE.
+     * `students.status` came later too — which is also why the class
+       dropdown was quietly served by the /classes fallback: that
+       endpoint failed for the very same reason and swallowed it.
+     * `attendance` and `classes` are NOT in COLLATION_FIX_TABLES, so on
+       a database whose tables carry different default collations, the
+       cross-table UNION / comparison can die with
+       ER_CANT_AGGREGATE_2COLLATIONS ("Illegal mix of collations").
+
+   The fix is to stop ASSUMING the schema and start READING it:
+     1. attSchema() asks information_schema which tables, columns and
+        indexes actually exist (cached 60s) and every attendance query is
+        then BUILT from what is really there.
+     2. Saved marks are read by (student_id, date) in their own tiny query
+        and merged in JavaScript. No cross-table string comparison
+        survives, so no collation clash is possible, and
+        `attendance.class_name` is no longer needed to open the register
+        (attendance keeps exactly one row per pupil per day, so the class
+        condition in the old JOIN never changed the answer anyway).
+     3. If the marks half still fails, the register STILL RETURNS the
+        class roster — that is the list of children the teacher is
+        standing in front of — and says what could not be read through the
+        X-AMS-Notice response header. "Everyone present, correct it" beats
+        a red 500 and an empty table.
+     4. No attendance route answers a bare 500 "Database error" any more:
+        the real database message is passed to the page so the teacher
+        (and the owner) can read the actual cause instead of a status code.
+     5. A guarded boot migration heals the drift itself where it safely
+        can (create the table, add the missing columns, add the
+        one-row-per-pupil-per-day key when there are no duplicates), so
+        most schools never even reach step 3.
+   Result data, grading, report cards, fees: completely untouched.
+   ==================================================================== */
+
+/* Which attendance tables/columns/indexes are REALLY there. Cached for a
+   minute; if the probe itself fails the cache holds `unknown:true` and
+   every attHas() answers "yes" so the documented (already correct) queries
+   run exactly as before — the guard can only ever add safety. */
+const ATT_SCHEMA_TTL = 60000;
+let attSchemaCache = null;
+let attSchemaWaiters = null;
+
+function attProbeSchema(done) {
     connection.query(
-        `SELECT DISTINCT TRIM(class_name) AS class_name FROM students
-           WHERE class_name IS NOT NULL AND class_name != ''
-             AND (status IS NULL OR status = 'active')
-         UNION
-         SELECT DISTINCT TRIM(class_name) FROM classes
-           WHERE class_name IS NOT NULL AND class_name != ''
-         ORDER BY class_name`,
+        `SELECT TABLE_NAME AS t, COLUMN_NAME AS c
+           FROM information_schema.COLUMNS
+          WHERE TABLE_SCHEMA = DATABASE()
+            AND TABLE_NAME IN ('attendance', 'students', 'classes')`,
         (err, rows) => {
-            if (err) { console.log(err); return res.status(500).json({ message: "Database error" }); }
-            res.json(rows.map(function(r){ return { class_name: r.class_name }; }));
+            if (err) {
+                console.log("[attendance] schema probe failed:", err.code || err.message || err);
+                attSchemaCache = { at: Date.now(), data: { unknown: true } };
+                return done(attSchemaCache.data);
+            }
+            const sets = { attendance: new Set(), students: new Set(), classes: new Set() };
+            (rows || []).forEach(function (r) {
+                const t = String(r.t || "").toLowerCase();
+                if (sets[t]) sets[t].add(String(r.c || "").toLowerCase());
+            });
+            connection.query(
+                `SELECT INDEX_NAME AS i,
+                        GROUP_CONCAT(COLUMN_NAME ORDER BY SEQ_IN_INDEX) AS cols,
+                        MAX(NON_UNIQUE) AS non_unique
+                   FROM information_schema.STATISTICS
+                  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'attendance'
+                  GROUP BY INDEX_NAME`,
+                (kErr, kRows) => {
+                    const idx = kErr ? [] : (kRows || []).map(function (x) {
+                        return {
+                            cols: String(x.cols || "").toLowerCase().replace(/\s+/g, ""),
+                            unique: Number(x.non_unique) === 0
+                        };
+                    });
+                    const data = {
+                        unknown: false,
+                        attendance: sets.attendance,
+                        students: sets.students,
+                        classes: sets.classes,
+                        hasAttendanceTable: sets.attendance.size > 0,
+                        /* (student_id, att_date) unique = the upsert the register
+                           relies on. Without it a re-save would pile a second row
+                           on the same pupil for the same day. */
+                        uniqueDayKey: idx.some(function (k) { return k.unique && k.cols === "student_id,att_date"; })
+                    };
+                    attSchemaCache = { at: Date.now(), data };
+                    done(data);
+                }
+            );
         }
     );
+}
+
+function attSchema(cb) {
+    if (attSchemaCache && Date.now() - attSchemaCache.at < ATT_SCHEMA_TTL) return cb(attSchemaCache.data);
+    if (attSchemaWaiters) { attSchemaWaiters.push(cb); return; }
+    attSchemaWaiters = [cb];
+    attProbeSchema(function (data) {
+        const waiters = attSchemaWaiters || [];
+        attSchemaWaiters = null;
+        waiters.forEach(function (f) { try { f(data); } catch (e) { console.log(e); } });
+    });
+}
+
+/* "does this column exist?" — unknown schema is treated as the documented
+   one so this can never make a working query worse. */
+function attHas(schema, table, col) {
+    if (!schema || schema.unknown) return true;
+    const set = schema[table];
+    return !!set && set.has(col);
+}
+function attTable(schema, table) {
+    if (!schema || schema.unknown) return true;
+    const set = schema[table];
+    return !!set && set.size > 0;
+}
+
+/* TRIM only — Arabic class names must survive byte for byte (no
+   LOWERCASE on either side, it has corrupted Arabic in some engines). */
+function attClassName(raw) {
+    return String(raw == null ? "" : raw).trim();
+}
+
+/* A DATE column never accepts junk: validate here so a stray value gives
+   the teacher a 400 with a sentence, not a 1292 error that surfaces as 500. */
+function attDateOnly(raw) {
+    const v = String(raw == null ? "" : raw).trim();
+    return /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : "";
+}
+
+/* One-line explanation for the page when part of the job could not be done.
+   Response headers must stay 7-bit ASCII, hence the scrub. */
+function attNotice(res, text) {
+    if (!text) return;
+    try {
+        res.setHeader("X-AMS-Notice", String(text).replace(/[^\x20-\x7E]+/g, " ").trim().slice(0, 400));
+    } catch (e) { /* headers already sent — the notice is optional */ }
+}
+
+/* Honest failures: log the real MySQL error AND hand it to the page. */
+function attDbFail(res, err, what) {
+    const detail = err ? String(err.sqlMessage || err.message || err.code || err) : "unknown database error";
+    console.log("[attendance] " + what + " failed:", (err && (err.code || err.sqlMessage || err.message)) || err);
+    return res.status(500).json({ message: "Could not " + what + " — database said: " + detail, detail: detail });
+}
+
+/* The roster rule used everywhere in this module: pupils of this class that
+   are not marked withdrawn/graduated. `status` is only referenced when the
+   column exists; matching happens on trimmed bytes. */
+function attRosterSql(schema) {
+    let sql = "SELECT s.student_id, s.full_name";
+    if (attHas(schema, "students", "gender")) sql += ", s.gender";
+    sql += " FROM students s";
+    const where = [];
+    if (attHas(schema, "students", "status")) where.push("(s.status IS NULL OR LOWER(TRIM(s.status)) = 'active')");
+    if (attHas(schema, "students", "class_name")) where.push("TRIM(s.class_name) = TRIM(?)");
+    if (where.length) sql += " WHERE " + where.join(" AND ");
+    return sql + " ORDER BY s.full_name";
+}
+
+/* The class names in this school live in two tables (classes + students) and
+   are typed by hand, so the same class can differ by a double space, a
+   non-breaking space or Latin case. This folder is used ONLY for the
+   last-resort comparison; only ASCII is lowercased because lowercasing
+   Arabic in some engines corrupts it. */
+function attFoldClass(raw) {
+    return String(raw == null ? "" : raw)
+        .replace(/[\u00A0\u2007\u202F\u200B\uFEFF]/g, " ")
+        .replace(/\s+/g, " ")
+        .trim()
+        .replace(/[A-Z]/g, function (c) { return c.toLowerCase(); });
+}
+
+/* Last-resort roster: whole students table, filtered in JavaScript. Needs
+   no column guarantees and no collation agreement at all. */
+function attRosterFromJs(className, done) {
+    connection.query("SELECT * FROM students", (err, rows) => {
+        if (err) return done(err, null);
+        const want = attFoldClass(className);
+        const list = (rows || [])
+            .filter(function (s) {
+                const st = s.status == null ? "active" : attFoldClass(s.status);
+                return (st === "active" || st === "") && attFoldClass(s.class_name) === want;
+            })
+            .map(function (s) {
+                return { student_id: s.student_id, full_name: s.full_name, gender: s.gender == null ? null : s.gender };
+            })
+            .sort(function (a, b) { return String(a.full_name || "").localeCompare(String(b.full_name || "")); });
+        done(null, list);
+    });
+}
+
+function attLoadRoster(schema, className, done) {
+    connection.query(attRosterSql(schema), [className], function (err, rows) {
+        if (err) {
+            console.log("[attendance] roster query failed, falling back to the JS roster:", err.code || err.sqlMessage || err.message);
+            return attRosterFromJs(className, done);
+        }
+        rows = rows || [];
+        if (rows.length) {
+            return done(null, rows.map(function (r) {
+                return { student_id: r.student_id, full_name: r.full_name, gender: r.gender == null ? null : r.gender };
+            }));
+        }
+        /* Zero rows is the OTHER half of this bug report ("the students are
+           not displaying"): an exact comparison that disagrees by one
+           invisible space. Retry once with the folded comparison instead of
+           telling the teacher the class is empty. */
+        return attRosterFromJs(className, function (e2, list) {
+            if (e2) {
+                console.log("[attendance] roster fallback failed too:", e2.code || e2.sqlMessage || e2.message);
+                return done(null, []);
+            }
+            done(null, list || []);
+        });
+    });
+}
+
+/* NEW (pack 108): the register used to die on `attendance.class_name`, a
+   column that only exists on databases created from pack 13 onwards. Marks
+   are therefore looked up by pupil + day, which the table has always had
+   one row for. Returns {status} per student_id through the callback. */
+function attLoadMarks(schema, date, roster, done) {
+    if (!attTable(schema, "attendance") || !attHas(schema, "attendance", "att_date") || !attHas(schema, "attendance", "status")) {
+        return done({ missing: true });
+    }
+    const ids = roster.map(function (r) { return String(r.student_id); }).filter(Boolean);
+    if (!ids.length) return done(null, {});
+    let sql = "SELECT student_id, status FROM attendance WHERE att_date = ? AND student_id IN (?)";
+    if (attHas(schema, "attendance", "id")) sql += " ORDER BY id DESC";
+    connection.query(sql, [date, ids], function (err, rows) {
+        if (err) {
+            /* A broken/absent marks table must never hide the class list. */
+            console.log("[attendance] marks query failed:", err.code || err.sqlMessage || err.message);
+            return done({ failed: err });
+        }
+        const by = {};
+        (rows || []).forEach(function (m) {
+            const k = String(m.student_id);
+            if (!(k in by)) by[k] = m.status;
+        });
+        done(null, by);
+    });
+}
+
+/* Distinct class names from BOTH the classes table AND the students table,
+   so the dropdown always offers every class that actually has pupils.
+   NEW (pack 108): each side is cast to ONE collation before the UNION —
+   mixing two table collations in a UNION is an "Illegal mix of collations"
+   error, and that 500 is exactly why the dropdown was falling back to the
+   plain /classes list. The characters are untouched (utf8mb4 holds the
+   Arabic as-is); only the comparison rules are agreed on. */
+app.get("/api/distinct-classes", requireLogin, (req, res) => {
+    attSchema(function (schema) {
+        const fromStudents = attTable(schema, "students") && attHas(schema, "students", "class_name");
+        const fromClasses = attTable(schema, "classes") && attHas(schema, "classes", "class_name");
+        const cast = function (alias) {
+            return "SELECT DISTINCT CONVERT(TRIM(" + alias + ") USING utf8mb4) COLLATE utf8mb4_unicode_ci AS class_name";
+        };
+        const parts = [];
+        if (fromStudents) {
+            let s = cast("class_name") + " FROM students WHERE class_name IS NOT NULL AND TRIM(class_name) != ''";
+            if (attHas(schema, "students", "status")) s += " AND (status IS NULL OR LOWER(TRIM(status)) = 'active')";
+            parts.push(s);
+        }
+        if (fromClasses) {
+            parts.push(cast("class_name") + " FROM classes WHERE class_name IS NOT NULL AND TRIM(class_name) != ''");
+        }
+        if (!parts.length) {
+            return res.json([]);
+        }
+        connection.query(parts.join(" UNION ") + " ORDER BY class_name", (err, rows) => {
+            if (err) {
+                console.log("[attendance] distinct-classes failed:", err.code || err.sqlMessage || err.message);
+                /* One side alone is still better than an empty dropdown. */
+                if (parts.length > 1) {
+                    return connection.query(parts[0] + " ORDER BY class_name", (e2, r2) => {
+                        if (e2) return attDbFail(res, e2, "load the class list");
+                        res.json((r2 || []).map(function (x) { return { class_name: x.class_name }; }));
+                    });
+                }
+                return attDbFail(res, err, "load the class list");
+            }
+            res.json((rows || []).map(function (x) { return { class_name: x.class_name }; }));
+        });
+    });
 });
 
 /* Portal: attendance for a student (used by parent portal) */
@@ -6693,84 +6981,395 @@ app.get("/portal/attendance", (req, res) => {
     );
 });
 
+/* THE MARK REGISTER (pack 108 rewrite — same URL, same JSON array, same
+   row fields as always, so nothing else on the page or in the PDFs has to
+   change). Steps: roster -> marks -> merge. A failure in step two can only
+   ever cost the "already marked today" tick, never the list of pupils. */
 app.get("/attendance/class", requireLogin, (req, res) => {
-    const className = (req.query.class_name || "").trim();
-    const date = (req.query.date || "").trim();
-    if (!className || !date) return res.status(400).json({ message: "class_name and date are required." });
-    connection.query(
-        `SELECT s.student_id, s.full_name, s.gender, a.status
-         FROM students s
-         LEFT JOIN attendance a
-           ON a.student_id = s.student_id
-          AND a.att_date = ?
-          AND LOWER(TRIM(a.class_name)) = LOWER(TRIM(?))
-         WHERE TRIM(s.class_name) = TRIM(?)
-           AND (s.status IS NULL OR LOWER(TRIM(s.status)) = 'active')
-         ORDER BY s.full_name`,
-        /* The roster is always selected from the student's current class.
-           Keeping the historical class check in the LEFT JOIN means an old
-           attendance row can never remove a current student from the list. */
-        [date, className, className],
-        (err, rows) => {
-            if (err) { console.log(err); return res.status(500).json({ message: "Database error" }); }
-            res.json(rows);
+    const className = attClassName(req.query.class_name);
+    const date = attDateOnly(req.query.date);
+    if (!className) return res.status(400).json({ message: "Pick a class first (class_name is required)." });
+    if (!date) return res.status(400).json({ message: "Pick a real date (YYYY-MM-DD) for the register." });
+
+    attSchema(function (schema) {
+        if (!attTable(schema, "students") || !attHas(schema, "students", "class_name")) {
+            return res.status(503).json({
+                message: "The register needs a class_name column in the students table and this database does not have it yet. Restarting the server adds it automatically (nothing else is touched), then the class list appears here."
+            });
         }
-    );
+        attLoadRoster(schema, className, function (rErr, roster) {
+            if (rErr) return attDbFail(res, rErr, "load the class list from the students table");
+            roster = roster || [];
+            if (!roster.length) {
+                /* Empty is a real answer here — but say WHY if the table we
+                   compare against does not even exist. */
+                if (!attTable(schema, "students")) {
+                    attNotice(res, "The students table is not available yet, so no class list could be built.");
+                }
+                return res.json([]);
+            }
+            attLoadMarks(schema, date, roster, function (mErr, byId) {
+                if (mErr && mErr.missing) {
+                    attNotice(res, !attTable(schema, "attendance")
+                        ? "There is no attendance table in this database yet, so nothing could be read back and everyone starts as Present. The table is created automatically when the server starts - if this message stays after a restart, the database user needs CREATE permission."
+                        : "The attendance table does not have its att_date/status column yet, so marks saved earlier could not be shown - everyone starts as Present. Mark the class and save as usual; the start-up repair adds the missing column on the next restart.");
+                } else if (mErr) {
+                    attNotice(res, "Marks saved earlier could not be read from the attendance table, so everyone starts as Present. You can still mark and save the register.");
+                }
+                const marks = byId || {};
+                res.json(roster.map(function (r) {
+                    r.status = marks[String(r.student_id)] || null;
+                    return r;
+                }));
+            });
+        });
+    });
 });
 
+/* SAVE. NEW (pack 108): the insert is built from the columns that exist,
+   and when the (student_id, att_date) unique key is missing the day is
+   cleared for those pupils first — otherwise ON DUPLICATE KEY UPDATE never
+   fires and a second save silently doubles every name in the register. */
 app.post("/attendance/save", requireLogin, (req, res) => {
-    const className = (req.body.class_name || "").trim();
-    const date = (req.body.date || "").trim();
+    const className = attClassName(req.body.class_name);
+    const date = attDateOnly(req.body.date);
     const records = Array.isArray(req.body.records) ? req.body.records : [];
-    if (!className || !date || !records.length) {
-        return res.status(400).json({ message: "class_name, date and records are required." });
-    }
+    if (!className) return res.status(400).json({ message: "class_name is required." });
+    if (!date) return res.status(400).json({ message: "A valid date (YYYY-MM-DD) is required." });
+    if (!records.length) return res.status(400).json({ message: "No marks to save - load the register first." });
+
     const valid = ["present", "absent", "late"];
     const markedBy = req.session.username || null;
-    const rows = records
+    const wanted = records
         .filter(r => r && r.student_id && valid.includes(r.status))
-        .map(r => [String(r.student_id), className, date, r.status, markedBy]);
-    if (!rows.length) return res.status(400).json({ message: "No valid records supplied." });
-    connection.query(
-        `INSERT INTO attendance (student_id, class_name, att_date, status, marked_by)
-         VALUES ?
-         ON DUPLICATE KEY UPDATE status = VALUES(status), marked_by = VALUES(marked_by)`,
-        [rows],
-        (err) => {
-            if (err) { console.log(err); return res.status(500).json({ message: "Database error" }); }
-            res.json({ message: "Attendance saved", count: rows.length });
+        .map(r => ({ student_id: String(r.student_id), status: r.status }));
+    if (!wanted.length) return res.status(400).json({ message: "No valid records supplied." });
+
+    attSchema(function (schema) {
+        if (!attTable(schema, "attendance")) {
+            return res.status(503).json({
+                message: "Attendance could not be saved because the 'attendance' table is not in this database yet. It is created automatically when the server starts — if you can see this after a restart, the database user needs CREATE/ALTER permission (then restart once)."
+            });
         }
-    );
+        if (!attHas(schema, "attendance", "att_date") || !attHas(schema, "attendance", "student_id") || !attHas(schema, "attendance", "status")) {
+            return res.status(503).json({
+                message: "Attendance could not be saved: the 'attendance' table is missing its student_id/att_date/status column. The automatic repair at server start-up will add it — restart the app once and try again."
+            });
+        }
+        const cols = ["student_id", "att_date", "status"];
+        if (attHas(schema, "attendance", "class_name")) cols.push("class_name");
+        if (attHas(schema, "attendance", "marked_by")) cols.push("marked_by");
+        const values = wanted.map(function (w) {
+            const out = [w.student_id, date, w.status];
+            if (attHas(schema, "attendance", "class_name")) out.push(className);
+            if (attHas(schema, "attendance", "marked_by")) out.push(markedBy);
+            return out;
+        });
+        const dup = cols.indexOf("class_name") !== -1
+            ? " ON DUPLICATE KEY UPDATE status = VALUES(status), marked_by = VALUES(marked_by)"
+            : " ON DUPLICATE KEY UPDATE status = VALUES(status)";
+        const doInsert = function () {
+            connection.query(
+                "INSERT INTO attendance (" + cols.map(function (c) { return "`" + c + "`"; }).join(", ") + ") VALUES ?" +
+                (schema.uniqueDayKey ? dup : ""),
+                [values],
+                (err) => {
+                    if (err) return attDbFail(res, err, "save the attendance register");
+                    if (!attHas(schema, "attendance", "class_name")) {
+                        attNotice(res, "Saved. Note: this database's attendance table has no class_name column, so the class was not recorded against each row.");
+                    }
+                    res.json({ message: "Attendance saved", count: values.length });
+                }
+            );
+        };
+        if (schema.uniqueDayKey || !attHas(schema, "attendance", "class_name")) return doInsert();
+        /* No unique key: replace the day's rows for these pupils instead of
+           appending a duplicate set. */
+        connection.query(
+            "DELETE FROM attendance WHERE att_date = ? AND student_id IN (?)",
+            [date, wanted.map(function (w) { return w.student_id; })],
+            function (dErr) {
+                if (dErr) console.log("[attendance] pre-save clean skipped:", dErr.code || dErr.message);
+                doInsert();
+            }
+        );
+    });
 });
 
+/* DATE-RANGE REPORT. NEW (pack 108): the class is matched through a
+   collation both sides agree on, and on databases whose attendance table
+   has no class_name column the report falls back to the pupils currently
+   in that class rather than dying with 1054/1267. */
 app.get("/attendance/report", requireLogin, (req, res) => {
-    const className = (req.query.class_name || "").trim();
-    const from = (req.query.from || "").trim();
-    const to = (req.query.to || "").trim();
-    if (!className || !from || !to) return res.status(400).json({ message: "class_name, from and to are required." });
-    connection.query(
-        `SELECT a.student_id, s.full_name,
+    const className = attClassName(req.query.class_name);
+    const from = attDateOnly(req.query.from);
+    const to = attDateOnly(req.query.to);
+    if (!className) return res.status(400).json({ message: "Pick a class first." });
+    if (!from || !to) return res.status(400).json({ message: "Pick a real 'from' and 'to' date (YYYY-MM-DD)." });
+
+    attSchema(function (schema) {
+        if (!attTable(schema, "attendance") || !attHas(schema, "attendance", "att_date")) {
+            attNotice(res, "There is no readable attendance table yet, so the report is empty.");
+            return res.json([]);
+        }
+        const agg = `SELECT a.student_id, s.full_name,
                 SUM(a.status = 'present') AS present,
                 SUM(a.status = 'absent')  AS absent,
                 SUM(a.status = 'late')    AS late,
-                COUNT(*) AS marked
-         FROM attendance a
-         JOIN students s ON s.student_id = a.student_id
-         WHERE CONVERT(a.class_name USING utf8mb4) COLLATE utf8mb4_unicode_ci
-               = CONVERT(? USING utf8mb4) COLLATE utf8mb4_unicode_ci
-           AND a.att_date BETWEEN ? AND ?
-         GROUP BY a.student_id, s.full_name
-         ORDER BY s.full_name`,
-        /* Reports deliberately use the class saved with each attendance
-           record, not the student's current class, so moves and renames do
-           not rewrite or hide historical attendance. */
-        [className, from, to],
-        (err, rows) => {
-            if (err) { console.log(err); return res.status(500).json({ message: "Database error" }); }
-            res.json(rows);
-        }
-    );
+                COUNT(*) AS marked`;
+        const tail = " GROUP BY a.student_id, s.full_name ORDER BY s.full_name";
+        const join = " FROM attendance a JOIN students s ON s.student_id = a.student_id";
+        const byClass = attHas(schema, "attendance", "class_name")
+            ? `CONVERT(a.class_name USING utf8mb4) COLLATE utf8mb4_unicode_ci = CONVERT(? USING utf8mb4) COLLATE utf8mb4_unicode_ci`
+            : `CONVERT(TRIM(s.class_name) USING utf8mb4) COLLATE utf8mb4_unicode_ci = CONVERT(TRIM(?) USING utf8mb4) COLLATE utf8mb4_unicode_ci`;
+        const sql = agg + join + " WHERE " + byClass + " AND a.att_date BETWEEN ? AND ?" + tail;
+        connection.query(sql, [className, from, to], (err, rows) => {
+            if (err) {
+                console.log("[attendance] report failed, retrying without the class filter:", err.code || err.sqlMessage || err.message);
+                /* Collation or a missing column on the class comparison: the
+                   marks themselves are still readable, so report the whole
+                   date range for the pupils of that class matched in JS. */
+                return connection.query(
+                    "SELECT a.student_id, a.status, a.att_date, s.full_name, s.class_name" + join + " WHERE a.att_date BETWEEN ? AND ?",
+                    [from, to],
+                    (e2, r2) => {
+                        if (e2) return attDbFail(res, e2, "build the attendance report");
+                        const by = {};
+                        (r2 || []).forEach(function (r) {
+                            if (attClassName(r.class_name) !== className) return;
+                            const k = String(r.student_id);
+                            const e = by[k] || (by[k] = { student_id: r.student_id, full_name: r.full_name, present: 0, absent: 0, late: 0, marked: 0 });
+                            e.marked++;
+                            if (r.status === "present") e.present++;
+                            else if (r.status === "absent") e.absent++;
+                            else if (r.status === "late") e.late++;
+                        });
+                        res.json(Object.keys(by).map(function (k) { return by[k]; }).sort(function (a, b) {
+                            return String(a.full_name || "").localeCompare(String(b.full_name || ""));
+                        }));
+                    }
+                );
+            }
+            res.json(rows || []);
+        });
+    });
 });
+
+/* "Already taken for this date" banner (pack 14). NEW (pack 108): a missing
+   or half-built attendance table simply means "not taken yet" — it must
+   never turn into a red error on top of the register. */
+app.get("/attendance/summary", requireLogin, (req, res) => {
+    const className = attClassName(req.query.class_name);
+    const date = attDateOnly(req.query.date);
+    if (!className || !date) return res.status(400).json({ message: "class_name and date are required." });
+
+    attSchema(function (schema) {
+        if (!attTable(schema, "attendance") || !attHas(schema, "attendance", "att_date")) {
+            return res.json({ taken: false, total: 0, present: 0, absent: 0, late: 0, marked_by: null, saved_at: null });
+        }
+        const hasStatus = attHas(schema, "attendance", "status");
+        const hasMarkedBy = attHas(schema, "attendance", "marked_by");
+        const hasCreatedAt = attHas(schema, "attendance", "created_at");
+        /* The banner must count THIS CLASS only. When the attendance table
+           carries no class_name (pre-pack-13 databases), the class comes from
+           the pupil's own row instead of silently counting the whole school. */
+        const viaAttendance = attHas(schema, "attendance", "class_name");
+        const viaStudents = !viaAttendance && attTable(schema, "students") && attHas(schema, "students", "class_name");
+        const fromAndWhere = viaAttendance
+            ? " FROM attendance WHERE CONVERT(class_name USING utf8mb4) COLLATE utf8mb4_unicode_ci = CONVERT(? USING utf8mb4) COLLATE utf8mb4_unicode_ci AND att_date = ?"
+            : (viaStudents
+                ? " FROM attendance a JOIN students s ON s.student_id = a.student_id WHERE a.att_date = ? AND CONVERT(TRIM(s.class_name) USING utf8mb4) COLLATE utf8mb4_unicode_ci = CONVERT(TRIM(?) USING utf8mb4) COLLATE utf8mb4_unicode_ci"
+                : " FROM attendance WHERE att_date = ?");
+        const params = viaAttendance || viaStudents ? [className, date] : [date];
+        if (viaStudents) params.reverse();
+        connection.query(
+            `SELECT COUNT(*) AS total,
+                    ${hasStatus ? "SUM(status = 'present') AS present, SUM(status = 'absent') AS absent, SUM(status = 'late') AS late," : "0 AS present, 0 AS absent, 0 AS late,"}
+                    ${hasMarkedBy ? "MAX(marked_by) AS marked_by," : "NULL AS marked_by,"}
+                    ${hasCreatedAt ? "MAX(created_at) AS saved_at" : "NULL AS saved_at"}
+             ` + fromAndWhere,
+            params,
+            (err, rows) => {
+                if (err) {
+                    console.log("[attendance] summary failed:", err.code || err.sqlMessage || err.message);
+                    return res.json({ taken: false, total: 0, present: 0, absent: 0, late: 0, marked_by: null, saved_at: null });
+                }
+                const r = (rows && rows[0]) || {};
+                res.json({
+                    taken: Number(r.total) > 0,
+                    total: Number(r.total) || 0,
+                    present: Number(r.present) || 0,
+                    absent: Number(r.absent) || 0,
+                    late: Number(r.late) || 0,
+                    marked_by: r.marked_by || null,
+                    saved_at: r.saved_at || null
+                });
+            }
+        );
+    });
+});
+
+/* Per-pupil history (pack 17) — same guards, an unreadable table reads as
+   "no history yet" instead of a 500. */
+app.get("/attendance/student", requireLogin, (req, res) => {
+    const sid = (req.query.student_id || "").trim();
+    if (!sid) return res.status(400).json({ message: "student_id is required." });
+    attSchema(function (schema) {
+        if (!attTable(schema, "attendance") || !attHas(schema, "attendance", "att_date")) return res.json([]);
+        const extra = (attHas(schema, "attendance", "class_name") ? ", a.class_name" : "") +
+            (attHas(schema, "attendance", "status") ? ", a.status" : "");
+        connection.query(
+            `SELECT a.att_date${extra}, s.full_name
+             FROM attendance a
+             LEFT JOIN students s ON s.student_id = a.student_id
+             WHERE a.student_id = ?
+             ORDER BY a.att_date DESC
+             LIMIT 366`,
+            [sid],
+            (err, rows) => {
+                if (err) {
+                    console.log("[attendance] history failed:", err.code || err.sqlMessage || err.message);
+                    return res.json([]);
+                }
+                res.json(rows || []);
+            }
+        );
+    });
+});
+
+/* NEW (pack 108): BOOT REPAIR for the attendance table. Purely additive and
+   guarded the same way as the other pack migrations (its own short-lived
+   connection, information_schema consulted first, retried a few times while
+   the database is warming up, silent if the user has no ALTER/CREATE right):
+     - creates `attendance` when it is missing entirely;
+     - appends only the columns a legacy copy does not have (class_name and
+       marked_by are the two that break the register on older databases);
+     - adds the (student_id, att_date) unique key when the table holds no
+       duplicate day rows, because the register's upsert depends on it.
+   Nothing is renamed, converted or deleted — existing marks are untouched. */
+function ensureAttendanceSchema(attempt) {
+    const conn = addonConnection();
+    conn.connect((err) => {
+        if (err) { conn.destroy(); return attBootRetry(attempt, err); }
+        conn.query(
+            `SELECT COLUMN_NAME AS c FROM information_schema.COLUMNS
+              WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'attendance'`,
+            (qErr, rows) => {
+                if (qErr) { conn.end(); return attBootRetry(attempt, qErr); }
+                const have = new Set((rows || []).map(function (r) { return String(r.c).toLowerCase(); }));
+                if (!have.size) {
+                    conn.query(
+                        `CREATE TABLE IF NOT EXISTS attendance (
+                            id INT AUTO_INCREMENT PRIMARY KEY,
+                            student_id VARCHAR(100) NOT NULL,
+                            class_name VARCHAR(150) NOT NULL DEFAULT '',
+                            att_date DATE NOT NULL,
+                            status ENUM('present','absent','late') NOT NULL DEFAULT 'present',
+                            marked_by VARCHAR(100),
+                            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                            UNIQUE KEY uniq_student_day (student_id, att_date),
+                            INDEX (att_date)
+                        ) DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
+                        (cErr) => {
+                            conn.end();
+                            if (cErr) {
+                                console.log("[attendance] boot repair could not create the table:", cErr.code || cErr.message);
+                                return attBootRetry(attempt, cErr);
+                            }
+                            attSchemaCache = null;
+                            console.log("Attendance setup ready (attendance table created with the one-row-per-pupil-per-day key).");
+                        }
+                    );
+                    return;
+                }
+                const adds = [];
+                if (!have.has("student_id")) adds.push("ADD COLUMN student_id VARCHAR(100) NOT NULL DEFAULT ''");
+                if (!have.has("class_name")) adds.push("ADD COLUMN class_name VARCHAR(150) NOT NULL DEFAULT ''");
+                if (!have.has("att_date")) adds.push("ADD COLUMN att_date DATE NULL");
+                if (!have.has("status")) adds.push("ADD COLUMN status ENUM('present','absent','late') NOT NULL DEFAULT 'present'");
+                if (!have.has("marked_by")) adds.push("ADD COLUMN marked_by VARCHAR(100) NULL");
+                if (adds.length) {
+                    conn.query("ALTER TABLE attendance " + adds.join(", "), (aErr) => {
+                        if (aErr && aErr.code !== "ER_DUP_FIELDNAME") {
+                            console.log("[attendance] boot repair skipped (columns):", aErr.code || aErr.message);
+                        } else {
+                            attSchemaCache = null;
+                            console.log("Attendance setup ready (added " + adds.length + " missing column(s) to the attendance table).");
+                        }
+                        conn.end();
+                        ensureAttendanceDayKey();
+                    });
+                } else {
+                    conn.end();
+                    ensureAttendanceDayKey();
+                }
+            }
+        );
+    });
+}
+
+/* The (student_id, att_date) unique key needs its own guarded pass, because
+   it is only safe once we know the table holds no duplicate day rows. */
+function ensureAttendanceDayKey() {
+    const conn = addonConnection();
+    conn.connect((err) => {
+        if (err) { conn.destroy(); return; }
+        conn.query(
+            `SELECT INDEX_NAME AS i, GROUP_CONCAT(COLUMN_NAME ORDER BY SEQ_IN_INDEX) AS cols, MAX(NON_UNIQUE) AS nu
+               FROM information_schema.STATISTICS
+              WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'attendance'
+              GROUP BY INDEX_NAME`,
+            (iErr, rows) => {
+                if (iErr) {
+                    conn.end();
+                    return console.log("[attendance] boot repair skipped (index check):", iErr.code || iErr.message);
+                }
+                const already = (rows || []).some(function (x) {
+                    return Number(x.nu) === 0 && String(x.cols || "").toLowerCase().replace(/\s+/g, "") === "student_id,att_date";
+                });
+                if (already) return conn.end();
+                conn.query(
+                    "SELECT student_id, att_date FROM attendance GROUP BY student_id, att_date HAVING COUNT(*) > 1 LIMIT 1",
+                    (dErr, dRows) => {
+                        if (dErr) {
+                            conn.end();
+                            return console.log("[attendance] boot repair skipped (duplicate check):", dErr.code || dErr.message);
+                        }
+                        if ((dRows || []).length) {
+                            conn.end();
+                            console.log("[attendance] the table already holds duplicate day rows - the register upserts by (student_id, date) anyway, so nothing was deleted. Add the unique key once the duplicates are merged if you want it enforced at the table level.");
+                            return;
+                        }
+                        conn.query(
+                            "ALTER TABLE attendance ADD UNIQUE KEY uniq_student_day (student_id, att_date)",
+                            (aErr) => {
+                                conn.end();
+                                if (aErr && aErr.code !== "ER_DUP_KEYNAME") {
+                                    return console.log("[attendance] boot repair skipped (unique key):", aErr.code || aErr.message);
+                                }
+                                attSchemaCache = null;
+                                console.log("Attendance setup ready (one row per pupil per day enforced).");
+                            }
+                        );
+                    }
+                );
+            }
+        );
+    });
+}
+
+function attBootRetry(attempt, err) {
+    const reason = err && (err.code || err.message) || err;
+    if (attempt >= 4) {
+        console.log("[attendance] boot repair gave up after 4 attempts:", reason);
+        console.log("  -> The register keeps working anyway: every attendance query now adapts to the table it finds.");
+        return;
+    }
+    console.log(`[attendance] boot repair: attempt ${attempt} failed (${reason}); retrying in 4s...`);
+    setTimeout(() => ensureAttendanceSchema(attempt + 1), 4000);
+}
+
+ensureAttendanceSchema(1);
 
 /* ---------- Staff attendance + weekly evaluations ------------------- */
 app.get("/staff-list", requireLogin, (req, res) => {
@@ -7087,40 +7686,11 @@ app.delete("/fee-payment/:id", requireLogin, requireAdmin, (req, res) => {
     });
 });
 
-/* ---------- Attendance "already taken for this date" summary --------
-   Lets the register WARN before re-taking (avoids duplicate surprises);
-   editing and saving again stays fully allowed (upsert). */
-app.get("/attendance/summary", requireLogin, (req, res) => {
-    const className = (req.query.class_name || "").trim();
-    const date = (req.query.date || "").trim();
-    if (!className || !date) return res.status(400).json({ message: "class_name and date are required." });
-    connection.query(
-        `SELECT COUNT(*) AS total,
-                SUM(status = 'present') AS present,
-                SUM(status = 'absent')  AS absent,
-                SUM(status = 'late')    AS late,
-                MAX(marked_by) AS marked_by,
-                MAX(created_at) AS saved_at
-         FROM attendance
-         WHERE CONVERT(class_name USING utf8mb4) COLLATE utf8mb4_unicode_ci
-               = CONVERT(? USING utf8mb4) COLLATE utf8mb4_unicode_ci
-           AND att_date = ?`,
-        [className, date],
-        (err, rows) => {
-            if (err) { console.log(err); return res.status(500).json({ message: "Database error" }); }
-            const r = rows && rows[0] ? rows[0] : {};
-            res.json({
-                taken: Number(r.total) > 0,
-                total: Number(r.total) || 0,
-                present: Number(r.present) || 0,
-                absent: Number(r.absent) || 0,
-                late: Number(r.late) || 0,
-                marked_by: r.marked_by || null,
-                saved_at: r.saved_at || null
-            });
-        }
-    );
-});
+/* GET /attendance/summary (the "already taken for this date" banner) MOVED
+   (pack 108) into the student-attendance section above, where it adapts to
+   the columns that exist and reports "not taken yet" instead of a 500 when
+   the attendance table is missing or half-built. */
+
 
 /* ---------- School settings ------------------------------------------
    SECURITY (split): the public GET below returns ONLY the harmless
@@ -8612,26 +9182,10 @@ app.get("/receipt-alerts", requireLogin, requireAdmin, (req, res) => {
     });
 });
 
-/* NEW (pack 17 - owner request): EVERY day attendance was marked for ONE
-   particular student (dates in rows) - powers the attendance page's new
-   per-student history card and its PDF download. */
-app.get("/attendance/student", requireLogin, (req, res) => {
-    const sid = (req.query.student_id || "").trim();
-    if (!sid) return res.status(400).json({ message: "student_id is required." });
-    connection.query(
-        `SELECT a.att_date, a.status, a.class_name, s.full_name
-         FROM attendance a
-         LEFT JOIN students s ON s.student_id = a.student_id
-         WHERE a.student_id = ?
-         ORDER BY a.att_date DESC
-         LIMIT 366`,
-        [sid],
-        (err, rows) => {
-            if (err) { console.log(err); return res.status(500).json({ message: "Database error" }); }
-            res.json(rows);
-        }
-    );
-});
+/* GET /attendance/student (per-pupil history, pack 17) MOVED (pack 108) into
+   the student-attendance section above, where it now reads the schema first
+   and answers an empty history instead of a 500 when the table is missing. */
+
 
 /* ---------- MADRASAH CALENDAR (admin) --------------------------------
    publishes ONE at a time: publishing auto-unpublishes the rest so the
