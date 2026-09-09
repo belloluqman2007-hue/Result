@@ -78,6 +78,7 @@
       ["add-subject.html","Classes & Subjects","book"],
       ["manage-classes.html","Class Management","home"],
       ["timetable.html","Timetables","calendar"],
+      ["arabic-timetable.html","الجدول الدراسي","calendar"],
       ["create-exam.html","Create Exam","pen"],
       ["lesson-planner.html","Lesson Planner","book"],
       ["ai-remarks.html","AI Chat","spark"],
