@@ -22,7 +22,9 @@
       <a class="btn btn-light" href="teacher-dashboard.html">Dashboard</a>
       <button class="btn btn-light" id="adminToggle" type="button">Admin Panel</button>
       <button class="btn btn-light" id="printAllBtn" type="button">Print All Classes</button>
+      <button class="btn btn-light" id="downloadAllBtn" type="button">⬇ Download All (PDF)</button>
       <button class="btn btn-gold" id="printBtn" type="button">🖨 Print This Class</button>
+      <button class="btn btn-gold" id="downloadBtn" type="button">⬇ Download PDF</button>
     </div>
   </header>
 
@@ -94,6 +96,11 @@
 
   <div class="toast no-print" id="ttToast" role="status"></div>
 
+  <!-- NEW (PDF download): local copies of jsPDF + html2canvas, used by
+       the Download PDF / Download All buttons to save the timetable
+       sheets as a real A4 PDF file (portrait or landscape). -->
+  <script src="js/vendor/jspdf.umd.min.js"></script>
+  <script src="js/vendor/html2canvas.min.js"></script>
   <script src="js/arabic-timetable.js"></script>
 </body>
 </html>
