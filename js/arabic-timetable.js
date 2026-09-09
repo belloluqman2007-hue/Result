@@ -14,9 +14,10 @@
 
   /* ---- Printed sheet content (stays in Arabic) ---- */
   var DEFAULT_CONFIG = {
-    bismillah: "بسم الله الرحمن الرحيم",
     school: "مدرسة أمين الله للعلوم العربية الإسلامية",
-    motto: "شعبة العلم والعبادة",
+    schoolEn: "AMEENULLAH SCHOOL OF ARABIC AND ISLAMIC STUDIES",
+    motto: "الشعار: العلم والعبادة",
+    mottoEn: "MOTTO: KNOWLEDGE AND WORSHIP",
     term: "الجدول الدراسي للفترة الأول 1446 / 2025/2026",
     morningTitle: "في الصباح",
     eveningTitle: "في المساء",
@@ -42,8 +43,14 @@
       { n: 2, time: "05:31–غروب الشمس" }
     ],
     breakAfter: 2,
-    breakLabel: "فسحة"
+    breakLabel: "الاستراحة",
+    breakTime: "10:00 – 10:30"
   };
+
+  /* Values saved by older builds that must be upgraded in place
+     (see migrateConfig) so existing timetables keep their data. */
+  var LEGACY_BREAK_LABELS = ["فسحة"];
+  var LEGACY_MOTTO = "شعبة العلم والعبادة";
 
   /* ---- Sample data: used only when the school has no class list yet ---- */
   var DEFAULT_CLASSES = [
@@ -152,10 +159,36 @@
     if (data && data.config) {
       state.config = Object.assign(clone(DEFAULT_CONFIG), data.config);
     }
+    migrateConfig();
     if (data && data.currentId) state.currentId = data.currentId;
     if (data && (data.orientation === "landscape" || data.orientation === "portrait")) {
       state.orientation = data.orientation;
     }
+  }
+
+  /* Upgrade letterhead / break values saved by older builds, so a
+     timetable saved before this version still prints with the new
+     header (Arabic + English names, الشعار/MOTTO line) and the new
+     الاستراحة row. Anything the school typed itself is left alone. */
+  function migrateConfig() {
+    var cfg = state.config;
+    if (!cfg) return;
+
+    var sameAr = function (a, b) { return normName(a) === normName(b); };
+
+    if (!String(cfg.school || "").trim()) cfg.school = DEFAULT_CONFIG.school;
+    if (!String(cfg.schoolEn || "").trim()) cfg.schoolEn = DEFAULT_CONFIG.schoolEn;
+
+    if (!String(cfg.motto || "").trim() || sameAr(cfg.motto, LEGACY_MOTTO)) {
+      cfg.motto = DEFAULT_CONFIG.motto;
+    }
+    if (!String(cfg.mottoEn || "").trim()) cfg.mottoEn = DEFAULT_CONFIG.mottoEn;
+
+    var label = String(cfg.breakLabel || "").trim();
+    if (!label || LEGACY_BREAK_LABELS.some(function (old) { return sameAr(label, old); })) {
+      cfg.breakLabel = DEFAULT_CONFIG.breakLabel;
+    }
+    if (!String(cfg.breakTime || "").trim()) cfg.breakTime = DEFAULT_CONFIG.breakTime;
   }
 
   function save() {
@@ -345,19 +378,22 @@
       '</svg>';
   }
 
+  /* Letterhead: the crest sits ONCE, on the left, with the school
+     names + motto beside it (the old green basmala photo banner that
+     used to sit above the header is gone). */
   function letterheadHtml(cfg) {
     return '<div class="letterhead">' +
-      '<img class="bismillah-img" src="images/bismillah.png" alt="' + esc(cfg.bismillah) + '" ' +
-        'onerror="this.style.display=\'none\'; this.nextElementSibling.style.display=\'block\'">' +
-      '<p class="bismillah-text" style="display:none">' + esc(cfg.bismillah) + "</p>" +
       '<div class="letter-row">' +
         '<img class="crest" src="images/LOGO.JPG" alt="شعار المدرسة">' +
         '<div class="letter-names">' +
           '<h2 class="school-ar">' + esc(cfg.school) + "</h2>" +
-          '<p class="motto">' + esc(cfg.motto) + "</p>" +
+          '<p class="school-en">' + esc(cfg.schoolEn) + "</p>" +
+          '<p class="motto">' +
+            '<span class="motto-ar">' + esc(cfg.motto) + "</span>" +
+            (cfg.mottoEn ? '<span class="motto-en">' + esc(cfg.mottoEn) + "</span>" : "") +
+          "</p>" +
           '<div class="term-line">' + esc(cfg.term) + "</div>" +
         "</div>" +
-        '<img class="crest" src="images/LOGO.JPG" alt="">' +
       "</div>" +
     "</div>" +
     '<div class="gold-rule"></div>';
@@ -382,7 +418,11 @@
     cfg.morningPeriods.forEach(function (p, i) {
       if (cfg.breakAfter && i === cfg.breakAfter) {
         html += '<tr class="break-row"><td colspan="' + (2 + days.length) + '">' +
-          esc(cfg.breakLabel) + "</td></tr>";
+          '<span class="break-label">' + esc(cfg.breakLabel) + "</span>" +
+          (cfg.breakTime
+            ? '<span class="break-time">' + esc(cfg.breakTime) + "</span>"
+            : "") +
+          "</td></tr>";
       }
       html += '<tr><td class="num">' + p.n + '</td><td class="time">' + esc(p.time) + "</td>";
       days.forEach(function (d) {
@@ -485,8 +525,10 @@
     var cls = currentClass();
     var nameInput = document.getElementById("classNameInput");
     var termInput = document.getElementById("termInput");
+    var breakTimeInput = document.getElementById("breakTimeInput");
     if (nameInput) nameInput.value = cls ? cls.name : "";
     if (termInput) termInput.value = state.config.term || "";
+    if (breakTimeInput) breakTimeInput.value = state.config.breakTime || "";
 
     var morningHost = document.getElementById("adminMorning");
     var eveningHost = document.getElementById("adminEvening");
@@ -625,25 +667,99 @@
     toast("Sample data restored.");
   }
 
-  function printOne() {
-    state.printAll = false;
+  /* ---------- Fit to exactly one A4 page ---------- */
+
+  /* The sheet is laid out at the real printable page width and then
+     measured: if it is taller than the printable height, it is zoomed
+     down (never up, never below 60 %) just enough to fit. Landscape
+     therefore always prints on a single A4 page instead of spilling
+     onto a second one. `zoom` is a layout-level zoom, so the printer
+     sees the scaled box too; browsers that do not support it simply
+     print the (already compacted) sheet as before. */
+  function ttPageBox(orientation) {
+    var landscape = orientation === "landscape";
+    // A4 minus the 8 mm @page margins on every side.
+    return { w: (landscape ? 297 : 210) - 16, h: (landscape ? 210 : 297) - 16 };
+  }
+
+  function ttPxPerMm() {
+    var probe = document.createElement("div");
+    probe.style.cssText = "position:absolute;left:-100000px;top:0;width:100mm;height:1mm;";
+    document.body.appendChild(probe);
+    var w = probe.getBoundingClientRect().width;
+    if (probe.parentNode) probe.parentNode.removeChild(probe);
+    return w > 0 ? w / 100 : 0;
+  }
+
+  /* Returns the list of sheets that were zoomed, so the zoom can be
+     cleared again once the print dialog is closed. */
+  function ttFitSheets(sheets) {
+    var pxPerMm = ttPxPerMm();
+    if (!pxPerMm) return [];
+    var box = ttPageBox(state.orientation);
+    var availW = box.w * pxPerMm;
+    var availH = box.h * pxPerMm;
+    var zoomed = [];
+    Array.prototype.forEach.call(sheets || [], function (sheet) {
+      sheet.style.zoom = "";
+      var prevWidth = sheet.style.width;
+      sheet.style.width = availW + "px";
+      var h = sheet.getBoundingClientRect().height;
+      sheet.style.width = prevWidth;
+      if (h > availH + 1) {
+        var k = availH / h;
+        if (k < 1 && k > 0.6) {
+          sheet.style.zoom = String(k);
+          zoomed.push(sheet);
+        }
+      }
+    });
+    return zoomed;
+  }
+
+  function ttClearFit(sheets) {
+    Array.prototype.forEach.call(sheets || [], function (sheet) {
+      sheet.style.zoom = "";
+      sheet.style.width = "";
+    });
+  }
+
+  function ttPrint(all) {
+    state.printAll = !!all;
     applyOrientation();
     renderSheets();
-    document.body.classList.remove("print-all");
-    setTimeout(function () { window.print(); }, 50);
+    document.body.classList.toggle("print-all", !!all);
+
+    var sheets = document.querySelectorAll("#sheets .sheet");
+    var fire = function () {
+      ttFitSheets(sheets);
+      setTimeout(function () { window.print(); }, 40);
+    };
+
+    // The Arabic web fonts change the text metrics — wait for them,
+    // but never block the print dialog on a slow font load.
+    if (document.fonts && document.fonts.ready) {
+      var fired = false;
+      var go = function () { if (!fired) { fired = true; fire(); } };
+      try { document.fonts.ready.then(go, go); } catch (e) { go(); }
+      setTimeout(go, 1200);
+    } else {
+      fire();
+    }
+  }
+
+  function printOne() {
+    ttPrint(false);
   }
 
   function printAll() {
-    state.printAll = true;
-    applyOrientation();
-    renderSheets();
-    document.body.classList.add("print-all");
-    setTimeout(function () { window.print(); }, 50);
+    ttPrint(true);
   }
 
   function onPrinted() {
     state.printAll = false;
     document.body.classList.remove("print-all");
+    ttClearFit(document.querySelectorAll("#sheets .sheet"));
     renderSheets();
   }
 
@@ -823,6 +939,15 @@
     if (termInput) {
       termInput.addEventListener("input", function () {
         state.config.term = termInput.value;
+        save();
+        renderSheets();
+      });
+    }
+
+    var breakTimeInput = document.getElementById("breakTimeInput");
+    if (breakTimeInput) {
+      breakTimeInput.addEventListener("input", function () {
+        state.config.breakTime = breakTimeInput.value;
         save();
         renderSheets();
       });
