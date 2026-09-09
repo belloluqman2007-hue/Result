@@ -322,11 +322,16 @@ table.mg-table tr:last-child td{ border-bottom:none; }
      sheet has to be their containing block on EVERY page (calendar-beauty.css
      already did this for the studio; the portal only loads this file). */
   position:relative; overflow:hidden;
+  /* FILL-A4 PACK: the sheet is a flex column so the weeks table
+     (.cal-tablewrap) can stretch and fill the page - see the .cal-pdf /
+     .cal-printfit locks below for the exact A4 boxes. */
+  display:flex; flex-direction:column;
 }
-/* A4 FIX PACK - the crest is now a little WIDER than the old 56x56 dot
-   (80x68) and the masthead text keeps clear of it. */
-.cal-head{ position:relative; padding-left:92px; }
-.cal-logo{ position:absolute; left:0; top:2px; width:80px; height:68px; object-fit:cover; border-radius:50%; }
+/* FILL-A4 PACK - the crest box now matches the image's own shape
+   (776x802) and object-fit:contain shows the WHOLE seal - the Arabic
+   ring text and the motto banner are never cropped or squashed. */
+.cal-head{ position:relative; padding-left:94px; }
+.cal-logo{ position:absolute; left:0; top:2px; width:78px; height:81px; object-fit:contain; border-radius:10px; }
 .cal-head-text{ text-align:center; }
 /* A4 FIX PACK - letterhead dressing: gold corner accents + a double rule
    under the masthead. Purely decorative, absolutely positioned / zero-flow,
@@ -357,7 +362,9 @@ table.mg-table tr:last-child td{ border-bottom:none; }
   text-align:center; font-weight:800; font-size:14.5px; text-transform:uppercase;
   text-decoration:underline; margin:10px 0 8px; letter-spacing:.3px;
 }
-.cal-table{ width:100%; border-collapse:collapse; font-size:12px; }
+/* FILL-A4 PACK: wrapper that lets the weeks table stretch to fill the page */
+.cal-tablewrap{ flex:1 0 auto; display:flex; flex-direction:column; min-height:0; }
+.cal-table{ width:100%; border-collapse:collapse; font-size:12px; flex:1 0 auto; }
 .cal-table th, .cal-table td{ border:1.6px solid #222; padding:4px 7px; text-align:left; vertical-align:middle; }
 .cal-table th{ font-weight:800; text-transform:uppercase; }
 .cal-table .w{ width:10%; font-weight:700; text-align:center; }
@@ -436,18 +443,32 @@ table.mg-table tr:last-child td{ border-bottom:none; }
 /* PDF capture copy AND the print preview copy: ALWAYS the desktop A4
    letterhead, whatever the device. Without this the phone rules below
    (stacked signatures, wrapped lesson times) leaked into the download and
-   into the printed page and pushed the calendar onto a second sheet. */
+   into the printed page and pushed the calendar onto a second sheet.
+
+   FILL-A4 PACK: the two boxes are now the EXACT paper the copy is destined
+   for -
+     .cal-pdf       = the FULL A4 page (210 x 297mm): jsPDF places the
+                      capture over the whole page, edge to edge.
+     .cal-printfit  = the printer's box (194mm wide, min 280mm tall inside
+                      the 8mm @page margin).
+   In both, the sheet is a flex column and the weeks table stretches, so
+   the content FILLS the box top to bottom - no empty band, no shrinking. */
 .cal-sheet.cal-pdf,
 .cal-sheet.cal-printfit{
-  width:190mm !important; max-width:190mm !important;
-  padding:8mm 10mm 0 !important; margin:0 !important; box-shadow:none !important;
+  max-width:none !important; box-shadow:none !important;
+  display:flex !important; flex-direction:column !important;
+  padding:8mm 10mm 0 !important; margin:0 !important;
 }
-.cal-sheet.cal-pdf{ margin:0 !important; }
-.cal-sheet.cal-printfit{ margin:0 auto !important; }
+.cal-sheet.cal-pdf{ width:210mm !important; height:297mm !important; margin:0 !important; }
+.cal-sheet.cal-printfit{ width:194mm !important; min-height:280mm !important; margin:0 auto !important; }
+.cal-sheet.cal-pdf .cal-tablewrap,
+.cal-sheet.cal-printfit .cal-tablewrap{ flex:1 0 auto !important; display:flex !important; flex-direction:column !important; min-height:0 !important; }
+.cal-sheet.cal-pdf .cal-table,
+.cal-sheet.cal-printfit .cal-table{ flex:1 0 auto !important; }
 .cal-sheet.cal-pdf .cal-head,
-.cal-sheet.cal-printfit .cal-head{ padding-left:104px !important; padding-right:12px !important; }
+.cal-sheet.cal-printfit .cal-head{ padding-left:122px !important; padding-right:12px !important; }
 .cal-sheet.cal-pdf .cal-logo,
-.cal-sheet.cal-printfit .cal-logo{ left:10px !important; top:8px !important; width:92px !important; height:78px !important; }
+.cal-sheet.cal-printfit .cal-logo{ left:12px !important; top:8px !important; width:96px !important; height:99px !important; object-fit:contain !important; border-radius:14px !important; }
 .cal-sheet.cal-pdf .cal-name-band,
 .cal-sheet.cal-printfit .cal-name-band{ font-size:18px !important; letter-spacing:1.2px !important; padding:6px 12px !important; }
 .cal-sheet.cal-pdf .cal-title,
@@ -476,7 +497,7 @@ table.mg-table tr:last-child td{ border-bottom:none; }
   .mcb-preview-stage{ background:none !important; border:none !important; padding:0 !important; margin:0 !important; box-shadow:none !important; }
   .cal-sheet{
     margin:0 auto !important; box-shadow:none !important;
-    width:100% !important; max-width:190mm !important; padding:8mm 10mm 0 !important;
+    width:100% !important; max-width:194mm !important; padding:8mm 10mm 0 !important;
   }
   /* the wrapper height is set inline by amsFitCalendarSheet() to the scaled
      sheet height, so the sheet stops exactly at the bottom of page 1 */

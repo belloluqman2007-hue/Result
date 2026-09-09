@@ -164,12 +164,16 @@ function calPreview() {
 
 /* ==========================================================================
    NEW (A4 fix pack - owner report: "the print calendar goes beyond A4")
+   CHANGED (fill-A4 pack - owner: "the print need to fill the whole A4 page,
+   no empty spaces and not shrinking")
    --------------------------------------------------------------------------
    Measures the rendered letterhead at the EXACT geometry the printer uses
-   (.cal-printfit = 190mm wide, 8mm/10mm padding, desktop layout with the two
-   signatures side by side) and lets amsFitCalendarSheet() shrink it - first by
-   tightening the typography, then by scaling - until it is guaranteed to fit
-   one A4 page. The density classes stay on the sheet (so the preview is what
+   (.cal-printfit = 194mm wide, min-height 280mm = the A4 box inside the 8mm
+   @page margin, desktop layout with the two signatures side by side) and
+   lets amsFitCalendarSheet() act ONLY if the content is genuinely taller
+   than the page (tighten typography, then scale). A normal calendar is
+   never shrunk: the flex column + stretching weeks table fill the page
+   instead. The density classes stay on the sheet (so the preview is what
    prints); the measuring class comes straight back off.
    ========================================================================== */
 function calFitPreview() {
@@ -180,8 +184,9 @@ function calFitPreview() {
 
   sheet.classList.add("cal-printfit");
   var fit = window.amsFitCalendarSheet(sheet, {
-    widthMm: 190,   /* sheet width the printer gets */
-    heightMm: 279,  /* A4 297mm - 2 x 8mm @page margin, minus 2mm of slack */
+    widthMm: 194,   /* sheet width the printer gets (A4 - 2 x 8mm) */
+    heightMm: 281,  /* the printable box is 280mm; 1mm slack so pixel
+                       rounding can never trigger a needless shrink */
     sizer: wrap
   });
   sheet.classList.remove("cal-printfit");

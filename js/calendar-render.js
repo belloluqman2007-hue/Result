@@ -87,7 +87,15 @@
     title.textContent = data.title_line || "";
     sheet.appendChild(title);
 
-    /* ---------- weeks table ---------- */
+    /* ---------- weeks table ----------
+       NEW (fill-A4 pack): the table lives inside a .cal-tablewrap flex box.
+       When the sheet is pinned to the exact A4 printable height (print and
+       PDF), the wrapper and the table stretch and the surplus height is
+       distributed across the week rows - so the calendar grid FILLS the
+       page top to bottom instead of leaving an empty band at the bottom
+       (and without shrinking anything). When the content is taller than
+       the page, nothing stretches and the fit helper tightens typography
+       as before. */
     var tbl = document.createElement("table");
     tbl.className = "cal-table";
     var thead = document.createElement("thead");
@@ -107,7 +115,10 @@
     ntr.innerHTML = "<td class=\"w\"></td><td><b>" + esc(data.note_label || "") + "</b></td><td class=\"d\"><b>" + esc(noteDate) + "</b></td>";
     tbody.appendChild(ntr);
     tbl.appendChild(tbody);
-    sheet.appendChild(tbl);
+    var tblwrap = document.createElement("div");
+    tblwrap.className = "cal-tablewrap";
+    tblwrap.appendChild(tbl);
+    sheet.appendChild(tblwrap);
 
     /* ---------- lesson times ---------- */
     if (lessons.length || data.lessons_title) {
@@ -281,14 +292,18 @@
   };
 
   /* ONE shared full-page PDF builder for the portal card, staff dashboard and admin studio.
-     Renders the FULL letterhead sheet (never compact) inside a FIXED A4-proportioned
-     capture box, preloads images, captures cleanly without screen drop-shadows, and
-     drops the result on ONE A4 page filling the printable area.
+     Renders the FULL letterhead sheet (never compact) inside a capture box that is
+     EXACTLY one A4 page, preloads images, captures cleanly without screen
+     drop-shadows, and drops the result on ONE A4 page filling it edge to edge.
 
-     A4 = 210 x 297 mm. With a 14pt (~4.9mm) margin the printable area is
-     200.1 x 287.1 mm, so a 190mm-wide sheet is captured 272.6mm tall: exactly the
-     same aspect ratio as the printable area, which is why the result always fills
-     the page instead of leaving a short strip at the bottom. */
+     CHANGED (fill-A4 pack - owner: "the calendar print need to fill the whole
+     A4 page, no empty spaces and not shrinking"): the capture box is now the
+     FULL A4 page - 210 x 297 mm - and the sheet is a flex column whose week
+     rows stretch to fill it (css .cal-tablewrap), so the raster has exactly
+     the paper's aspect ratio and jsPDF places it over the WHOLE page with no
+     margin strip and nothing scaled down. The typography-only fit still runs
+     first as a safety valve for calendars whose content is genuinely taller
+     than one page. */
   window.amsCalendarPDF = function (data, sigMap, done, filename) {
     if (!window.html2canvas || !window.jspdf) {
       alert("PDF generator is still loading - try again in a moment.");
@@ -296,8 +311,8 @@
       return;
     }
 
-    var SHEET_W_MM = 190;
-    var SHEET_H_MM = 272.6;
+    var SHEET_W_MM = 210;
+    var SHEET_H_MM = 297;
 
     var stage = document.createElement("div");
     stage.style.cssText = "position:fixed; left:-10000px; top:0; width:" + SHEET_W_MM + "mm; background:#ffffff; padding:0; margin:0;";
@@ -319,10 +334,11 @@
     stage.appendChild(sheet);
     document.body.appendChild(stage);
 
-    /* Shrink the typography until the content is inside the capture box, so
-       nothing is clipped by overflow:hidden and nothing is squashed later. */
+    /* Tighten the typography ONLY if the content is genuinely taller than the
+       page (normal calendars never get here - they stretch to fill instead).
+       +0.6mm of slack so pixel rounding can never trigger a needless step. */
     window.amsFitCalendarSheet(sheet, {
-      widthMm: SHEET_W_MM, heightMm: SHEET_H_MM, allowScale: false
+      widthMm: SHEET_W_MM, heightMm: SHEET_H_MM + 0.6, allowScale: false
     });
 
     function waitForImages(container) {
@@ -354,13 +370,12 @@
       var pdf = new window.jspdf.jsPDF({ unit: "pt", format: "a4" });
       var pageW = pdf.internal.pageSize.getWidth();   // 595.28 pt
       var pageH = pdf.internal.pageSize.getHeight();  // 841.89 pt
-      var margin = 14;                                // ~4.9mm
 
-      var maxW = pageW - margin * 2;
-      var maxH = pageH - margin * 2;
-
-      /* ONE page, always: shrink to the printable area, never crop, never spill. */
-      var scale = Math.min(maxW / canvas.width, maxH / canvas.height);
+      /* ONE page, ALWAYS the WHOLE page: the capture box is exactly A4, so the
+         uniform fit scale is 1 on both axes - the image covers the full page
+         with no empty margin strip and nothing scaled down. The maths stays
+         generic (fit + centre) so it can never crop or spill either. */
+      var scale = Math.min(pageW / canvas.width, pageH / canvas.height);
       var imgW = canvas.width * scale;
       var imgH = canvas.height * scale;
 

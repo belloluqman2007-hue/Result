@@ -69,7 +69,9 @@ body.wb2-body{
   border-bottom:1px solid rgba(231,197,91,.22);
 }
 .wb2-head-in{ display:flex; align-items:center; gap:12px; padding:10px 0; }
-.wb2-logo{ width:46px; height:46px; border-radius:12px; background:#fff; padding:3px; box-shadow:var(--wb-shadow-sm); }
+/* CHANGED (Arabic pack): the crest is 776x802 (not square) - object-fit:contain
+   shows the WHOLE logo instead of squashing it into the box. */
+.wb2-logo{ width:46px; height:46px; border-radius:12px; background:#fff; padding:3px; box-shadow:var(--wb-shadow-sm); object-fit:contain; }
 .wb2-brand{ color:#fff; font-weight:800; font-size:15px; line-height:1.2; }
 .wb2-brand small{ display:block; font-weight:600; font-size:11px; color:var(--wb-gold-soft); letter-spacing:.6px; }
 .wb2-nav{ margin-left:auto; display:flex; align-items:center; gap:4px; flex-wrap:wrap; }
@@ -123,6 +125,7 @@ body.wb2-body{
 .wb2-hero-logo{
   width:104px; height:104px; border-radius:26px; background:#fff; padding:6px;
   box-shadow:0 18px 44px -12px rgba(0,0,0,.45), 0 0 0 6px rgba(231,197,91,.18);
+  object-fit:contain; /* CHANGED (Arabic pack): whole crest, never squashed */
   animation:wb2-rise .8s ease both;
 }
 @keyframes wb2-rise{ from{ opacity:0; transform:translateY(14px) scale(.96);} to{ opacity:1; transform:none;} }
@@ -367,7 +370,7 @@ body.wb2-body{
   background:var(--wb-emerald-950); color:#C2D8C9; text-align:center; padding:50px 0 34px;
   border-top:4px solid var(--wb-gold); font-size:14px;
 }
-.wb2-foot-logo{ width:64px; height:64px; border-radius:16px; background:#fff; padding:4px; margin-bottom:14px; }
+.wb2-foot-logo{ width:64px; height:64px; border-radius:16px; background:#fff; padding:4px; margin-bottom:14px; object-fit:contain; /* CHANGED (Arabic pack) */ }
 .wb2-foot b{ color:#fff; font-size:16px; letter-spacing:.4px; }
 .wb2-foot-ar{ font-family:'Amiri',serif; color:var(--wb-gold-soft); font-size:19px; margin:8px 0 14px; }
 .wb2-foot-line{ margin:4px 0; opacity:.9; }
@@ -638,3 +641,54 @@ body.wb2-body{
 /* phones that ask for less motion: jump instead of glide */
 @media (prefers-reduced-motion:reduce){ html{ scroll-behavior:auto; } }
 /* ===================== end NEW (pack 103) / CHANGED (pack 104) ===================== */
+
+/* ==========================================================================
+   NEW (Arabic pack) - ARABIC ACCENTS THROUGHOUT THE PUBLIC WEBSITE
+   Owner: "Add some Arabic to the public website."
+   Additive only: every element it styles was added in this pack. The
+   school's name, motto and stage names now appear in Arabic in the
+   header, hero, every section heading, the program/step/role cards,
+   the admission panel and the footer - in the manuscript Amiri face
+   already used by the site, in gold/jade to match the theme.
+   ========================================================================== */
+.wb2-brand .wb2-ar{
+  display:block; font-family:'Amiri',serif; font-weight:700;
+  font-size:12.5px; line-height:1.45; letter-spacing:0;
+  color:#CFE4D6; text-transform:none;
+}
+.wb2-hero-bismillah{
+  font-family:'Amiri',serif; font-size:clamp(17px,2.8vw,22px);
+  color:var(--wb-gold-soft); margin-top:18px;
+  text-shadow:0 2px 12px rgba(0,0,0,.4);
+}
+.wb2-ar-sub{
+  font-family:'Amiri',serif; font-size:clamp(17px,2.4vw,21px); line-height:1.5;
+  color:var(--wb-jade); margin-top:2px;
+}
+/* dark sections read better in gold */
+.wb2-board .wb2-ar-sub, .wb2-login .wb2-ar-sub, .wb2-honour .wb2-ar-sub{ color:var(--wb-gold-soft); }
+.wb2-prog-ar{
+  display:block; font-family:'Amiri',serif; font-size:15.5px; line-height:1.4;
+  color:var(--wb-gold-soft); margin-top:3px; position:relative;
+}
+.wb2-step-ar{
+  display:block; font-family:'Amiri',serif; font-size:15px; line-height:1.4;
+  color:var(--wb-jade); margin:-3px 0 5px;
+}
+.wb2-role-ar{
+  display:block; font-family:'Amiri',serif; font-size:14.5px; line-height:1.4;
+  color:var(--wb-gold-soft); margin-top:1px;
+}
+.wb2-contact-ar{
+  font-family:'Amiri',serif; font-size:16px; line-height:1.5;
+  color:var(--wb-emerald-2); margin:2px 0 6px;
+}
+.wb2-foot-motto{
+  font-family:'Amiri',serif; font-size:17px; color:var(--wb-gold-soft);
+  margin:-4px 0 14px;
+}
+/* keep the header tidy on phones - the Arabic brand line follows the same
+   hide rule as the English sub-line (compact 2-row phone header) */
+@media (max-width:760px){
+  .wb2-brand .wb2-ar{ display:none; }
+}
