@@ -402,91 +402,111 @@ body.landscape .toolbar {
    in print AND in the PDF capture) so the whole timetable stays on
    one page and displays normally. */
 body.landscape .sheet {
-  padding: 10px 14px 12px;
+  padding: 8px 12px 10px;
 }
 
 body.landscape .letterhead {
-  padding: 4px 8px 6px;
+  padding: 3px 6px 4px;
 }
 
-body.landscape .bismillah-img {
-  width: 24%;
-  max-width: 130px;
-  margin-bottom: 4px;
-}
-
-body.landscape .bismillah-text {
-  font-size: 18px;
-  margin-bottom: 4px;
+body.landscape .letter-row {
+  gap: 10px;
 }
 
 body.landscape .letter-row img.crest {
-  width: 44px;
-  height: 44px;
+  width: 48px;
+  height: 48px;
   border-width: 2px;
   box-shadow: 0 0 0 2px var(--emerald);
 }
 
 body.landscape .school-ar {
-  font-size: 20px;
+  font-size: 19px;
+}
+
+body.landscape .school-en {
+  font-size: 10.5px;
+  letter-spacing: 0.4px;
+  margin-top: 1px;
 }
 
 body.landscape .motto {
-  font-size: 15px;
+  font-size: 14px;
+  margin-top: 2px;
 }
 
 body.landscape .term-line {
-  font-size: 12.5px;
-  padding: 4px 14px;
-  margin-top: 6px;
+  font-size: 12px;
+  padding: 3px 14px;
+  margin-top: 5px;
 }
 
 body.landscape .gold-rule {
-  height: 6px;
-  margin: 6px 4px 8px;
+  height: 5px;
+  margin: 5px 4px 7px;
 }
 
 body.landscape .class-banner {
-  font-size: 17px;
-  padding: 5px 10px;
-  margin: 0 8px 8px;
+  font-size: 16px;
+  padding: 4px 10px;
+  margin: 0 8px 7px;
+}
+
+body.landscape .class-banner small {
+  font-size: 11px;
 }
 
 body.landscape .block {
-  margin-bottom: 8px;
+  margin-bottom: 7px;
 }
 
 body.landscape .block-head {
-  font-size: 15px;
-  padding: 5px 10px;
+  font-size: 14px;
+  padding: 4px 10px;
 }
 
 body.landscape .tt th,
 body.landscape .tt td {
-  padding: 5px 6px;
+  padding: 4px 6px;
+}
+
+body.landscape .tt thead th {
+  font-size: 12px;
 }
 
 body.landscape .tt td {
-  font-size: 13.5px;
+  font-size: 13px;
+}
+
+body.landscape .tt .num {
+  width: 44px;
 }
 
 body.landscape .tt .time {
-  width: 104px;
-  font-size: 11px;
+  width: 96px;
+  font-size: 10.5px;
 }
 
 body.landscape .break-row td {
-  font-size: 12.5px;
-  padding: 3px;
+  font-size: 12px;
+  padding: 2px;
 }
 
 body.landscape .sheet-foot {
-  margin: 10px 14px 2px;
-  padding-top: 6px;
+  margin: 8px 14px 2px;
+  padding-top: 4px;
+}
+
+body.landscape .sig {
+  font-size: 11.5px;
 }
 
 body.landscape .sig .line {
-  margin-top: 20px;
+  margin-top: 14px;
+}
+
+body.landscape .sig b {
+  font-size: 14px;
 }
 
 .btn:disabled,
@@ -544,31 +564,20 @@ select:disabled {
   padding: 6px 8px 8px;
 }
 
-.bismillah-img {
-  max-width: 170px;
-  width: 38%;
-  height: auto;
-  display: block;
-  margin: 0 auto 6px;
-}
-
-.bismillah-text {
-  font-family: var(--amiri);
-  font-size: 22px;
-  color: var(--emerald);
-  margin: 0 0 6px;
-}
-
+/* The crest is rendered ONCE, on the left of the sheet, with the
+   school names + motto beside it (the sheet itself is RTL, so the
+   row is laid out LTR to keep the crest on the left). */
 .letter-row {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 10px;
+  justify-content: flex-start;
+  gap: 14px;
+  direction: ltr;
 }
 
 .letter-row img.crest {
-  width: 54px;
-  height: 54px;
+  width: 60px;
+  height: 60px;
   object-fit: contain;
   background: #fff;
   border-radius: 50%;
@@ -580,22 +589,54 @@ select:disabled {
 .letter-names {
   flex: 1;
   min-width: 0;
+  direction: rtl;
+  text-align: center;
 }
 
 .school-ar {
   font-family: var(--amiri);
-  font-size: 26px;
+  font-size: 25px;
   font-weight: 700;
   color: var(--emerald);
   margin: 0;
-  line-height: 1.45;
+  line-height: 1.4;
+}
+
+.school-en {
+  font-family: var(--cairo);
+  font-size: 12.5px;
+  font-weight: 700;
+  letter-spacing: 0.6px;
+  color: var(--emerald-2);
+  margin: 2px 0 0;
+  direction: ltr;
+  unicode-bidi: isolate;
 }
 
 .motto {
   font-family: var(--amiri);
-  font-size: 18px;
+  font-size: 17px;
   color: var(--gold-deep);
-  margin: 2px 0 0;
+  margin: 3px 0 0;
+  direction: rtl;
+  unicode-bidi: isolate;
+}
+
+.motto-ar {
+  direction: rtl;
+  unicode-bidi: isolate;
+}
+
+.motto-en {
+  display: inline-block;
+  direction: ltr;
+  unicode-bidi: isolate;
+  font-family: var(--cairo);
+  font-size: 0.74em;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+  margin-inline-start: 10px;
+  color: var(--emerald-2);
 }
 
 .term-line {
@@ -767,6 +808,30 @@ select:disabled {
   padding: 4px;
 }
 
+/* الاستراحة row: label + its own time slot. */
+.break-label {
+  direction: rtl;
+  unicode-bidi: isolate;
+}
+
+.break-time {
+  display: inline-block;
+  direction: ltr;
+  unicode-bidi: isolate;
+  font-family: var(--cairo);
+  font-size: 0.9em;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+  margin-inline-start: 12px;
+  color: #6a5420;
+}
+
+.break-time::before {
+  content: "•";
+  margin-inline-end: 8px;
+  color: var(--gold-deep);
+}
+
 .sheet-foot {
   position: relative;
   z-index: 3;
@@ -835,6 +900,13 @@ select:disabled {
   padding: 6px 5px;
 }
 
+/* Landscape keeps its compacted metrics inside the capture stage too,
+   so the downloaded PDF matches the screen preview and the print. */
+body.landscape .tt-capture .tt td {
+  font-size: 13px;
+  padding: 4px 6px;
+}
+
 .toast {
   position: fixed;
   bottom: 18px;
@@ -901,11 +973,11 @@ select:disabled {
   .app-bar .brand h1 {
     font-size: 16px;
   }
-  .bismillah-img {
-    width: 62%;
-  }
   .letter-row {
     flex-direction: column;
+  }
+  .letter-names {
+    text-align: center;
   }
   .class-banner {
     font-size: 18px;
