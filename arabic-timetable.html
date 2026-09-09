@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>الجدول الدراسي | مدرسة أمين الله للعلوم العربية الإسلامية</title>
+  <meta name="description" content="الجدول الدراسي القابل للطباعة لمدرسة أمين الله للعلوم العربية الإسلامية — الفترة الأولى 1446 / 2025/2026">
+  <meta name="theme-color" content="#0c3327">
+  <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <link rel="stylesheet" href="css/arabic-timetable.css">
+</head>
+<body>
+
+  <header class="app-bar no-print">
+    <img class="crest" src="images/LOGO.JPG" alt="شعار المدرسة">
+    <div class="brand">
+      <h1>الجدول الدراسي</h1>
+      <p>مدرسة أمين الله للعلوم العربية الإسلامية · شعبة العلم والعبادة</p>
+    </div>
+    <div class="app-actions">
+      <a class="btn btn-light" href="teacher-dashboard.html">لوحة التحكم</a>
+      <button class="btn btn-light" id="adminToggle" type="button">لوحة الإدارة</button>
+      <button class="btn btn-light" id="printAllBtn" type="button">طباعة جميع الفصول</button>
+      <button class="btn btn-gold" id="printBtn" type="button">🖨 طباعة هذا الفصل</button>
+    </div>
+  </header>
+
+  <div class="toolbar no-print">
+    <section class="selector-card">
+      <div class="selector-head">
+        <h2>اختر الفصل</h2>
+        <label>القائمة
+          <select id="classSelect" aria-label="اختيار الفصل"></select>
+        </label>
+      </div>
+      <div class="class-pills" id="classPills"></div>
+      <p class="hint">كل فصل له جدول مستقل للطباعة على ورقة A4 مع ترويسة المدرسة. افتح لوحة الإدارة لإضافة فصول بلا حد.</p>
+    </section>
+
+    <section class="admin-card" id="adminCard">
+      <h2>لوحة الإدارة — إضافة وتعديل الفصول</h2>
+      <p class="hint">التغييرات تُحفظ تلقائياً في هذا المتصفح. يمكن إضافة عدد غير محدود من الفصول.</p>
+
+      <div class="admin-grid">
+        <div>
+          <div class="admin-list" id="adminList"></div>
+          <div class="row" style="display:flex; gap:8px; margin-top:10px; flex-wrap:wrap;">
+            <input type="text" id="newClassName" placeholder="اسم الفصل الجديد" style="flex:1; min-width:140px;">
+            <button class="btn btn-emerald" id="addClassBtn" type="button">＋ إضافة فصل</button>
+          </div>
+        </div>
+
+        <div class="admin-editor">
+          <div class="row">
+            <label class="field">اسم الفصل
+              <input type="text" id="classNameInput">
+            </label>
+            <label class="field">عنوان الفترة (يظهر في الترويسة)
+              <input type="text" id="termInput">
+            </label>
+          </div>
+
+          <div class="section-label">☀ في الصباح — ٦ حصص (السبت والأحد)</div>
+          <div id="adminMorning"></div>
+
+          <div class="section-label">☽ في المساء — حصّتان (الاثنين · الثلاثاء · الأربعاء)</div>
+          <div id="adminEvening"></div>
+
+          <div class="admin-actions">
+            <button class="btn btn-ghost" id="duplicateClassBtn" type="button">نسخ هذا الفصل</button>
+            <button class="btn btn-ghost" id="resetBtn" type="button">استعادة البيانات النموذجية</button>
+            <button class="btn btn-danger" id="deleteClassBtn" type="button">حذف الفصل</button>
+          </div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <main class="stage">
+    <div id="sheets"></div>
+  </main>
+
+  <div class="toast no-print" id="ttToast" role="status"></div>
+
+  <script src="js/arabic-timetable.js"></script>
+</body>
+</html>
