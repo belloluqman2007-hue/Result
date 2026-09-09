@@ -647,6 +647,146 @@
     renderSheets();
   }
 
+  /* ---------- PDF download (Download PDF / Download All) ---------- */
+
+  var ttBusy = false;
+
+  /* Wait until every image inside the capture stage is loaded and the
+     web fonts (Amiri / Cairo / Naskh) are ready, so Arabic renders
+     correctly in the exported PDF. */
+  function ttWaitAssets(node) {
+    var imgs = Array.prototype.slice.call(node.querySelectorAll("img"));
+    return Promise.all(imgs.map(function (img) {
+      if (img.complete) return Promise.resolve();
+      return new Promise(function (res) {
+        img.onload = res;
+        img.onerror = res;
+        setTimeout(res, 4000);
+      });
+    })).then(function () {
+      if (document.fonts && document.fonts.ready) {
+        return document.fonts.ready.catch(function () { /* font load failed — fall back */ });
+      }
+      return Promise.resolve();
+    });
+  }
+
+  /* Capture one .sheet element into a JPEG data URL (same pattern the
+     certificate / calendar downloads use), with a blank-canvas guard. */
+  function ttCaptureSheet(sheetEl) {
+    return html2canvas(sheetEl, { scale: 2, backgroundColor: "#ffffff", useCORS: true })
+      .then(function (canvas) {
+        try {
+          var probe = document.createElement("canvas");
+          probe.width = 40;
+          probe.height = 40;
+          var cx = probe.getContext("2d");
+          cx.drawImage(canvas, 0, 0, 40, 40);
+          var d = cx.getImageData(0, 0, 40, 40).data;
+          var ink = 0;
+          for (var i = 0; i < d.length; i += 4) {
+            if (d[i] < 245 || d[i + 1] < 245 || d[i + 2] < 245) ink++;
+          }
+          if (ink < 6) return null;
+        } catch (e) { /* keep going */ }
+        return {
+          url: canvas.toDataURL("image/jpeg", 0.93),
+          width: canvas.width,
+          height: canvas.height
+        };
+      });
+  }
+
+  /* Render every requested sheet into an invisible fixed-width stage
+     (A4 portrait or landscape, matching the print layout), then capture
+     them one by one. */
+  function ttCaptureSheets(list) {
+    var landscape = state.orientation === "landscape";
+    var stage = document.createElement("div");
+    stage.className = "tt-capture";
+    stage.style.width = (landscape ? 1123 : 794) + "px";
+    stage.innerHTML = list.map(function (c) { return sheetHtml(c, state.config); }).join("");
+    document.body.appendChild(stage);
+    return ttWaitAssets(stage)
+      .then(function () {
+        var sheets = Array.prototype.slice.call(stage.querySelectorAll(".sheet"));
+        var shots = [];
+        return sheets.reduce(function (chain, el) {
+          return chain.then(function () {
+            return ttCaptureSheet(el).then(function (shot) {
+              if (shot) shots.push(shot);
+            });
+          });
+        }, Promise.resolve()).then(function () {
+          document.body.removeChild(stage);
+          return shots;
+        });
+      })
+      .catch(function () {
+        if (stage.parentNode) stage.parentNode.removeChild(stage);
+        return [];
+      });
+  }
+
+  /* Build the actual A4 PDF (one page per class, centered, never
+     cropped or stretched) and save it. */
+  function ttDownloadPdf(all) {
+    if (ttBusy) return;
+    if (!window.jspdf || !window.html2canvas) {
+      toast("PDF generator is loading — try again in a moment.");
+      return;
+    }
+    var list = all ? state.classes.slice() : [currentClass()].filter(Boolean);
+    if (!list.length) {
+      toast("No classes to download yet.");
+      return;
+    }
+    ttBusy = true;
+    var btn = document.getElementById(all ? "downloadAllBtn" : "downloadBtn");
+    if (btn) btn.disabled = true;
+    toast(all ? "Building PDF for all classes…" : "Building timetable PDF…");
+
+    ttCaptureSheets(list).then(function (shots) {
+      if (!shots.length) {
+        toast("Could not build the PDF — try again.");
+        return;
+      }
+      var landscape = state.orientation === "landscape";
+      var pdf = new window.jspdf.jsPDF({
+        orientation: landscape ? "landscape" : "portrait",
+        unit: "mm",
+        format: "a4"
+      });
+      var pageW = landscape ? 297 : 210;
+      var pageH = landscape ? 210 : 297;
+      var margin = 8; // mm — same margin as the printed page
+      var availW = pageW - margin * 2;
+      var availH = pageH - margin * 2;
+      shots.forEach(function (shot, i) {
+        if (i > 0) pdf.addPage("a4", landscape ? "landscape" : "portrait");
+        var ratio = shot.width > 0 ? shot.height / shot.width : 1;
+        var fitW = availW;
+        var fitH = fitW * ratio;
+        if (fitH > availH) {
+          fitH = availH;
+          fitW = fitH / ratio;
+        }
+        var fmt = /^data:image\/png/i.test(shot.url) ? "PNG" : "JPEG";
+        pdf.addImage(shot.url, fmt, (pageW - fitW) / 2, (pageH - fitH) / 2, fitW, fitH);
+      });
+      var base = all ? "all-classes" : String(currentClass() ? currentClass().name : "class");
+      var safe = base.replace(/[\\/:*?"<>|]+/g, "_").replace(/\s+/g, " ").trim() || "timetable";
+      pdf.save("timetable-" + safe + "-" + (landscape ? "landscape" : "portrait") + ".pdf");
+      toast("Timetable PDF downloaded ✓ (" + shots.length + " page" + (shots.length > 1 ? "s" : "") + ")");
+    }).catch(function (e) {
+      console.log("ttDownloadPdf error:", e);
+      toast("Could not build the PDF — try again.");
+    }).then(function () {
+      ttBusy = false;
+      if (btn) btn.disabled = false;
+    });
+  }
+
   function toggleAdmin() {
     document.body.classList.toggle("admin-open");
     var on = document.body.classList.contains("admin-open");
@@ -710,6 +850,10 @@
     if (printBtn) printBtn.addEventListener("click", printOne);
     var printAllBtn = document.getElementById("printAllBtn");
     if (printAllBtn) printAllBtn.addEventListener("click", printAll);
+    var downloadBtn = document.getElementById("downloadBtn");
+    if (downloadBtn) downloadBtn.addEventListener("click", function () { ttDownloadPdf(false); });
+    var downloadAllBtn = document.getElementById("downloadAllBtn");
+    if (downloadAllBtn) downloadAllBtn.addEventListener("click", function () { ttDownloadPdf(true); });
 
     window.addEventListener("afterprint", onPrinted);
   }
