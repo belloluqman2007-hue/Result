@@ -38,7 +38,7 @@ body {
 }
 
 html {
-  direction: rtl;
+  direction: ltr;
 }
 
 body {
@@ -291,7 +291,7 @@ body.admin-open .admin-card {
 
 .admin-list button {
   width: 100%;
-  text-align: right;
+  text-align: left;
   background: transparent;
   border: none;
   border-bottom: 1px solid #e8efe9;
@@ -386,8 +386,30 @@ body.admin-open .admin-card {
   padding: 0 12px 40px;
 }
 
+/* Landscape preview: the sheet keeps its design, the stage simply
+   goes wide like an A4 landscape page. Print orientation itself is
+   driven by the JS-injected @page rule. */
+body.landscape .stage {
+  max-width: 1220px;
+}
+
+body.landscape .toolbar {
+  max-width: 1220px;
+}
+
+.btn:disabled,
+select:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.btn:disabled:hover {
+  transform: none;
+}
+
 .sheet {
   position: relative;
+  direction: rtl;
   background: var(--cream);
   border: 2px solid var(--emerald);
   box-shadow: var(--shadow);
@@ -431,8 +453,8 @@ body.admin-open .admin-card {
 }
 
 .bismillah-img {
-  max-width: 280px;
-  width: 62%;
+  max-width: 210px;
+  width: 46%;
   height: auto;
   display: block;
   margin: 0 auto 6px;
@@ -759,7 +781,7 @@ body.admin-open .admin-card {
     font-size: 16px;
   }
   .bismillah-img {
-    width: 78%;
+    width: 62%;
   }
   .letter-row {
     flex-direction: column;
