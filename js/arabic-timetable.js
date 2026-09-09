@@ -1,14 +1,18 @@
 /* ============================================================
-   Ameenullah School — Arabic timetable
-   All class data lives in DEFAULT_CLASSES so extra classes can
-   be added in code, or unlimited classes can be created from
-   the on-screen admin panel (saved in localStorage).
+   Ameenullah School — Printable class timetable
+   Screen UI is in English; the printed sheet itself stays in
+   Arabic (RTL manuscript letterhead · emerald + brass gold).
+   Classes are picked from the school's existing class list
+   (/classes) first; extra timetables can still be added by hand.
+   Print supports both A4 portrait and A4 landscape.
    ============================================================ */
 (function () {
   "use strict";
 
-  var STORAGE_KEY = "ams-arabic-timetables-v1";
+  var STORAGE_KEY = "ams-arabic-timetables-v2";
+  var LEGACY_KEY = "ams-arabic-timetables-v1";
 
+  /* ---- Printed sheet content (stays in Arabic) ---- */
   var DEFAULT_CONFIG = {
     bismillah: "بسم الله الرحمن الرحيم",
     school: "مدرسة أمين الله للعلوم العربية الإسلامية",
@@ -41,7 +45,7 @@
     breakLabel: "فسحة"
   };
 
-  /* ---- Sample data: add more objects here for extra classes ---- */
+  /* ---- Sample data: used only when the school has no class list yet ---- */
   var DEFAULT_CLASSES = [
     {
       id: "ibtidai-3",
@@ -75,7 +79,11 @@
     config: clone(DEFAULT_CONFIG),
     classes: clone(DEFAULT_CLASSES),
     currentId: "",
-    printAll: false
+    printAll: false,
+    orientation: "portrait",   // "portrait" | "landscape"
+    schoolClasses: [],         // existing school classes from /classes
+    schoolLoaded: false,
+    schoolLoadFailed: false
   };
 
   function clone(v) {
@@ -95,6 +103,17 @@
     return "class-" + Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 7);
   }
 
+  /* Compare class names loosely: ignore Arabic harakat/diacritics,
+     extra spaces and case — so a saved "الثالث الابتدائي" matches the
+     official "الثّالث الابتدائيّ" and keeps its timetable data. */
+  function normName(s) {
+    return String(s == null ? "" : s)
+      .replace(/[ً-ٰٟ]/g, "")
+      .replace(/\s+/g, " ")
+      .trim()
+      .toLowerCase();
+  }
+
   function emptyClass(name) {
     var morning = {};
     var evening = {};
@@ -104,7 +123,7 @@
     DEFAULT_CONFIG.eveningDays.forEach(function (d) {
       evening[d.key] = ["", ""];
     });
-    return { id: uid(), name: name || "فصل جديد", morning: morning, evening: evening };
+    return { id: uid(), name: name || "New Class", morning: morning, evening: evening };
   }
 
   function pad(arr, n) {
@@ -114,18 +133,29 @@
   }
 
   function load() {
+    var data = null;
     try {
       var raw = localStorage.getItem(STORAGE_KEY);
-      if (!raw) return;
-      var data = JSON.parse(raw);
-      if (data && Array.isArray(data.classes) && data.classes.length) {
-        state.classes = data.classes;
-      }
-      if (data && data.config) {
-        state.config = Object.assign(clone(DEFAULT_CONFIG), data.config);
-      }
-      if (data && data.currentId) state.currentId = data.currentId;
-    } catch (e) { /* private mode / corrupt storage */ }
+      if (raw) data = JSON.parse(raw);
+    } catch (e) { /* private mode */ }
+    if (!data) {
+      // Migrate v1 data (keeps every saved timetable).
+      try {
+        var legacy = localStorage.getItem(LEGACY_KEY);
+        if (legacy) data = JSON.parse(legacy);
+      } catch (e) { /* corrupt storage */ }
+    }
+    if (!data) return;
+    if (data && Array.isArray(data.classes) && data.classes.length) {
+      state.classes = data.classes;
+    }
+    if (data && data.config) {
+      state.config = Object.assign(clone(DEFAULT_CONFIG), data.config);
+    }
+    if (data && data.currentId) state.currentId = data.currentId;
+    if (data && (data.orientation === "landscape" || data.orientation === "portrait")) {
+      state.orientation = data.orientation;
+    }
   }
 
   function save() {
@@ -133,7 +163,8 @@
       localStorage.setItem(STORAGE_KEY, JSON.stringify({
         classes: state.classes,
         config: state.config,
-        currentId: state.currentId
+        currentId: state.currentId,
+        orientation: state.orientation
       }));
     } catch (e) { /* quota */ }
   }
@@ -150,6 +181,146 @@
     clearTimeout(toast._t);
     toast._t = setTimeout(function () { el.classList.remove("show"); }, 2600);
   }
+
+  /* ---------- Existing school classes (picked first) ---------- */
+
+  function fetchSchoolClasses() {
+    renderExistingPicker();
+    fetch("/classes", { credentials: "same-origin" })
+      .then(function (r) {
+        if (!r.ok) throw new Error("http " + r.status);
+        return r.json();
+      })
+      .then(function (rows) {
+        state.schoolLoaded = true;
+        state.schoolLoadFailed = false;
+        state.schoolClasses = (Array.isArray(rows) ? rows : [])
+          .map(function (c) { return String((c && c.class_name) || "").trim(); })
+          .filter(Boolean);
+        mergeSchoolClasses();
+      })
+      .catch(function () {
+        // Offline / not logged in: keep the saved timetables as-is.
+        state.schoolLoaded = true;
+        state.schoolLoadFailed = true;
+        renderExistingPicker();
+      });
+  }
+
+  /* Every existing school class gets its own timetable. Saved data is
+     matched by name (diacritics-insensitive) so nothing is lost, and the
+     official school spelling is adopted automatically. */
+  function mergeSchoolClasses() {
+    var changed = false;
+    state.schoolClasses.forEach(function (name) {
+      var found = state.classes.find(function (c) { return normName(c.name) === normName(name); });
+      if (found) {
+        if (found.name !== name) {
+          found.name = name;
+          changed = true;
+        }
+      } else {
+        state.classes.push(emptyClass(name));
+        changed = true;
+      }
+    });
+    if (changed) {
+      save();
+      refresh();
+      toast("Class list updated from the school register.");
+    } else {
+      renderExistingPicker();
+    }
+  }
+
+  function renderExistingPicker() {
+    var sel = document.getElementById("existingClassSelect");
+    var btn = document.getElementById("addExistingBtn");
+    var hint = document.getElementById("existingHint");
+    if (!sel || !btn) return;
+
+    if (!state.schoolLoaded) {
+      sel.innerHTML = '<option value="">Loading school classes…</option>';
+      sel.disabled = true;
+      btn.disabled = true;
+      if (hint) hint.textContent = "Loading your existing school classes…";
+      return;
+    }
+
+    if (!state.schoolClasses.length) {
+      sel.innerHTML = state.schoolLoadFailed
+        ? '<option value="">Could not load school classes</option>'
+        : '<option value="">No school classes found</option>';
+      sel.disabled = true;
+      btn.disabled = true;
+      if (hint) hint.textContent = state.schoolLoadFailed
+        ? "Could not reach the class list (are you logged in?). You can still add classes manually below."
+        : "No classes in the school list yet — add one manually below.";
+      return;
+    }
+
+    var missing = state.schoolClasses.filter(function (name) {
+      return !state.classes.some(function (c) { return normName(c.name) === normName(name); });
+    });
+
+    sel.innerHTML = "";
+    if (!missing.length) {
+      var done = document.createElement("option");
+      done.value = "";
+      done.textContent = "All school classes already added ✓";
+      sel.appendChild(done);
+      sel.disabled = true;
+      btn.disabled = true;
+      if (hint) hint.textContent = "Every existing school class already has a timetable. You can still add extras below.";
+      return;
+    }
+
+    missing.forEach(function (name) {
+      var opt = document.createElement("option");
+      opt.value = name;
+      opt.textContent = name;
+      sel.appendChild(opt);
+    });
+    sel.disabled = false;
+    btn.disabled = false;
+    if (hint) hint.textContent = "Pick from your existing school classes first — each one gets its own blank timetable to fill in.";
+  }
+
+  function addExistingClass() {
+    var sel = document.getElementById("existingClassSelect");
+    var name = sel ? String(sel.value || "").trim() : "";
+    if (!name) return;
+    if (state.classes.some(function (c) { return normName(c.name) === normName(name); })) {
+      toast("That class already has a timetable.");
+      return;
+    }
+    var cls = emptyClass(name);
+    state.classes.push(cls);
+    state.currentId = cls.id;
+    save();
+    refresh();
+    toast("Class added: " + name);
+  }
+
+  /* ---------- Page orientation (portrait / landscape) ---------- */
+
+  function applyOrientation() {
+    var o = state.orientation === "landscape" ? "landscape" : "portrait";
+    document.body.classList.toggle("landscape", o === "landscape");
+    var sel = document.getElementById("orientationSelect");
+    if (sel && sel.value !== o) sel.value = o;
+    // @page cannot be scoped to a body class, so the print orientation
+    // is driven by this injected rule (it wins over the CSS default).
+    var st = document.getElementById("ttOrientationStyle");
+    if (!st) {
+      st = document.createElement("style");
+      st.id = "ttOrientationStyle";
+      document.head.appendChild(st);
+    }
+    st.textContent = "@media print { @page { size: A4 " + o + "; margin: 8mm; } }";
+  }
+
+  /* ---------- Printed sheet (Arabic, RTL) ---------- */
 
   function cornerSvg() {
     return '<svg class="corner tl" viewBox="0 0 48 48" fill="none" aria-hidden="true">' +
@@ -247,7 +418,7 @@
   }
 
   function sheetHtml(cls, cfg) {
-    return '<article class="sheet" data-class-id="' + esc(cls.id) + '">' +
+    return '<article class="sheet" dir="rtl" lang="ar" data-class-id="' + esc(cls.id) + '">' +
       cornerSvg() +
       '<div class="watermark"></div>' +
       letterheadHtml(cfg) +
@@ -268,7 +439,7 @@
     var cfg = state.config;
     var list = state.printAll ? state.classes : [currentClass()].filter(Boolean);
     if (!list.length) {
-      root.innerHTML = '<div class="empty-state">لا توجد فصول بعد. افتح لوحة الإدارة وأضف فصلاً.</div>';
+      root.innerHTML = '<div class="empty-state">No classes yet. Open the Admin Panel and add a class.</div>';
       return;
     }
     root.innerHTML = list.map(function (c) { return sheetHtml(c, cfg); }).join("");
@@ -329,7 +500,7 @@
   }
 
   function buildEditTable(kind, cls, days, periods) {
-    var html = '<table class="edit-table"><thead><tr><th>الحصة</th><th>الوقت</th>';
+    var html = '<table class="edit-table"><thead><tr><th>Period</th><th>Time</th>';
     days.forEach(function (d) { html += "<th>" + esc(d.label) + "</th>"; });
     html += "</tr></thead><tbody>";
     periods.forEach(function (p, i) {
@@ -385,7 +556,7 @@
 
   function refresh() {
     if (!state.classes.length) {
-      state.classes = [emptyClass("فصل جديد")];
+      state.classes = [emptyClass("New Class")];
       state.currentId = state.classes[0].id;
     }
     if (!state.classes.some(function (c) { return c.id === state.currentId; })) {
@@ -395,13 +566,15 @@
     renderAdminList();
     renderAdminEditor();
     renderSheets();
+    renderExistingPicker();
+    applyOrientation();
     document.title = (currentClass() ? currentClass().name + " · " : "") +
-      "الجدول الدراسي | مدرسة أمين الله";
+      "Class Timetable | Ameenullah School";
   }
 
   function addClass() {
     var name = (document.getElementById("newClassName") || {}).value;
-    name = String(name || "").trim() || "فصل جديد";
+    name = String(name || "").trim() || "New Class";
     var cls = emptyClass(name);
     state.classes.push(cls);
     state.currentId = cls.id;
@@ -409,22 +582,22 @@
     if (field) field.value = "";
     save();
     refresh();
-    toast("تمت إضافة الفصل: " + name);
+    toast("Class added: " + name);
   }
 
   function deleteClass() {
     var cls = currentClass();
     if (!cls) return;
     if (state.classes.length === 1) {
-      toast("يجب أن يبقى فصل واحد على الأقل");
+      toast("At least one class must remain.");
       return;
     }
-    if (!confirm("حذف جدول «" + cls.name + "»؟")) return;
+    if (!confirm("Delete the timetable for \"" + cls.name + "\"?")) return;
     state.classes = state.classes.filter(function (c) { return c.id !== cls.id; });
     state.currentId = state.classes[0].id;
     save();
     refresh();
-    toast("تم حذف الفصل");
+    toast("Class deleted.");
   }
 
   function duplicateClass() {
@@ -432,26 +605,29 @@
     if (!cls) return;
     var copy = clone(cls);
     copy.id = uid();
-    copy.name = cls.name + " (نسخة)";
+    copy.name = cls.name + " (Copy)";
     state.classes.push(copy);
     state.currentId = copy.id;
     save();
     refresh();
-    toast("تم نسخ الفصل");
+    toast("Class duplicated.");
   }
 
   function resetSample() {
-    if (!confirm("إعادة الجداول إلى البيانات النموذجية؟ ستُحذف الفصول المضافة.")) return;
+    if (!confirm("Restore the sample timetables? Added classes will be removed.")) return;
     state.config = clone(DEFAULT_CONFIG);
     state.classes = clone(DEFAULT_CLASSES);
     state.currentId = state.classes[0].id;
     save();
     refresh();
-    toast("تمت استعادة البيانات النموذجية");
+    // Re-attach the existing school classes on top of the samples.
+    if (state.schoolLoaded && !state.schoolLoadFailed) mergeSchoolClasses();
+    toast("Sample data restored.");
   }
 
   function printOne() {
     state.printAll = false;
+    applyOrientation();
     renderSheets();
     document.body.classList.remove("print-all");
     setTimeout(function () { window.print(); }, 50);
@@ -459,6 +635,7 @@
 
   function printAll() {
     state.printAll = true;
+    applyOrientation();
     renderSheets();
     document.body.classList.add("print-all");
     setTimeout(function () { window.print(); }, 50);
@@ -474,12 +651,20 @@
     document.body.classList.toggle("admin-open");
     var on = document.body.classList.contains("admin-open");
     var btn = document.getElementById("adminToggle");
-    if (btn) btn.textContent = on ? "إغلاق الإدارة" : "لوحة الإدارة";
+    if (btn) btn.textContent = on ? "Close Admin" : "Admin Panel";
   }
 
   function bind() {
     var sel = document.getElementById("classSelect");
     if (sel) sel.addEventListener("change", function () { selectClass(sel.value); });
+
+    var orient = document.getElementById("orientationSelect");
+    if (orient) orient.addEventListener("change", function () {
+      state.orientation = orient.value === "landscape" ? "landscape" : "portrait";
+      save();
+      applyOrientation();
+      toast(state.orientation === "landscape" ? "Landscape preview — prints on A4 landscape." : "Portrait preview — prints on A4 portrait.");
+    });
 
     var nameInput = document.getElementById("classNameInput");
     if (nameInput) {
@@ -510,6 +695,9 @@
       if (e.key === "Enter") { e.preventDefault(); addClass(); }
     });
 
+    var addExistingBtn = document.getElementById("addExistingBtn");
+    if (addExistingBtn) addExistingBtn.addEventListener("click", addExistingClass);
+
     var delBtn = document.getElementById("deleteClassBtn");
     if (delBtn) delBtn.addEventListener("click", deleteClass);
     var dupBtn = document.getElementById("duplicateClassBtn");
@@ -536,6 +724,7 @@
     if (!state.currentId && state.classes[0]) state.currentId = state.classes[0].id;
     bind();
     refresh();
+    fetchSchoolClasses();
   }
 
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", boot);

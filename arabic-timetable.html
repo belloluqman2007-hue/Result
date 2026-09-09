@@ -1,10 +1,10 @@
 <!DOCTYPE html>
-<html lang="ar" dir="rtl">
+<html lang="en" dir="ltr">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>الجدول الدراسي | مدرسة أمين الله للعلوم العربية الإسلامية</title>
-  <meta name="description" content="الجدول الدراسي القابل للطباعة لمدرسة أمين الله للعلوم العربية الإسلامية — الفترة الأولى 1446 / 2025/2026">
+  <title>Class Timetable | Ameenullah School of Arabic and Islamic Studies</title>
+  <meta name="description" content="Printable class timetable for Ameenullah School of Arabic and Islamic Studies — First Period 1446 / 2025/2026">
   <meta name="theme-color" content="#0c3327">
   <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
@@ -13,64 +13,75 @@
 <body>
 
   <header class="app-bar no-print">
-    <img class="crest" src="images/LOGO.JPG" alt="شعار المدرسة">
+    <img class="crest" src="images/LOGO.JPG" alt="School crest">
     <div class="brand">
-      <h1>الجدول الدراسي</h1>
-      <p>مدرسة أمين الله للعلوم العربية الإسلامية · شعبة العلم والعبادة</p>
+      <h1>Class Timetable</h1>
+      <p>Ameenullah School of Arabic and Islamic Studies · Knowledge and Worship</p>
     </div>
     <div class="app-actions">
-      <a class="btn btn-light" href="teacher-dashboard.html">لوحة التحكم</a>
-      <button class="btn btn-light" id="adminToggle" type="button">لوحة الإدارة</button>
-      <button class="btn btn-light" id="printAllBtn" type="button">طباعة جميع الفصول</button>
-      <button class="btn btn-gold" id="printBtn" type="button">🖨 طباعة هذا الفصل</button>
+      <a class="btn btn-light" href="teacher-dashboard.html">Dashboard</a>
+      <button class="btn btn-light" id="adminToggle" type="button">Admin Panel</button>
+      <button class="btn btn-light" id="printAllBtn" type="button">Print All Classes</button>
+      <button class="btn btn-gold" id="printBtn" type="button">🖨 Print This Class</button>
     </div>
   </header>
 
   <div class="toolbar no-print">
     <section class="selector-card">
       <div class="selector-head">
-        <h2>اختر الفصل</h2>
-        <label>القائمة
-          <select id="classSelect" aria-label="اختيار الفصل"></select>
+        <h2>Select Class</h2>
+        <label>Orientation
+          <select id="orientationSelect" aria-label="Page orientation">
+            <option value="portrait">Portrait (A4)</option>
+            <option value="landscape">Landscape (A4)</option>
+          </select>
+        </label>
+        <label>List
+          <select id="classSelect" aria-label="Select class"></select>
         </label>
       </div>
       <div class="class-pills" id="classPills"></div>
-      <p class="hint">كل فصل له جدول مستقل للطباعة على ورقة A4 مع ترويسة المدرسة. افتح لوحة الإدارة لإضافة فصول بلا حد.</p>
+      <p class="hint">Each class has its own timetable sheet, printed on A4 with the school letterhead. Open the Admin Panel to add unlimited classes.</p>
     </section>
 
     <section class="admin-card" id="adminCard">
-      <h2>لوحة الإدارة — إضافة وتعديل الفصول</h2>
-      <p class="hint">التغييرات تُحفظ تلقائياً في هذا المتصفح. يمكن إضافة عدد غير محدود من الفصول.</p>
+      <h2>Admin Panel — Add &amp; Edit Classes</h2>
+      <p class="hint">Changes are saved automatically in this browser. You can add unlimited classes.</p>
 
       <div class="admin-grid">
         <div>
           <div class="admin-list" id="adminList"></div>
           <div class="row" style="display:flex; gap:8px; margin-top:10px; flex-wrap:wrap;">
-            <input type="text" id="newClassName" placeholder="اسم الفصل الجديد" style="flex:1; min-width:140px;">
-            <button class="btn btn-emerald" id="addClassBtn" type="button">＋ إضافة فصل</button>
+            <select id="existingClassSelect" aria-label="Pick an existing school class" style="flex:1; min-width:140px;"></select>
+            <button class="btn btn-emerald" id="addExistingBtn" type="button">＋ Add Selected</button>
+          </div>
+          <p class="hint" id="existingHint">Loading your existing school classes…</p>
+          <div class="row" style="display:flex; gap:8px; margin-top:8px; flex-wrap:wrap;">
+            <input type="text" id="newClassName" placeholder="Or type a brand-new class name" style="flex:1; min-width:140px;">
+            <button class="btn btn-ghost" id="addClassBtn" type="button">＋ Add New</button>
           </div>
         </div>
 
         <div class="admin-editor">
           <div class="row">
-            <label class="field">اسم الفصل
+            <label class="field">Class name
               <input type="text" id="classNameInput">
             </label>
-            <label class="field">عنوان الفترة (يظهر في الترويسة)
+            <label class="field">Term title (shows in the letterhead)
               <input type="text" id="termInput">
             </label>
           </div>
 
-          <div class="section-label">☀ في الصباح — ٦ حصص (السبت والأحد)</div>
+          <div class="section-label">☀ Morning — 6 periods (Saturday &amp; Sunday)</div>
           <div id="adminMorning"></div>
 
-          <div class="section-label">☽ في المساء — حصّتان (الاثنين · الثلاثاء · الأربعاء)</div>
+          <div class="section-label">☽ Evening — 2 periods (Monday · Tuesday · Wednesday)</div>
           <div id="adminEvening"></div>
 
           <div class="admin-actions">
-            <button class="btn btn-ghost" id="duplicateClassBtn" type="button">نسخ هذا الفصل</button>
-            <button class="btn btn-ghost" id="resetBtn" type="button">استعادة البيانات النموذجية</button>
-            <button class="btn btn-danger" id="deleteClassBtn" type="button">حذف الفصل</button>
+            <button class="btn btn-ghost" id="duplicateClassBtn" type="button">Duplicate This Class</button>
+            <button class="btn btn-ghost" id="resetBtn" type="button">Restore Sample Data</button>
+            <button class="btn btn-danger" id="deleteClassBtn" type="button">Delete Class</button>
           </div>
         </div>
       </div>
