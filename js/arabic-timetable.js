@@ -12,6 +12,21 @@
   var STORAGE_KEY = "ams-arabic-timetables-v2";
   var LEGACY_KEY = "ams-arabic-timetables-v1";
 
+  /* ---- Shared sync (server-side storage) -------------------------------
+     The timetable used to live ONLY in this browser (localStorage), so a
+     teacher editing on their phone was invisible to other teachers and
+     the admin. Now, when signed in, every device reads and writes ONE
+     school-wide document on the server (/api/arabic-timetable). The local
+     copy is kept as an offline cache and is merged INTO the shared copy
+     on first load, so timetables already typed on any device are never
+     lost. --------------------------------------------------------------- */
+  var sync = {
+    loggedIn: false,   // set true once /me confirms a staff session
+    lastUpdatedBy: "", // username of whoever last saved the shared doc
+    lastUpdatedAt: ""  // when it was last saved
+  };
+  var pushTimer = null;
+
   /* ---- Printed sheet content (stays in Arabic) ---- */
   var DEFAULT_CONFIG = {
     school: "مدرسة أمين الله للعلوم العربية الإسلامية",
@@ -212,6 +227,7 @@
         orientation: state.orientation
       }));
     } catch (e) { /* quota */ }
+    scheduleServerPush();
   }
 
   function currentClass() {
@@ -996,6 +1012,161 @@
     window.addEventListener("afterprint", onPrinted);
   }
 
+  /* ================= Shared sync (server storage) ================= */
+
+  /* Merge two copies of the document. `server` is the shared truth and
+     wins on conflicts; `local` only ADDS classes the server doesn't have
+     and fills cells the server left empty. On first load this keeps every
+     device's old data without clobbering the school copy. */
+  function mergeConfig(server, local) {
+    var out = clone(server || {});
+    var lc = local || {};
+    Object.keys(lc).forEach(function (k) {
+      var sv = out[k];
+      var lv = lc[k];
+      if (sv === undefined || sv === null || sv === "") {
+        out[k] = clone(lv);
+      } else if (Array.isArray(sv) && Array.isArray(lv)) {
+        lv.forEach(function (item, i) {
+          if (sv[i] && item && typeof item === "object" &&
+              String(sv[i].time || "").trim() === "" && String(item.time || "").trim() !== "") {
+            sv[i].time = item.time;
+          }
+        });
+      }
+    });
+    return out;
+  }
+
+  function mergeClass(server, local) {
+    var s = clone(server || {});
+    var l = local || {};
+    ["morning", "evening"].forEach(function (section) {
+      var sBag = s[section] = (s[section] && typeof s[section] === "object") ? s[section] : {};
+      var lBag = l[section] || {};
+      Object.keys(lBag).forEach(function (day) {
+        var lList = Array.isArray(lBag[day]) ? lBag[day] : [];
+        var sList = Array.isArray(sBag[day]) ? sBag[day].slice() : [];
+        lList.forEach(function (val, i) {
+          var sv = String(sList[i] == null ? "" : sList[i]).trim();
+          var lv = String(val == null ? "" : val).trim();
+          if (sv === "" && lv !== "") sList[i] = val;
+        });
+        sBag[day] = sList;
+      });
+    });
+    if (String(l.name || "").trim() && !String(s.name || "").trim()) s.name = l.name;
+    return s;
+  }
+
+  function mergeDocs(server, local) {
+    server = server && typeof server === "object" ? server : { config: null, classes: [] };
+    local = local && typeof local === "object" ? local : { config: null, classes: [] };
+    var sClasses = Array.isArray(server.classes) ? clone(server.classes) : [];
+    var lClasses = Array.isArray(local.classes) ? local.classes : [];
+    var config = mergeConfig(server.config, local.config);
+    lClasses.forEach(function (lc) {
+      var idx = sClasses.findIndex(function (c) { return normName(c.name) === normName(lc.name); });
+      if (idx === -1) sClasses.push(clone(lc));
+      else sClasses[idx] = mergeClass(sClasses[idx], lc);
+    });
+    return { config: config, classes: sClasses };
+  }
+
+  function setSyncStatus(msg, kind) {
+    var el = document.getElementById("ttSyncStatus");
+    if (!el) return;
+    el.textContent = msg || "";
+    el.style.color = kind === "err" ? "#8c3b2e" : (kind === "warn" ? "#9a7a2e" : "#1c6b48");
+  }
+
+  function doPush() {
+    var payload = { config: state.config, classes: state.classes };
+    var payloadStr = JSON.stringify(payload);
+    fetch("/api/arabic-timetable", {
+      method: "POST",
+      credentials: "same-origin",
+      headers: { "Content-Type": "application/json" },
+      body: payloadStr
+    }).then(function (r) { return r.json().then(function (d) { return { ok: r.ok, d: d }; }); })
+      .then(function (res) {
+        if (res.ok && res.d && res.d.doc) {
+          var doc = res.d.doc;
+          sync.lastUpdatedBy = res.d.updated_by || "";
+          if (JSON.stringify(doc) !== payloadStr) {
+            // The server kept a different document (e.g. our copy was blank
+            // and it protected the school's saved one) — adopt its truth.
+            state.config = doc.config || state.config;
+            state.classes = Array.isArray(doc.classes) ? doc.classes : state.classes;
+            if (!state.classes.some(function (c) { return c.id === state.currentId; })) {
+              state.currentId = state.classes[0] ? state.classes[0].id : "";
+            }
+            save();
+            refresh();
+          }
+          setSyncStatus("Shared timetable saved ✓ · every teacher & the admin see the same one");
+        } else if (res.d && res.d.message) {
+          setSyncStatus(res.d.message, "err");
+        }
+      }).catch(function () {
+        setSyncStatus("Offline — changes stay on this device and sync when you're back online.", "warn");
+      });
+  }
+
+  function scheduleServerPush() {
+    if (!sync.loggedIn) return;
+    clearTimeout(pushTimer);
+    pushTimer = setTimeout(doPush, 400);
+  }
+
+  function pushToServer() {
+    if (!sync.loggedIn) return;
+    clearTimeout(pushTimer);
+    doPush();
+  }
+
+  /* First load: pull the shared document, merge this device's saved copy
+     into it, then push the result so everyone (including this device's
+     old work) sees the same timetable. */
+  function syncShared() {
+    setSyncStatus("Syncing with the shared timetable…", "warn");
+    fetch("/me", { credentials: "same-origin" })
+      .then(function (r) { return r.json(); })
+      .then(function (me) {
+        if (!me || !me.loggedIn || (me.role !== "admin" && me.role !== "teacher")) {
+          setSyncStatus("Saved in this browser only — log in to sync with all teachers.", "warn");
+          return;
+        }
+        sync.loggedIn = true;
+        fetch("/api/arabic-timetable", { credentials: "same-origin" })
+          .then(function (r) { return r.ok ? r.json() : null; })
+          .then(function (data) {
+            var serverDoc = data && data.doc;
+            sync.lastUpdatedBy = (data && data.updated_by) || "";
+            sync.lastUpdatedAt = (data && data.updated_at) || "";
+            var hasServer = !!(serverDoc && Array.isArray(serverDoc.classes) && serverDoc.classes.length);
+            if (hasServer) {
+              var merged = mergeDocs(serverDoc, { config: state.config, classes: state.classes });
+              var changed = JSON.stringify(merged) !== JSON.stringify({ config: state.config, classes: state.classes });
+              state.config = merged.config;
+              state.classes = merged.classes;
+              if (!state.classes.some(function (c) { return c.id === state.currentId; })) {
+                state.currentId = state.classes[0] ? state.classes[0].id : "";
+              }
+              save();
+              refresh();
+              if (changed) toast("This device's timetable was merged into the shared one.");
+            }
+            // Upload this device's copy too (also covers a still-empty server).
+            pushToServer();
+          }).catch(function () {
+            setSyncStatus("Could not reach the shared timetable — working on this device only.", "warn");
+          });
+      }).catch(function () {
+        setSyncStatus("Saved in this browser only — log in to sync with all teachers.", "warn");
+      });
+  }
+
   function boot() {
     load();
     var params = new URLSearchParams(location.search);
@@ -1007,6 +1178,7 @@
     bind();
     refresh();
     fetchSchoolClasses();
+    syncShared();
   }
 
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", boot);

@@ -546,6 +546,12 @@ app.get("/settings.html", requireLogin, (req, res) => {
 app.get("/timetable.html", requireLogin, (req, res) => {
     res.sendFile(path.join(__dirname, "timetable.html"));
 });
+// NEW: Arabic timetable (الجدول الدراسي) - shared school-wide timetable.
+// Same guard as the dashboard so a signed-in teacher/admin always has a
+// session for the shared sync (the old page saved only in the browser).
+app.get("/arabic-timetable.html", requireLogin, (req, res) => {
+    res.sendFile(path.join(__dirname, "arabic-timetable.html"));
+});
 // NEW (pack 35): certificate generator page (staff only, all client-side)
 app.get("/certificates.html", requireLogin, (req, res) => {
     res.sendFile(path.join(__dirname, "certificates.html"));
@@ -2270,6 +2276,90 @@ runPack25Migrations();
                 }
             );
         });
+    });
+});
+
+/* =====================================================================
+   NEW: Shared Arabic timetable (الجدول الدراسي) — school-wide sync.
+   ---------------------------------------------------------------------
+   The Arabic timetable builder used to save everything in the browser's
+   localStorage, so a teacher editing on their phone was invisible to
+   other teachers and the admin. It now persists ONE school-wide JSON
+   document in MySQL. Every signed-in staff member reads/writes the SAME
+   document, and the page merges each device's old local copy into the
+   shared one (missing classes are added, empty cells are filled) so
+   nothing the school already typed is lost.
+===================================================================== */
+function ensureArabicTimetableTable() {
+    connection.query(
+        `CREATE TABLE IF NOT EXISTS arabic_timetable (
+            id INT PRIMARY KEY DEFAULT 1,
+            doc LONGTEXT NOT NULL,
+            updated_by VARCHAR(100) DEFAULT '',
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+        ) DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
+        (err) => { if (err) console.log("arabic_timetable setup notice:", err.code || err.message); }
+    );
+}
+ensureArabicTimetableTable();
+
+/* True when a timetable class actually has at least one subject typed in.
+   Used to stop a blank/fresh device from wiping the shared document. */
+function arabicTtClassHasData(cls) {
+    if (!cls || typeof cls !== "object") return false;
+    return ["morning", "evening"].some(function (section) {
+        const bag = cls[section];
+        if (!bag || typeof bag !== "object") return false;
+        return Object.keys(bag).some(function (day) {
+            return Array.isArray(bag[day]) && bag[day].some(function (v) { return String(v || "").trim() !== ""; });
+        });
+    });
+}
+
+// Staff: read the one shared document (empty object if never saved yet).
+app.get("/api/arabic-timetable", requireLogin, (req, res) => {
+    connection.query("SELECT doc, updated_by, updated_at FROM arabic_timetable WHERE id = 1", (err, rows) => {
+        if (err) {
+            if (err.code === "ER_NO_SUCH_TABLE") return res.json({ doc: null });
+            return res.status(500).json({ message: "Database error" });
+        }
+        if (!rows || !rows.length) return res.json({ doc: null });
+        let doc = null;
+        try { doc = JSON.parse(rows[0].doc || "null"); } catch (e) { doc = null; }
+        res.json({ doc: doc, updated_by: rows[0].updated_by || "", updated_at: rows[0].updated_at || "" });
+    });
+});
+
+// Staff: save the shared document (last write wins, like the old browser
+// storage - but now every teacher and the admin see the same timetable).
+app.post("/api/arabic-timetable", requireLogin, (req, res) => {
+    const body = req.body && typeof req.body === "object" ? req.body : {};
+    const incomingClasses = Array.isArray(body.classes) ? body.classes : [];
+    const incomingConfig = body.config && typeof body.config === "object" ? body.config : {};
+    const hasData = incomingClasses.some(arabicTtClassHasData);
+    connection.query("SELECT doc FROM arabic_timetable WHERE id = 1", (err, rows) => {
+        if (err) {
+            if (err.code === "ER_NO_SUCH_TABLE") return res.status(503).json({ message: "Timetable store is still starting — try again in a moment." });
+            return res.status(500).json({ message: "Database error" });
+        }
+        let existing = null;
+        if (rows && rows.length) {
+            try { existing = JSON.parse(rows[0].doc || "null"); } catch (e) { existing = null; }
+        }
+        const existingHasData = !!(existing && Array.isArray(existing.classes) && existing.classes.some(arabicTtClassHasData));
+        // A blank device must never overwrite the school's saved timetable.
+        const doc = (existingHasData && !hasData)
+            ? existing
+            : { config: incomingConfig, classes: incomingClasses };
+        connection.query(
+            "INSERT INTO arabic_timetable (id, doc, updated_by) VALUES (1, ?, ?) " +
+            "ON DUPLICATE KEY UPDATE doc = VALUES(doc), updated_by = VALUES(updated_by)",
+            [JSON.stringify(doc), String(req.session.username || "")],
+            (err2) => {
+                if (err2) return res.status(500).json({ message: "Database error" });
+                res.json({ doc: doc, updated_by: req.session.username || "", message: "Saved to the shared timetable." });
+            }
+        );
     });
 });
 
