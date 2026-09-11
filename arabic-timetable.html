@@ -44,6 +44,7 @@
       </div>
       <div class="class-pills" id="classPills"></div>
       <p class="hint">Each class has its own timetable sheet, printed on A4 with the school letterhead. Open the Admin Panel to add unlimited classes.</p>
+      <p class="hint" id="ttSyncStatus" aria-live="polite">Syncing with the shared timetable…</p>
     </section>
 
     <section class="admin-card" id="adminCard">
@@ -104,6 +105,9 @@
        sheets as a real A4 PDF file (portrait or landscape). -->
   <script src="js/vendor/jspdf.umd.min.js"></script>
   <script src="js/vendor/html2canvas.min.js"></script>
+  <!-- csrf.js auto-injects the session CSRF token on POST, so the shared
+       timetable save (POST /api/arabic-timetable) is accepted by the server. -->
+  <script src="js/csrf.js"></script>
   <script src="js/arabic-timetable.js"></script>
 </body>
 </html>
