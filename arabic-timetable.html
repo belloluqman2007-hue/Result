@@ -48,7 +48,7 @@
 
     <section class="admin-card" id="adminCard">
       <h2>Admin Panel — Add &amp; Edit Classes</h2>
-      <p class="hint">Changes are saved automatically in this browser. You can add unlimited classes.</p>
+      <p class="hint">Edit the timetable, then press Save Timetable to share it with every teacher and administrator.</p>
 
       <div class="admin-grid">
         <div>
@@ -84,8 +84,8 @@
           <div id="adminEvening"></div>
 
           <div class="admin-actions">
+            <button class="btn btn-emerald" id="saveTimetableBtn" type="button">Save Timetable</button>
             <button class="btn btn-ghost" id="duplicateClassBtn" type="button">Duplicate This Class</button>
-            <button class="btn btn-ghost" id="resetBtn" type="button">Restore Sample Data</button>
             <button class="btn btn-danger" id="deleteClassBtn" type="button">Delete Class</button>
           </div>
         </div>
@@ -104,6 +104,7 @@
        sheets as a real A4 PDF file (portrait or landscape). -->
   <script src="js/vendor/jspdf.umd.min.js"></script>
   <script src="js/vendor/html2canvas.min.js"></script>
+  <script src="js/csrf.js"></script>
   <script src="js/arabic-timetable.js"></script>
 </body>
 </html>

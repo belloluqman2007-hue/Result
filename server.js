@@ -546,6 +546,9 @@ app.get("/settings.html", requireLogin, (req, res) => {
 app.get("/timetable.html", requireLogin, (req, res) => {
     res.sendFile(path.join(__dirname, "timetable.html"));
 });
+app.get("/arabic-timetable.html", requireLogin, (req, res) => {
+    res.sendFile(path.join(__dirname, "arabic-timetable.html"));
+});
 // NEW (pack 35): certificate generator page (staff only, all client-side)
 app.get("/certificates.html", requireLogin, (req, res) => {
     res.sendFile(path.join(__dirname, "certificates.html"));
@@ -2169,6 +2172,12 @@ function runPack25Migrations() {
                 published TINYINT(1) NOT NULL DEFAULT 0,
                 created_by VARCHAR(64) DEFAULT '',
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )`,
+            `CREATE TABLE IF NOT EXISTS arabic_timetable_settings (
+                id TINYINT PRIMARY KEY,
+                timetable_json LONGTEXT NOT NULL,
+                updated_by VARCHAR(64) DEFAULT '',
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
             )`
         ];
         let i = 0;
@@ -2182,6 +2191,42 @@ function runPack25Migrations() {
     });
 }
 runPack25Migrations();
+
+/* Shared Arabic timetable. One school-wide document is deliberately used:
+   a save by any authenticated teacher is immediately available to every
+   other teacher and administrator, regardless of device/browser. */
+app.get("/api/arabic-timetable", requireLogin, (req, res) => {
+    connection.query("SELECT timetable_json, updated_by, updated_at FROM arabic_timetable_settings WHERE id = 1 LIMIT 1", (err, rows) => {
+        if (err) {
+            if (err.code === "ER_NO_SUCH_TABLE") return res.json({ data: null });
+            return res.status(500).json({ message: "Database error" });
+        }
+        if (!rows.length) return res.json({ data: null });
+        try {
+            res.json({ data: JSON.parse(rows[0].timetable_json), updatedBy: rows[0].updated_by, updatedAt: rows[0].updated_at });
+        } catch (e) {
+            res.status(500).json({ message: "Saved timetable is invalid" });
+        }
+    });
+});
+
+app.put("/api/arabic-timetable", requireLogin, writeRateLimit, (req, res) => {
+    const data = req.body && req.body.data;
+    if (!data || !Array.isArray(data.classes) || !data.config) {
+        return res.status(400).json({ message: "Invalid timetable data" });
+    }
+    const json = JSON.stringify(data);
+    if (json.length > 2000000) return res.status(413).json({ message: "Timetable is too large" });
+    connection.query(
+        "INSERT INTO arabic_timetable_settings (id, timetable_json, updated_by) VALUES (1, ?, ?) " +
+        "ON DUPLICATE KEY UPDATE timetable_json = VALUES(timetable_json), updated_by = VALUES(updated_by)",
+        [json, String(req.session.username || "")],
+        (err) => {
+            if (err) return res.status(500).json({ message: "Could not save timetable" });
+            res.json({ message: "Saved for all teachers and admin." });
+        }
+    );
+});
 
 /* =====================================================================
    NEW (pack 25): TIMETABLE API - staff CRUD + admin publish + portal.
