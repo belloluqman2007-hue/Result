@@ -92,7 +92,12 @@
     orientation: "portrait",   // "portrait" | "landscape"
     schoolClasses: [],         // existing school classes from /classes
     schoolLoaded: false,
-    schoolLoadFailed: false
+    schoolLoadFailed: false,
+    // Official signature images (role -> saved image path) read from
+    // /signatures at RUNTIME ONLY. Deliberately NOT part of save() /
+    // sharedData(), so no timetable data can ever be affected by them.
+    signatures: {},
+    sigStamp: ""               // one cache-buster per page load (see sigSrc)
   };
 
   function clone(v) {
@@ -517,6 +522,45 @@
     return html;
   }
 
+  /* ---------- Official signatures on the printed sheet ----------
+     FIX (owner: "the principal and headteacher signature is not
+     appearing"). The footer used to be two hard-coded blank lines, and
+     this page never asked the server for a signature at all — so the
+     Principal / Head Teacher signatures saved in Manage Signatures could
+     never show up here (report cards and the term calendar already
+     stamp them via the same /signatures endpoint).
+
+     Now each signing slot stamps the school's SAVED signature image when
+     one exists, and falls back to the old blank line when it does not —
+     so a school with no signature on file sees exactly what it saw
+     before. The images are runtime-only state: nothing is written into
+     the saved timetable, so no class, period, subject or time can be
+     lost by this. */
+
+  /* Cache-buster so a freshly re-uploaded signature is never served from
+     the browser/service-worker cache (same trick manage-signatures uses),
+     while staying stable within a page load so print + PDF reuse one
+     already-decoded image instead of re-downloading it per sheet. */
+  function sigSrc(path) {
+    var p = String(path || "");
+    if (!p) return "";
+    return p + (p.indexOf("?") === -1 ? "?" : "&") + "t=" + state.sigStamp;
+  }
+
+  /* One signing slot. `role` is a /signatures role id ("principal",
+     "head_teacher", …); pass an empty role for a slot that never carries
+     an image (the school seal). */
+  function sigHtml(role, title, caption) {
+    var path = role ? (state.signatures && state.signatures[role]) : "";
+    return '<div class="sig">' +
+      '<div class="sig-area">' +
+        (path ? '<img class="sig-img" src="' + esc(sigSrc(path)) + '" alt="">' : "") +
+      "</div>" +
+      '<div class="line"></div>' +
+      "<b>" + esc(title) + "</b>" + esc(caption) +
+    "</div>";
+  }
+
   function sheetHtml(cls, cfg) {
     return '<article class="sheet" dir="rtl" lang="ar" data-class-id="' + esc(cls.id) + '">' +
       cornerSvg() +
@@ -527,8 +571,9 @@
       morningTable(cls, cfg) +
       eveningTable(cls, cfg) +
       '<div class="sheet-foot">' +
-        '<div class="sig"><div class="line"></div><b>مدير المدرسة</b>التوقيع</div>' +
-        '<div class="sig"><div class="line"></div><b>ختم المدرسة</b>الرسمي</div>' +
+        sigHtml("principal", "مدير المدرسة", "التوقيع") +
+        sigHtml("head_teacher", "رئيس المعلمين", "التوقيع") +
+        sigHtml("", "ختم المدرسة", "الرسمي") +
       "</div>" +
     "</article>";
   }
@@ -1031,6 +1076,27 @@
     window.addEventListener("afterprint", onPrinted);
   }
 
+  /* Read the school's saved official signatures (role -> image path) from
+     the SAME endpoint the report cards and the term calendar already use,
+     then re-draw the sheets so the Principal / Head Teacher images are
+     stamped. Fails safe: logged out (401), offline, or no signature saved
+     yet simply leaves the blank signing lines that were there before.
+     Never touches, saves or reshapes any timetable data. */
+  function fetchSignatures() {
+    return fetch("/signatures", { credentials: "same-origin" })
+      .then(function (r) { return r.ok ? r.json() : []; })
+      .then(function (rows) {
+        var map = {};
+        (Array.isArray(rows) ? rows : []).forEach(function (s) {
+          if (s && s.role && s.signature_path) map[s.role] = String(s.signature_path);
+        });
+        state.signatures = map;
+        state.sigStamp = String(Date.now());
+        renderSheets();
+      })
+      .catch(function () { /* keep the blank signing lines */ });
+  }
+
   function boot() {
     load();
     bind();
@@ -1043,6 +1109,7 @@
       if (!state.currentId && state.classes[0]) state.currentId = state.classes[0].id;
       refresh();
       fetchSchoolClasses();
+      fetchSignatures();
     });
   }
 

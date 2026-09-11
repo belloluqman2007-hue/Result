@@ -501,8 +501,20 @@ body.landscape .sig {
   font-size: 11.5px;
 }
 
+/* Landscape has ~194mm of printable height instead of 281mm, so the
+   signature block is compacted here exactly like the rest of the sheet
+   (the reserved space matches the old 14px line margin, and the stamped
+   image is capped smaller) — the one-page A4 landscape fit is kept. */
+body.landscape .sig-area {
+  min-height: 14px;
+}
+
+body.landscape .sig-img {
+  max-height: 30px;
+}
+
 body.landscape .sig .line {
-  margin-top: 14px;
+  margin-top: 0;
 }
 
 body.landscape .sig b {
@@ -850,9 +862,36 @@ select:disabled {
   color: #4a6356;
 }
 
+/* Saved official signature (Principal / Head Teacher) sits directly on
+   top of the signing line, the same way the report card and the term
+   calendar stamp theirs.
+
+   The old rule reserved the blank space above the line with the line's
+   own 28px top margin. That space now lives in .sig-area instead (same
+   28px minimum), so a sheet with NO signature on file keeps byte-for-byte
+   the same footer height it always had; only a slot that actually has an
+   image grows, and only by the few pixels the image is taller. */
+.sig-area {
+  min-height: 28px;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding: 0 6px;
+}
+
+.sig-img {
+  display: block;
+  max-height: 42px;
+  max-width: 100%;
+  object-fit: contain;
+  /* Nudge the ink down so it sits ON the signing line, like a real
+     signature, instead of floating above it. */
+  margin-bottom: -4px;
+}
+
 .sig .line {
   border-top: 1px solid var(--emerald);
-  margin: 28px 18px 6px;
+  margin: 0 18px 6px;
 }
 
 .sig b {
