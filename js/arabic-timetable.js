@@ -92,7 +92,8 @@
     orientation: "portrait",   // "portrait" | "landscape"
     schoolClasses: [],         // existing school classes from /classes
     schoolLoaded: false,
-    schoolLoadFailed: false
+    schoolLoadFailed: false,
+    signatures: {}             // role -> signature image path (from /signatures)
   };
 
   function clone(v) {
@@ -517,6 +518,24 @@
     return html;
   }
 
+  /* Signatures (owner request): the school's saved Principal + Head
+     Teacher signatures are stamped on every sheet, exactly like the
+     report cards and term calendar do. The images come from /signatures
+     (role -> path); when one is not saved yet the slot simply keeps its
+     blank signing line, so a timetable with no signatures still prints
+     exactly as before. Class/period data is never touched. */
+  function sigHtml(role, title, suffix) {
+    var path = state.signatures && state.signatures[role];
+    var img = path
+      ? '<img class="sig-img" src="' + esc(path) + '" alt="">'
+      : "";
+    return '<div class="sig">' +
+      '<div class="sig-area">' + img + "</div>" +
+      '<div class="line"></div>' +
+      "<b>" + esc(title) + "</b>" + (suffix || "التوقيع") +
+      "</div>";
+  }
+
   function sheetHtml(cls, cfg) {
     return '<article class="sheet" dir="rtl" lang="ar" data-class-id="' + esc(cls.id) + '">' +
       cornerSvg() +
@@ -527,8 +546,9 @@
       morningTable(cls, cfg) +
       eveningTable(cls, cfg) +
       '<div class="sheet-foot">' +
-        '<div class="sig"><div class="line"></div><b>مدير المدرسة</b>التوقيع</div>' +
-        '<div class="sig"><div class="line"></div><b>ختم المدرسة</b>الرسمي</div>' +
+        sigHtml("principal", "مدير المدرسة") +
+        sigHtml("head_teacher", "رئيس المعلمين") +
+        '<div class="sig"><div class="sig-area"></div><div class="line"></div><b>ختم المدرسة</b>الرسمي</div>' +
       "</div>" +
     "</article>";
   }
@@ -1031,6 +1051,24 @@
     window.addEventListener("afterprint", onPrinted);
   }
 
+  /* Load the saved official signatures (principal + head teacher) so the
+     printed sheet can stamp them. Reads the same /signatures endpoint the
+     report cards use. Fails silently (blank lines) when logged out or
+     offline - nothing in the timetable data is affected. */
+  function fetchSignatures() {
+    fetch("/signatures", { credentials: "same-origin" })
+      .then(function (r) { return r.ok ? r.json() : []; })
+      .then(function (rows) {
+        var map = {};
+        (Array.isArray(rows) ? rows : []).forEach(function (s) {
+          if (s && s.role && s.signature_path) map[s.role] = s.signature_path;
+        });
+        state.signatures = map;
+        renderSheets();
+      })
+      .catch(function () { /* leave blank signing lines */ });
+  }
+
   function boot() {
     load();
     bind();
@@ -1043,6 +1081,7 @@
       if (!state.currentId && state.classes[0]) state.currentId = state.classes[0].id;
       refresh();
       fetchSchoolClasses();
+      fetchSignatures();
     });
   }
 

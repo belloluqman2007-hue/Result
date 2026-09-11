@@ -501,8 +501,17 @@ body.landscape .sig {
   font-size: 11.5px;
 }
 
+body.landscape .sig-area {
+  min-height: 32px;
+}
+
+body.landscape .sig-img {
+  max-height: 32px;
+  max-width: 120px;
+}
+
 body.landscape .sig .line {
-  margin-top: 14px;
+  margin-top: 4px;
 }
 
 body.landscape .sig b {
@@ -850,9 +859,26 @@ select:disabled {
   color: #4a6356;
 }
 
+/* Saved signature image (principal / head teacher) sits above the signing
+   line; when there is no signature on file the area stays empty so the
+   slot still shows its blank line for a hand-written signature. */
+.sig-area {
+  min-height: 46px;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding: 0 4px;
+}
+
+.sig-img {
+  max-height: 46px;
+  max-width: 150px;
+  object-fit: contain;
+}
+
 .sig .line {
   border-top: 1px solid var(--emerald);
-  margin: 28px 18px 6px;
+  margin: 4px 18px 6px;
 }
 
 .sig b {
