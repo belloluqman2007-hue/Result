@@ -42,7 +42,8 @@
       { n: 1, time: "04:31–05:30" },
       { n: 2, time: "05:31–غروب الشمس" }
     ],
-    breakAfter: 2,
+    // Show الاستراحة after period row 3 (before row 4), not above row 3.
+    breakAfter: 3,
     breakLabel: "الاستراحة",
     breakTime: "10:00 – 10:30"
   };
@@ -50,6 +51,7 @@
   /* Values saved by older builds that must be upgraded in place
      (see migrateConfig) so existing timetables keep their data. */
   var LEGACY_BREAK_LABELS = ["فسحة"];
+  var LEGACY_BREAK_AFTER = 2;
   var LEGACY_MOTTO = "شعبة العلم والعبادة";
 
   /* ---- Sample data: used only when the school has no class list yet ---- */
@@ -189,6 +191,16 @@
       cfg.breakLabel = DEFAULT_CONFIG.breakLabel;
     }
     if (!String(cfg.breakTime || "").trim()) cfg.breakTime = DEFAULT_CONFIG.breakTime;
+
+    // Older saved timetables placed الاستراحة above period row 3.
+    // Move that legacy/default position down so it appears after row 3.
+    var breakAfter = Number(cfg.breakAfter);
+    if (!breakAfter || breakAfter === LEGACY_BREAK_AFTER) {
+      cfg.breakAfter = DEFAULT_CONFIG.breakAfter;
+    } else {
+      var morningCount = (cfg.morningPeriods || DEFAULT_CONFIG.morningPeriods).length;
+      cfg.breakAfter = Math.max(1, Math.min(morningCount, Math.floor(breakAfter)));
+    }
   }
 
   function save() {
@@ -415,8 +427,15 @@
     days.forEach(function (d) { html += "<th>" + esc(d.label) + "</th>"; });
     html += "</tr></thead><tbody>";
 
+    var breakAfter = Number(cfg.breakAfter) || 0;
     cfg.morningPeriods.forEach(function (p, i) {
-      if (cfg.breakAfter && i === cfg.breakAfter) {
+      html += '<tr><td class="num">' + p.n + '</td><td class="time">' + esc(p.time) + "</td>";
+      days.forEach(function (d) {
+        var list = pad(cls.morning && cls.morning[d.key], cfg.morningPeriods.length);
+        html += "<td>" + cellText(list[i]) + "</td>";
+      });
+      html += "</tr>";
+      if (breakAfter && (i + 1) === breakAfter) {
         html += '<tr class="break-row"><td colspan="' + (2 + days.length) + '">' +
           '<span class="break-label">' + esc(cfg.breakLabel) + "</span>" +
           (cfg.breakTime
@@ -424,12 +443,6 @@
             : "") +
           "</td></tr>";
       }
-      html += '<tr><td class="num">' + p.n + '</td><td class="time">' + esc(p.time) + "</td>";
-      days.forEach(function (d) {
-        var list = pad(cls.morning && cls.morning[d.key], cfg.morningPeriods.length);
-        html += "<td>" + cellText(list[i]) + "</td>";
-      });
-      html += "</tr>";
     });
     html += "</tbody></table></div>";
     return html;
