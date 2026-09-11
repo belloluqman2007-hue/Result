@@ -572,8 +572,7 @@
       eveningTable(cls, cfg) +
       '<div class="sheet-foot">' +
         sigHtml("principal", "مدير المدرسة", "التوقيع") +
-        sigHtml("head_teacher", "رئيس المعلمين", "التوقيع") +
-        sigHtml("", "ختم المدرسة", "الرسمي") +
+        sigHtml("head_teacher", "عميد المدرسة", "التوقيع") +
       "</div>" +
     "</article>";
   }
