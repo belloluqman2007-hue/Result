@@ -547,9 +547,9 @@
     return p + (p.indexOf("?") === -1 ? "?" : "&") + "t=" + state.sigStamp;
   }
 
-  /* One signing slot. `role` is a /signatures role id ("principal",
-     "head_teacher", …); pass an empty role for a slot that never carries
-     an image (the school seal). */
+  /* One signing slot. `role` is a /signatures role id ("principal" or
+     "head_teacher"). The timetable intentionally renders only these two
+     signature slots. */
   function sigHtml(role, title, caption) {
     var path = role ? (state.signatures && state.signatures[role]) : "";
     return '<div class="sig">' +
