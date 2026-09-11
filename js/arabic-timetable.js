@@ -214,6 +214,53 @@
     } catch (e) { /* quota */ }
   }
 
+  function sharedData() {
+    return {
+      classes: state.classes,
+      config: state.config,
+      orientation: state.orientation
+    };
+  }
+
+  function loadShared() {
+    return fetch("/api/arabic-timetable", { credentials: "same-origin" })
+      .then(function (r) {
+        if (!r.ok) throw new Error("http " + r.status);
+        return r.json();
+      })
+      .then(function (result) {
+        var data = result && result.data;
+        if (!data || !Array.isArray(data.classes) || !data.classes.length || !data.config) return;
+        state.classes = data.classes;
+        state.config = Object.assign(clone(DEFAULT_CONFIG), data.config);
+        if (data.orientation === "landscape" || data.orientation === "portrait") state.orientation = data.orientation;
+        migrateConfig();
+        if (!state.classes.some(function (c) { return c.id === state.currentId; })) state.currentId = state.classes[0].id;
+        save();
+      });
+  }
+
+  function saveShared() {
+    var btn = document.getElementById("saveTimetableBtn");
+    if (btn) btn.disabled = true;
+    return fetch("/api/arabic-timetable", {
+      method: "PUT",
+      credentials: "same-origin",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ data: sharedData() })
+    }).then(function (r) {
+      return r.json().catch(function () { return {}; }).then(function (body) {
+        if (!r.ok) throw new Error(body.message || "Save failed");
+        save();
+        toast("Saved — all teachers and admin can now see these changes.");
+      });
+    }).catch(function (e) {
+      toast(e.message || "Could not save. Please try again.");
+    }).then(function () {
+      if (btn) btn.disabled = false;
+    });
+  }
+
   function currentClass() {
     return state.classes.find(function (c) { return c.id === state.currentId; }) || state.classes[0];
   }
@@ -668,18 +715,6 @@
     toast("Class duplicated.");
   }
 
-  function resetSample() {
-    if (!confirm("Restore the sample timetables? Added classes will be removed.")) return;
-    state.config = clone(DEFAULT_CONFIG);
-    state.classes = clone(DEFAULT_CLASSES);
-    state.currentId = state.classes[0].id;
-    save();
-    refresh();
-    // Re-attach the existing school classes on top of the samples.
-    if (state.schoolLoaded && !state.schoolLoadFailed) mergeSchoolClasses();
-    toast("Sample data restored.");
-  }
-
   /* ---------- Fit to exactly one A4 page ---------- */
 
   /* The sheet is laid out at the real printable page width and then
@@ -980,8 +1015,8 @@
     if (delBtn) delBtn.addEventListener("click", deleteClass);
     var dupBtn = document.getElementById("duplicateClassBtn");
     if (dupBtn) dupBtn.addEventListener("click", duplicateClass);
-    var resetBtn = document.getElementById("resetBtn");
-    if (resetBtn) resetBtn.addEventListener("click", resetSample);
+    var saveTimetableBtn = document.getElementById("saveTimetableBtn");
+    if (saveTimetableBtn) saveTimetableBtn.addEventListener("click", saveShared);
     var adminBtn = document.getElementById("adminToggle");
     if (adminBtn) adminBtn.addEventListener("click", toggleAdmin);
     var printBtn = document.getElementById("printBtn");
@@ -998,15 +1033,17 @@
 
   function boot() {
     load();
-    var params = new URLSearchParams(location.search);
-    var qid = params.get("id");
-    if (qid && state.classes.some(function (c) { return c.id === qid; })) {
-      state.currentId = qid;
-    }
-    if (!state.currentId && state.classes[0]) state.currentId = state.classes[0].id;
     bind();
-    refresh();
-    fetchSchoolClasses();
+    loadShared().catch(function () {
+      toast("Could not load the shared timetable; showing this device's saved copy.");
+    }).then(function () {
+      var params = new URLSearchParams(location.search);
+      var qid = params.get("id");
+      if (qid && state.classes.some(function (c) { return c.id === qid; })) state.currentId = qid;
+      if (!state.currentId && state.classes[0]) state.currentId = state.classes[0].id;
+      refresh();
+      fetchSchoolClasses();
+    });
   }
 
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", boot);
