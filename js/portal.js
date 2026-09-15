@@ -46,6 +46,7 @@
       if (student.photo_path) {
         document.getElementById("ptPhoto").src = student.photo_path;
       }
+      loadFamilyChildren();
       loadPublished();
       loadMyFees();      // NEW (pack 15)
       loadBankAccounts();// NEW (pack 15)
@@ -61,6 +62,43 @@
       ptInitAlerts();    // NEW (pack 32): phone-alerts opt-in card
     })
     .catch(goLogin);
+
+  /* A family selector appears only when the authenticated parent has more
+     than one securely linked child. Switching updates the server session,
+     then reloads every portal feature for the selected child. */
+  function loadFamilyChildren() {
+    fetch("/portal/children", { credentials: "same-origin" })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (data) {
+        var children = data && Array.isArray(data.children) ? data.children : [];
+        if (children.length < 2) return;
+        var wrap = document.getElementById("ptChildSwitcher");
+        var select = document.getElementById("ptChildSelect");
+        select.innerHTML = "";
+        children.forEach(function (child) {
+          var option = document.createElement("option");
+          option.value = child.student_id;
+          option.textContent = child.full_name + " — " + (child.class_name || child.student_id);
+          option.selected = String(child.student_id) === String(data.current);
+          select.appendChild(option);
+        });
+        wrap.style.display = "block";
+        select.addEventListener("change", function () {
+          select.disabled = true;
+          fetch("/portal/switch-child", {
+            method: "POST", credentials: "same-origin",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ student_id: select.value })
+          }).then(function (r) {
+            if (!r.ok) throw new Error("switch");
+            window.location.reload();
+          }).catch(function () {
+            select.disabled = false;
+            alert("Could not switch child. Please refresh and try again.");
+          });
+        }, { once: true });
+      }).catch(function () {});
+  }
 
   /* --------------------- published terms list ---------------------- */
   function loadPublished() {

@@ -303,21 +303,34 @@
     d.setTextColor(80, 80, 80);
     d.text("Thank you for your payment. This receipt remains valid proof of payment for this academic session.", W / 2, y + 20, { align: "center" });
 
-    /* ----------------- Bursar + Principal signature areas ----------------- */
-    var sigY = Math.max(y + 55, H - M - 110);
-    d.setDrawColor(15, 61, 46);
-    d.setLineWidth(0.9);
-    d.line(M + 30, sigY, M + 210, sigY);
-    d.line(W - M - 210, sigY, W - M - 30, sigY);
-    d.setFont("helvetica", "normal");
-    d.setFontSize(8.5);
-    d.setTextColor(90, 90, 90);
-    d.text("Received by: " + (o.receivedBy || "__________"), M + 32, sigY - 6);
-    d.setFont("helvetica", "bold");
-    d.setFontSize(9);
-    d.setTextColor(10, 30, 20);
-    d.text("THE BURSAR / ACCOUNTANT", M + 40, sigY + 13);
-    d.text("THE PRINCIPAL", W - M - 175, sigY + 13);
+    /* Official signatories. Signature images are supplied as data URLs by
+       finance.js; keeping image loading outside this synchronous builder means
+       the PDF is never saved before the browser has finished reading them. */
+    var sigY = Math.max(y + 64, H - M - 105);
+    var colW = (W - 2 * M) / 3;
+    function receiptSignature(index, label, image, sublabel) {
+      var left = M + index * colW;
+      var centre = left + colW / 2;
+      if (image) {
+        try { d.addImage(image, left + 25, sigY - 49, colW - 50, 43, undefined, "FAST"); } catch (ignore) {}
+      }
+      d.setDrawColor(15, 61, 46);
+      d.setLineWidth(0.9);
+      d.line(left + 18, sigY, left + colW - 18, sigY);
+      d.setFont("helvetica", "bold");
+      d.setFontSize(8.5);
+      d.setTextColor(10, 30, 20);
+      d.text(label, centre, sigY + 13, { align: "center" });
+      if (sublabel) {
+        d.setFont("helvetica", "normal");
+        d.setFontSize(7.5);
+        d.setTextColor(90, 90, 90);
+        d.text(sublabel, centre, sigY + 24, { align: "center" });
+      }
+    }
+    receiptSignature(0, "RECEIVED BY", o.bursarSignature, o.receivedBy || "Bursar / Accountant");
+    receiptSignature(1, "THE HEAD TEACHER", o.headTeacherSignature, "Official Signature");
+    receiptSignature(2, "THE PRINCIPAL", o.principalSignature, "Official Signature");
 
     return d;
   };
