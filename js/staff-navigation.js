@@ -319,7 +319,7 @@
   }
 
   function mount(me) {
-    if (!me || !me.loggedIn || (me.role !== "admin" && me.role !== "teacher")) return;
+    if (!me || !me.loggedIn) return;
     if (document.body.classList.contains("ams-staff-navigation")) return;
     document.body.classList.add("ams-staff-navigation");
     document.body.classList.add(me.role === "admin" ? "ams-role-admin" : "ams-role-teacher");
