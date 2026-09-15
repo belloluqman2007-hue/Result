@@ -25,5 +25,13 @@ services:
         generateValue: true
       - key: ADMIN_DEFAULT_PASSWORD
         sync: false
+      # Gemini key for the text AI features. The separate OpenAI key below
+      # is only for the image generator.
+      - key: AI_API_KEY
+        sync: false
+      - key: AI_BASE_URL
+        value: https://generativelanguage.googleapis.com/v1beta/openai
+      - key: AI_MODEL
+        value: gemini-3.1-flash-lite
       - key: OPENAI_API_KEY
         sync: false

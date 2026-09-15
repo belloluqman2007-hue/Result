@@ -296,6 +296,12 @@
         col.appendChild(bubble("assistant", res.d.reply, Date.now()));
       } else {
         var msg = (res.d && res.d.error) || "The AI is busy right now - please try again in a moment.";
+        /* Admins receive a short server-side diagnostic when the provider
+           rejects the key/model. Showing it here stops a real configuration
+           problem from looking like a temporary busy message. */
+        if (me && me.role === "admin" && res.d && res.d.detail) {
+          msg += "\n\nDiagnostic: " + String(res.d.detail).slice(0, 200);
+        }
         col.appendChild(bubble("assistant", "\u26A0\uFE0E " + msg, Date.now(), { raw: true }));
         if (res.status === 503) setState(false); // key gone - show the switch-on card again
       }
