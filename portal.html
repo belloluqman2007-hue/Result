@@ -268,6 +268,11 @@
         <section class="pt-card portal-no-print">
           <h2>Student Information</h2>
           <p class="pt-hint">These details come from the official school register.</p>
+          <div id="ptChildSwitcher" style="display:none;margin:10px 0 16px;padding:12px;background:#f1f8f3;border:1px solid #cfe3d5;border-radius:12px;">
+            <label for="ptChildSelect" style="display:block;font-weight:800;color:#14532d;margin-bottom:6px;">Viewing child</label>
+            <select id="ptChildSelect" style="width:100%;max-width:430px;padding:10px;border:1px solid #aac9b3;border-radius:9px;background:#fff;"></select>
+            <small style="display:block;margin-top:5px;color:#5b6b62;">Switch children here without logging out.</small>
+          </div>
           <div class="pt-child">
             <img id="ptPhoto" src="images/default.png" alt="Student Photo"
                  onerror="this.onerror=null; this.src='images/default.png';">

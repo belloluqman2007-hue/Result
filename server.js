@@ -580,15 +580,15 @@ app.get("/teacher-dashboard.html", requireLogin, (req, res) => {
     res.sendFile(path.join(__dirname, "teacher-dashboard.html"));
 });
 
-app.get("/add-student.html", requireLogin, (req, res) => {
+app.get("/add-student.html", requireAdminPage, (req, res) => {
     res.sendFile(path.join(__dirname, "add-student.html"));
 });
 
-app.get("/add-subject.html", requireLogin, (req, res) => {
+app.get("/add-subject.html", requireAdminPage, (req, res) => {
     res.sendFile(path.join(__dirname, "add-subject.html"));
 });
 
-app.get("/manage-signatures.html", requireLogin, (req, res) => {
+app.get("/manage-signatures.html", requireAdminPage, (req, res) => {
     res.sendFile(path.join(__dirname, "manage-signatures.html"));
 });
 
@@ -616,7 +616,7 @@ app.get("/staff-attendance.html", requireLogin, (req, res) => {
 
 // NEW (pack 15): calendar editor page - staff can view/print; saving,
 // publishing and deleting stay admin-only at the API level.
-app.get("/manage-calendars.html", requireLogin, (req, res) => {
+app.get("/manage-calendars.html", requireAdminPage, (req, res) => {
     res.sendFile(path.join(__dirname, "manage-calendars.html"));
 });
 
@@ -637,7 +637,7 @@ app.get("/school-settings.html", requireAdminPage, (req, res) => {
     res.sendFile(path.join(__dirname, "school-settings.html"));
 });
 
-app.get("/id-card.html", requireLogin, (req, res) => {
+app.get("/id-card.html", requireAdminPage, (req, res) => {
     res.sendFile(path.join(__dirname, "id-card.html"));
 });
 
@@ -661,12 +661,12 @@ app.get("/class-results.html", requireLogin, (req, res) => {
 // NEW (Third Term Results feature): the page that uploads the school's
 // internal grade workbook (.xlsx, one sheet per class) and generates
 // third-term result sheets / PDFs / a consolidated Excel export.
-app.get("/third-term-results.html", requireLogin, (req, res) => {
+app.get("/third-term-results.html", requireAdminPage, (req, res) => {
     res.sendFile(path.join(__dirname, "third-term-results.html"));
 });
 
 // NEW (bulk results / discipline / lesson planner pages).
-app.get("/bulk-results.html", requireLogin, (req, res) => {
+app.get("/bulk-results.html", requireAdminPage, (req, res) => {
     res.sendFile(path.join(__dirname, "bulk-results.html"));
 });
 
@@ -3428,7 +3428,7 @@ app.get("/signatures", (req, res) => {
 // Handles both a drawn signature (canvas converted to a PNG file on the
 // client) and a real uploaded image - both arrive here as a normal file
 // upload, so the server treats them identically.
-app.post("/save-signature", requireLogin, writeRateLimit, uploadSignature.single("signature"), (req, res) => {
+app.post("/save-signature", requireLogin, requireAdmin, writeRateLimit, uploadSignature.single("signature"), (req, res) => {
     const role = req.body.role;
 
     // CHANGED (signature management, request #4): four staff roles are
@@ -3469,7 +3469,7 @@ app.post("/save-signature", requireLogin, writeRateLimit, uploadSignature.single
     );
 });
 
-app.delete("/delete-signature/:role", requireLogin, (req, res) => {
+app.delete("/delete-signature/:role", requireLogin, requireAdmin, (req, res) => {
     const role = req.params.role;
 
     connection.query(
@@ -3516,7 +3516,7 @@ app.get("/class-signatures", (req, res) => {
     );
 });
 
-app.post("/save-class-signature", requireLogin, writeRateLimit, uploadClassSignature.single("signature"), (req, res) => {
+app.post("/save-class-signature", requireLogin, requireAdmin, writeRateLimit, uploadClassSignature.single("signature"), (req, res) => {
     const className = (req.body.class_name || "").trim();
 
     if (!className) {
@@ -3547,7 +3547,7 @@ app.post("/save-class-signature", requireLogin, writeRateLimit, uploadClassSigna
     );
 });
 
-app.delete("/class-signature/:className", requireLogin, (req, res) => {
+app.delete("/class-signature/:className", requireLogin, requireAdmin, (req, res) => {
     connection.query(
         "DELETE FROM class_teacher_signatures WHERE class_name = ?",
         [req.params.className],
@@ -5320,7 +5320,7 @@ app.get("/classes", requireLogin, (req, res) => {
     );
 });
 
-app.post("/add-class", requireLogin, (req, res) => {
+app.post("/add-class", requireLogin, requireAdmin, (req, res) => {
     const { class_name } = req.body;
 
     if (!class_name || class_name.trim() === "") {
@@ -5343,7 +5343,7 @@ app.post("/add-class", requireLogin, (req, res) => {
     );
 });
 
-app.delete("/delete-class/:id", requireLogin, (req, res) => {
+app.delete("/delete-class/:id", requireLogin, requireAdmin, (req, res) => {
     const id = req.params.id;
 
     connection.query(
@@ -5401,7 +5401,7 @@ app.get("/subjects", requireLogin, (req, res) => {
     runQuery(subjectActiveColReady);
 });
 
-app.post("/add-subject", requireLogin, (req, res) => {
+app.post("/add-subject", requireLogin, requireAdmin, (req, res) => {
     const { subject_name, class_name } = req.body;
 
     if (!subject_name || !class_name) {
@@ -5434,7 +5434,7 @@ app.get("/all-subjects", requireLogin, (req, res) => {
     );
 });
 
-app.delete("/delete-subject/:id", requireLogin, (req, res) => {
+app.delete("/delete-subject/:id", requireLogin, requireAdmin, (req, res) => {
     const id = req.params.id;
 
     connection.query(
@@ -5455,7 +5455,7 @@ app.delete("/delete-subject/:id", requireLogin, (req, res) => {
 // another class. ADDITIVE - complements (never changes) the existing
 // /add-subject and /delete-subject routes.
 // ----------------------------------------------------------------
-app.put("/update-subject/:id", requireLogin, (req, res) => {
+app.put("/update-subject/:id", requireLogin, requireAdmin, (req, res) => {
     const id = req.params.id;
     const { subject_name, class_name } = req.body;
     // CHANGED (subject enable/disable, request #3): optional is_active
@@ -6360,17 +6360,35 @@ app.post("/portal-login", (req, res) => {
         const surname  = fullName ? fullName.split(/\s+/).pop() : "";
         const sendOk = () => {
             req.session.portalStudentId = st.student_id;
-            res.json({
-                message: "Login successful",
-                student: {
-                    student_id: st.student_id,
-                    full_name: st.full_name,
-                    class_name: st.class_name,
-                    gender: st.gender,
-                    date_of_birth: st.date_of_birth,
-                    photo_path: st.photo_path
+            /* A parent signs in once, then may switch among children whose
+               non-empty parent phone AND parent name match this record. The
+               authorised IDs are stored server-side; the browser cannot add an
+               unrelated student by changing a request. */
+            const normPhone = (v) => String(v || "").replace(/\D/g, "");
+            const normName = (v) => String(v || "").trim().toLowerCase().replace(/\s+/g, " ");
+            connection.query(
+                "SELECT student_id, full_name, class_name, photo_path, parent_name, parent_phone FROM students",
+                (familyErr, candidates) => {
+                    const phone = normPhone(st.parent_phone);
+                    const parent = normName(st.parent_name);
+                    let family = [{ student_id: st.student_id, full_name: st.full_name, class_name: st.class_name, photo_path: st.photo_path }];
+                    if (!familyErr && phone && parent) {
+                        family = (candidates || []).filter((child) =>
+                            normPhone(child.parent_phone) === phone && normName(child.parent_name) === parent
+                        ).map((child) => ({
+                            student_id: child.student_id, full_name: child.full_name,
+                            class_name: child.class_name, photo_path: child.photo_path
+                        }));
+                    }
+                    if (!family.some((child) => child.student_id === st.student_id)) family.unshift(st);
+                    req.session.portalFamilyIds = family.map((child) => String(child.student_id));
+                    res.json({ message: "Login successful", student: {
+                        student_id: st.student_id, full_name: st.full_name,
+                        class_name: st.class_name, gender: st.gender,
+                        date_of_birth: st.date_of_birth, photo_path: st.photo_path
+                    }, children: family });
                 }
-            });
+            );
         };
         // NEW (pack 23): if the family set their own password in portal
         // Settings, it REPLACES the surname rule. Legacy login unchanged
@@ -6400,8 +6418,34 @@ app.get("/portal/me", (req, res) => {
     });
 });
 
+app.get("/portal/children", (req, res) => {
+    const sid = req.session && req.session.portalStudentId;
+    const ids = req.session && req.session.portalFamilyIds;
+    if (!sid) return res.status(401).json({ message: "Not logged in" });
+    const allowed = Array.isArray(ids) && ids.length ? ids : [sid];
+    connection.query(
+        "SELECT student_id, full_name, class_name, photo_path FROM students WHERE student_id IN (" + allowed.map(() => "?").join(",") + ") ORDER BY full_name",
+        allowed,
+        (err, rows) => err ? res.status(500).json({ message: "Database error" }) : res.json({ current: sid, children: rows || [] })
+    );
+});
+
+app.post("/portal/switch-child", (req, res) => {
+    const sid = String((req.body && req.body.student_id) || "").trim();
+    const allowed = req.session && req.session.portalFamilyIds;
+    if (!req.session || !req.session.portalStudentId) return res.status(401).json({ message: "Not logged in" });
+    if (!sid || !Array.isArray(allowed) || !allowed.some((id) => String(id).toLowerCase() === sid.toLowerCase())) {
+        return res.status(403).json({ message: "That child is not linked to this parent account." });
+    }
+    req.session.portalStudentId = allowed.find((id) => String(id).toLowerCase() === sid.toLowerCase());
+    res.json({ message: "Child selected" });
+});
+
 app.post("/portal/logout", (req, res) => {
-    if (req.session) delete req.session.portalStudentId;
+    if (req.session) {
+        delete req.session.portalStudentId;
+        delete req.session.portalFamilyIds;
+    }
     res.json({ message: "Logged out" });
 });
 
@@ -8296,7 +8340,7 @@ app.delete("/payroll/:id", requireLogin, requireAdmin, (req, res) => {
    phones/browsers that send .xlsx as application/octet-stream (or with an
    empty MIME type) were rejected before the route ever ran — the page then
    showed "Network error while parsing the workbook." */
-app.post("/third-term-upload", requireLogin, writeRateLimit, receiveThirdTermWorkbook, (req, res) => {
+app.post("/third-term-upload", requireLogin, requireAdmin, writeRateLimit, receiveThirdTermWorkbook, (req, res) => {
     if (!req.file) return res.status(400).json({ message: "No file uploaded." });
 
     let parsed;
@@ -8317,7 +8361,7 @@ app.post("/third-term-upload", requireLogin, writeRateLimit, receiveThirdTermWor
     });
 });
 
-app.post("/third-term-export-excel", requireLogin, writeRateLimit, (req, res) => {
+app.post("/third-term-export-excel", requireLogin, requireAdmin, writeRateLimit, (req, res) => {
     const classes = Array.isArray(req.body && req.body.classes) ? req.body.classes : [];
     if (!classes.length) {
         return res.status(400).json({ message: "No result data to export. Upload and parse the workbook first." });
@@ -8368,7 +8412,7 @@ function numOr(v) {
     return isNaN(n) ? 0 : n;
 }
 
-app.post("/bulk-import-results", requireLogin, writeRateLimit, uploadExcel.single("file"), (req, res) => {
+app.post("/bulk-import-results", requireLogin, requireAdmin, writeRateLimit, uploadExcel.single("file"), (req, res) => {
     if (!req.file) return res.status(400).json({ message: "No file uploaded." });
 
     const term = (req.body.term || "").trim();
@@ -10441,8 +10485,8 @@ app.delete("/api/broadcasts/:id", requireLogin, requireAdmin, (req, res) => {
 
 /* Serve new admin pages */
 app.get("/homework.html", requireLogin, (req, res) => res.sendFile(path.join(__dirname, "homework.html")));
-app.get("/gallery.html", requireLogin, (req, res) => res.sendFile(path.join(__dirname, "gallery.html")));
-app.get("/transport.html", requireLogin, (req, res) => res.sendFile(path.join(__dirname, "transport.html")));
+app.get("/gallery.html", requireAdminPage, (req, res) => res.sendFile(path.join(__dirname, "gallery.html")));
+app.get("/transport.html", requireAdminPage, (req, res) => res.sendFile(path.join(__dirname, "transport.html")));
 app.get("/leave-requests.html", requireLogin, (req, res) => res.sendFile(path.join(__dirname, "leave-requests.html")));
 app.get("/broadcast.html", requireLogin, requireAdmin, (req, res) => res.sendFile(path.join(__dirname, "broadcast.html")));
 

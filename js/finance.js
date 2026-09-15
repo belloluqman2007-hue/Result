@@ -723,11 +723,38 @@ function finResolveStudent(sid, cb) {
     .catch(function () { cb({}); });
 }
 
+/* Load saved official signatures before building a receipt. jsPDF cannot use
+   a remote image reliably while saving, so convert each image to a data URL. */
+function finReceiptSignatures() {
+  return fetch("/signatures", { credentials: "same-origin" })
+    .then(function (r) { return r.ok ? r.json() : []; })
+    .then(function (rows) {
+      var wanted = {};
+      (Array.isArray(rows) ? rows : []).forEach(function (s) {
+        if (s && s.role && s.signature_path) wanted[s.role] = s.signature_path;
+      });
+      return Promise.all(["principal", "head_teacher", "bursar"].map(function (role) {
+        if (!wanted[role]) return Promise.resolve([role, ""]);
+        return fetch(wanted[role], { credentials: "same-origin" })
+          .then(function (r) { if (!r.ok) throw new Error("signature"); return r.blob(); })
+          .then(function (blob) { return new Promise(function (resolve) {
+            var reader = new FileReader();
+            reader.onload = function () { resolve([role, reader.result]); };
+            reader.onerror = function () { resolve([role, ""]); };
+            reader.readAsDataURL(blob);
+          }); }).catch(function () { return [role, ""]; });
+      }));
+    }).then(function (pairs) {
+      var map = {}; pairs.forEach(function (p) { map[p[0]] = p[1]; }); return map;
+    }).catch(function () { return {}; });
+}
+
 function downloadReceipt(row) {
   var ts = finTermSession();
   var sid = row.student_id || (document.getElementById("payStudent") && document.getElementById("payStudent").value) || "";
   var classFallback = (document.getElementById("payClass") && document.getElementById("payClass").value) || "";
   finResolveStudent(sid, function (st) {
+    finReceiptSignatures().then(function (signatures) {
     /* FIX: resolve CLASS + NAME from the payment row's OWN student_id
        (not the possibly-changed dropdown). Order: server JOIN fields ->
        authoritative /students record -> selected class dropdown. Never blank. */
@@ -746,9 +773,13 @@ function downloadReceipt(row) {
       amount: row.amount,
       method: row.method,
       receivedBy: row.received_by,
-      note: row.note
+      note: row.note,
+      principalSignature: signatures.principal || "",
+      headTeacherSignature: signatures.head_teacher || "",
+      bursarSignature: signatures.bursar || ""
     });
     d.save("receipt-" + row.id + ".pdf");
+    });
   });
 }
 

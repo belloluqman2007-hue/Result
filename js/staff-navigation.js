@@ -48,6 +48,15 @@
     logout:'<path d="M10 17l5-5-5-5M15 12H3M14 3h5a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-5"/>'
   };
 
+  /* Configuration and whole-school operations belong to administrators.
+     Teachers retain classroom, assessment, communication and learning tools. */
+  var ADMIN_ONLY_PAGES = {
+    "add-student.html":1, "bulk-results.html":1, "third-term-results.html":1,
+    "add-subject.html":1, "manage-classes.html":1, "broadcast.html":1,
+    "gallery.html":1, "transport.html":1, "id-card.html":1,
+    "manage-signatures.html":1, "manage-calendars.html":1
+  };
+
   var GROUPS = [
     { label:"Main", items:[
       ["teacher-dashboard.html","Dashboard","dashboard"],
@@ -145,6 +154,7 @@
       nav.appendChild(label);
 
       group.items.forEach(function (item) {
+        if (me.role !== "admin" && ADMIN_ONLY_PAGES[item[0]]) return;
         var link = document.createElement("a");
         link.href = item[0];
         link.innerHTML = svg(item[2]);
@@ -319,7 +329,7 @@
   }
 
   function mount(me) {
-    if (!me || !me.loggedIn || (me.role !== "admin" && me.role !== "teacher")) return;
+    if (!me || !me.loggedIn) return;
     if (document.body.classList.contains("ams-staff-navigation")) return;
     document.body.classList.add("ams-staff-navigation");
 
