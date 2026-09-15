@@ -4511,7 +4511,12 @@ function aiModelErr(e) {
 }
 function aiChatSmart(messages, opts, cfg) {
     opts = opts || {};
-    const chain = [cfg.model].concat(AI_FALLBACK_MODELS).filter(function (v, i, a) {
+    // Gemini model IDs must never be sent to an explicitly configured
+    // OpenAI/Groq/OpenRouter endpoint. Those providers get one configured
+    // model and their own error; Gemini gets the retirement/availability
+    // chain above.
+    const fallback = aiIsGoogleBase(cfg.base) ? AI_FALLBACK_MODELS : [];
+    const chain = [cfg.model].concat(fallback).filter(function (v, i, a) {
         return v && a.indexOf(v) === i;
     });
     let attempt = 0;
