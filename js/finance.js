@@ -13,6 +13,47 @@ var finStudents = []; // current class roster for payments
 var finPayRows = [];
 var finPayBalance = null;
 
+/* Official receipt signatures are converted through a canvas to PNG data
+   URLs before jsPDF receives them. This works for both uploaded JPG files and
+   drawn transparent PNGs (the server deliberately stores both with stable
+   role filenames). */
+function finSignatureDataUrl(path) {
+  return new Promise(function (resolve) {
+    if (!path) { resolve(null); return; }
+    var img = new Image();
+    img.onload = function () {
+      try {
+        var canvas = document.createElement("canvas");
+        canvas.width = img.naturalWidth || img.width || 1;
+        canvas.height = img.naturalHeight || img.height || 1;
+        canvas.getContext("2d").drawImage(img, 0, 0);
+        resolve(canvas.toDataURL("image/png"));
+      } catch (e) { resolve(null); }
+    };
+    img.onerror = function () { resolve(null); };
+    img.src = "/" + String(path).replace(/^\/+/, "") + "?receipt=" + Date.now();
+  });
+}
+
+function finLoadReceiptSignatures() {
+  return fetch("/signatures", { credentials: "same-origin" })
+    .then(function (r) { return r.ok ? r.json() : []; })
+    .then(function (rows) {
+      rows = Array.isArray(rows) ? rows : [];
+      function rolePath(role) {
+        var found = rows.find(function (row) { return row.role === role; });
+        return found && found.signature_path;
+      }
+      return Promise.all([
+        finSignatureDataUrl(rolePath("head_teacher")),
+        finSignatureDataUrl(rolePath("principal"))
+      ]).then(function (images) {
+        return { headTeacherSignature: images[0], principalSignature: images[1] };
+      });
+    })
+    .catch(function () { return { headTeacherSignature: null, principalSignature: null }; });
+}
+
 // NEW (pack 14): fill a session datalist from the sessions the admin
 // created (School Settings page). Falls back silently to the HTML options.
 function fillSessionList(listId, inputId) {
@@ -723,64 +764,48 @@ function finResolveStudent(sid, cb) {
     .catch(function () { cb({}); });
 }
 
-/* Load saved official signatures before building a receipt. jsPDF cannot use
-   a remote image reliably while saving, so convert each image to a data URL. */
-function finReceiptSignatures() {
-  return fetch("/signatures", { credentials: "same-origin" })
-    .then(function (r) { return r.ok ? r.json() : []; })
-    .then(function (rows) {
-      var wanted = {};
-      (Array.isArray(rows) ? rows : []).forEach(function (s) {
-        if (s && s.role && s.signature_path) wanted[s.role] = s.signature_path;
-      });
-      return Promise.all(["principal", "head_teacher", "bursar"].map(function (role) {
-        if (!wanted[role]) return Promise.resolve([role, ""]);
-        return fetch(wanted[role], { credentials: "same-origin" })
-          .then(function (r) { if (!r.ok) throw new Error("signature"); return r.blob(); })
-          .then(function (blob) { return new Promise(function (resolve) {
-            var reader = new FileReader();
-            reader.onload = function () { resolve([role, reader.result]); };
-            reader.onerror = function () { resolve([role, ""]); };
-            reader.readAsDataURL(blob);
-          }); }).catch(function () { return [role, ""]; });
-      }));
-    }).then(function (pairs) {
-      var map = {}; pairs.forEach(function (p) { map[p[0]] = p[1]; }); return map;
-    }).catch(function () { return {}; });
-}
-
 function downloadReceipt(row) {
   var ts = finTermSession();
   var sid = row.student_id || (document.getElementById("payStudent") && document.getElementById("payStudent").value) || "";
   var classFallback = (document.getElementById("payClass") && document.getElementById("payClass").value) || "";
-  finResolveStudent(sid, function (st) {
-    finReceiptSignatures().then(function (signatures) {
-    /* FIX: resolve CLASS + NAME from the payment row's OWN student_id
-       (not the possibly-changed dropdown). Order: server JOIN fields ->
-       authoritative /students record -> selected class dropdown. Never blank. */
-    var className = row.class_name || row.className || st.class_name || classFallback || "";
-    var studentName = row.student_name || row.studentName || st.full_name || sid;
-    var d = window.amsReceiptPDF({
-      receiptNo: "RCP-" + String(row.id).padStart(5, "0"),
-      date: row.paid_at ? String(row.paid_at).slice(0, 10) : "-",
-      studentName: studentName,
-      studentId: sid,
-      className: className,
-      purpose: row.fee_type || row.purpose || "School Fee",
-      feeType: row.fee_type || "School Fee",
-      term: ts.term,
-      session: ts.session,
-      amount: row.amount,
-      method: row.method,
-      receivedBy: row.received_by,
-      note: row.note,
-      principalSignature: signatures.principal || "",
-      headTeacherSignature: signatures.head_teacher || "",
-      bursarSignature: signatures.bursar || ""
-    });
-    d.save("receipt-" + row.id + ".pdf");
-    });
-  });
+  finNotify("Preparing the signed official receipt...", true);
+
+  var studentPromise = new Promise(function (resolve) { finResolveStudent(sid, resolve); });
+  Promise.all([studentPromise, finLoadReceiptSignatures()])
+    .then(function (loaded) {
+      var st = loaded[0] || {};
+      var signatures = loaded[1] || {};
+      /* Resolve CLASS + NAME from the payment row's OWN student_id (not the
+         possibly-changed dropdown). The payment's own term/session also wins
+         over the toolbar, keeping historical receipts authoritative. */
+      var className = row.class_name || row.className || st.class_name || classFallback || "";
+      var studentName = row.student_name || row.studentName || st.full_name || sid;
+      var d = window.amsReceiptPDF({
+        receiptNo: "RCP-" + String(row.id).padStart(5, "0"),
+        date: row.paid_at ? String(row.paid_at).slice(0, 10) : "-",
+        studentName: studentName,
+        studentId: sid,
+        className: className,
+        purpose: row.fee_type || row.purpose || "School Fee",
+        feeType: row.fee_type || "School Fee",
+        term: row.term || ts.term,
+        session: row.session || ts.session,
+        amount: row.amount,
+        method: row.method,
+        receivedBy: row.received_by,
+        note: row.note,
+        headTeacherSignature: signatures.headTeacherSignature,
+        principalSignature: signatures.principalSignature
+      });
+      d.save("receipt-" + row.id + ".pdf");
+      var missing = [];
+      if (!signatures.headTeacherSignature) missing.push("Head Teacher");
+      if (!signatures.principalSignature) missing.push("Principal");
+      finNotify(missing.length
+        ? "Receipt downloaded. Upload the missing " + missing.join(" and ") + " signature in Manage Signatures to stamp it next time."
+        : "Signed receipt downloaded with Head Teacher and Principal signatures.", !missing.length);
+    })
+    .catch(function () { finNotify("Could not build the receipt. Please try again.", false); });
 }
 
 function deletePayment(row) {

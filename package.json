@@ -5,7 +5,7 @@
   "main": "index.js",
   "scripts": {
     "start": "node server.js",
-    "test": "node test/attendance-500-test.js && node test/attendance-page-client-test.js",
+    "test": "node test/attendance-500-test.js && node test/attendance-page-client-test.js && node test/family-receipt-role-test.js",
     "test:register-api": "node test/attendance-500-test.js",
     "test:register-page": "node test/attendance-page-client-test.js"
   },

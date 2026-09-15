@@ -224,8 +224,9 @@
      letterhead, receipt no + date strip, a labelled details box (student
      name, student ID / admission no, class, term/session, purpose, method),
      a prominent green AMOUNT PAID banner, amount in words, optional note,
-     and Bursar ("Received by") + Principal signature areas. Still returns
-     the jsPDF doc, so the existing download path is unchanged. */
+     and Bursar ("Received by") + Head Teacher + Principal signature areas.
+     Saved signature images are stamped above their labels when available.
+     Still returns the jsPDF doc, so the existing download path is unchanged. */
   window.amsReceiptPDF = function (o) {
     var d = doc();
     var y = header(d, "OFFICIAL SCHOOL PAYMENT RECEIPT", []);
@@ -303,34 +304,34 @@
     d.setTextColor(80, 80, 80);
     d.text("Thank you for your payment. This receipt remains valid proof of payment for this academic session.", W / 2, y + 20, { align: "center" });
 
-    /* Official signatories. Signature images are supplied as data URLs by
-       finance.js; keeping image loading outside this synchronous builder means
-       the PDF is never saved before the browser has finished reading them. */
-    var sigY = Math.max(y + 64, H - M - 105);
-    var colW = (W - 2 * M) / 3;
-    function receiptSignature(index, label, image, sublabel) {
-      var left = M + index * colW;
-      var centre = left + colW / 2;
-      if (image) {
-        try { d.addImage(image, left + 25, sigY - 49, colW - 50, 43, undefined, "FAST"); } catch (ignore) {}
-      }
-      d.setDrawColor(15, 61, 46);
-      d.setLineWidth(0.9);
-      d.line(left + 18, sigY, left + colW - 18, sigY);
-      d.setFont("helvetica", "bold");
-      d.setFontSize(8.5);
-      d.setTextColor(10, 30, 20);
-      d.text(label, centre, sigY + 13, { align: "center" });
-      if (sublabel) {
-        d.setFont("helvetica", "normal");
-        d.setFontSize(7.5);
-        d.setTextColor(90, 90, 90);
-        d.text(sublabel, centre, sigY + 24, { align: "center" });
-      }
+    /* -------- Bursar + Head Teacher + Principal signature areas -------- */
+    var sigY = Math.max(y + 62, H - M - 104);
+    var sigCenters = [M + 78, W / 2, W - M - 78];
+    d.setDrawColor(15, 61, 46);
+    d.setLineWidth(0.9);
+    sigCenters.forEach(function (cx) { d.line(cx - 65, sigY, cx + 65, sigY); });
+
+    /* Signature images arrive as PNG data URLs prepared by finance.js. A
+       missing official signature leaves the ruled signature space intact,
+       so an old receipt can still be printed and signed by hand. */
+    function stampSignature(dataUrl, centerX) {
+      if (!dataUrl) return;
+      try { d.addImage(dataUrl, "PNG", centerX - 48, sigY - 43, 96, 36); }
+      catch (e) { /* malformed/old image: keep the manual signature line */ }
     }
-    receiptSignature(0, "RECEIVED BY", o.bursarSignature, o.receivedBy || "Bursar / Accountant");
-    receiptSignature(1, "THE HEAD TEACHER", o.headTeacherSignature, "Official Signature");
-    receiptSignature(2, "THE PRINCIPAL", o.principalSignature, "Official Signature");
+    stampSignature(o.headTeacherSignature, sigCenters[1]);
+    stampSignature(o.principalSignature, sigCenters[2]);
+
+    d.setFont("helvetica", "normal");
+    d.setFontSize(8);
+    d.setTextColor(90, 90, 90);
+    d.text("Received by: " + (o.receivedBy || "__________"), sigCenters[0], sigY - 7, { align: "center" });
+    d.setFont("helvetica", "bold");
+    d.setFontSize(8.5);
+    d.setTextColor(10, 30, 20);
+    d.text("BURSAR / ACCOUNTANT", sigCenters[0], sigY + 13, { align: "center" });
+    d.text("HEAD TEACHER", sigCenters[1], sigY + 13, { align: "center" });
+    d.text("PRINCIPAL", sigCenters[2], sigY + 13, { align: "center" });
 
     return d;
   };
