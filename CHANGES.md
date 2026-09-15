@@ -1,5 +1,21 @@
 # UI Modernization — Change Log
 
+## Pack 110 - 2026-09-15
+
+Owner: "The AI in the public website needs to know all about the school at the public website. Fix and merge."
+
+### Public website assistant knowledge fix
+
+| File | What changed |
+|---|---|
+| `public-school-knowledge.js` | Added one canonical, public-only school reference covering the correct Ijebu-Ode/Ogun State location, both contact numbers, English/Arabic identity and motto, all five programmes and their details, Tahfeedh days/time, admission steps and form fields, staff/student/parent login guidance, portal features, notices, Honour Roll and privacy boundaries. Admin-edited public profile fields, published term dates/result notice, general announcements and upcoming events are folded in live; private student, result, fee and bank data is never queried or sent to the provider. |
+| `server.js` | The public assistant now uses that complete reference instead of its old two-line prompt. Fixed the incorrect hard-coded `Lagos` location and the non-existent `st.phone` lookup (the schema uses `phone1` and `phone2`). It reads the same public notice-board filters as the homepage, supports legacy settings schemas, removes the duplicate current question from chat history, allows a complete structured answer when someone asks for “all”, and raises the previous 1,200-character response cut to 4,000 so the answer is not chopped. |
+| `test/public-ai-knowledge-test.js`, `package.json` | Added regression coverage for the correct location, both phones, every programme, schedule, admission, portal guidance, live settings/notices/events, date formatting and control-character cleanup. Included it in `npm test`. |
+
+The assistant remains public, rate-limited and grounded: unknown fees, policies, private records or dates must be confirmed by management rather than invented.
+
+---
+
 ## Pack 109 - 2026-09-15
 
 Owner: "Every time I try to use the AI it says the AI is busy. Fix and merge."
