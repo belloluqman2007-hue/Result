@@ -17,6 +17,11 @@
      they can't collide with legacy markup.
 ========================================================== */
 
+/* Role visibility is declarative across every staff page. The server still
+   enforces each permission; this also covers admin-only controls inserted
+   after the role check has completed. */
+body.ams-role-teacher [data-admin-only]{ display:none !important; }
+
 /* ---------- 1. Design tokens (modern palette, additive) ---------- */
 :root{
   /* Brand stays emerald + jade + cream (matches legacy variables) */

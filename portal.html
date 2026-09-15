@@ -40,6 +40,26 @@
     .pt-maintop .pt-tt small{ display:block; font-weight:500; font-size:11px; opacity:.85; }
     .pt-ham{ display:none; background:rgba(255,255,255,.14); border:none; color:#fff;
       width:38px; height:38px; border-radius:10px; font-size:18px; }
+    .pt-family-switch{ display:none; align-items:center; gap:7px; }
+    .pt-family-switch label{ font-size:10px; font-weight:800; opacity:.82; text-transform:uppercase; }
+    .pt-family-switch select{
+      max-width:190px; padding:7px 28px 7px 9px; border-radius:9px;
+      border:1px solid rgba(255,255,255,.35); background:#fff; color:#14532d;
+      font:700 12px inherit;
+    }
+
+    .pt-family-list{ display:grid; grid-template-columns:repeat(auto-fit,minmax(190px,1fr)); gap:9px; margin:12px 0; }
+    .pt-family-child{ width:100%; display:flex; align-items:center; gap:9px; border:1px solid #dce8df; background:#f7fbf8; border-radius:12px; padding:9px 11px; box-shadow:none; text-align:left; font-family:inherit; cursor:pointer; }
+    .pt-family-child:hover{ background:#edf8f1; border-color:#75bd91; transform:none; box-shadow:none; }
+    .pt-family-child:disabled{ opacity:1; cursor:default; }
+    .pt-family-child.active{ border-color:#2F9E6E; background:#edf8f1; box-shadow:inset 3px 0 #2F9E6E; }
+    .pt-family-child img{ width:40px; height:40px; flex:0 0 40px; border-radius:10px; object-fit:cover; background:#fff; }
+    .pt-family-child b{ display:block; color:#14291c; font-size:13px; line-height:1.25; }
+    .pt-family-child small{ display:block; color:#64766b; font-size:11px; margin-top:2px; }
+    .pt-family-form{ display:grid; grid-template-columns:1fr 1fr auto; gap:8px; align-items:end; margin-top:11px; }
+    .pt-family-form label{ display:block; color:#345244; font-size:11px; font-weight:800; margin-bottom:4px; }
+    .pt-family-form input{ width:100%; box-sizing:border-box; padding:9px 10px; border:1px solid #cddbd1; border-radius:9px; }
+    .pt-family-note{ min-height:18px; margin:8px 0 0; color:#5B6B62; font-size:12px; }
 
     .pt-layout{ display:flex; flex:1; align-items:stretch; }
 
@@ -138,6 +158,15 @@
       }
       body.pt-nav-open .pt-sidenav{ transform:none; }
       .pt-mainnew{ padding:14px 12px 60px; }
+      .pt-maintop .pt-tt small{ display:none; }
+      .pt-family-switch label{ display:none; }
+      .pt-family-switch select{ max-width:125px; }
+      .pt-family-form{ grid-template-columns:1fr 1fr; }
+      .pt-family-form button{ grid-column:1/-1; }
+    }
+    @media (max-width:560px){
+      .pt-maintop .pt-tt{ display:none; }
+      .pt-family-switch select{ max-width:150px; }
     }
 
     /* ---------- NEW (Pack 105) mobile bottom quick-nav ----------
@@ -207,7 +236,13 @@
     <button class="pt-ham" id="ptHam" type="button" aria-label="Menu">&#9776;</button>
     <img src="images/LOGO.JPG" alt="School Logo">
     <div class="pt-tt">Student &amp; Parent Portal<small>Ameenullah School of Arabic &amp; Islamic Studies</small></div>
-    <div style="margin-left:auto; display:flex; gap:8px; align-items:center;">
+    <div style="margin-left:auto; display:flex; gap:8px; align-items:center; min-width:0;">
+      <!-- Family switcher: appears after two or more children have been
+           linked. Changing it swaps the active child without logging out. -->
+      <div class="pt-family-switch" id="ptFamilySwitch">
+        <label for="ptChildSelect">Viewing</label>
+        <select id="ptChildSelect" aria-label="Switch child"></select>
+      </div>
       <!-- pack 23 + CHANGED (pack 24): bell now opens the notifications PAGE -->
       <button class="pt-linkbtn" id="ptBellBtn" type="button" title="Notifications" style="position:relative;">
         &#128276; <span id="ptBellBadge" style="display:none; position:absolute; top:-6px; right:-6px; background:#C0392B; color:#fff; font-size:11px; font-weight:800; border-radius:10px; padding:1px 6px; line-height:1.4;"></span>
@@ -289,6 +324,27 @@
             <button type="button" data-jump="exams">&#128394; Exam Timetable</button>
             <button type="button" onclick="window.location.href='student-ai-tutor.html'">&#127891; AI Tutor for Learning</button>
           </div>
+        </section>
+
+        <!-- Family access: each additional child's own credentials are
+             verified once. Afterwards every linked child appears in the top
+             switcher and can be opened without logging out. -->
+        <section class="pt-card portal-no-print" id="ptFamilyCard">
+          <h2 style="margin-bottom:3px;">&#128106; My Children</h2>
+          <p class="pt-hint" style="margin-top:0;">Link all your children here once, then switch between their results, fees and records without logging in and out.</p>
+          <div class="pt-family-list" id="ptFamilyList"><span class="pt-hint">Loading family...</span></div>
+          <form class="pt-family-form" id="ptLinkChildForm">
+            <div>
+              <label for="ptLinkStudentId">Other child's Student ID</label>
+              <input type="text" id="ptLinkStudentId" autocomplete="username" placeholder="e.g. AMS002" required>
+            </div>
+            <div>
+              <label for="ptLinkPassword">Surname or portal password</label>
+              <input type="password" id="ptLinkPassword" autocomplete="current-password" placeholder="Other child's password" required>
+            </div>
+            <button class="mg-btn" id="ptLinkChildBtn" type="submit">&#10133; Link Child</button>
+          </form>
+          <p class="pt-family-note" id="ptFamilyNote">For security, enter the Student ID and password of every child you add.</p>
         </section>
 
         <!-- NEW (pack 32): one-tap phone alerts - results/fees/chat ring

@@ -224,8 +224,9 @@
      letterhead, receipt no + date strip, a labelled details box (student
      name, student ID / admission no, class, term/session, purpose, method),
      a prominent green AMOUNT PAID banner, amount in words, optional note,
-     and Bursar ("Received by") + Principal signature areas. Still returns
-     the jsPDF doc, so the existing download path is unchanged. */
+     and Bursar ("Received by") + Head Teacher + Principal signature areas.
+     Saved signature images are stamped above their labels when available.
+     Still returns the jsPDF doc, so the existing download path is unchanged. */
   window.amsReceiptPDF = function (o) {
     var d = doc();
     var y = header(d, "OFFICIAL SCHOOL PAYMENT RECEIPT", []);
@@ -303,21 +304,34 @@
     d.setTextColor(80, 80, 80);
     d.text("Thank you for your payment. This receipt remains valid proof of payment for this academic session.", W / 2, y + 20, { align: "center" });
 
-    /* ----------------- Bursar + Principal signature areas ----------------- */
-    var sigY = Math.max(y + 55, H - M - 110);
+    /* -------- Bursar + Head Teacher + Principal signature areas -------- */
+    var sigY = Math.max(y + 62, H - M - 104);
+    var sigCenters = [M + 78, W / 2, W - M - 78];
     d.setDrawColor(15, 61, 46);
     d.setLineWidth(0.9);
-    d.line(M + 30, sigY, M + 210, sigY);
-    d.line(W - M - 210, sigY, W - M - 30, sigY);
+    sigCenters.forEach(function (cx) { d.line(cx - 65, sigY, cx + 65, sigY); });
+
+    /* Signature images arrive as PNG data URLs prepared by finance.js. A
+       missing official signature leaves the ruled signature space intact,
+       so an old receipt can still be printed and signed by hand. */
+    function stampSignature(dataUrl, centerX) {
+      if (!dataUrl) return;
+      try { d.addImage(dataUrl, "PNG", centerX - 48, sigY - 43, 96, 36); }
+      catch (e) { /* malformed/old image: keep the manual signature line */ }
+    }
+    stampSignature(o.headTeacherSignature, sigCenters[1]);
+    stampSignature(o.principalSignature, sigCenters[2]);
+
     d.setFont("helvetica", "normal");
-    d.setFontSize(8.5);
+    d.setFontSize(8);
     d.setTextColor(90, 90, 90);
-    d.text("Received by: " + (o.receivedBy || "__________"), M + 32, sigY - 6);
+    d.text("Received by: " + (o.receivedBy || "__________"), sigCenters[0], sigY - 7, { align: "center" });
     d.setFont("helvetica", "bold");
-    d.setFontSize(9);
+    d.setFontSize(8.5);
     d.setTextColor(10, 30, 20);
-    d.text("THE BURSAR / ACCOUNTANT", M + 40, sigY + 13);
-    d.text("THE PRINCIPAL", W - M - 175, sigY + 13);
+    d.text("BURSAR / ACCOUNTANT", sigCenters[0], sigY + 13, { align: "center" });
+    d.text("HEAD TEACHER", sigCenters[1], sigY + 13, { align: "center" });
+    d.text("PRINCIPAL", sigCenters[2], sigY + 13, { align: "center" });
 
     return d;
   };

@@ -580,15 +580,15 @@ app.get("/teacher-dashboard.html", requireLogin, (req, res) => {
     res.sendFile(path.join(__dirname, "teacher-dashboard.html"));
 });
 
-app.get("/add-student.html", requireLogin, (req, res) => {
+app.get("/add-student.html", requireAdminPage, (req, res) => {
     res.sendFile(path.join(__dirname, "add-student.html"));
 });
 
-app.get("/add-subject.html", requireLogin, (req, res) => {
+app.get("/add-subject.html", requireAdminPage, (req, res) => {
     res.sendFile(path.join(__dirname, "add-subject.html"));
 });
 
-app.get("/manage-signatures.html", requireLogin, (req, res) => {
+app.get("/manage-signatures.html", requireAdminPage, (req, res) => {
     res.sendFile(path.join(__dirname, "manage-signatures.html"));
 });
 
@@ -610,7 +610,7 @@ app.get("/attendance.html", requireLogin, (req, res) => {
     res.sendFile(path.join(__dirname, "attendance.html"));
 });
 
-app.get("/staff-attendance.html", requireLogin, (req, res) => {
+app.get("/staff-attendance.html", requireAdminPage, (req, res) => {
     res.sendFile(path.join(__dirname, "staff-attendance.html"));
 });
 
@@ -637,7 +637,7 @@ app.get("/school-settings.html", requireAdminPage, (req, res) => {
     res.sendFile(path.join(__dirname, "school-settings.html"));
 });
 
-app.get("/id-card.html", requireLogin, (req, res) => {
+app.get("/id-card.html", requireAdminPage, (req, res) => {
     res.sendFile(path.join(__dirname, "id-card.html"));
 });
 
@@ -689,6 +689,23 @@ app.get("/notify-parents.html", requireLogin, requireAdmin, (req, res) => {
 
 app.get("/appointments.html", requireLogin, (req, res) => {
     res.sendFile(path.join(__dirname, "appointments.html"));
+});
+
+/* Role audit: these pages change school-wide administration records rather
+   than classroom work. Keep them behind the page-level admin gate BEFORE
+   express.static, otherwise Express would serve the HTML to a teacher before
+   reaching the duplicate routes near their API modules. */
+[
+    "analytics.html",
+    "manage-classes.html",
+    "transport.html",
+    "leave-requests.html",
+    "broadcast.html",
+    "health.html"
+].forEach((fileName) => {
+    app.get("/" + fileName, requireAdminPage, (req, res) => {
+        res.sendFile(path.join(__dirname, fileName));
+    });
 });
 
 // ----------------------------------------------------------------
@@ -1149,6 +1166,17 @@ const addonTables = [
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
         PRIMARY KEY (class_name, term, session)
     )`,
+    // Family portal links: a parent proves each child's credentials once,
+    // then any linked child can be selected without logging out. Links are
+    // stored in both directions so logging in with any sibling restores the
+    // whole family switcher and practical household sizes are supported.
+    `CREATE TABLE IF NOT EXISTS portal_family_links (
+        student_id VARCHAR(100) NOT NULL,
+        linked_student_id VARCHAR(100) NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (student_id, linked_student_id),
+        KEY idx_family_linked_student (linked_student_id)
+    ) DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
     // NEW (pack 13 - admission enquiries from the school website):
     // visitors register interest; management reviews and admits.
     `CREATE TABLE IF NOT EXISTS admission_enquiries (
@@ -3428,7 +3456,7 @@ app.get("/signatures", (req, res) => {
 // Handles both a drawn signature (canvas converted to a PNG file on the
 // client) and a real uploaded image - both arrive here as a normal file
 // upload, so the server treats them identically.
-app.post("/save-signature", requireLogin, writeRateLimit, uploadSignature.single("signature"), (req, res) => {
+app.post("/save-signature", requireLogin, requireAdmin, writeRateLimit, uploadSignature.single("signature"), (req, res) => {
     const role = req.body.role;
 
     // CHANGED (signature management, request #4): four staff roles are
@@ -3469,7 +3497,7 @@ app.post("/save-signature", requireLogin, writeRateLimit, uploadSignature.single
     );
 });
 
-app.delete("/delete-signature/:role", requireLogin, (req, res) => {
+app.delete("/delete-signature/:role", requireLogin, requireAdmin, (req, res) => {
     const role = req.params.role;
 
     connection.query(
@@ -3516,7 +3544,7 @@ app.get("/class-signatures", (req, res) => {
     );
 });
 
-app.post("/save-class-signature", requireLogin, writeRateLimit, uploadClassSignature.single("signature"), (req, res) => {
+app.post("/save-class-signature", requireLogin, requireAdmin, writeRateLimit, uploadClassSignature.single("signature"), (req, res) => {
     const className = (req.body.class_name || "").trim();
 
     if (!className) {
@@ -3547,7 +3575,7 @@ app.post("/save-class-signature", requireLogin, writeRateLimit, uploadClassSigna
     );
 });
 
-app.delete("/class-signature/:className", requireLogin, (req, res) => {
+app.delete("/class-signature/:className", requireLogin, requireAdmin, (req, res) => {
     connection.query(
         "DELETE FROM class_teacher_signatures WHERE class_name = ?",
         [req.params.className],
@@ -5320,7 +5348,7 @@ app.get("/classes", requireLogin, (req, res) => {
     );
 });
 
-app.post("/add-class", requireLogin, (req, res) => {
+app.post("/add-class", requireLogin, requireAdmin, (req, res) => {
     const { class_name } = req.body;
 
     if (!class_name || class_name.trim() === "") {
@@ -5343,7 +5371,7 @@ app.post("/add-class", requireLogin, (req, res) => {
     );
 });
 
-app.delete("/delete-class/:id", requireLogin, (req, res) => {
+app.delete("/delete-class/:id", requireLogin, requireAdmin, (req, res) => {
     const id = req.params.id;
 
     connection.query(
@@ -5401,7 +5429,7 @@ app.get("/subjects", requireLogin, (req, res) => {
     runQuery(subjectActiveColReady);
 });
 
-app.post("/add-subject", requireLogin, (req, res) => {
+app.post("/add-subject", requireLogin, requireAdmin, (req, res) => {
     const { subject_name, class_name } = req.body;
 
     if (!subject_name || !class_name) {
@@ -5434,7 +5462,7 @@ app.get("/all-subjects", requireLogin, (req, res) => {
     );
 });
 
-app.delete("/delete-subject/:id", requireLogin, (req, res) => {
+app.delete("/delete-subject/:id", requireLogin, requireAdmin, (req, res) => {
     const id = req.params.id;
 
     connection.query(
@@ -5455,7 +5483,7 @@ app.delete("/delete-subject/:id", requireLogin, (req, res) => {
 // another class. ADDITIVE - complements (never changes) the existing
 // /add-subject and /delete-subject routes.
 // ----------------------------------------------------------------
-app.put("/update-subject/:id", requireLogin, (req, res) => {
+app.put("/update-subject/:id", requireLogin, requireAdmin, (req, res) => {
     const id = req.params.id;
     const { subject_name, class_name } = req.body;
     // CHANGED (subject enable/disable, request #3): optional is_active
@@ -5596,7 +5624,7 @@ SELECT
 
 
 
-    app.post("/save-student", requireLogin, writeRateLimit, upload.single("photo"), (req, res) => {
+    app.post("/save-student", requireLogin, requireAdmin, writeRateLimit, upload.single("photo"), (req, res) => {
         const{
             student_id,
             full_name,
@@ -5771,7 +5799,22 @@ SELECT
                     }
                     // FIX (pack 20): database copy of the photo (survives disk wipes)
                     if (photoPath) backupStudentPhoto(newId, req.file && req.file.path);
-                    res.json({ message: "Student profile updated.", student_id: newId });
+                    const sendDone = () => res.json({ message: "Student profile updated.", student_id: newId });
+                    if (newId === origId) return sendDone();
+                    // Keep verified sibling links usable after an admin changes
+                    // a child's Admission Number. This is best-effort for
+                    // legacy databases where the family table is not present.
+                    connection.query(
+                        `UPDATE portal_family_links
+                         SET student_id = CASE WHEN student_id = ? THEN ? ELSE student_id END,
+                             linked_student_id = CASE WHEN linked_student_id = ? THEN ? ELSE linked_student_id END
+                         WHERE student_id = ? OR linked_student_id = ?`,
+                        [origId, newId, origId, newId, origId, origId],
+                        (linkErr) => {
+                            if (linkErr && linkErr.code !== "ER_NO_SUCH_TABLE") console.log(linkErr);
+                            sendDone();
+                        }
+                    );
                 }
             );
         }
@@ -5846,7 +5889,7 @@ SELECT
         );
     });
 
-    app.post("/update-student-photo", requireLogin, writeRateLimit, upload.single("photo"), (req, res) => {
+    app.post("/update-student-photo", requireLogin, requireAdmin, writeRateLimit, upload.single("photo"), (req, res) => {
         if (!req.file) {
             return res.status(400).json({ message: "No photo uploaded." });
         }
@@ -5873,7 +5916,7 @@ SELECT
         );
     });
 
-    app.get("/download-student-template", requireLogin, (req, res) => {
+    app.get("/download-student-template", requireLogin, requireAdmin, (req, res) => {
         const filePath = path.join(__dirname, "templates", "student_upload_template.xlsx");
         res.download(filePath, "student_upload_template.xlsx", (err) => {
             if (err) {
@@ -5885,7 +5928,7 @@ SELECT
         });
     });
 
-    app.post("/bulk-add-students", requireLogin, writeRateLimit, uploadExcel.single("file"), (req, res) => {
+    app.post("/bulk-add-students", requireLogin, requireAdmin, writeRateLimit, uploadExcel.single("file"), (req, res) => {
         if (!req.file) {
             return res.status(400).json({ message: "No file uploaded." });
         }
@@ -6002,7 +6045,7 @@ SELECT
         });
     });
 
-app.post("/promote-class", requireLogin, (req, res) => {
+app.post("/promote-class", requireLogin, requireAdmin, (req, res) => {
     console.log("PROMOTE ROUTE CALLED");
 
     const { currentClass, nextClass: reqNextClass, mode } = req.body;
@@ -6209,7 +6252,7 @@ app.delete("/delete-result/:id", requireLogin, (req, res) => {
     );
 });
 
-app.delete("/delete-results-by-student/:studentId", requireLogin, (req, res) => {
+app.delete("/delete-results-by-student/:studentId", requireLogin, requireAdmin, (req, res) => {
     const studentId = req.params.studentId;
 
     connection.query(
@@ -6243,6 +6286,7 @@ app.delete("/delete-student/:studentId", requireLogin, requireAdmin, (req, res) 
             connection.query("DELETE FROM results WHERE student_id = ?", [studentId], () => {});
             connection.query("DELETE FROM attendance WHERE student_id = ?", [studentId], () => {});
             connection.query("DELETE FROM tahfeedh WHERE student_id = ?", [studentId], () => {});
+            connection.query("DELETE FROM portal_family_links WHERE student_id = ? OR linked_student_id = ?", [studentId, studentId], () => {});
             connection.query("DELETE FROM messages WHERE (sender_type = 'portal' AND sender_ref = ?) OR (recipient_type = 'parent' AND recipient_ref = ?) OR sender_ref = ? OR recipient_ref = ?", [studentId, studentId, studentId, studentId], () => {});
 
             res.json({
@@ -6254,7 +6298,7 @@ app.delete("/delete-student/:studentId", requireLogin, requireAdmin, (req, res) 
 
 // NEW (Pack 45): automatic orphan cleanup - removes any ghost scores in results
 // where the student_id no longer exists in the students database table.
-app.delete("/api/clean-orphan-results", requireLogin, (req, res) => {
+app.delete("/api/clean-orphan-results", requireLogin, requireAdmin, (req, res) => {
     const sql = `
         DELETE r FROM results r
         LEFT JOIN students s ON r.student_id = s.student_id
@@ -6274,7 +6318,7 @@ app.delete("/api/clean-orphan-results", requireLogin, (req, res) => {
 
 // NEW (Pack 45): one-click score deletion for a specific student in a term+session
 // directly from the Class Results broadsheet page.
-app.delete("/api/delete-student-term-results", requireLogin, (req, res) => {
+app.delete("/api/delete-student-term-results", requireLogin, requireAdmin, (req, res) => {
     const { student_id, term, session } = req.body;
     if (!student_id || !term || !session) {
         return res.status(400).json({ message: "Student ID, Term and Session are required." });
@@ -6296,7 +6340,7 @@ app.delete("/api/delete-student-term-results", requireLogin, (req, res) => {
 });
 
 // NEW (Pack 45): clear all results for an entire class in a specific term+session.
-app.delete("/api/clear-class-term-results", requireLogin, (req, res) => {
+app.delete("/api/clear-class-term-results", requireLogin, requireAdmin, (req, res) => {
     const { class_name, term, session } = req.body;
     if (!class_name || !term || !session) {
         return res.status(400).json({ message: "Class, Term and Session are required." });
@@ -6345,6 +6389,71 @@ app.delete("/wipe-all-data", requireLogin, requireAdmin, (req, res) => {
    ===================================================================== */
 
 /* ---------- Student / Parent portal (login: Student ID + surname) --- */
+function portalPublicStudent(st) {
+    return {
+        student_id: st.student_id,
+        full_name: st.full_name,
+        class_name: st.class_name,
+        gender: st.gender,
+        date_of_birth: st.date_of_birth,
+        photo_path: st.photo_path,
+        parent_name: st.parent_name,
+        parent_phone: st.parent_phone,
+        address: st.address
+    };
+}
+
+/* One credential checker is shared by the first portal login and by "Link
+   another child". This prevents the family switcher from ever linking a child
+   merely because a parent guessed an admission number: that child's surname
+   or custom portal password must also be proved. */
+function verifyPortalStudentCredentials(studentId, password, cb) {
+    const sid = String(studentId || "").trim();
+    const secret = String(password || "").trim();
+    if (!sid || !secret) return cb(null, null);
+    connection.query("SELECT * FROM students WHERE student_id = ? LIMIT 1", [sid], (err, rows) => {
+        if (err) return cb(err);
+        if (!rows || !rows.length) return cb(null, null);
+        const st = rows[0];
+        if (st.portal_password) {
+            return bcrypt.compare(secret, st.portal_password, (bErr, match) => {
+                if (bErr) return cb(bErr);
+                cb(null, match ? st : null);
+            });
+        }
+        const fullName = String(st.full_name || "").trim();
+        const surname = fullName ? fullName.split(/\s+/).pop() : "";
+        const entered = secret.toLowerCase();
+        cb(null, entered === surname.toLowerCase() || entered === fullName.toLowerCase() ? st : null);
+    });
+}
+
+/* Family links are a complete, two-way set. Reading both columns also makes
+   this tolerant of an interrupted older write. If the new table is still
+   being created during a deploy, ordinary one-child login continues to work. */
+function portalFamilyIds(studentId, cb) {
+    const sid = String(studentId || "").trim();
+    if (!sid) return cb(null, []);
+    connection.query(
+        "SELECT student_id, linked_student_id FROM portal_family_links WHERE student_id = ? OR linked_student_id = ?",
+        [sid, sid],
+        (err, rows) => {
+            if (err) {
+                if (err.code === "ER_NO_SUCH_TABLE") return cb(null, [sid]);
+                return cb(err);
+            }
+            const ids = [sid];
+            (rows || []).forEach((row) => {
+                [row.student_id, row.linked_student_id].forEach((id) => {
+                    const clean = String(id || "").trim();
+                    if (clean && !ids.includes(clean)) ids.push(clean);
+                });
+            });
+            cb(null, ids);
+        }
+    );
+}
+
 app.post("/portal-login", (req, res) => {
     if (!loginRateLimit(req, res)) return;
     const studentId = (req.body.student_id || "").trim();
@@ -6352,39 +6461,19 @@ app.post("/portal-login", (req, res) => {
     if (!studentId || !password) {
         return res.status(400).json({ message: "Student ID and surname are required." });
     }
-    connection.query("SELECT * FROM students WHERE student_id = ?", [studentId], (err, rows) => {
+    verifyPortalStudentCredentials(studentId, password, (err, st) => {
         if (err) { console.log(err); return res.status(500).json({ message: "Database error" }); }
-        if (!rows.length) return res.status(401).json({ message: "Invalid Student ID or surname" });
-        const st = rows[0];
-        const fullName = (st.full_name || "").trim();
-        const surname  = fullName ? fullName.split(/\s+/).pop() : "";
-        const sendOk = () => {
+        if (!st) return res.status(401).json({ message: "Invalid Student ID or password" });
+        portalFamilyIds(st.student_id, (familyErr, familyIds) => {
+            if (familyErr) console.log("Family links lookup notice:", familyErr.message || familyErr);
             req.session.portalStudentId = st.student_id;
+            req.session.portalStudentIds = familyErr ? [st.student_id] : familyIds;
             res.json({
                 message: "Login successful",
-                student: {
-                    student_id: st.student_id,
-                    full_name: st.full_name,
-                    class_name: st.class_name,
-                    gender: st.gender,
-                    date_of_birth: st.date_of_birth,
-                    photo_path: st.photo_path
-                }
+                student: portalPublicStudent(st),
+                linked_children: req.session.portalStudentIds.length
             });
-        };
-        // NEW (pack 23): if the family set their own password in portal
-        // Settings, it REPLACES the surname rule. Legacy login unchanged
-        // for everyone who has not set one yet.
-        if (st.portal_password) {
-            return bcrypt.compare(password, st.portal_password, (err, match) => {
-                if (err || !match) return res.status(401).json({ message: "Invalid Student ID or password" });
-                sendOk();
-            });
-        }
-        const ok = password.toLowerCase() === surname.toLowerCase()
-                || password.toLowerCase() === fullName.toLowerCase();
-        if (!ok) return res.status(401).json({ message: "Invalid Student ID or surname" });
-        sendOk();
+        });
     });
 });
 
@@ -6396,12 +6485,104 @@ app.get("/portal/me", (req, res) => {
             if (err) console.log(err);
             return res.json({ loggedIn: false });
         }
-        res.json({ loggedIn: true, student: rows[0] });
+        res.json({ loggedIn: true, student: portalPublicStudent(rows[0]) });
+    });
+});
+
+/* List every child whose credentials this family has linked. The active child
+   remains the identity used by all existing portal endpoints, so switching is
+   safe and does not require any changes to results/fees/messages queries. */
+app.get("/portal/children", (req, res) => {
+    const activeId = req.session && req.session.portalStudentId;
+    if (!activeId) return res.status(401).json({ message: "Not logged in" });
+    portalFamilyIds(activeId, (err, ids) => {
+        if (err) { console.log(err); return res.status(500).json({ message: "Could not load linked children." }); }
+        const uniqueIds = Array.from(new Set((ids || []).concat([activeId])));
+        const placeholders = uniqueIds.map(() => "?").join(",");
+        connection.query(
+            `SELECT student_id, full_name, class_name, gender, photo_path
+             FROM students WHERE student_id IN (${placeholders})
+             ORDER BY full_name`,
+            uniqueIds,
+            (qErr, rows) => {
+                if (qErr) { console.log(qErr); return res.status(500).json({ message: "Could not load linked children." }); }
+                req.session.portalStudentIds = (rows || []).map((row) => row.student_id);
+                res.json({ active_student_id: activeId, children: rows || [] });
+            }
+        );
+    });
+});
+
+app.post("/portal/children/link", writeRateLimit, (req, res) => {
+    const activeId = req.session && req.session.portalStudentId;
+    if (!activeId) return res.status(401).json({ message: "Not logged in" });
+    const studentId = String(req.body.student_id || "").trim();
+    const password = String(req.body.password || "").trim();
+    if (!studentId || !password) {
+        return res.status(400).json({ message: "Enter the other child's Student ID and password." });
+    }
+    if (studentId.toLowerCase() === String(activeId).toLowerCase()) {
+        return res.status(400).json({ message: "That child is already open in this portal." });
+    }
+    verifyPortalStudentCredentials(studentId, password, (err, linkedStudent) => {
+        if (err) { console.log(err); return res.status(500).json({ message: "Database error" }); }
+        if (!linkedStudent) return res.status(401).json({ message: "The other child's Student ID or password is incorrect." });
+        portalFamilyIds(activeId, (familyErr, currentIds) => {
+            if (familyErr) { console.log(familyErr); return res.status(500).json({ message: "Could not link this child yet." }); }
+            portalFamilyIds(linkedStudent.student_id, (otherErr, otherIds) => {
+                if (otherErr) { console.log(otherErr); return res.status(500).json({ message: "Could not link this child yet." }); }
+                const allIds = Array.from(new Set(currentIds.concat(otherIds, [activeId, linkedStudent.student_id])));
+                if (allIds.length > 25) return res.status(400).json({ message: "This family has too many linked records. Please contact the school office." });
+                const pairs = [];
+                allIds.forEach((a) => allIds.forEach((b) => { if (a !== b) pairs.push([a, b]); }));
+                connection.query(
+                    "INSERT IGNORE INTO portal_family_links (student_id, linked_student_id) VALUES ?",
+                    [pairs],
+                    (insertErr) => {
+                        if (insertErr) {
+                            console.log(insertErr);
+                            const msg = insertErr.code === "ER_NO_SUCH_TABLE"
+                                ? "Family linking is still starting. Please wait a moment and try again."
+                                : "Could not link this child.";
+                            return res.status(500).json({ message: msg });
+                        }
+                        req.session.portalStudentIds = allIds;
+                        res.json({
+                            message: linkedStudent.full_name + " is now linked. You can switch children without logging out.",
+                            child: portalPublicStudent(linkedStudent),
+                            linked_children: allIds.length
+                        });
+                    }
+                );
+            });
+        });
+    });
+});
+
+app.post("/portal/children/switch", (req, res) => {
+    const activeId = req.session && req.session.portalStudentId;
+    if (!activeId) return res.status(401).json({ message: "Not logged in" });
+    const targetId = String(req.body.student_id || "").trim();
+    if (!targetId) return res.status(400).json({ message: "Choose a child first." });
+    portalFamilyIds(activeId, (err, ids) => {
+        if (err) { console.log(err); return res.status(500).json({ message: "Could not switch child." }); }
+        const allowed = (ids || []).some((id) => String(id).toLowerCase() === targetId.toLowerCase());
+        if (!allowed) return res.status(403).json({ message: "That child is not linked to this family portal." });
+        connection.query("SELECT student_id, full_name FROM students WHERE student_id = ? LIMIT 1", [targetId], (qErr, rows) => {
+            if (qErr) { console.log(qErr); return res.status(500).json({ message: "Database error" }); }
+            if (!rows || !rows.length) return res.status(404).json({ message: "Student record not found." });
+            req.session.portalStudentId = rows[0].student_id;
+            req.session.portalStudentIds = ids;
+            res.json({ message: "Now viewing " + rows[0].full_name + ".", student_id: rows[0].student_id });
+        });
     });
 });
 
 app.post("/portal/logout", (req, res) => {
-    if (req.session) delete req.session.portalStudentId;
+    if (req.session) {
+        delete req.session.portalStudentId;
+        delete req.session.portalStudentIds;
+    }
     res.json({ message: "Logged out" });
 });
 
@@ -7647,14 +7828,14 @@ ensureAttendanceSchema(1);
 ensureAttendanceCollation();
 
 /* ---------- Staff attendance + weekly evaluations ------------------- */
-app.get("/staff-list", requireLogin, (req, res) => {
+app.get("/staff-list", requireLogin, requireAdmin, (req, res) => {
     connection.query("SELECT username, role FROM users ORDER BY username", (err, rows) => {
         if (err) { console.log(err); return res.status(500).json({ message: "Database error" }); }
         res.json(rows);
     });
 });
 
-app.get("/staff-attendance", requireLogin, (req, res) => {
+app.get("/staff-attendance", requireLogin, requireAdmin, (req, res) => {
     const date = (req.query.date || "").trim();
     if (!date) return res.status(400).json({ message: "date is required." });
     connection.query(
@@ -10190,14 +10371,14 @@ app.get("/portal/health", (req, res) => {
     });
 });
 
-app.get("/api/health/:studentId", requireLogin, (req, res) => {
+app.get("/api/health/:studentId", requireLogin, requireAdmin, (req, res) => {
     connection.query("SELECT * FROM student_health WHERE student_id = ? LIMIT 1", [req.params.studentId], (err, rows) => {
         if (err) return res.status(500).json({ message: "Database error" });
         res.json(rows[0] || {});
     });
 });
 
-app.post("/api/health/:studentId", requireLogin, writeRateLimit, (req, res) => {
+app.post("/api/health/:studentId", requireLogin, requireAdmin, writeRateLimit, (req, res) => {
     const { blood_group, allergies, medical_conditions, emergency_contact_name, emergency_contact_phone, notes,
             height_cm, weight_kg, bmi, genotype, doctor_name, doctor_phone, insurance_no,
             current_medications, last_checkup, special_needs } = req.body;
@@ -10226,7 +10407,7 @@ app.post("/api/health/:studentId", requireLogin, writeRateLimit, (req, res) => {
 });
 
 /* ---------- TRANSPORT ROUTES ---------- */
-app.get("/api/transport/routes", requireLogin, (req, res) => {
+app.get("/api/transport/routes", requireLogin, requireAdmin, (req, res) => {
     connection.query("SELECT * FROM transport_routes ORDER BY route_name", (err, rows) => {
         if (err) return res.status(500).json({ message: "Database error" });
         res.json(rows);
@@ -10377,7 +10558,7 @@ app.post("/portal/leave", (req, res) => {
     });
 });
 
-app.get("/api/leave-requests", requireLogin, (req, res) => {
+app.get("/api/leave-requests", requireLogin, requireAdmin, (req, res) => {
     const status = req.query.status;
     const sql = status
         ? "SELECT * FROM leave_requests WHERE status = ? ORDER BY created_at DESC LIMIT 100"
@@ -10388,7 +10569,7 @@ app.get("/api/leave-requests", requireLogin, (req, res) => {
     });
 });
 
-app.post("/api/leave-requests/:id/status", requireLogin, writeRateLimit, (req, res) => {
+app.post("/api/leave-requests/:id/status", requireLogin, requireAdmin, writeRateLimit, (req, res) => {
     const { status, admin_note } = req.body;
     const valid = ["approved", "rejected", "pending"];
     if (!valid.includes(status)) return res.status(400).json({ message: "Invalid status." });
@@ -10412,7 +10593,7 @@ app.get("/portal/broadcasts", (req, res) => {
     });
 });
 
-app.get("/api/broadcasts", requireLogin, (req, res) => {
+app.get("/api/broadcasts", requireLogin, requireAdmin, (req, res) => {
     connection.query("SELECT * FROM broadcasts ORDER BY pinned DESC, created_at DESC LIMIT 100", (err, rows) => {
         if (err) return res.status(500).json([]);
         res.json(rows);
@@ -10442,11 +10623,11 @@ app.delete("/api/broadcasts/:id", requireLogin, requireAdmin, (req, res) => {
 /* Serve new admin pages */
 app.get("/homework.html", requireLogin, (req, res) => res.sendFile(path.join(__dirname, "homework.html")));
 app.get("/gallery.html", requireLogin, (req, res) => res.sendFile(path.join(__dirname, "gallery.html")));
-app.get("/transport.html", requireLogin, (req, res) => res.sendFile(path.join(__dirname, "transport.html")));
-app.get("/leave-requests.html", requireLogin, (req, res) => res.sendFile(path.join(__dirname, "leave-requests.html")));
-app.get("/broadcast.html", requireLogin, requireAdmin, (req, res) => res.sendFile(path.join(__dirname, "broadcast.html")));
+app.get("/transport.html", requireAdminPage, (req, res) => res.sendFile(path.join(__dirname, "transport.html")));
+app.get("/leave-requests.html", requireAdminPage, (req, res) => res.sendFile(path.join(__dirname, "leave-requests.html")));
+app.get("/broadcast.html", requireAdminPage, (req, res) => res.sendFile(path.join(__dirname, "broadcast.html")));
 
-app.get("/health.html", requireLogin, (req, res) => res.sendFile(path.join(__dirname, "health.html")));
+app.get("/health.html", requireAdminPage, (req, res) => res.sendFile(path.join(__dirname, "health.html")));
 app.get("/library.html", requireLogin, (req, res) => res.sendFile(path.join(__dirname, "library.html")));
 app.get("/remarks.html", requireLogin, (req, res) => res.sendFile(path.join(__dirname, "remarks.html")));
 
@@ -10454,7 +10635,7 @@ app.get("/remarks.html", requireLogin, (req, res) => res.sendFile(path.join(__di
    PACK 84 — Health clinic, library, term remarks
    ===================================================================== */
 
-app.get("/api/health-records", requireLogin, (req, res) => {
+app.get("/api/health-records", requireLogin, requireAdmin, (req, res) => {
     const cls = (req.query.class_name || "").trim();
     // COLLATE hint: student_health may still carry the database-default
     // collation on old installs; forcing utf8mb4_unicode_ci makes the JOIN
@@ -10477,7 +10658,7 @@ app.get("/api/health-records", requireLogin, (req, res) => {
     });
 });
 
-app.get("/api/clinic-visits/:studentId", requireLogin, (req, res) => {
+app.get("/api/clinic-visits/:studentId", requireLogin, requireAdmin, (req, res) => {
     connection.query(
         "SELECT * FROM clinic_visits WHERE student_id = ? ORDER BY visit_date DESC, id DESC LIMIT 80",
         [req.params.studentId],
@@ -10488,7 +10669,7 @@ app.get("/api/clinic-visits/:studentId", requireLogin, (req, res) => {
     );
 });
 
-app.post("/api/clinic-visits/:studentId", requireLogin, writeRateLimit, (req, res) => {
+app.post("/api/clinic-visits/:studentId", requireLogin, requireAdmin, writeRateLimit, (req, res) => {
     const sid = req.params.studentId;
     const visit_date = (req.body.visit_date || "").trim() || new Date().toISOString().slice(0, 10);
     const complaint = (req.body.complaint || "").trim();
@@ -10504,14 +10685,14 @@ app.post("/api/clinic-visits/:studentId", requireLogin, writeRateLimit, (req, re
     );
 });
 
-app.delete("/api/clinic-visits/:id", requireLogin, (req, res) => {
+app.delete("/api/clinic-visits/:id", requireLogin, requireAdmin, (req, res) => {
     connection.query("DELETE FROM clinic_visits WHERE id = ?", [req.params.id], (err) => {
         if (err) return res.status(500).json({ message: "Database error" });
         res.json({ message: "Deleted." });
     });
 });
 
-app.get("/api/vaccinations/:studentId", requireLogin, (req, res) => {
+app.get("/api/vaccinations/:studentId", requireLogin, requireAdmin, (req, res) => {
     connection.query(
         "SELECT * FROM vaccinations WHERE student_id = ? ORDER BY given_date DESC, id DESC LIMIT 80",
         [req.params.studentId],
@@ -10522,7 +10703,7 @@ app.get("/api/vaccinations/:studentId", requireLogin, (req, res) => {
     );
 });
 
-app.post("/api/vaccinations/:studentId", requireLogin, writeRateLimit, (req, res) => {
+app.post("/api/vaccinations/:studentId", requireLogin, requireAdmin, writeRateLimit, (req, res) => {
     const sid = req.params.studentId;
     const vaccine_name = (req.body.vaccine_name || "").trim();
     const given_date = (req.body.given_date || "").trim() || null;
@@ -10538,7 +10719,7 @@ app.post("/api/vaccinations/:studentId", requireLogin, writeRateLimit, (req, res
     );
 });
 
-app.delete("/api/vaccinations/:id", requireLogin, (req, res) => {
+app.delete("/api/vaccinations/:id", requireLogin, requireAdmin, (req, res) => {
     connection.query("DELETE FROM vaccinations WHERE id = ?", [req.params.id], (err) => {
         if (err) return res.status(500).json({ message: "Database error" });
         res.json({ message: "Deleted." });
@@ -11062,7 +11243,7 @@ app.post("/api/gradebook/cell", requireLogin, (req, res) => {
 });
 
 /* ---------- Class Management ---------- */
-app.get("/api/manage-classes", requireLogin, (req, res) => {
+app.get("/api/manage-classes", requireLogin, requireAdmin, (req, res) => {
     connection.query(
         `SELECT c.id, c.class_name, COUNT(s.student_id) AS student_count
          FROM classes c
@@ -11082,7 +11263,7 @@ app.get("/api/manage-classes", requireLogin, (req, res) => {
     );
 });
 
-app.put("/api/manage-classes/:id", requireLogin, writeRateLimit, (req, res) => {
+app.put("/api/manage-classes/:id", requireLogin, requireAdmin, writeRateLimit, (req, res) => {
     const id = Number(req.params.id);
     const nextName = String(req.body.class_name || "").trim();
     if (!id || !nextName) return res.status(400).json({ message: "Class name is required." });
@@ -11117,7 +11298,7 @@ app.put("/api/manage-classes/:id", requireLogin, writeRateLimit, (req, res) => {
     });
 });
 
-app.delete("/api/manage-classes/:id", requireLogin, writeRateLimit, (req, res) => {
+app.delete("/api/manage-classes/:id", requireLogin, requireAdmin, writeRateLimit, (req, res) => {
     const id = Number(req.params.id);
     if (!id) return res.status(400).json({ message: "Class is required." });
     connection.query("SELECT class_name FROM classes WHERE id = ?", [id], (err, rows) => {

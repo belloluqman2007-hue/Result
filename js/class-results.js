@@ -162,7 +162,7 @@
                 "<td>" + ordinal(s.position) + "</td>";
             if (showActions) {
                 var escName = escapeHTML(s.name).replace(/'/g, "\\'");
-                html += '<td class="bs-action-col"><button type="button" class="mng-btn-sm mng-btn-ghost bs-del-btn" onclick="crDeleteStudentScores(\'' + escapeHTML(s.id) + '\', \'' + escName + '\')">🗑️ Delete</button></td>';
+                html += '<td class="bs-action-col" data-admin-only><button type="button" class="mng-btn-sm mng-btn-ghost bs-del-btn" data-admin-only onclick="crDeleteStudentScores(\'' + escapeHTML(s.id) + '\', \'' + escName + '\')">🗑️ Delete</button></td>';
             }
             html += "</tr>";
         }

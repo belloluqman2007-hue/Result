@@ -51,7 +51,6 @@
   var GROUPS = [
     { label:"Main", items:[
       ["teacher-dashboard.html","Dashboard","dashboard"],
-      ["analytics.html","Analytics","chart"],
       ["notifications.html","Notifications","bell","notifications"],
       ["chat.html","Chat","chat","chat"],
       ["staff-chat.html","Staff Chat","users"],
@@ -59,7 +58,6 @@
     ]},
     { label:"Students & Results", items:[
       ["students.html","Students Directory","users"],
-      ["add-student.html","Add Student","userplus"],
       ["scores.html","Student Scores","clipboard"],
       ["gradebook.html","Grade Book","book"],
       ["bulk-results.html","Bulk Result Import","upload"],
@@ -68,15 +66,12 @@
       ["third-term-results.html","Third Term Results","file"],
       ["attendance.html","Attendance","calendar"],
       ["tahfeedh.html","Tahfeedh Tracker","book"],
-      ["health.html","Student Health","heart"],
       ["remarks.html","Teacher Comments","chat"],
       ["discipline.html","Discipline Records","shield"],
       ["quizzes.html","Online Quizzes","check"],
       ["appointments.html","Appointments","clock"]
     ]},
     { label:"Teaching Tools", items:[
-      ["add-subject.html","Classes & Subjects","book"],
-      ["manage-classes.html","Class Management","home"],
       ["timetable.html","Timetables","calendar"],
       ["arabic-timetable.html","الجدول الدراسي","calendar"],
       ["create-exam.html","Create Exam","pen"],
@@ -86,20 +81,25 @@
       ["homework.html","Homework Board","file"],
       ["certificates.html","Certificates","award"],
       ["store.html","File Store","folder"],
-      ["broadcast.html","School Broadcasts","broadcast"],
       ["gallery.html","School Gallery","image"],
-      ["transport.html","Transport","bus"],
       ["library.html","School Library","book"],
-      ["leave-requests.html","Leave Requests","leave"],
-      ["id-card.html","Create ID Card","id"],
-      ["manage-signatures.html","Manage Signatures","signature"],
-      ["staff-attendance.html","Staff Tools","briefcase"],
       ["manage-calendars.html","Madrasah Calendar","calendar"]
     ]},
     { label:"Administration", admin:true, items:[
+      ["analytics.html","Analytics","chart"],
+      ["add-student.html","Add Student","userplus"],
+      ["add-subject.html","Classes & Subjects","book"],
+      ["manage-classes.html","Class Management","home"],
       ["manage-publish.html","Publish Results","send"],
       ["manage-admissions.html","Admissions","award"],
       ["finance.html","Finance","money"],
+      ["transport.html","Transport Management","bus"],
+      ["leave-requests.html","Leave Approvals","leave"],
+      ["broadcast.html","School Broadcasts","broadcast"],
+      ["health.html","Student Health Records","heart"],
+      ["id-card.html","Create ID Card","id"],
+      ["manage-signatures.html","Manage Signatures","signature"],
+      ["staff-attendance.html","Staff Tools","briefcase"],
       ["manage-users.html","Manage Users","shield"],
       ["staff.html","Staff & Payroll","users"],
       ["notify-parents.html","Notify Parents","send"],
@@ -322,6 +322,16 @@
     if (!me || !me.loggedIn || (me.role !== "admin" && me.role !== "teacher")) return;
     if (document.body.classList.contains("ams-staff-navigation")) return;
     document.body.classList.add("ams-staff-navigation");
+    document.body.classList.add(me.role === "admin" ? "ams-role-admin" : "ams-role-teacher");
+
+    /* One role rule for every staff page, not only the dashboard. Marking an
+       administrative control with data-admin-only now reliably hides it from
+       teachers while the matching server route remains the final authority. */
+    if (me.role !== "admin") {
+      document.querySelectorAll("[data-admin-only]").forEach(function (el) {
+        el.style.display = "none";
+      });
+    }
 
     var sidebar = document.querySelector(".ams-sidebar:not(.ams-shared-drawer)");
     var hasShellSidebar = !!sidebar;

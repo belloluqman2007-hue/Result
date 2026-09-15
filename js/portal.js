@@ -46,6 +46,7 @@
       if (student.photo_path) {
         document.getElementById("ptPhoto").src = student.photo_path;
       }
+      loadPortalChildren(); // family switcher: no logout/login between siblings
       loadPublished();
       loadMyFees();      // NEW (pack 15)
       loadBankAccounts();// NEW (pack 15)
@@ -295,6 +296,126 @@ var ptStudent = null; // FIX (pack 21): file-scope copy of the logged-in
                       // fee statement can read name/id/class without
                       // breaking on an undefined `student`.
 var ptPaymentsRows = []; // pack 21: payment rows for the statement
+var ptFamilyWired = false;
+
+/* ------------------------ linked children -------------------------
+   A parent authenticates every additional child once. The server stores a
+   two-way family link; this UI then changes the active student in the same
+   portal session and reloads all existing child-specific views. */
+function ptSwitchChild(studentId) {
+  var note = document.getElementById("ptFamilyNote");
+  if (note) { note.textContent = "Switching child..."; note.style.color = "#14532d"; }
+  fetch("/portal/children/switch", {
+    method: "POST",
+    credentials: "same-origin",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ student_id: studentId })
+  })
+    .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, d: d }; }); })
+    .then(function (res) {
+      if (!res.ok) throw new Error(res.d.message || "Could not switch child.");
+      window.location.reload();
+    })
+    .catch(function (err) {
+      if (note) { note.textContent = err.message || "Could not switch child."; note.style.color = "#B3261E"; }
+    });
+}
+
+function loadPortalChildren() {
+  fetch("/portal/children", { credentials: "same-origin" })
+    .then(function (r) { return r.ok ? r.json() : Promise.reject(new Error("Could not load family.")); })
+    .then(function (data) {
+      var children = Array.isArray(data.children) ? data.children : [];
+      var active = String(data.active_student_id || "");
+      var list = document.getElementById("ptFamilyList");
+      var select = document.getElementById("ptChildSelect");
+      var switcher = document.getElementById("ptFamilySwitch");
+
+      if (list) {
+        list.innerHTML = "";
+        children.forEach(function (child) {
+          var isActive = String(child.student_id) === active;
+          var card = document.createElement("button");
+          card.type = "button";
+          card.className = "pt-family-child" + (isActive ? " active" : "");
+          card.disabled = isActive;
+          card.title = isActive ? "Currently viewing this child" : "View this child";
+          var photo = document.createElement("img");
+          photo.alt = "";
+          photo.src = child.photo_path || "images/default.png";
+          photo.onerror = function () { this.onerror = null; this.src = "images/default.png"; };
+          var text = document.createElement("span");
+          var name = document.createElement("b");
+          name.textContent = child.full_name || child.student_id;
+          var meta = document.createElement("small");
+          meta.textContent = (child.class_name || "No class") + " · " + child.student_id + (isActive ? " · Viewing" : " · Tap to switch");
+          text.appendChild(name); text.appendChild(meta);
+          card.appendChild(photo); card.appendChild(text);
+          if (!isActive) card.addEventListener("click", function () { ptSwitchChild(child.student_id); });
+          list.appendChild(card);
+        });
+        if (!children.length) list.innerHTML = '<span class="pt-hint">No student record found.</span>';
+      }
+
+      if (select) {
+        select.innerHTML = "";
+        children.forEach(function (child) {
+          var option = document.createElement("option");
+          option.value = child.student_id;
+          option.textContent = child.full_name + " · " + (child.class_name || "No class");
+          option.selected = String(child.student_id) === active;
+          select.appendChild(option);
+        });
+        select.onchange = function () {
+          if (select.value && select.value !== active) ptSwitchChild(select.value);
+        };
+      }
+      if (switcher) switcher.style.display = children.length > 1 ? "flex" : "none";
+    })
+    .catch(function (err) {
+      var list = document.getElementById("ptFamilyList");
+      if (list) list.innerHTML = '<span style="color:#B3261E;font-size:12px;">' + esc(err.message || "Could not load family.") + "</span>";
+    });
+
+  if (!ptFamilyWired) {
+    ptFamilyWired = true;
+    var form = document.getElementById("ptLinkChildForm");
+    if (form) form.addEventListener("submit", function (event) {
+      event.preventDefault();
+      var studentId = document.getElementById("ptLinkStudentId").value.trim();
+      var password = document.getElementById("ptLinkPassword").value;
+      var button = document.getElementById("ptLinkChildBtn");
+      var note = document.getElementById("ptFamilyNote");
+      button.disabled = true;
+      button.textContent = "Linking...";
+      note.textContent = "Checking the other child's details securely...";
+      note.style.color = "#14532d";
+      fetch("/portal/children/link", {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ student_id: studentId, password: password })
+      })
+        .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, d: d }; }); })
+        .then(function (res) {
+          note.textContent = res.d.message || (res.ok ? "Child linked." : "Could not link child.");
+          note.style.color = res.ok ? "#157347" : "#B3261E";
+          if (res.ok) {
+            form.reset();
+            loadPortalChildren();
+          }
+        })
+        .catch(function () {
+          note.textContent = "Network error - the child was not linked.";
+          note.style.color = "#B3261E";
+        })
+        .finally(function () {
+          button.disabled = false;
+          button.textContent = "\u2795 Link Child";
+        });
+    });
+  }
+}
 
 /* pack 21: fetch helper - image URL -> data URL (for PDF photos). Silently
    resolves to null if the image is missing/failed, so a photo never
