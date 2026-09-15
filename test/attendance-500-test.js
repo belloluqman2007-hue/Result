@@ -426,7 +426,7 @@ function prepareOldCopy() {
   }
   fs.mkdirSync(dir, { recursive: true });
   fs.writeFileSync(path.join(dir, "server.js"), src);
-  ["third-term-parser.js", "package.json", "db.js"].forEach(function (f) {
+  ["third-term-parser.js", "public-school-knowledge.js", "package.json", "db.js"].forEach(function (f) {
     const dst = path.join(dir, f);
     if (fs.existsSync(dst) || fs.lstatSync(dst, { throwIfNoEntry: false })) { try { fs.unlinkSync(dst); } catch (e) {} }
     fs.symlinkSync(path.join(REPO, f), dst);
