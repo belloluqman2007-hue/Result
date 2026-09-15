@@ -1,5 +1,23 @@
 # UI Modernization — Change Log
 
+## Pack 109 - 2026-09-15
+
+Owner: "Every time I try to use the AI it says the AI is busy. Fix and merge."
+
+### Root cause and fix
+
+The busy sentence was the shared catch-all for provider failures, so a rejected Gemini OpenAI-compatible request looked exactly like a temporary quota problem. The text AI also defaulted to an older model and the deployment template documented only the separate OpenAI image key.
+
+| File | What happened |
+|---|---|
+| `server.js` | Text AI now accepts `AI_API_KEY` plus the common `GEMINI_API_KEY` / `GOOGLE_API_KEY` aliases, defaults to the documented free `gemini-3.1-flash-lite`, and keeps a current free-model fallback chain. Google requests automatically retry through Gemini's native `generateContent` endpoint when its OpenAI-compatible endpoint rejects a valid request. Provider responses are parsed safely even when content is returned as parts, authentication errors stop immediately instead of burning through every model, and admins receive the short real diagnostic while normal users keep the friendly message.
+| `.env.example`, `render.yaml` | Added the text-AI environment settings and clearly separated them from `OPENAI_API_KEY`, which remains the image-generator key.
+| `js/ai-remarks.js` | Admin chat errors show the server diagnostic, so a bad key, disabled model or exhausted quota can be fixed instead of retried blindly. |
+
+The fallback list does not bypass Google's project-wide daily quota; if the quota is genuinely exhausted, the diagnostic now says so and the service resumes after reset or when the key/project limit is fixed. `node --check server.js` and the existing test suite pass.
+
+---
+
 ## Pack 108 - 2026-09-05
 
 Owner: "About the attendance you recently fixed for me the students is still not displaying about I selected class to mark register. But I saw that the mistake is in csrf.js:52 again - 500 internal server error. And where the student should display I am seeing 'Could not load register. The server answered with an error (status 500). Please try again.' Fix and merge."

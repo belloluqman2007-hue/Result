@@ -4259,9 +4259,9 @@ app.get("/voice/:id", (req, res) => {
    values (Render dashboard -> Environment):
      AI_API_KEY  = the secret key (free one: aistudio.google.com -> Get API key)
      AI_BASE_URL = default https://generativelanguage.googleapis.com/v1beta/openai
-     AI_MODEL    = default gemini-2.5-flash. When the configured model is
-                   retired/unavailable the automatic fallback chain below
-                   keeps working (CHANGED pack 106 - see AI_FALLBACK_MODELS)
+     AI_MODEL    = default gemini-3.1-flash-lite. When the configured model
+                   is retired/unavailable the automatic fallback chain below
+                   keeps working (CHANGED pack 109 - see AI_FALLBACK_MODELS)
    With no key set, every AI endpoint answers a friendly "not switched on
    yet" message and the rest of the system is completely unaffected.
    Privacy: only the prompt text (e.g. a topic, or an average score) is
@@ -4272,9 +4272,15 @@ app.get("/voice/:id", (req, res) => {
      2) the classic environment variables (still work exactly as before).
    aiConfig() resolves them with a 10-second cache so chats stay fast. */
 const AI_ENV = {
-    key:  String(process.env.AI_API_KEY || "").trim(),
+    // AI_API_KEY is the documented setting. Keep the Gemini aliases because
+    // Google and hosting dashboards commonly call this GEMINI_API_KEY or
+    // GOOGLE_API_KEY. OPENAI_API_KEY is intentionally not used here: that
+    // variable powers the image generator and is not necessarily a chat key.
+    key:  String(process.env.AI_API_KEY || process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || "").trim(),
     base: String(process.env.AI_BASE_URL || "https://generativelanguage.googleapis.com/v1beta/openai").trim().replace(/\/+$/, ""),
-    model:String(process.env.AI_MODEL || "gemini-2.5-flash").trim()
+    // 3.1 Flash-Lite is the current low-cost/free Gemini chat model. A
+    // saved older model is still tried first, then aiChatSmart can move on.
+    model:String(process.env.AI_MODEL || "gemini-3.1-flash-lite").trim()
 };
 let aiCfgCache = { at: 0, cfg: null };
 function aiConfig() {
@@ -4307,59 +4313,163 @@ function aiNotReady(res) {
     });
 }
 
-/* One small POST to the AI service (OpenAI chat-completions shape), built on
-   node's own http/https so NO new packages are needed. 30s hard timeout. */
-function aiChat(messages, opts, cfg) {
-    cfg = cfg || AI_ENV; // safety net - callers always pass it
-    opts = opts || {};
+/* The providers we support all return JSON, but they do not all return it
+   with exactly the same error details. Keeping the HTTP part in one place
+   means a provider error is not accidentally reported as an empty reply. */
+function aiRequestJson(urlString, headers, body) {
     return new Promise(function (resolve, reject) {
-        const body = JSON.stringify({
-            model: cfg.model,
-            messages: messages,
-            temperature: typeof opts.temperature === "number" ? opts.temperature : 0.5,
-            max_tokens: opts.maxTokens || 900
-        });
         let u;
-        try { u = new URL(cfg.base + "/chat/completions"); }
-        catch (e) { return reject(new Error("AI_BASE_URL is not a valid address")); }
+        try { u = new URL(urlString); }
+        catch (e) { return reject(new Error("AI service address is not valid")); }
         const lib = u.protocol === "http:" ? require("http") : require("https");
         const req = lib.request({
             method: "POST",
             hostname: u.hostname,
             port: u.port || (u.protocol === "http:" ? 80 : 443),
             path: u.pathname + u.search,
-            headers: {
-                "Content-Type": "application/json",
-                "Authorization": "Bearer " + cfg.key,
-                "Content-Length": Buffer.byteLength(body)
-            }
+            headers: Object.assign({}, headers, { "Content-Length": Buffer.byteLength(body) })
         }, function (aiRes) {
             let raw = "";
+            aiRes.setEncoding("utf8");
             aiRes.on("data", function (c) {
                 raw += c;
-                if (raw.length > 200000) req.destroy(new Error("AI reply too large")); // safety cap
+                if (raw.length > 200000) req.destroy(new Error("AI reply too large"));
             });
             aiRes.on("end", function () {
                 let data = null;
-                try { data = JSON.parse(raw); } catch (e) { return reject(new Error("AI reply was not JSON")); }
-                if (aiRes.statusCode >= 400) {
-                    const m = data && data.error && data.error.message ? data.error.message : ("AI service error " + aiRes.statusCode);
-                    return reject(new Error(m));
+                try { data = JSON.parse(raw); }
+                catch (e) {
+                    const parseErr = new Error("AI service returned a non-JSON response (HTTP " + aiRes.statusCode + ")");
+                    parseErr.statusCode = aiRes.statusCode;
+                    return reject(parseErr);
                 }
-                const choice = data && data.choices && data.choices[0];
-                const text = choice && choice.message ? (choice.message.content || "") : "";
-                if (!text.trim()) return reject(new Error("AI sent an empty reply"));
-                /* CHANGED (pack 31 - owner: "the ai is giving incomplete
-                   message"): also surface finish_reason so the caller can
-                   see when the model ran out of room and ask it to
-                   continue instead of showing a half answer. */
-                resolve({ text: text, finishReason: (choice.finish_reason || "") });
+                if (aiRes.statusCode >= 400) {
+                    const m = data && data.error && (data.error.message || data.error.status)
+                        ? (data.error.message || data.error.status)
+                        : (data && data.message ? data.message : "AI service error " + aiRes.statusCode);
+                    const err = new Error(String(m));
+                    err.statusCode = aiRes.statusCode;
+                    err.providerBody = data;
+                    return reject(err);
+                }
+                resolve(data);
             });
         });
-        req.setTimeout(30000, function () { req.destroy(new Error("The AI took too long - please try again")); });
+        req.setTimeout(30000, function () {
+            const err = new Error("The AI took too long - please try again");
+            err.code = "AI_TIMEOUT";
+            req.destroy(err);
+        });
         req.on("error", reject);
         req.write(body);
         req.end();
+    });
+}
+
+function aiContentText(content) {
+    if (typeof content === "string") return content;
+    // Some OpenAI-compatible providers return an array of content parts.
+    if (Array.isArray(content)) {
+        return content.map(function (part) {
+            return typeof part === "string" ? part : String(part && (part.text || part.content) || "");
+        }).join("");
+    }
+    return "";
+}
+
+function aiChatOpenAI(messages, opts, cfg) {
+    const body = JSON.stringify({
+        model: cfg.model,
+        messages: messages,
+        temperature: typeof opts.temperature === "number" ? opts.temperature : 0.5,
+        max_tokens: opts.maxTokens || 900
+    });
+    return aiRequestJson(cfg.base + "/chat/completions", {
+        "Content-Type": "application/json",
+        "Authorization": "Bearer " + cfg.key
+    }, body).then(function (data) {
+        const choice = data && data.choices && data.choices[0];
+        const text = choice && choice.message ? aiContentText(choice.message.content) : "";
+        if (!text.trim()) {
+            const err = new Error("AI sent an empty reply");
+            err.providerBody = data;
+            throw err;
+        }
+        return { text: text, finishReason: (choice.finish_reason || "") };
+    });
+}
+
+function aiIsGoogleBase(base) {
+    try { return /(^|\.)generativelanguage\.googleapis\.com$/i.test(new URL(base).hostname); }
+    catch (e) { return false; }
+}
+
+/* Google also exposes the native generateContent endpoint. It is a useful
+   compatibility fallback: older Gemini OpenAI-compatible deployments have
+   rejected perfectly valid chat requests even though the native endpoint
+   still works. This fallback is only used for Google's host; custom OpenAI,
+   Groq and OpenRouter URLs keep their original behaviour. */
+function aiChatGoogleNative(messages, opts, cfg) {
+    let base;
+    try { base = new URL(cfg.base); }
+    catch (e) { return Promise.reject(new Error("AI_BASE_URL is not a valid address")); }
+    const version = (base.pathname.match(/\/(v[0-9A-Za-z]+)(?:\/|$)/i) || [])[1] || "v1beta";
+    const endpoint = "https://" + base.host + "/" + version + "/models/" + encodeURIComponent(cfg.model) + ":generateContent";
+    const systemParts = [];
+    const contents = [];
+    messages.forEach(function (m) {
+        const text = aiContentText(m && m.content).trim();
+        if (!text) return;
+        if (m.role === "system") {
+            systemParts.push({ text: text });
+            return;
+        }
+        const role = m.role === "assistant" ? "model" : "user";
+        const last = contents[contents.length - 1];
+        if (last && last.role === role) last.parts.push({ text: text });
+        else contents.push({ role: role, parts: [{ text: text }] });
+    });
+    if (!contents.length) contents.push({ role: "user", parts: [{ text: "Hello" }] });
+    const body = JSON.stringify({
+        systemInstruction: systemParts.length ? { parts: systemParts } : undefined,
+        contents: contents,
+        generationConfig: {
+            temperature: typeof opts.temperature === "number" ? opts.temperature : 0.5,
+            maxOutputTokens: opts.maxTokens || 900
+        }
+    });
+    const u = new URL(endpoint);
+    u.searchParams.set("key", cfg.key);
+    return aiRequestJson(u.toString(), { "Content-Type": "application/json" }, body).then(function (data) {
+        const candidate = data && data.candidates && data.candidates[0];
+        const parts = candidate && candidate.content && candidate.content.parts;
+        const text = Array.isArray(parts) ? parts.map(function (p) { return String(p && p.text || ""); }).join("") : "";
+        if (!text.trim()) {
+            const err = new Error("Google Gemini returned no text");
+            err.providerBody = data;
+            throw err;
+        }
+        return {
+            text: text,
+            finishReason: candidate.finishReason === "MAX_TOKENS" ? "length" : ""
+        };
+    });
+}
+
+/* One small POST to the AI service (OpenAI chat-completions shape), built on
+   node's own http/https so NO new packages are needed. Google requests get a
+   native REST retry when the compatibility endpoint rejects the request. */
+function aiChat(messages, opts, cfg) {
+    cfg = cfg || AI_ENV;
+    opts = opts || {};
+    return aiChatOpenAI(messages, opts, cfg).catch(function (compatErr) {
+        if (!aiIsGoogleBase(cfg.base)) throw compatErr;
+        return aiChatGoogleNative(messages, opts, cfg).catch(function (nativeErr) {
+            // Keep the native error (it is usually more actionable) while
+            // retaining the first failure for admin diagnostics.
+            nativeErr.compatibilityError = String(compatErr && compatErr.message || "");
+            throw nativeErr;
+        });
     });
 }
 
@@ -4371,30 +4481,33 @@ function aiChat(messages, opts, cfg) {
    are reported immediately.
    CHANGED (pack 106 - owner: "the public AI is saying 'The assistant is
    taking a short break - please try again in a moment' to every question"):
-   the whole list was still 2.5-era. Google has announced the end of the
-   2.5-flash family (and 2.5 calls were already erroring for some projects
-   ahead of the date), so when the saved model died there was NOT a single
-   current free model left in the chain and every AI feature - including
-   the public website assistant - answered with the vague "short break".
-   Added the current-generation FREE models that work on the same AI
-   Studio key (gemini-3.1-flash-lite, gemini-3.8-flash) plus the live
-   alias. Each entry only costs one extra attempt when the previous one
-   fails, and every model has its OWN free daily quota, so the longer
-   chain also multiplies how many chats the school can do per day. */
+   the whole list was still 2.5-era. When the saved model was unavailable,
+   there was not a current free model left in the chain and every AI feature
+   returned the vague "short break" message. The fallback list now starts
+   with Google's documented free Flash-Lite models and the native Gemini
+   endpoint is also tried when the OpenAI-compatible endpoint rejects a
+   request. Quota is project-wide, so these fallbacks handle model/API
+   compatibility and retirement; they do not pretend to bypass a finished
+   daily quota. */
 const AI_FALLBACK_MODELS = [
-    "gemini-2.5-flash",       // today's free workhorse (retirement announced for later in 2026)
-    "gemini-2.5-flash-lite",  // cheapest free model - its own free quota
-    "gemini-3.1-flash-lite",  // current-generation free Flash-Lite - its own free quota
-    "gemini-flash-latest",    // Google's live alias - always points at the newest GA flash
-    "gemini-3.8-flash"        // newest free Flash (September 2026) - its own free quota
+    // Keep this list to models with a documented standard free tier. Quota is
+    // actually shared by Google project, not by API key; the list is for
+    // model retirement/availability problems, not a way to evade a quota.
+    "gemini-3.1-flash-lite",
+    "gemini-3.5-flash-lite",
+    "gemini-2.5-flash-lite",
+    "gemini-2.5-flash",
+    "gemini-3.6-flash"
 ];
 function aiModelErr(e) {
     const m = String(e && e.message || e || "");
-    /* CHANGED (pack 31 - owner: "can it handle much task"): free-tier
-       quota/rate errors now also move on to the next model - each Gemini
-       model has its OWN free quota, so the fallback chain multiplies how
-       many chats a day the school can do before anyone is told 'slow down'. */
-    return /model|retired|deprecated|not found|404|unsupported|invalid|quota|rate.?limit|429|resource.?exhausted|too many/i.test(m);
+    // Bad credentials and permissions will fail for every model. Do not hide
+    // those behind five more requests and a misleading "AI is busy" message.
+    if (/api.?key|authentication|unauthori[sz]ed|permission|forbidden|billing|insufficient.?funds/i.test(m)) return false;
+    /* Model retirement, provider overload and quota/rate responses can be
+       recoverable by trying the next compatible model. */
+    return /model|retired|deprecated|not found|404|unsupported|quota|rate.?limit|429|resource.?exhausted|too many|temporar|unavailable|overload|502|503|504/i.test(m)
+        || [408, 429, 500, 502, 503, 504].indexOf(Number(e && e.statusCode)) !== -1;
 }
 function aiChatSmart(messages, opts, cfg) {
     opts = opts || {};
@@ -4402,8 +4515,14 @@ function aiChatSmart(messages, opts, cfg) {
         return v && a.indexOf(v) === i;
     });
     let attempt = 0;
+    let lastError = null;
     function tryNext(msgs) {
-        if (attempt >= chain.length) return Promise.reject(new Error("no usable AI model - or today's free quota is finished (it resets daily)"));
+        if (attempt >= chain.length) {
+            const tail = lastError && lastError.message ? ": " + String(lastError.message).slice(0, 180) : "";
+            const exhausted = new Error("no usable AI model - or today's free quota is finished (it resets daily)" + tail);
+            exhausted.statusCode = lastError && lastError.statusCode;
+            throw exhausted;
+        }
         const model = chain[attempt++];
         const sub = Object.assign({}, cfg, { model: model });
         return aiChat(msgs, opts, sub).then(function (got) {
@@ -4426,6 +4545,7 @@ function aiChatSmart(messages, opts, cfg) {
             }
             return { text: got.text, model: model, finishReason: got.finishReason };
         }, function (err) {
+            lastError = err;
             if (attempt < chain.length && aiModelErr(err)) return tryNext(msgs);
             throw err;
         });
