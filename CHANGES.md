@@ -10,7 +10,7 @@ The busy sentence was the shared catch-all for provider failures, so a rejected 
 
 | File | What happened |
 |---|---|
-| `server.js` | Text AI now accepts `AI_API_KEY` plus the common `GEMINI_API_KEY` / `GOOGLE_API_KEY` aliases, defaults to the documented free `gemini-3.1-flash-lite`, and keeps a current free-model fallback chain. Google requests automatically retry through Gemini's native `generateContent` endpoint when its OpenAI-compatible endpoint rejects a valid request. Provider responses are parsed safely even when content is returned as parts, authentication errors stop immediately instead of burning through every model, and admins receive the short real diagnostic while normal users keep the friendly message.
+| `server.js` | Text AI now accepts `AI_API_KEY` plus the common `GEMINI_API_KEY` / `GOOGLE_API_KEY` aliases, defaults to the documented free `gemini-3.1-flash-lite`, and keeps a current free-model fallback chain. Google requests automatically retry through Gemini's native `generateContent` endpoint when its OpenAI-compatible endpoint rejects a valid request. Provider responses are parsed safely even when content is returned as parts, authentication errors stop immediately instead of burning through every model, and admins receive the short real diagnostic while normal users keep the friendly message. Explicit OpenAI/Groq/OpenRouter endpoints no longer receive Gemini model IDs as fallbacks.
 | `.env.example`, `render.yaml` | Added the text-AI environment settings and clearly separated them from `OPENAI_API_KEY`, which remains the image-generator key.
 | `js/ai-remarks.js` | Admin chat errors show the server diagnostic, so a bad key, disabled model or exhausted quota can be fixed instead of retried blindly. |
 
