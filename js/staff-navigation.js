@@ -54,7 +54,8 @@
       ["notifications.html","Notifications","bell","notifications"],
       ["chat.html","Chat","chat","chat"],
       ["staff-chat.html","Staff Chat","users"],
-      ["notices.html","Notices","notice"]
+      ["notices.html","Notices","notice"],
+      ["staff-attendance.html","My Attendance","calendar"]
     ]},
     { label:"Students & Results", items:[
       ["students.html","Students Directory","users"],
