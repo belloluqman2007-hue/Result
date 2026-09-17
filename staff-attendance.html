@@ -27,11 +27,37 @@
       </a>
       <div class="mng-head-text">
         <h1>&#128104;&#8205;&#127979; Staff Tools</h1>
-        <p>Daily staff attendance and weekly teacher evaluations. Only the admin account can save here.</p>
+        <p id="staffToolsIntro">Daily staff attendance and weekly teacher evaluations.</p>
       </div>
     </div>
 
-    <div class="mg-cards">
+    <!-- Teachers use this compact section to record their own attendance. -->
+    <div class="mg-card teacher-attendance-card" id="myAttendanceCard" style="display:none; margin-bottom:18px;">
+      <h3>🕘 My Attendance</h3>
+      <p class="mg-note">Mark your own attendance for the selected day. You can update it if you made a mistake.</p>
+      <div class="mg-toolbar">
+        <div class="mg-field">
+          <label for="mySaDate">Date</label>
+          <input type="date" id="mySaDate">
+        </div>
+        <div class="mg-field">
+          <label for="mySaStatus">Status</label>
+          <select id="mySaStatus">
+            <option value="present">Present</option>
+            <option value="absent">Absent</option>
+          </select>
+        </div>
+        <button class="mg-btn" type="button" onclick="saveMyStaffAttendance()">💾 Mark Attendance</button>
+      </div>
+      <div class="mg-table-wrap">
+        <table class="mg-table" id="mySaTable">
+          <thead><tr><th>Date</th><th>Status</th><th>Recorded by</th></tr></thead>
+          <tbody><tr><td colspan="3" style="text-align:center; color:#5B6B62;">Loading...</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="mg-cards" id="adminStaffTools" data-admin-only>
 
       <!-- Staff attendance -->
       <div class="mg-card">
@@ -88,7 +114,7 @@
     </div>
 
     <!-- Recent evaluations -->
-    <div class="mg-card" style="margin-top:18px;">
+    <div class="mg-card" data-admin-only style="margin-top:18px;">
       <h3>&#128203; Recent Evaluations</h3>
       <div class="mg-table-wrap">
         <table class="mg-table" id="evTable">

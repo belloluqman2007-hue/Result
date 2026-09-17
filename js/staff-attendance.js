@@ -28,9 +28,36 @@ function mondayStr() {
 }
 
 function initStaffTools() {
-  document.getElementById("saDate").value = todayStr2();
-  document.getElementById("evWeek").value = mondayStr();
+  var today = todayStr2();
+  var saDate = document.getElementById("saDate");
+  var myDate = document.getElementById("mySaDate");
+  if (saDate) saDate.value = today;
+  if (myDate) myDate.value = today;
+  var evWeek = document.getElementById("evWeek");
+  if (evWeek) evWeek.value = mondayStr();
 
+  // The same page serves both roles: admins get the full register, while
+  // teachers get only the self-service attendance section.
+  fetch("/me", { credentials: "same-origin" })
+    .then(function (r) { return r.ok ? r.json() : null; })
+    .then(function (me) {
+      if (!me || !me.loggedIn) return;
+      var isAdmin = me.role === "admin";
+      var intro = document.getElementById("staffToolsIntro");
+      var mine = document.getElementById("myAttendanceCard");
+      var admin = document.getElementById("adminStaffTools");
+      if (mine) mine.style.display = isAdmin ? "none" : "block";
+      if (admin) admin.style.display = isAdmin ? "" : "none";
+      if (intro) intro.textContent = isAdmin
+        ? "Daily staff attendance and weekly teacher evaluations."
+        : "Record your daily attendance in the teacher section below.";
+      if (isAdmin) initAdminStaffTools();
+      else loadMyStaffAttendance();
+    })
+    .catch(function () {});
+}
+
+function initAdminStaffTools() {
   // rating dropdowns 1..10 (default 8)
   ["evTeaching", "evPunctuality", "evConduct"].forEach(function (id) {
     var sel = document.getElementById(id);
@@ -56,6 +83,7 @@ function initStaffTools() {
         evSel.appendChild(opt);
       });
       renderStaffDay(rows, {});
+      loadStaffDay();
       loadEvaluations();
     })
     .catch(function () {
@@ -196,4 +224,54 @@ function loadEvaluations() {
     .catch(function () {
       tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; color:#B3261E;">Could not load evaluations.</td></tr>';
     });
+}
+
+
+function loadMyStaffAttendance() {
+  var tbody = document.querySelector("#mySaTable tbody");
+  if (!tbody) return;
+  fetch("/my-staff-attendance", { credentials: "same-origin" })
+    .then(function (r) { return r.ok ? r.json() : []; })
+    .then(function (rows) {
+      rows = Array.isArray(rows) ? rows : [];
+      if (!rows.length) {
+        tbody.innerHTML = '<tr><td colspan="3" style="text-align:center; color:#5B6B62;">No attendance recorded yet.</td></tr>';
+        return;
+      }
+      tbody.innerHTML = "";
+      var selectedDate = document.getElementById("mySaDate").value;
+      var selected = rows.find(function (row) { return String(row.att_date || "").slice(0, 10) === selectedDate; });
+      if (selected) document.getElementById("mySaStatus").value = selected.status;
+      rows.forEach(function (row) {
+        var tr = document.createElement("tr");
+        [String(row.att_date || "").slice(0, 10), row.status === "present" ? "Present" : "Absent", row.marked_by || "-"]
+          .forEach(function (value) {
+            var td = document.createElement("td");
+            td.textContent = value;
+            tr.appendChild(td);
+          });
+        tbody.appendChild(tr);
+      });
+    })
+    .catch(function () {
+      tbody.innerHTML = '<tr><td colspan="3" style="text-align:center; color:#B3261E;">Could not load your attendance.</td></tr>';
+    });
+}
+
+function saveMyStaffAttendance() {
+  var date = document.getElementById("mySaDate").value;
+  var status = document.getElementById("mySaStatus").value;
+  if (!date) { stNotify("Pick a date first.", false); return; }
+  fetch("/my-staff-attendance/save", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "same-origin",
+    body: JSON.stringify({ date: date, status: status })
+  })
+    .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, d: d }; }); })
+    .then(function (res) {
+      stNotify(res.ok ? "✅ " + (res.d.message || "Attendance saved") : (res.d.message || "Could not save attendance."), res.ok);
+      if (res.ok) loadMyStaffAttendance();
+    })
+    .catch(function () { stNotify("Network error - NOT saved.", false); });
 }

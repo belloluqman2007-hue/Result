@@ -611,7 +611,7 @@ app.get("/attendance.html", requireLogin, (req, res) => {
     res.sendFile(path.join(__dirname, "attendance.html"));
 });
 
-app.get("/staff-attendance.html", requireAdminPage, (req, res) => {
+app.get("/staff-attendance.html", requireLogin, (req, res) => {
     res.sendFile(path.join(__dirname, "staff-attendance.html"));
 });
 
@@ -7996,6 +7996,43 @@ app.get("/staff-list", requireLogin, requireAdmin, (req, res) => {
         if (err) { console.log(err); return res.status(500).json({ message: "Database error" }); }
         res.json(rows);
     });
+});
+
+// Teachers can view and record only their own attendance. The admin
+// register above remains the source for marking attendance for everyone.
+app.get("/my-staff-attendance", requireLogin, (req, res) => {
+    const username = req.session.username;
+    connection.query(
+        `SELECT att_date, status, marked_by, created_at
+         FROM staff_attendance
+         WHERE staff_username = ?
+         ORDER BY att_date DESC
+         LIMIT 90`,
+        [username],
+        (err, rows) => {
+            if (err) { console.log(err); return res.status(500).json({ message: "Database error" }); }
+            res.json(rows);
+        }
+    );
+});
+
+app.post("/my-staff-attendance/save", requireLogin, (req, res) => {
+    const date = String(req.body.date || "").trim();
+    const status = String(req.body.status || "").trim();
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !["present", "absent"].includes(status)) {
+        return res.status(400).json({ message: "A valid date and attendance status are required." });
+    }
+    const username = req.session.username;
+    connection.query(
+        `INSERT INTO staff_attendance (staff_username, att_date, status, marked_by)
+         VALUES (?, ?, ?, ?)
+         ON DUPLICATE KEY UPDATE status = VALUES(status), marked_by = VALUES(marked_by)`,
+        [username, date, status, username],
+        (err) => {
+            if (err) { console.log(err); return res.status(500).json({ message: "Database error" }); }
+            res.json({ message: "Your attendance was saved", date, status });
+        }
+    );
 });
 
 app.get("/staff-attendance", requireLogin, requireAdmin, (req, res) => {
