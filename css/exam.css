@@ -47,12 +47,17 @@ body{
   height:100dvh;
   overflow-y:auto;
   overflow-x:hidden;
-  z-index:60;
+  /* Keep the open exam tools above the shared mobile quick navigation.
+     That bar is injected after this page loads and uses z-index:995. */
+  z-index:1004;
   background:#fff;
   border-bottom:none;
   border-right:5px solid var(--emerald);
   box-shadow:4px 0 20px rgba(0,0,0,.10);
   transition:transform .28s cubic-bezier(.22,.61,.36,1);
+  overscroll-behavior:contain;
+  -webkit-overflow-scrolling:touch;
+  padding-bottom:calc(16px + env(safe-area-inset-bottom, 0px));
 }
 
 .exam-main{
@@ -60,13 +65,15 @@ body{
   min-height:100vh;
 }
 
-/* Floating button that re-opens the sidebar (phones/tablets) */
+/* Floating button that re-opens the sidebar (phones/tablets).
+   The shared staff quick navigation occupies the bottom ~62px on mobile,
+   so keep this control safely above it (and above phone safe areas). */
 .exam-side-toggle{
   display:none;
   position:fixed;
   left:14px;
-  bottom:16px;
-  z-index:70;
+  bottom:calc(74px + env(safe-area-inset-bottom, 0px));
+  z-index:1000;
   padding:12px 20px;
   border:none;
   border-radius:999px;
@@ -85,7 +92,9 @@ body{
   position:fixed;
   inset:0;
   background:rgba(8,32,24,.45);
-  z-index:55;
+  /* Also cover the shared bottom navigation while exam tools are open,
+     so it cannot steal taps from selects/buttons near the bottom. */
+  z-index:1003;
 }
 
 .exam-side-back{

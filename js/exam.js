@@ -30,6 +30,16 @@ const TERM_ARABIC = {
     "3rd Term": "الثَّالِثَة"
 };
 
+// Native mobile pickers (font size, spacing, language, etc.) can be dismissed
+// by a DOM reflow while they are open. Phone browsers also emit resize events
+// when opening those pickers. Treat an active exam-tool field as a short layout
+// lock; its own change handler will paginate after the teacher makes a choice.
+function examToolControlIsActive() {
+    const active = document.activeElement;
+    return !!(active && active.closest && active.closest("#examSidebar") &&
+        active.matches("select, input, textarea"));
+}
+
 /* ==========================================================================
    1. INITIALISATION
 ========================================================================== */
@@ -57,6 +67,21 @@ function initExam() {
        engine, never rebuilt, so the selection survives). Auto-flow to new
        pages still happens exactly as before. */
     let paginateTimer = null;
+    const examSidebar = document.getElementById("examSidebar");
+
+    // Cancel a pending typing refresh as soon as the teacher starts using a
+    // sidebar field. Without this, the refresh fired under Android/iOS's
+    // native select sheet and immediately closed it before an option was tapped.
+    if (examSidebar) {
+        const pauseTypingRefresh = function (e) {
+            if (e.target && e.target.closest("select, input, textarea")) {
+                clearTimeout(paginateTimer);
+            }
+        };
+        examSidebar.addEventListener("pointerdown", pauseTypingRefresh, true);
+        examSidebar.addEventListener("focusin", pauseTypingRefresh, true);
+    }
+
     function keepExamCaret(fn) {
         const sel = window.getSelection();
         let saved = null;
@@ -86,9 +111,15 @@ function initExam() {
         if (e && e.isComposing) return; // mid Arabic IME composition: hands off
         scheduleTypingPaginate(800);
     });
-    // tapping out of the page text = refresh the layout promptly
-    flow.addEventListener("focusout", function () {
-        scheduleTypingPaginate(200);
+    // Tapping out of page text normally refreshes promptly. Do not refresh
+    // when focus moves into an exam tool: mobile native select sheets close if
+    // pagination changes the page DOM while the sheet is still being chosen.
+    flow.addEventListener("focusout", function (event) {
+        clearTimeout(paginateTimer);
+        if (examSidebar && event.relatedTarget && examSidebar.contains(event.relatedTarget)) return;
+        requestAnimationFrame(function () {
+            if (!examToolControlIsActive()) scheduleTypingPaginate(200);
+        });
     });
 
     // Images load asynchronously - re-measure once they arrive.
@@ -97,10 +128,14 @@ function initExam() {
     }, true);
 
     // Rotating the phone / resizing the window changes page width → re-fit.
+    // Opening a native mobile select also reports a resize; ignore only that
+    // synthetic resize so the picker stays open and tappable.
     let resizeTimer = null;
     window.addEventListener("resize", function () {
         clearTimeout(resizeTimer);
-        resizeTimer = setTimeout(paginateExam, 500);
+        resizeTimer = setTimeout(function () {
+            if (!examToolControlIsActive()) paginateExam();
+        }, 500);
     });
 
     // Image tools: click an image to select it, click away to deselect.
@@ -138,6 +173,7 @@ function initExam() {
     window.addEventListener("resize", function () {
         clearTimeout(fitTimer);
         fitTimer = setTimeout(function () {
+            if (examToolControlIsActive()) return;
             fitAllCoverOneLiners();
             updateExamZoom();
         }, 400);
