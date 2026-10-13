@@ -133,44 +133,19 @@ function loadExistingResults() {
         return;
     }
 
-    fetch(`/search-result/${studentId}`)
+    fetch(`/search-result/${encodeURIComponent(studentId)}`)
         .then(response => response.json())
         .then(results => {
 
-            if (results.length === 0) {
+            if (!Array.isArray(results) || results.length === 0) {
                 alert("No existing results found for that Student ID.");
                 return;
             }
 
-            let table = document.getElementById("scoreTable");
-
-            results.forEach(item => {
-                // avoid loading the same row twice if it's already in the table
-                if (table.querySelector(`tr[data-id="${item.id}"]`)) {
-                    return;
-                }
-
-                let row = table.insertRow();
-                row.dataset.id = item.id;
-                row.dataset.session = item.session;
-                row.insertCell(0).innerHTML = item.student_id;
-                row.insertCell(1).innerHTML = item.student_name;
-                row.insertCell(2).innerHTML = item.class_name;
-                row.insertCell(3).innerHTML = item.term;
-                row.insertCell(4).innerHTML = item.subject;
-                row.insertCell(5).innerHTML = item.first_test;
-                row.insertCell(6).innerHTML = item.second_test;
-                row.insertCell(7).innerHTML = item.note_score;
-                row.insertCell(8).innerHTML = item.attendance_score;
-                row.insertCell(9).innerHTML = item.ca_score;
-                row.insertCell(10).innerHTML = item.exam_score;
-                row.insertCell(11).innerHTML = item.total;
-                row.insertCell(12).innerHTML = item.grade;
-                row.insertCell(13).innerHTML =
-                    '<button onclick="editRow(this)">Edit</button>';
-                row.insertCell(14).innerHTML =
-                    '<button onclick="deleteRow(this)">Delete</button>';
-            });
+            // CHANGED (pack 112): drawn by the shared renderer, which keeps one
+            // row per term/session/subject (newest wins) so a score the old
+            // /save-result duplicated is not listed twice here either.
+            amsDrawResultRows(results);
         })
         .catch(error => {
             console.log(error);
@@ -254,17 +229,22 @@ function saveScore() {
         alert(data.message);
 
         let table = document.getElementById("scoreTable");
-        let row;
+        let row = null;
+        const savedId = data && data.id != null ? data.id : null;
 
-        if (isEditing) {
-            // find the existing row by its stored id and update it in place
+        /* FIX (pack 112): the server upserts now, so `data.id` is ALWAYS the row
+           that was written - inserted or updated. The table is looked up by
+           that id first, so a save can never leave two rows for the same
+           student/term/session/subject on the page (nor in the database). */
+        if (savedId != null && table) {
+            row = table.querySelector(`tr[data-id="${savedId}"]`);
+        }
+        if (!row && isEditing && table) {
             row = table.querySelector(`tr[data-id="${editingResultId}"]`);
-            if (!row) {
-                row = table.insertRow();
-            }
-        } else {
+        }
+        if (!row) {
             row = table.insertRow();
-            row.dataset.id = data.id;
+            if (savedId != null) row.dataset.id = savedId;
         }
 
         row.dataset.session = session;
@@ -297,6 +277,10 @@ function saveScore() {
 }
 
 function clearScoreForm() {
+    // The "loaded that saved score" banner belongs to the row that was just
+    // saved / cancelled - it goes with the cleared form.
+    if (typeof amsHideScoreNote === "function") amsHideScoreNote();
+    if (typeof amsResetPrefillCache === "function") amsResetPrefillCache();
     document.getElementById("studentId").value = "";
     document.getElementById("studentName").value = "";
     document.getElementById("studentClass").value = "";
@@ -402,6 +386,10 @@ function amsLookupStudent(fromTyping) {
             document.getElementById("studentClass").value = st.class_name;
             loadSubjects();
             if (card) amsFillQuickCard(card, st);
+            // FIX (pack 112): typing/blurring a Student ID also brings that
+            // student's saved score back onto the form (and the results table)
+            // instead of leaving the boxes empty.
+            amsSchedulePrefill(80);
         } else {
             if (card) card.style.display = "none";
             if (!fromTyping) alert("Student not found.");
@@ -452,6 +440,298 @@ function amsFillQuickCard(card, st) {
     .catch(() => { balEl.textContent = "Fee balance: —"; });
 }
 
+/* ------------------------------------------------------------------
+   FIX (pack 112 - owner: "If student is picking in both batch entry and
+   single student score it must automatically display scores that has been
+   input before not just empty space and to avoid duplicate").
+
+   What used to happen the moment a teacher picked a student from the
+   Quick-Pick list:
+     * the score boxes (First Test ... Exam) stayed EMPTY. The old code did
+       call loadExistingResults(), but that function reads the SEPARATE
+       "Student ID to load their results" box at the bottom of the page -
+       which the picker never filled - so it only ever raised "Please enter a
+       Student ID to load." The score that was already in the database was
+       never put back on the form;
+     * so the teacher typed it again, and /save-result (which INSERTED every
+       time) stored a SECOND row for the same student/term/session/subject:
+       the duplicate.
+
+   Now the picked student's saved rows are loaded ONCE and used for BOTH
+   * the results table at the bottom of the page, and
+   * the entry form: the saved marks go back into the boxes, and the row is
+     opened for editing, so pressing "Save Score" UPDATES that row instead of
+     adding another one. The server (/save-result) upserts too, so a
+     duplicate can no longer be created even if the form was not pre-filled.
+------------------------------------------------------------------ */
+
+/* Mirrors the server's normalizeClassName: case, extra spaces and Arabic
+   tashkeel must never hide a score that is already saved. */
+function amsScoreKey(v) {
+    return String(v == null ? "" : v)
+        .trim().toLowerCase()
+        .replace(/[\u064B-\u065F\u0670\u06D6-\u06ED\u0640]/g, "")
+        .replace(/\s+/g, " ");
+}
+
+/* 45.00 -> 45, 8.5 -> 8.5 (the boxes are plain number inputs). */
+function amsScoreText(v) {
+    if (v == null || v === "") return "";
+    const n = Number(v);
+    if (!isFinite(n)) return String(v);
+    return String(Math.round(n * 100) / 100);
+}
+
+/* ONE row per student + term + session + subject, newest id wins - the exact
+   duplicate rule the server applies now. */
+function amsDedupeResultRows(rows) {
+    const seen = Object.create(null);
+    const order = [];
+    (rows || []).forEach(function (row) {
+        if (!row) return;
+        const key = amsScoreKey(row.student_id) + "|" + amsScoreKey(row.term) + "|" +
+            amsScoreKey(row.session) + "|" + amsScoreKey(row.subject);
+        if (!seen[key]) { seen[key] = row; order.push(key); return; }
+        if (Number(row.id) > Number(seen[key].id)) seen[key] = row;
+    });
+    return order.map(function (k) { return seen[k]; });
+}
+
+/* Draws saved rows into the "Student Scores" table. A row already on screen
+   (same row id) is left alone, so picking the same student twice - or
+   pressing "Load Results" after the pick - never doubles the table. */
+function amsDrawResultRows(results) {
+    const table = document.getElementById("scoreTable");
+    if (!table) return 0;
+    let added = 0;
+    amsDedupeResultRows(results).forEach(function (item) {
+        if (item && item.id != null && table.querySelector(`tr[data-id="${item.id}"]`)) return;
+
+        let row = table.insertRow();
+        if (item.id != null) row.dataset.id = item.id;
+        row.dataset.session = item.session;
+        row.insertCell(0).innerHTML = item.student_id;
+        row.insertCell(1).innerHTML = item.student_name;
+        row.insertCell(2).innerHTML = item.class_name;
+        row.insertCell(3).innerHTML = item.term;
+        row.insertCell(4).innerHTML = item.subject;
+        row.insertCell(5).innerHTML = item.first_test;
+        row.insertCell(6).innerHTML = item.second_test;
+        row.insertCell(7).innerHTML = item.note_score;
+        row.insertCell(8).innerHTML = item.attendance_score;
+        row.insertCell(9).innerHTML = item.ca_score;
+        row.insertCell(10).innerHTML = item.exam_score;
+        row.insertCell(11).innerHTML = item.total;
+        row.insertCell(12).innerHTML = item.grade;
+        row.insertCell(13).innerHTML =
+            '<button onclick="editRow(this)">Edit</button>';
+        row.insertCell(14).innerHTML =
+            '<button onclick="deleteRow(this)">Delete</button>';
+        added++;
+    });
+    if (added && typeof amsFilterScoreTable === "function") amsFilterScoreTable();
+    return added;
+}
+
+/* The little banner above the form that says what was loaded / what will
+   happen when Save Score is pressed. */
+function amsScoreNoteEl(create) {
+    let el = document.getElementById("amsPrefillNote");
+    if (!el && create) {
+        el = document.createElement("div");
+        el.id = "amsPrefillNote";
+        el.className = "ams-prefill-note";
+        const anchor = document.getElementById("studentId");
+        const host = anchor && (anchor.parentNode || anchor.parentElement);
+        if (host && host.insertBefore) host.insertBefore(el, anchor.nextSibling);
+        else if (anchor && anchor.parentNode) anchor.parentNode.appendChild(el);
+    }
+    return el;
+}
+
+function amsShowScoreNote(kind, html) {
+    const el = amsScoreNoteEl(true);
+    if (!el) return;
+    el.className = "ams-prefill-note ams-prefill-" + kind;
+    el.innerHTML = html;
+    if (el.style) el.style.display = "block";
+}
+
+function amsHideScoreNote() {
+    const el = amsScoreNoteEl(false);
+    if (!el) return;
+    if (el.style) el.style.display = "none";
+    el.innerHTML = "";
+}
+
+/* Sets a <select> to a saved value, retrying briefly: the option list may
+   still be loading (subjects are fetched when the class is picked) or its
+   redraw may be waiting for the teacher's picker to close. Gives up as soon
+   as the teacher picks something themselves. */
+function amsSetSelectValue(el, value, tries) {
+    if (!el || value == null || value === "") return false;
+    el.value = value;
+    if (el.value === value) return true;
+    if ((tries || 0) >= 20) return false;                 // ~4s, then quietly stop
+    setTimeout(function () {
+        if (document.activeElement === el) return;         // picker is open
+        if (el.value) return;                              // teacher already chose
+        amsSetSelectValue(el, value, (tries || 0) + 1);
+    }, 200);
+    return false;
+}
+
+function amsScoreFormContext() {
+    const val = (id) => {
+        const el = document.getElementById(id);
+        return el ? String(el.value == null ? "" : el.value) : "";
+    };
+    return {
+        sid: val("studentId").trim(),
+        cls: val("studentClass").trim(),
+        term: val("term").trim(),
+        session: val("session").trim(),
+        subject: val("subject").trim()
+    };
+}
+
+let amsPrefillToken = 0;
+let amsPrefillTimer = null;
+let amsPrefillDone = "";        // "sid|term|session|subject" already applied
+let amsShownStudent = "";       // the student the form is currently holding
+
+/* Switching to ANOTHER student must never leave the previous student's marks
+   in the boxes (they would be saved onto the new student). They are emptied
+   before the newly picked student's saved score is loaded. */
+function amsClearScoreBoxes() {
+    ["firstTest", "secondTest", "noteScore", "attendanceScore", "examScore",
+        "caScore", "totalScore", "grade"].forEach(function (id) {
+        const el = document.getElementById(id);
+        if (el) el.value = "";
+    });
+}
+
+function amsSchedulePrefill(delay) {
+    clearTimeout(amsPrefillTimer);
+    amsPrefillTimer = setTimeout(function () { amsPrefillExistingScore(); }, delay == null ? 200 : delay);
+}
+
+/* The form was cleared (saved / cancelled): the same student may be picked
+   again straight away and must be re-read from the database, not skipped. */
+function amsResetPrefillCache() {
+    amsPrefillDone = "";
+}
+
+function amsPrefillExistingScore() {
+    // Only the score-entry form has these; other pages load js/app.js too.
+    if (!document.getElementById("firstTest")) return;
+
+    const form = amsScoreFormContext();
+    if (!form.sid) return;
+
+    if (amsShownStudent && amsScoreKey(amsShownStudent) !== amsScoreKey(form.sid)) {
+        amsClearScoreBoxes();
+        exitEditMode();
+        amsHideScoreNote();
+    }
+    amsShownStudent = form.sid;
+
+    const sig = amsScoreKey(form.sid) + "|" + amsScoreKey(form.term) + "|" +
+        amsScoreKey(form.session) + "|" + amsScoreKey(form.subject);
+    if (sig === amsPrefillDone) return;      // same pick, same answer, no refetch
+    amsPrefillDone = sig;                    // set now so a second caller shares this one request
+
+    const token = ++amsPrefillToken;
+    fetch(`/search-result/${encodeURIComponent(form.sid)}`)
+        .then(response => (response && response.ok === false ? [] : response.json()))
+        .catch(() => [])
+        .then(rows => {
+            if (token !== amsPrefillToken) return;             // a newer pick answered first
+            const now = amsScoreFormContext();
+            if (now.sid !== form.sid) return;                  // the teacher moved on
+            if (!Array.isArray(rows)) { amsPrefillDone = ""; return; }   // let a later attempt retry
+            const list = amsDedupeResultRows(rows);
+            amsDrawResultRows(list);
+            amsApplySavedScore(form, list, (rows || []).length - list.length);
+        })
+        .catch(error => { amsPrefillDone = ""; console.log(error); });
+}
+
+/* Puts the saved score for the current picks back into the form and opens
+   that row for editing, so "Save Score" updates it instead of inserting a
+   duplicate. */
+function amsApplySavedScore(form, rows, mergedCount) {
+    const val = (id) => {
+        const el = document.getElementById(id);
+        return el ? String(el.value == null ? "" : el.value) : "";
+    };
+    const setVal = (id, v) => { const el = document.getElementById(id); if (el) el.value = amsScoreText(v); };
+    const boxEmpty = () => ["firstTest", "secondTest", "noteScore", "attendanceScore", "examScore"]
+        .every(id => val(id).trim() === "");
+
+    const list = (rows || []).slice().sort(function (a, b) { return Number(b.id || 0) - Number(a.id || 0); });
+    const complete = !!(form.term && form.session && form.subject);
+
+    function fits(row) {
+        if (form.term && amsScoreKey(row.term) !== amsScoreKey(form.term)) return false;
+        if (form.session && amsScoreKey(row.session) !== amsScoreKey(form.session)) return false;
+        if (form.subject && amsScoreKey(row.subject) !== amsScoreKey(form.subject)) return false;
+        return true;
+    }
+
+    // A complete pick (term + session + subject) means the teacher wants THAT
+    // score; otherwise the newest row matching what is picked so far is shown.
+    const target = list.filter(fits)[0] || null;
+
+    if (!target || target.id == null) {
+        // Nothing saved for this student yet -> a plain new entry.
+        exitEditMode();
+        amsHideScoreNote();
+        if (complete) {
+            amsShowScoreNote("info",
+                "🆕 No score saved yet for <b>" + val("studentClass") + " · " + form.term + " · " + form.session +
+                " · " + form.subject + "</b> — the marks you type now will be added as a NEW entry.");
+        } else if (!list.length) {
+            amsShowScoreNote("info", "🆕 Nothing saved for this student yet — this will be a NEW entry.");
+        }
+        return;
+    }
+
+    // Adopt the picks the saved row carries (only where the form is still blank).
+    if (!form.term) amsSetSelectValue(document.getElementById("term"), target.term);
+    if (!form.session) amsSetSelectValue(document.getElementById("session"), target.session);
+    if (!form.cls && target.class_name) {
+        amsSetSelectValue(document.getElementById("studentClass"), target.class_name);
+        if (typeof loadSubjects === "function") loadSubjects();
+    }
+    if (!form.subject) amsSetSelectValue(document.getElementById("subject"), target.subject);
+
+    // The saved marks go back into the boxes. While the pick is incomplete
+    // they only fill blank boxes - marks the teacher is typing are never wiped.
+    if (complete || boxEmpty()) {
+        setVal("firstTest", target.first_test);
+        setVal("secondTest", target.second_test);
+        setVal("noteScore", target.note_score);
+        setVal("attendanceScore", target.attendance_score);
+        setVal("examScore", target.exam_score);
+        if (typeof calculateScore === "function") calculateScore();
+    }
+
+    // Open the saved row for editing - this is what stops the duplicate.
+    editingResultId = target.id;
+    const saveButton = document.getElementById("saveScoreBtn");
+    const cancelButton = document.getElementById("cancelEditBtn");
+    if (saveButton) saveButton.textContent = "Update Score";
+    if (cancelButton) cancelButton.style.display = "inline-block";
+
+    const where = [target.class_name || form.cls, target.term, target.session, target.subject]
+        .filter(Boolean).join(" · ");
+    amsShowScoreNote("ok",
+        "📄 Loaded the score entered before" + (where ? " for <b>" + where + "</b>" : "") +
+        " — the boxes show the saved marks and <b>Save Score updates this row</b>, so no duplicate is created." +
+        (mergedCount ? " (" + mergedCount + " older duplicate row" + (mergedCount === 1 ? "" : "s") + " ignored — the newest is shown.)" : ""));
+}
+
 // Attach the as-you-type search once the DOM is ready (keeps onblur too).
 document.addEventListener("DOMContentLoaded", function () {
     const idEl = document.getElementById("studentId");
@@ -467,6 +747,16 @@ document.addEventListener("DOMContentLoaded", function () {
             const card = document.getElementById("studentQuickCard");
             if (card && card.style.display !== "none") amsLookupStudent(true);
         });
+    });
+
+    // FIX (pack 112): changing ANY of the scores a row is keyed by re-reads the
+    // saved score for the new pick. So picking the term / session / subject
+    // AFTER the student - the normal way round on the phone - still brings the
+    // marks that were entered before onto the form, and the form stays in
+    // "update that row" mode instead of risking a duplicate.
+    ["studentClass", "term", "session", "subject"].forEach(function (selId) {
+        const sel = document.getElementById(selId);
+        if (sel) sel.addEventListener("change", function () { amsSchedulePrefill(250); });
     });
 });
 
@@ -738,9 +1028,19 @@ window.pickStudentFromDropdown = function(sid) {
     if (idEl) {
         idEl.value = sid;
         if (typeof loadStudent === "function") loadStudent();
-        if (typeof loadExistingResults === "function") {
-            setTimeout(loadExistingResults, 250);
-        }
+
+        /* FIX (pack 112 - owner: "If student is picking in both batch entry and
+           single student score it must automatically display scores that has
+           been input before not just empty space and to avoid duplicate").
+           The picker now also fills the "load their results" box (that is the
+           box loadExistingResults() reads - the old code left it empty, which
+           is why the pick only ever raised "Please enter a Student ID"), loads
+           every saved row into the results table, and puts the saved marks for
+           the current pick back into the form inside that same row's edit
+           session. */
+        const loadIdEl = document.getElementById("loadStudentId");
+        if (loadIdEl) loadIdEl.value = sid;
+        amsSchedulePrefill(0);
     }
 };
 

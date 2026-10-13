@@ -185,6 +185,16 @@
     /* ============ single-student panel (original module) ============ */
     .sc-wrap .score-card{ margin:14px 0 0; }
     #amsSinglePanel .card-section input#loadStudentId{ flex:1 1 220px; min-width:180px; }
+    /* FIX (pack 112): banner under the Student ID box - it says whether the
+       marks on the form were LOADED from a score saved before (and that Save
+       updates that row) or that this will be a brand new entry. */
+    .ams-prefill-note{
+      display:none; margin:10px 0 0; padding:10px 12px; border-radius:10px;
+      font-size:13px; line-height:1.55; border:1px solid #C3EBD8; background:#EBF7F1; color:#1C5A42;
+    }
+    .ams-prefill-note.ams-prefill-ok{ border-color:#9AD6B6; background:#E8F6EE; color:#0F3D2E; }
+    .ams-prefill-note.ams-prefill-info{ border-color:#E7D9A8; background:#FFF8E6; color:#7a5c00; }
+    html[data-theme="dark"] .ams-prefill-note{ background:#24402f; border-color:#2d5a38; color:#cfe3d6; }
 
     /* ============ responsive ============ */
     /* FIX (pack 111): on phones/tablets the page content must clear BOTH the
@@ -341,13 +351,17 @@
           <select id="studentSelectDropdown" onchange="pickStudentFromDropdown(this.value)" style="width:100%; padding:8px; border-radius:6px; border:1px solid #99C7B2; background:#fff; font-weight:600;">
             <option value="">Loading students list...</option>
           </select>
-          <small style="color:#1C5A42; display:block; margin-top:4px;">Pick a student to auto-fill their ID, Name, and load their existing scores table!</small>
+          <small style="color:#1C5A42; display:block; margin-top:4px;">Pick a student to auto-fill their ID and Name, list every score saved before in the table below, and put the saved marks back on the form — saving then UPDATES that row instead of adding a duplicate.</small>
         </div>
 
         <div class="form-group">
           <label>Student ID</label>
           <input type="text" id="studentId" onblur="loadStudent()" required>
           <div id="studentQuickCard" class="ams-quick-card" style="display:none;"></div>
+          <!-- FIX (pack 112): what the form loaded / what Save will do. Filled by
+               js/app.js (amsShowScoreNote) - empty and hidden until a student is
+               picked, so the page looks exactly as before. -->
+          <div id="amsPrefillNote" class="ams-prefill-note"></div>
         </div>
 
         <div class="form-group">
