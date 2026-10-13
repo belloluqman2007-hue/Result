@@ -141,6 +141,41 @@
     [250, 800, 1800].forEach(function (ms) { setTimeout(bbSyncBottomSpace, ms); });
   }
 
+  /* ---------------- saved scores show up by themselves ----------------
+     FIX (pack 112 - owner: "If student is picking in both batch entry and
+     single student score it must automatically display scores that has been
+     input before not just empty space and to avoid duplicate").
+     The pick-once filters now LOAD the grid by themselves:
+       * coming back to the same class (the picks are remembered) opens the
+         grid already filled with the scores that were entered before - no
+         empty area, no pressing anything;
+       * changing any pick while a class is on screen reloads the grid for the
+         new pick, so the saved marks for that class/subject appear at once
+         (the grid pre-fills from /api/scores/batch, and saving UPDATES those
+         same rows - it never adds a second copy).
+     "Load Students" keeps working exactly as before. */
+  var bbAutoTimer = null;
+  var bbGridShown = false;
+
+  function bbPickComplete() {
+    return !!(($("bbClass") || {}).value && ($("bbSession") || {}).value &&
+      ($("bbTerm") || {}).value && ($("bbSubject") || {}).value);
+  }
+
+  function bbAutoLoad(delay) {
+    clearTimeout(bbAutoTimer);
+    bbAutoTimer = setTimeout(function () {
+      var panel = $("amsBatchPanel");
+      if (panel && panel.style.display === "none") return;   // single-student tab is on screen
+      if (!bbGridShown) return;                              // first visit -> the Load Students button
+      if (!bbPickComplete()) return;                         // still picking
+      /* Never throw away work: if the teacher has unsaved edits in the grid,
+         the reload waits for them to press Load Students themselves. */
+      if (document.querySelector("#bbGrid .bb-row.bb-dirty")) return;
+      window.bbLoad();
+    }, delay == null ? 300 : delay);
+  }
+
   /* ---------------- tab switching ---------------- */
   window.amsScoresTab = function (which) {
     var batchPanel = $("amsBatchPanel");
@@ -268,6 +303,7 @@
     }
     writeSaved();
     batchLoading = true;
+    bbGridShown = true;          /* from now on a pick change reloads by itself (see bbAutoLoad) */
     if (status) status.textContent = "Loading " + cls + " · " + subject + "…";
     var grid = $("bbGrid");
     if (grid) grid.innerHTML = '<div class="bb-loading">Loading students…</div>';
@@ -608,25 +644,42 @@
         return loadBatchSubjects(cls, saved.subject);
       })
       .then(function () {
-        // If we remembered a full pick-once set, offer one-tap reload.
+        // If we remembered a full pick-once set, show it immediately - the
+        // scores entered before are on the screen without pressing anything.
         var cls = ($("bbClass") || {}).value || "";
         var session = ($("bbSession") || {}).value || "";
         var term = ($("bbTerm") || {}).value || "";
         var subject = ($("bbSubject") || {}).value || "";
         var status = $("bbStatus");
-        if (cls && session && term && subject && status) {
-          status.textContent = "Welcome back — your last class (" + cls + " · " + subject + ") is still selected. Press Load Students.";
+        if (cls && session && term && subject) {
+          if (status) {
+            status.textContent = "Welcome back — your last class (" + cls + " · " + subject + ") is still selected. Loading the scores entered before…";
+          }
+          if (typeof window.bbLoad === "function") {
+            var panel = $("amsBatchPanel");
+            if (!panel || panel.style.display !== "none") {
+              bbGridShown = true;
+              window.bbLoad();
+            }
+          }
+        } else if (status) {
+          status.textContent = "Pick a class, session, term and subject — just once — then press Load Students.";
         }
       });
 
     var clsSel = $("bbClass");
     if (clsSel) clsSel.addEventListener("change", function () {
-      loadBatchSubjects(clsSel.value, "");
+      // The subject list for the new class has to land first, then the grid
+      // reloads on its own with that class's saved scores.
+      loadBatchSubjects(clsSel.value, "").then(function () { bbAutoLoad(250); });
       writeSaved();
     });
     ["bbSession", "bbTerm", "bbSubject"].forEach(function (id) {
       var el = $(id);
-      if (el) el.addEventListener("change", writeSaved);
+      if (el) el.addEventListener("change", function () {
+        writeSaved();
+        bbAutoLoad(300);
+      });
     });
     var search = $("bbSearch");
     if (search) search.addEventListener("input", applyBatchSearch);

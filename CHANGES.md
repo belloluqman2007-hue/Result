@@ -1,5 +1,31 @@
 # UI Modernization — Change Log
 
+## Pack 112 - 2026-10-13
+
+Owner: "If student is picking in both batch entry and single student score it must automatically display scores that as been input before not just empty space and to avoid duplicate. Fix and merge now"
+
+### Root cause 1 - picking a student on the scores page left the boxes empty
+
+The Quick-Pick list *did* call `loadExistingResults()`, but that function reads the **separate** "Enter Student ID to load their results" box at the bottom of `scores.html` - a box the picker never filled. So every pick fetched nothing and only raised *"Please enter a Student ID to load."*, while the marks that were already saved for that student stayed invisible: an empty First Test / Second Test / Note / Attendance / Exam, an empty "Student Scores" table.
+
+### Root cause 2 - that is why duplicates appeared
+
+Because the saved score was never read back, the teacher typed it again - and `/save-result` **always INSERTED**. The same student + class + term + session + subject ended up with a second row in `results` (and the report card / student result page listed the subject twice). `/api/scores/batch` and `/api/gradebook/cell` were already case/tashkeel-safe upserts; the single-student form was the one route that was not.
+
+| File | What changed |
+|---|---|
+| `js/app.js` | Picking a student (from the list, by typing the ID, or by blur) now loads every saved row for that student in ONE request, draws them into the "Student Scores" table (one row per term/session/subject - newest wins, so a duplicate the old code created is listed once) and puts the saved score **back into the form**: the boxes show the marks that were entered before, the pick's class/term/session/subject are filled in where they are still blank, and the row is opened for editing (`editingResultId` + "Update Score" + Cancel Edit) so **Save Score UPDATES that row instead of adding another**. `loadExistingResults()` reads its own box again and shares the same renderer; the picked student is copied into that box so "Load Results" / "Delete All Results" act on the student on screen. Switching to a different student empties the previous student's marks first (they can never be saved onto the wrong pupil). |
+| `js/app.js` | Changing the class / term / session / subject **after** the student - the normal order on a phone - re-reads the saved score for the new pick, so the marks that were entered before appear by themselves (complete pick = exactly that row; otherwise the newest still-matching row). A small banner under the Student ID box states what was loaded and that saving updates it, or that a brand new entry will be added. An identical pick is not re-fetched (one request per pick, token-guarded against stale answers). |
+| `js/app.js` | `saveScore()` writes the server's answer (`data.id` - returned for updates *and* inserts now) back into the table, looking the row up by that id first: a save can no longer leave two rows for the same student/term/session/subject on the page. |
+| `server.js` | `POST /save-result` is an **upsert**: the newest row for the same student + term + session + subject (case / extra-space / Arabic tashkeel safe) is UPDATED and any older copies are merged away in the same request. The answer carries `id`, `updated` and `merged`. A genuinely new score still inserts, exactly as before. |
+| `server.js` | `GET /search-result/:studentId` returns **one row per term/session/subject** (newest id wins), so the scores table, the student result page and the report card stop showing a subject twice. Read-only - nothing is deleted, and other terms/subjects are untouched. |
+| `server.js` | New guarded boot step: it merges rows that are an **exact** copy of a newer row (same student, term, session, subject *and* the same marks) - the pairs the old single-student saving created. Rows that differ in any mark are left alone; they are listed once (newest wins) and merged the moment the teacher re-saves that student or saves the class from Batch Entry. `POST /api/scores/batch` now also merges older copies of a pupil's subject when the class is saved, and reports how many it merged. |
+| `js/scores-batch.js`, `scores.html` | Batch Entry no longer opens on an empty area: when the class/session/term/subject are still remembered, the grid loads **by itself** and shows the scores that were entered before (still pre-filled and editable); changing any of the four picks reloads the grid for the new pick (debounced), unless the grid has unsaved edits - those are never thrown away. |
+| `sw.js` | Cache v70, so phones drop the old `scores.html` / `js/app.js` / `js/scores-batch.js`. |
+| `test/scores-prefill-duplicate-test.js`, `package.json` | New regression test, added to `npm test`: the real page files in a VM (fake DOM/fetch) prove the pick fills the boxes with the saved marks, that Save then sends `PUT /update-result/<id>` and never a second `POST /save-result`, that a student with nothing saved stays a plain new entry, that duplicates in the database are listed once and merged into the newest row, that a term/subject picked after the student re-reads the right score, and that Batch Entry auto-loads the remembered class; plus the real `server.js` booted against a fake MySQL layer proves the `/save-result` upsert (SQL trail: UPDATE, zero INSERTs), the boot-time exact-duplicate merge, the deduped `/search-result` and the class-save duplicate merge. |
+
+The score calculations, grade bands, positions, report cards and every other route are untouched - this pack changes where the page gets its numbers from (the row that already exists) and guarantees there is only ever ONE such row.
+
 ## Pack 111 - 2026-10-13
 
 Owner: "In the batch entry. The save is falling under the bottom nav causing not to be able to save it. In the single student score if I want to select student it will display and disappear same time for 3 times before it stay likewise picking subjects also. Fix and merge now."

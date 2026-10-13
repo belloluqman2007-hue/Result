@@ -2139,6 +2139,65 @@ function runPack86Migrations() {
 runPack86Migrations();
 
 /* ------------------------------------------------------------------
+   NEW (pack 112 - owner: "...to avoid duplicate").
+   Heals the duplicates the old /save-result created. It only ever removes a
+   row that is an EXACT copy - same student, term, session, subject AND the
+   same five marks - of a newer row (the newest id is kept, so no score is
+   ever lost). Rows that differ in any mark are left alone: those are visible
+   in /search-result as one row (newest wins) and are merged the moment the
+   teacher re-saves that student from the scores page (see /save-result).
+   Guarded + idempotent: on a clean database it does nothing at all.
+------------------------------------------------------------------ */
+function runPack112Migrations() {
+    const conn = addonConnection();
+    conn.connect((err) => {
+        if (err) { conn.destroy(); return setTimeout(runPack112Migrations, 4000); }
+        conn.query(
+            `SELECT id, student_id, term, session, subject, first_test, second_test,
+                    note_score, attendance_score, ca_score, exam_score, total, grade
+             FROM results`,
+            (qErr, rows) => {
+                if (qErr) {
+                    console.log("Pack 112 duplicate notice:", qErr.code || qErr.message);
+                    conn.end();
+                    return;
+                }
+                const groups = Object.create(null);
+                (rows || []).forEach((r) => {
+                    const key = [
+                        normalizeClassName(r.student_id), normalizeClassName(r.term),
+                        normalizeClassName(r.session), normalizeClassName(r.subject),
+                        Number(r.first_test) || 0, Number(r.second_test) || 0,
+                        Number(r.note_score) || 0, Number(r.attendance_score) || 0,
+                        Number(r.ca_score) || 0, Number(r.exam_score) || 0,
+                        Number(r.total) || 0, String(r.grade || "").trim().toUpperCase()
+                    ].join("|");
+                    if (!groups[key]) groups[key] = [];
+                    groups[key].push(r);
+                });
+                const dropIds = [];
+                Object.keys(groups).forEach((key) => {
+                    const list = groups[key].slice().sort((a, b) => Number(b.id) - Number(a.id));
+                    list.slice(1).forEach((r) => dropIds.push(r.id));   // identical copies - the newest keeps the data
+                });
+                if (!dropIds.length) {
+                    conn.end();
+                    console.log("Pack 112 setup ready (no duplicate result rows).");
+                    return;
+                }
+                conn.query("DELETE FROM results WHERE id IN (?)", [dropIds], (dErr, dRes) => {
+                    if (dErr) console.log("Pack 112 duplicate notice:", dErr.code || dErr.message);
+                    else console.log("Pack 112 merged " + ((dRes && dRes.affectedRows) || dropIds.length) +
+                        " duplicate result row(s) - every student/term/session/subject now has ONE row.");
+                    conn.end();
+                });
+            }
+        );
+    });
+}
+runPack112Migrations();
+
+/* ------------------------------------------------------------------
    NEW (pack 37 - admission pipeline): enquiries can now carry gender /
    date of birth (collected at the one-tap ADMIT step), record WHICH
    student id the child became, and a 'declined' status. All guarded +
@@ -3018,6 +3077,20 @@ app.get("/", (req, res) => {
 });
 
 console.log("THIS IS MY SERVER.JS")
+/* FIX (pack 112 - owner: "If student is picking in both batch entry and
+   single student score it must automatically display scores that has been
+   input before not just empty space and to avoid duplicate").
+   /save-result used to INSERT unconditionally, so saving a score for a
+   student + class + term + session + subject that ALREADY had one created a
+   SECOND row - the duplicate the owner is seeing (and the reason the entry
+   form looked empty: the row that was already saved was never read back).
+   It is now the same tolerant upsert the batch entry and the grade book use:
+     * the newest row for this student + term + session + subject (case /
+       extra-space / Arabic tashkeel safe) is UPDATED;
+     * any older copies of that same row are merged away in the same request,
+       so re-saving also HEALS rows the old code duplicated.
+   The answer carries `id`, `updated` and `merged` so the page refreshes the
+   exact row it wrote instead of adding another one to the table. */
 app.post("/save-result", requireLogin, writeRateLimit, (req, res) => {
 
     const {
@@ -3037,7 +3110,29 @@ app.post("/save-result", requireLogin, writeRateLimit, (req, res) => {
         grade
     } = req.body;
 
-    const sql = `
+    if (!String(student_id || "").trim() || !String(term || "").trim() ||
+        !String(session || "").trim() || !String(subject || "").trim()) {
+        return res.status(400).json({ message: "Student, term, session and subject are required." });
+    }
+
+    const values = [
+        student_id,
+        student_name,
+        class_name,
+        term,
+        session,
+        subject,
+        first_test,
+        second_test,
+        note_score,
+        attendance_score,
+        ca_score,
+        exam_score,
+        total_score,
+        grade
+    ];
+
+    const insertSql = `
     INSERT INTO results
         (student_id, student_name, class_name, term, session, subject,
         first_test, second_test, note_score, attendance_score,
@@ -3045,37 +3140,87 @@ app.post("/save-result", requireLogin, writeRateLimit, (req, res) => {
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 
     `;
+
+    const updateSql = `
+        UPDATE results SET
+            student_id = ?,
+            student_name = ?,
+            class_name = ?,
+            term = ?,
+            session = ?,
+            subject = ?,
+            first_test = ?,
+            second_test = ?,
+            note_score = ?,
+            attendance_score = ?,
+            ca_score = ?,
+            exam_score = ?,
+            total = ?,
+            grade = ?
+        WHERE id = ?
+    `;
+
 console.log(req.body);
     connection.query(
-        sql,
-        [
-            student_id,
-            student_name,
-            class_name,
-            term,
-            session,
-            subject,
-            first_test,
-            second_test,
-            note_score,
-            attendance_score,
-            ca_score,
-            exam_score,
-            total_score,
-            grade
-        ],
-        (err, result) => {
+        `SELECT id, subject FROM results
+         WHERE (TRIM(student_id) = TRIM(?) OR LOWER(TRIM(student_id)) = LOWER(TRIM(?)))
+           AND TRIM(term) = TRIM(?) AND TRIM(session) = TRIM(?)`,
+        [student_id, student_id, term, session],
+        (findErr, rows) => {
+            if (findErr) {
+                console.log(findErr);
+                return res.status(500).json({ message: "Error saving result" });
+            }
+            const wantSubject = normalizeClassName(subject);
+            const same = (rows || [])
+                .filter((r) => normalizeClassName(r.subject) === wantSubject)
+                .sort((a, b) => Number(b.id) - Number(a.id));   // newest first
 
-            if (err) {
-                console.log(err);
-                res.status(500).send("Error saving result");
-            } else {
+            function inserted(err, result) {
+                if (err) {
+                    console.log(err);
+                    return res.status(500).json({ message: "Error saving result" });
+                }
                 res.json({
                     message: "Result saved successfully",
-                id: result.insertId
-            });
+                    id: result.insertId,
+                    updated: false,
+                    merged: 0
+                });
             }
 
+            if (!same.length) {
+                return connection.query(insertSql, values, inserted);
+            }
+
+            const keepId = same[0].id;
+            const duplicateIds = same.slice(1).map((r) => r.id);
+
+            connection.query(updateSql, values.concat([keepId]), (uErr) => {
+                if (uErr) {
+                    console.log(uErr);
+                    return res.status(500).json({ message: "Error saving result" });
+                }
+
+                function done() {
+                    res.json({
+                        message: duplicateIds.length
+                            ? "Score updated - the entry already existed, so it was refreshed and " +
+                              duplicateIds.length + " duplicate row" + (duplicateIds.length === 1 ? "" : "s") +
+                              " was merged into it."
+                            : "Score updated - this student already had a score for this subject, so the existing entry was refreshed (no duplicate added).",
+                        id: keepId,
+                        updated: true,
+                        merged: duplicateIds.length
+                    });
+                }
+
+                if (!duplicateIds.length) return done();
+                connection.query("DELETE FROM results WHERE id IN (?)", [duplicateIds], (dErr) => {
+                    if (dErr) console.log(dErr);
+                    done();
+                });
+            });
         }
     );
 
@@ -3154,6 +3299,28 @@ app.put("/update-result/:id", requireLogin, writeRateLimit, (req, res) => {
 
 });
 
+/* NEW (pack 112 - owner: "...to avoid duplicate").
+   ONE row per student + term + session + subject. Before this pack
+   /save-result inserted a second row whenever a score was saved again (see
+   the upsert note on that route), and every reader of /search-result then
+   showed that subject twice - the scores table, the student result page and
+   the report card. Older copies are dropped HERE, newest id wins, so those
+   pages read the way the database is supposed to look. Read-only: this
+   never deletes anything, and rows for other terms/subjects are untouched. */
+function amsDedupeResultRows(rows) {
+    const seen = Object.create(null);
+    const out = [];
+    (rows || []).forEach((row) => {
+        if (!row) return;
+        const key = normalizeClassName(row.student_id) + "|" + normalizeClassName(row.term) + "|" +
+            normalizeClassName(row.session) + "|" + normalizeClassName(row.subject);
+        const at = seen[key];
+        if (at === undefined) { seen[key] = out.length; out.push(row); return; }
+        if (Number(row.id) > Number(out[at].id)) out[at] = row;
+    });
+    return out;
+}
+
 app.get("/search-result/:studentId", publishResultGate, (req, res) => { // CHANGED (pack 13): portal/anon users need login + published term; staff skip the gate completely
     const studentId = req.params.studentId;
     const term = req.query.term;
@@ -3176,6 +3343,10 @@ app.get("/search-result/:studentId", publishResultGate, (req, res) => { // CHANG
             return res.status(500).send("Database Error");
         }
 
+        // CHANGED (pack 112): one row per term+session+subject (newest wins),
+        // so a score the old /save-result duplicated is only listed once.
+        currentTermResults = amsDedupeResultRows(currentTermResults);
+
         // For 3rd Term, also pull 1st and 2nd Term results for the same
         // student and session so we can show a cumulative subject average.
         if (term === "3rd Term" && currentTermResults.length > 0) {
@@ -3190,7 +3361,7 @@ app.get("/search-result/:studentId", publishResultGate, (req, res) => { // CHANG
                 const firstTermBySubject = {};
                 const secondTermBySubject = {};
 
-                priorResults.forEach(row => {
+                amsDedupeResultRows(priorResults).forEach(row => {
                     // Match subjects tolerantly (tashkeel / spacing / case
                     // differences between terms must not hide a score).
                     const key = normalizeClassName(row.subject);
@@ -11557,28 +11728,50 @@ app.post("/api/scores/batch", requireLogin, (req, res) => {
             if (err) { console.log(err); return res.status(500).json({ message: "Database error" }); }
             const wantSub = normalizeClassName(subject);
             const byStudent = {};
+            const duplicateIds = [];
+            /* CHANGED (pack 112): when a student already has MORE than one row
+               for this subject (the old /save-result upsert-less saving created
+               those), keep the NEWEST and merge the older copies away - so
+               saving a class also cleans the duplicates out of it. */
             (existing || []).forEach((r) => {
                 if (normalizeClassName(r.subject) !== wantSub) return;
-                byStudent[amsSidKey(r.student_id)] = r.id;
+                const k = amsSidKey(r.student_id);
+                const prev = byStudent[k];
+                if (prev === undefined) { byStudent[k] = r.id; return; }
+                if (Number(r.id) > Number(prev)) { duplicateIds.push(prev); byStudent[k] = r.id; }
+                else duplicateIds.push(r.id);
             });
 
             let inserted = 0;
             let updated = 0;
             let index = 0;
 
-            function next() {
-                if (index >= rows.length) {
-                    const parts = [];
-                    if (updated) parts.push(updated + " updated");
-                    if (inserted) parts.push(inserted + " added");
-                    const summary = parts.length ? parts.join(", ") : "0 saved";
-                    return res.json({
-                        message: "Saved " + summary + " for " + subject + " (" + className + ", " + term + ", " + session + ").",
+            function finish() {
+                const parts = [];
+                if (updated) parts.push(updated + " updated");
+                if (inserted) parts.push(inserted + " added");
+                const summary = parts.length ? parts.join(", ") : "0 saved";
+                function done(merged) {
+                    res.json({
+                        message: "Saved " + summary + " for " + subject + " (" + className + ", " + term + ", " + session + ")." +
+                            (merged ? " " + merged + " duplicate row" + (merged === 1 ? "" : "s") + " merged." : ""),
                         inserted: inserted,
                         updated: updated,
+                        merged: merged,
                         total: rows.length,
                         errors: errors
                     });
+                }
+                if (!duplicateIds.length) return done(0);
+                connection.query("DELETE FROM results WHERE id IN (?)", [duplicateIds], (dErr, dRes) => {
+                    if (dErr) { console.log(dErr); return done(0); }
+                    done((dRes && dRes.affectedRows) || duplicateIds.length);
+                });
+            }
+
+            function next() {
+                if (index >= rows.length) {
+                    return finish();
                 }
                 const r = rows[index++];
                 const matchId = byStudent[amsSidKey(r.student_id)];
