@@ -3091,6 +3091,70 @@ console.log("THIS IS MY SERVER.JS")
        so re-saving also HEALS rows the old code duplicated.
    The answer carries `id`, `updated` and `merged` so the page refreshes the
    exact row it wrote instead of adding another one to the table. */
+/* Keep every score writer on the same student + term + session + subject key.
+   In particular, spreadsheet imports must not create rows that single and
+   batch entry then treat as separate scores. */
+function amsUpsertScoreResult(values, cb) {
+    const studentId = String(values[0] || "").trim();
+    const term = String(values[3] || "").trim();
+    const session = String(values[4] || "").trim();
+    const subjectKey = normalizeClassName(values[5]);
+    const insertSql = `
+        INSERT INTO results
+            (student_id, student_name, class_name, term, session, subject,
+             first_test, second_test, note_score, attendance_score,
+             ca_score, exam_score, total, grade)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `;
+    const updateSql = `
+        UPDATE results SET
+            student_id = ?, student_name = ?, class_name = ?, term = ?,
+            session = ?, subject = ?, first_test = ?, second_test = ?,
+            note_score = ?, attendance_score = ?, ca_score = ?, exam_score = ?,
+            total = ?, grade = ?
+        WHERE id = ?
+    `;
+
+    connection.query(
+        `SELECT id, subject FROM results
+         WHERE (TRIM(student_id) = TRIM(?) OR LOWER(TRIM(student_id)) = LOWER(TRIM(?)))
+           AND TRIM(term) = TRIM(?) AND TRIM(session) = TRIM(?)`,
+        [studentId, studentId, term, session],
+        (findErr, rows) => {
+            if (findErr) return cb(findErr);
+
+            const same = (rows || [])
+                .filter((row) => normalizeClassName(row.subject) === subjectKey)
+                .sort((a, b) => Number(b.id) - Number(a.id));
+            if (!same.length) {
+                return connection.query(insertSql, values, (insertErr, result) => {
+                    if (insertErr) return cb(insertErr);
+                    cb(null, { id: result.insertId, updated: false, merged: 0 });
+                });
+            }
+
+            const keepId = same[0].id;
+            const duplicateIds = same.slice(1).map((row) => row.id);
+            connection.query(updateSql, values.concat([keepId]), (updateErr) => {
+                if (updateErr) return cb(updateErr);
+                const finish = (merged) => cb(null, {
+                    id: keepId,
+                    updated: true,
+                    merged: merged
+                });
+                if (!duplicateIds.length) return finish(0);
+                connection.query("DELETE FROM results WHERE id IN (?)", [duplicateIds], (deleteErr, result) => {
+                    if (deleteErr) {
+                        console.log(deleteErr);
+                        return finish(0);
+                    }
+                    finish(Number(result && result.affectedRows) || duplicateIds.length);
+                });
+            });
+        }
+    );
+}
+
 app.post("/save-result", requireLogin, writeRateLimit, (req, res) => {
 
     const {
@@ -3132,97 +3196,24 @@ app.post("/save-result", requireLogin, writeRateLimit, (req, res) => {
         grade
     ];
 
-    const insertSql = `
-    INSERT INTO results
-        (student_id, student_name, class_name, term, session, subject,
-        first_test, second_test, note_score, attendance_score,
-        ca_score, exam_score, total, grade)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-
-    `;
-
-    const updateSql = `
-        UPDATE results SET
-            student_id = ?,
-            student_name = ?,
-            class_name = ?,
-            term = ?,
-            session = ?,
-            subject = ?,
-            first_test = ?,
-            second_test = ?,
-            note_score = ?,
-            attendance_score = ?,
-            ca_score = ?,
-            exam_score = ?,
-            total = ?,
-            grade = ?
-        WHERE id = ?
-    `;
-
-console.log(req.body);
-    connection.query(
-        `SELECT id, subject FROM results
-         WHERE (TRIM(student_id) = TRIM(?) OR LOWER(TRIM(student_id)) = LOWER(TRIM(?)))
-           AND TRIM(term) = TRIM(?) AND TRIM(session) = TRIM(?)`,
-        [student_id, student_id, term, session],
-        (findErr, rows) => {
-            if (findErr) {
-                console.log(findErr);
-                return res.status(500).json({ message: "Error saving result" });
-            }
-            const wantSubject = normalizeClassName(subject);
-            const same = (rows || [])
-                .filter((r) => normalizeClassName(r.subject) === wantSubject)
-                .sort((a, b) => Number(b.id) - Number(a.id));   // newest first
-
-            function inserted(err, result) {
-                if (err) {
-                    console.log(err);
-                    return res.status(500).json({ message: "Error saving result" });
-                }
-                res.json({
-                    message: "Result saved successfully",
-                    id: result.insertId,
-                    updated: false,
-                    merged: 0
-                });
-            }
-
-            if (!same.length) {
-                return connection.query(insertSql, values, inserted);
-            }
-
-            const keepId = same[0].id;
-            const duplicateIds = same.slice(1).map((r) => r.id);
-
-            connection.query(updateSql, values.concat([keepId]), (uErr) => {
-                if (uErr) {
-                    console.log(uErr);
-                    return res.status(500).json({ message: "Error saving result" });
-                }
-
-                function done() {
-                    res.json({
-                        message: duplicateIds.length
-                            ? "Score updated - the entry already existed, so it was refreshed and " +
-                              duplicateIds.length + " duplicate row" + (duplicateIds.length === 1 ? "" : "s") +
-                              " was merged into it."
-                            : "Score updated - this student already had a score for this subject, so the existing entry was refreshed (no duplicate added).",
-                        id: keepId,
-                        updated: true,
-                        merged: duplicateIds.length
-                    });
-                }
-
-                if (!duplicateIds.length) return done();
-                connection.query("DELETE FROM results WHERE id IN (?)", [duplicateIds], (dErr) => {
-                    if (dErr) console.log(dErr);
-                    done();
-                });
-            });
+    amsUpsertScoreResult(values, (err, saved) => {
+        if (err) {
+            console.log(err);
+            return res.status(500).json({ message: "Error saving result" });
         }
-    );
+        const message = !saved.updated
+            ? "Result saved successfully"
+            : saved.merged
+                ? "Score updated - the entry already existed, so it was refreshed and " +
+                  saved.merged + " duplicate row" + (saved.merged === 1 ? "" : "s") + " was merged into it."
+                : "Score updated - this student already had a score for this subject, so the existing entry was refreshed (no duplicate added).";
+        res.json({
+            message: message,
+            id: saved.id,
+            updated: saved.updated,
+            merged: saved.merged
+        });
+    });
 
 });
 
@@ -8941,17 +8932,27 @@ app.post("/bulk-import-results", requireLogin, writeRateLimit, uploadExcel.singl
 
     connection.query("SELECT student_id, full_name, class_name FROM students", (err, students) => {
         if (err) { console.log(err); return res.status(500).json({ message: "Database error while loading students." }); }
-        const stuMap = {};
-        (students || []).forEach(function (s) { stuMap[s.student_id] = s; });
+        const stuMap = Object.create(null);
+        (students || []).forEach(function (s) {
+            stuMap[normalizeClassName(s.student_id)] = s;
+        });
 
-        const results = { inserted: 0, errors: [] };
+        const results = { inserted: 0, updated: 0, merged: 0, errors: [] };
         let index = 0;
 
         function processNext() {
             if (index >= rows.length) {
+                const imported = results.inserted + results.updated;
+                const parts = [];
+                if (results.inserted) parts.push(results.inserted + " added");
+                if (results.updated) parts.push(results.updated + " updated");
                 return res.json({
-                    message: results.inserted + " of " + rows.length + " result row(s) imported successfully.",
+                    message: imported + " of " + rows.length + " result row(s) imported successfully" +
+                        (parts.length ? " (" + parts.join(", ") + ")" : "") + "." +
+                        (results.merged ? " " + results.merged + " duplicate row" + (results.merged === 1 ? "" : "s") + " merged." : ""),
                     inserted: results.inserted,
+                    updated: results.updated,
+                    merged: results.merged,
                     total: rows.length,
                     errors: results.errors
                 });
@@ -8967,9 +8968,14 @@ app.post("/bulk-import-results", requireLogin, writeRateLimit, uploadExcel.singl
                 return processNext();
             }
 
-            const stu = stuMap[studentId];
+            const stu = stuMap[normalizeClassName(studentId)];
             const studentName = stu ? stu.full_name : studentId;
-            const className = (row["Class"] ? String(row["Class"]).trim() : "") || (stu ? stu.class_name : "") || defaultClass;
+            // The selected class is the import's default (as the upload page
+            // promises). A student's current class is only a fallback when no
+            // default was supplied; otherwise historical/promoted-class
+            // imports were silently written under the wrong class and were
+            // then absent from Batch Entry for the class that was selected.
+            const className = (row["Class"] ? String(row["Class"]).trim() : "") || defaultClass || (stu ? stu.class_name : "");
 
             const firstTest = numOr(row["First Test"]);
             const secondTest = numOr(row["Second Test"]);
@@ -8986,19 +8992,17 @@ app.post("/bulk-import-results", requireLogin, writeRateLimit, uploadExcel.singl
             const gradeRaw = String(row["Grade"] || "").trim();
             const grade = gradeRaw || gradeForTotal(total);
 
-            connection.query(
-                `INSERT INTO results
-                    (student_id, student_name, class_name, term, session, subject,
-                     first_test, second_test, note_score, attendance_score,
-                     ca_score, exam_score, total, grade)
-                 VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+            amsUpsertScoreResult(
                 [studentId, studentName, className, term, session, subject,
                  firstTest, secondTest, noteScore, attendanceScore,
                  caScore, examScore, total, grade],
-                (err2) => {
+                (err2, saved) => {
                     if (err2) {
                         console.log(err2);
                         results.errors.push("Row " + rowNum + ": Database error saving this row.");
+                    } else if (saved.updated) {
+                        results.updated++;
+                        results.merged += Number(saved.merged) || 0;
                     } else {
                         results.inserted++;
                     }
@@ -11636,7 +11640,13 @@ app.get("/api/scores/batch", requireLogin, (req, res) => {
         const scores = {};
         (pack.results || []).forEach((r) => {
             if (normalizeClassName(r.subject) !== wantSub) return;
-            scores[amsSidKey(r.student_id)] = {
+            const sid = amsSidKey(r.student_id);
+            const previous = scores[sid];
+            // Old imports and pre-upsert versions could leave more than one
+            // row for a student/subject. Always expose the newest row rather
+            // than whichever one MySQL happened to return last.
+            if (previous && (Number(previous.id) || 0) >= (Number(r.id) || 0)) return;
+            scores[sid] = {
                 id: r.id,
                 first_test: r.first_test,
                 second_test: r.second_test,

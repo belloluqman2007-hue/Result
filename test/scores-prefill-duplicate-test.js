@@ -25,12 +25,20 @@
           so the right rows appear again without pressing anything;
         * batch entry opens with the remembered class ALREADY filled with the
           previously entered scores, and changing a pick reloads the grid by
-          itself instead of leaving the old/empty grid on screen.
+          itself instead of leaving the old/empty grid on screen;
+        * saved/imported subjects remain selectable even if they are no longer
+          in the active-subject list.
 
    B. SERVER (the real server.js booted with a fake MySQL layer):
         * POST /save-result the first time inserts;
         * POST /save-result again for the same student/term/session/subject
           UPDATES that row (the SQL trail proves it) and merges older copies;
+        * GET /api/scores/batch reads the same row Single Student just saved,
+          choosing the newest id deterministically;
+        * bulk spreadsheet upload updates the same row, honors the selected
+          default class, and appears in batch entry;
+        * POST /api/scores/batch updates the same rows that /search-result
+          returns to Single Student;
         * GET /search-result lists one row per term/session/subject (newest);
         * the pack-112 boot step deletes only EXACT duplicate rows.
 
@@ -468,7 +476,8 @@ async function batchAutoLoadTests() {
       batchCalls.push(url.split("?")[0]);
       if (url.indexOf("/classes") === 0) return Promise.resolve(jsonResponse(200, [{ class_name: "SS 1" }]));
       if (url.indexOf("/sessions") === 0) return Promise.resolve(jsonResponse(200, [{ session: "2025/2026", is_current: 1 }]));
-      if (url.indexOf("/subjects") === 0) return Promise.resolve(jsonResponse(200, [{ subject_name: "Mathematics" }]));
+      if (url.indexOf("/subjects") === 0) return Promise.resolve(jsonResponse(200, [{ subject_name: "English" }]));
+      if (url.indexOf("/api/gradebook") === 0) return Promise.resolve(jsonResponse(200, { subjects: ["Mathematics"] }));
       if (url.indexOf("/api/scores/batch") === 0) {
         return Promise.resolve(jsonResponse(200, {
           students: [
@@ -489,6 +498,8 @@ async function batchAutoLoadTests() {
 
   ok(batchCalls.some(function (u) { return u.indexOf("/api/scores/batch") === 0; }),
     "the remembered class loads by itself on entry (no button press)", JSON.stringify(batchCalls));
+  ok(els.bbSubject.value === "Mathematics" && els.bbSubject.options.some(function (o) { return o.value === "Mathematics"; }),
+    "a previously saved/imported subject is added to the batch picker even when it is not active anymore");
   ok(/AM\/24\/001/.test(grid.innerHTML), "the class grid is on screen");
   ok(/value="8"/.test(grid.innerHTML) && /value="45"/.test(grid.innerHTML),
     "and the scores entered before are already in the boxes");
@@ -546,6 +557,16 @@ function makeStore() {
   return {
     sessions: Object.create(null),
     nextId: 500,
+    students: [
+      { student_id: "AM/24/001", full_name: "Aisha Bello", class_name: "SS 1", status: "active" },
+      { student_id: "AM/24/002", full_name: "Bilal Yusuf", class_name: "SS 1", status: "active" },
+      { student_id: "AM/24/003", full_name: "Danladi Musa", class_name: "SS 1", status: "active" },
+      /* This pupil is currently in JS 1, but the upload can explicitly target SS 1. */
+      { student_id: "AM/24/004", full_name: "Fatima Idris", class_name: "JS 1", status: "active" }
+    ],
+    subjects: [
+      { subject_name: "Mathematics", class_name: "SS 1", is_active: 1 }
+    ],
     rows: [
       /* 1 + 2 are the duplicate pair the old /save-result created (identical). */
       { id: 1, student_id: "AM/24/001", student_name: "Aisha Bello", class_name: "SS 1", term: "1st Term", session: "2025/2026", subject: "Mathematics", first_test: 8, second_test: 7, note_score: 6, attendance_score: 9, ca_score: 30, exam_score: 45, total: 75, grade: "A" },
@@ -585,6 +606,19 @@ function makeConnection(store, push) {
     if (/^DELETE FROM app_sessions/i.test(sql)) { delete store.sessions[params[0]]; return { rows: { affectedRows: 0 } }; }
     if (/^SELECT 1$/i.test(sql)) return { rows: [{ n: 1 }] };
     if (/^SELECT \* FROM users/i.test(sql)) return { rows: params[0] === USER.username ? [USER] : [] };
+
+    if (/^SELECT student_id, full_name, class_name, status FROM students/i.test(sql)) {
+      return { rows: store.students.map(function (s) { return Object.assign({}, s); }) };
+    }
+    if (/^SELECT student_id, full_name, class_name FROM students/i.test(sql)) {
+      return { rows: store.students.map(function (s) { return Object.assign({}, s); }) };
+    }
+    if (/^SELECT subject_name, class_name, is_active FROM subjects/i.test(sql)) {
+      return { rows: store.subjects.map(function (s) { return Object.assign({}, s); }) };
+    }
+    if (/^SELECT subject_name, class_name FROM subjects/i.test(sql)) {
+      return { rows: store.subjects.map(function (s) { return Object.assign({}, s); }) };
+    }
 
     /* ---- the results table: the only data this harness cares about ---- */
     if (/FROM results/i.test(sql) || /(?:INSERT INTO|UPDATE|DELETE FROM) results/i.test(sql)) {
@@ -627,6 +661,10 @@ function makeConnection(store, push) {
       }
       /* SELECT ... FROM results */
       let rows = store.rows.slice();
+      // MySQL does not promise result ordering without ORDER BY. Make the
+      // gradebook query return newest rows first, so a reader that blindly
+      // overwrites on each row would incorrectly finish on the oldest marks.
+      if (/^SELECT id, student_id, student_name, class_name, subject/i.test(sql)) rows.reverse();
       const where = sql.split(/\bWHERE\b/i)[1] || "";
       if (/student_id/i.test(where)) {
         const sid = String(params[0] || "").trim().toLowerCase();
@@ -685,6 +723,42 @@ function request(port, method, urlPath, opts) {
     req.on("error", reject);
     if (body) req.write(body);
     req.end();
+  });
+}
+
+function requestMultipart(port, urlPath, fields, filename, fileContent, opts) {
+  opts = opts || {};
+  const boundary = "----ams-test-" + Date.now() + "-" + Math.random().toString(16).slice(2);
+  let body = "";
+  Object.keys(fields || {}).forEach(function (name) {
+    body += "--" + boundary + "\r\n" +
+      'Content-Disposition: form-data; name="' + name + '"\r\n\r\n' +
+      String(fields[name]) + "\r\n";
+  });
+  body += "--" + boundary + "\r\n" +
+    'Content-Disposition: form-data; name="file"; filename="' + filename + '"\r\n' +
+    "Content-Type: text/csv\r\n\r\n" + fileContent + "\r\n" +
+    "--" + boundary + "--\r\n";
+  const buffer = Buffer.from(body, "utf8");
+  return new Promise(function (resolve, reject) {
+    const req = http.request({
+      host: "127.0.0.1", port: port, path: urlPath, method: "POST",
+      headers: Object.assign({
+        "Content-Type": "multipart/form-data; boundary=" + boundary,
+        "Content-Length": buffer.length
+      }, opts.cookie ? { Cookie: opts.cookie } : {},
+      opts.csrf ? { "x-csrf-token": opts.csrf } : {})
+    }, function (res) {
+      let data = "";
+      res.on("data", function (c) { data += c; });
+      res.on("end", function () {
+        let json = null;
+        try { json = JSON.parse(data); } catch (e) {}
+        resolve({ status: res.statusCode, headers: res.headers, body: data, json: json });
+      });
+    });
+    req.on("error", reject);
+    req.end(buffer);
   });
 }
 
@@ -763,6 +837,19 @@ async function serverTests() {
     ok(save1.json && /no duplicate|duplicate row/i.test(save1.json.message || ""),
       "the answer says no duplicate was added: \"" + (save1.json && save1.json.message) + "\"");
 
+    /* A score entered in the single-student form must be the same score the
+       class grid reads. The fake database returns result rows out of order so
+       the batch reader must choose the newest id explicitly. */
+    const singleToBatch = await request(port, "GET",
+      "/api/scores/batch?class=SS%201&term=1st%20Term&session=2025%2F2026&subject=Mathematics",
+      { cookie: cookie });
+    const singleGridScore = singleToBatch.json && singleToBatch.json.scores && singleToBatch.json.scores["am/24/001"];
+    const duplicateGridScore = singleToBatch.json && singleToBatch.json.scores && singleToBatch.json.scores["am/24/003"];
+    ok(singleToBatch.status === 200 && singleGridScore && Number(singleGridScore.first_test) === 9,
+      "a score updated in Single Student is immediately available in Batch Entry (first test: " + (singleGridScore && singleGridScore.first_test) + ")");
+    ok(duplicateGridScore && Number(duplicateGridScore.first_test) === 3,
+      "Batch Entry consistently chooses the newest saved row even when MySQL returns rows out of order (first test: " + (duplicateGridScore && duplicateGridScore.first_test) + ")");
+
     const after = trail();
     const updates = after.filter(function (l) { return /^##UPDATE## id=2 /.test(l); });
     const inserts = after.filter(function (l) { return /^##INSERT## /.test(l); });
@@ -784,21 +871,52 @@ async function serverTests() {
       "a NEW score is still inserted (updated: " + (save2.json && save2.json.updated) + ")");
     ok(save2.json && Number(save2.json.id) > 500, "and answers with the new id (" + (save2.json && save2.json.id) + ")");
 
+    /* Bulk spreadsheet uploads use the same upsert identity. A blank Class
+       column must honor the class selected on the upload form, even when a
+       pupil's current roster class has changed. */
+    const uploadCsv = [
+      "Student ID,Subject,Class,First Test,Second Test,Note,Attendance,CA,Exam,Total,Grade",
+      "AM/24/001,Mathematics,,4,5,6,7,,40,,",
+      "AM/24/004,Mathematics,,5,6,7,8,,50,,"
+    ].join("\r\n");
+    const imported = await requestMultipart(port, "/bulk-import-results", {
+      class_name: "SS 1", term: "1st Term", session: "2025/2026"
+    }, "scores.csv", uploadCsv, { cookie: cookie, csrf: csrf });
+    ok(imported.status === 200 && imported.json && imported.json.updated === 1 && imported.json.inserted === 1,
+      "spreadsheet import updates an existing Single Student score and adds a new one (" +
+      (imported.json && imported.json.updated) + " updated, " + (imported.json && imported.json.inserted) + " added)",
+      imported.body.slice(0, 200));
+
+    const importedBatch = await request(port, "GET",
+      "/api/scores/batch?class=SS%201&term=1st%20Term&session=2025%2F2026&subject=Mathematics",
+      { cookie: cookie });
+    const importedAisha = importedBatch.json && importedBatch.json.scores && importedBatch.json.scores["am/24/001"];
+    const importedFatima = importedBatch.json && importedBatch.json.scores && importedBatch.json.scores["am/24/004"];
+    ok(importedAisha && Number(importedAisha.first_test) === 4 && Number(importedAisha.id) === Number(save1.json.id),
+      "imported marks show in Batch Entry and update the same row as Single Student (first test: " + (importedAisha && importedAisha.first_test) + ")");
+    ok(importedFatima && Number(importedFatima.first_test) === 5 &&
+      (importedBatch.json.students || []).some(function (s) { return s.student_id === "AM/24/004"; }),
+      "the selected upload class is honored for a pupil whose current class differs, so their uploaded score appears in that batch");
+
     /* ---- saving a whole class also cleans the duplicates out of it ---- */
     const batch = await request(port, "POST", "/api/scores/batch", {
       cookie: cookie, csrf: csrf,
       body: {
         class_name: "SS 1", term: "1st Term", session: "2025/2026", subject: "Mathematics",
         scores: [
-          { student_id: "AM/24/001", student_name: "Aisha Bello", first_test: 9, second_test: 8, note_score: 7, attendance_score: 9, exam_score: 50 },
+          { student_id: "AM/24/001", student_name: "Aisha Bello", first_test: 1, second_test: 2, note_score: 3, attendance_score: 4, exam_score: 30 },
           { student_id: "AM/24/002", student_name: "Bilal Yusuf", first_test: 4, second_test: 4, note_score: 4, attendance_score: 4, exam_score: 20 },
-          { student_id: "AM/24/003", student_name: "Danladi Musa", first_test: 6, second_test: 6, note_score: 6, attendance_score: 6, exam_score: 40 }
+          { student_id: "AM/24/003", student_name: "Danladi Musa", first_test: 6, second_test: 6, note_score: 6, attendance_score: 6, exam_score: 40 },
+          { student_id: "AM/24/004", student_name: "Fatima Idris", first_test: 9, second_test: 8, note_score: 7, attendance_score: 6, exam_score: 55 }
         ]
       }
     });
     ok(batch.status === 200 && batch.json && batch.json.merged >= 1,
       "the batch save merges the duplicated class rows (merged: " + (batch.json && batch.json.merged) + ")",
       batch.body.slice(0, 160));
+    ok(batch.json && batch.json.updated === 4 && batch.json.inserted === 0,
+      "Batch Entry updates the same existing single/imported rows instead of making copies (" +
+      (batch.json && batch.json.updated) + " updated, " + (batch.json && batch.json.inserted) + " added)");
     ok(batch.json && /duplicate row/.test(batch.json.message || ""),
       "and says so: \"" + (batch.json && batch.json.message) + "\"");
     const trail3 = trail();
@@ -811,6 +929,16 @@ async function serverTests() {
     ok(thirdMaths.length === 1 && Number(thirdMaths[0].first_test) === 6,
       "that pupil now has ONE Mathematics row, with the marks just saved (rows: " + thirdMaths.length +
       ", first test: " + (thirdMaths[0] && thirdMaths[0].first_test) + ")");
+
+    const batchToSingle = await request(port, "GET", "/search-result/AM%2F24%2F004", { cookie: cookie });
+    const fatimaMaths = (batchToSingle.json || []).filter(function (r) { return String(r.subject) === "Mathematics"; });
+    ok(fatimaMaths.length === 1 && Number(fatimaMaths[0].first_test) === 9,
+      "scores entered in Batch Entry show in Single Student Results too (one row, first test: " +
+      (fatimaMaths[0] && fatimaMaths[0].first_test) + ")");
+    const aishaAfterBatch = await request(port, "GET", "/search-result/AM%2F24%2F001", { cookie: cookie });
+    const aishaMathsAfterBatch = (aishaAfterBatch.json || []).filter(function (r) { return String(r.subject) === "Mathematics"; });
+    ok(aishaMathsAfterBatch.length === 1 && Number(aishaMathsAfterBatch[0].first_test) === 1,
+      "the batch edit replaces the imported score on the same Single Student row (no duplicate)");
 
     /* ---- the missing-fields guard ---- */
     const bad = await request(port, "POST", "/save-result", { cookie: cookie, csrf: csrf, body: { student_id: "AM/24/001" } });
