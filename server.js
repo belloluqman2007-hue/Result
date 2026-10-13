@@ -11442,6 +11442,193 @@ app.post("/api/gradebook/cell", requireLogin, (req, res) => {
     );
 });
 
+/* ---------- Batch score entry (scores.html: many students, save once) -----
+   WHY: teachers had to pick the student + class + term + session + subject
+   for EVERY single score and save one row at a time. The new Batch tab on
+   scores.html picks class/term/session/subject ONCE, shows every student
+   in the class in one grid, and saves the whole class with ONE button.
+   Both routes are additive - nothing existing is renamed or re-shaped.
+   No writeRateLimit here on purpose: one class = one HTTP request, so a
+   40-student save can never trip the per-IP write cap. Calculations
+   (CA cap 40, Exam cap 60, grade bands) match /save-result exactly. */
+app.get("/api/scores/batch", requireLogin, (req, res) => {
+    const className = String(req.query.class || req.query.class_name || "").trim();
+    const term = String(req.query.term || "").trim();
+    const session = String(req.query.session || "").trim();
+    const subject = String(req.query.subject || "").trim();
+    if (!className || !term || !session || !subject) {
+        return res.status(400).json({ message: "Class, term, session and subject are required." });
+    }
+    amsBuildGradebook(className, term, session, (err, pack) => {
+        if (err) return res.status(500).json({ message: "Database error" });
+        const wantSub = normalizeClassName(subject);
+        const scores = {};
+        (pack.results || []).forEach((r) => {
+            if (normalizeClassName(r.subject) !== wantSub) return;
+            scores[amsSidKey(r.student_id)] = {
+                id: r.id,
+                first_test: r.first_test,
+                second_test: r.second_test,
+                note_score: r.note_score,
+                attendance_score: r.attendance_score,
+                ca_score: r.ca_score,
+                exam_score: r.exam_score,
+                total: r.total,
+                grade: r.grade
+            };
+        });
+        res.json({
+            class_name: className,
+            term: term,
+            session: session,
+            subject: subject,
+            subjects: pack.subjects || [],
+            students: (pack.students || []).map((s) => ({
+                student_id: s.student_id,
+                full_name: s.full_name,
+                class_name: s.class_name
+            })),
+            scores: scores
+        });
+    });
+});
+
+app.post("/api/scores/batch", requireLogin, (req, res) => {
+    const className = String(req.body.class_name || "").trim();
+    const term = String(req.body.term || "").trim();
+    const session = String(req.body.session || "").trim();
+    const subject = String(req.body.subject || "").trim();
+    const scores = Array.isArray(req.body.scores) ? req.body.scores : [];
+    if (!className || !term || !session || !subject) {
+        return res.status(400).json({ message: "Class, term, session and subject are required." });
+    }
+    if (!scores.length) {
+        return res.status(400).json({ message: "No scores to save." });
+    }
+    if (scores.length > 500) {
+        return res.status(400).json({ message: "Too many rows in one save (max 500)." });
+    }
+
+    const clamp = (n, max) => {
+        const v = Number(n);
+        if (!isFinite(v)) return 0;
+        return Math.max(0, Math.min(max, v));
+    };
+
+    // Normalise + compute every row first (same bands as /save-result).
+    const rows = [];
+    const errors = [];
+    scores.forEach((s, i) => {
+        const sid = String((s && s.student_id) || "").trim();
+        if (!sid) {
+            errors.push("Row " + (i + 1) + ": missing Student ID - skipped.");
+            return;
+        }
+        const first_test = clamp(s.first_test, 10);
+        const second_test = clamp(s.second_test, 10);
+        const note_score = clamp(s.note_score, 10);
+        const attendance_score = clamp(s.attendance_score, 10);
+        const exam_score = clamp(s.exam_score, 60);
+        const ca_score = Math.max(0, Math.min(40, first_test + second_test + note_score + attendance_score));
+        const total = Math.max(0, Math.min(100, ca_score + exam_score));
+        rows.push({
+            student_id: sid,
+            student_name: String((s && s.student_name) || sid).trim() || sid,
+            first_test: first_test,
+            second_test: second_test,
+            note_score: note_score,
+            attendance_score: attendance_score,
+            ca_score: ca_score,
+            exam_score: exam_score,
+            total_score: total,
+            grade: amsGradeForTotal(total)
+        });
+    });
+    if (!rows.length) {
+        return res.status(400).json({ message: "No valid score rows to save.", errors: errors });
+    }
+
+    // Tashkeel/case-safe lookup of existing rows for this term+session,
+    // so re-saving a class UPDATES instead of inserting ghost duplicates.
+    connection.query(
+        "SELECT id, student_id, subject FROM results WHERE TRIM(term) = TRIM(?) AND TRIM(session) = TRIM(?)",
+        [term, session],
+        (err, existing) => {
+            if (err) { console.log(err); return res.status(500).json({ message: "Database error" }); }
+            const wantSub = normalizeClassName(subject);
+            const byStudent = {};
+            (existing || []).forEach((r) => {
+                if (normalizeClassName(r.subject) !== wantSub) return;
+                byStudent[amsSidKey(r.student_id)] = r.id;
+            });
+
+            let inserted = 0;
+            let updated = 0;
+            let index = 0;
+
+            function next() {
+                if (index >= rows.length) {
+                    const parts = [];
+                    if (updated) parts.push(updated + " updated");
+                    if (inserted) parts.push(inserted + " added");
+                    const summary = parts.length ? parts.join(", ") : "0 saved";
+                    return res.json({
+                        message: "Saved " + summary + " for " + subject + " (" + className + ", " + term + ", " + session + ").",
+                        inserted: inserted,
+                        updated: updated,
+                        total: rows.length,
+                        errors: errors
+                    });
+                }
+                const r = rows[index++];
+                const matchId = byStudent[amsSidKey(r.student_id)];
+                if (matchId) {
+                    connection.query(
+                        `UPDATE results SET
+                            student_id = ?, student_name = ?, class_name = ?, subject = ?,
+                            first_test = ?, second_test = ?, note_score = ?, attendance_score = ?,
+                            ca_score = ?, exam_score = ?, total = ?, grade = ?
+                         WHERE id = ?`,
+                        [r.student_id, r.student_name, className, subject,
+                         r.first_test, r.second_test, r.note_score, r.attendance_score,
+                         r.ca_score, r.exam_score, r.total_score, r.grade, matchId],
+                        (uErr) => {
+                            if (uErr) {
+                                console.log(uErr);
+                                errors.push(r.student_id + ": could not update.");
+                            } else {
+                                updated++;
+                            }
+                            next();
+                        }
+                    );
+                } else {
+                    connection.query(
+                        `INSERT INTO results
+                            (student_id, student_name, class_name, term, session, subject,
+                             first_test, second_test, note_score, attendance_score,
+                             ca_score, exam_score, total, grade)
+                         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+                        [r.student_id, r.student_name, className, term, session, subject,
+                         r.first_test, r.second_test, r.note_score, r.attendance_score,
+                         r.ca_score, r.exam_score, r.total_score, r.grade],
+                        (iErr) => {
+                            if (iErr) {
+                                console.log(iErr);
+                                errors.push(r.student_id + ": could not save.");
+                            } else {
+                                inserted++;
+                            }
+                            next();
+                        }
+                    );
+                }
+            }
+            next();
+        }
+    );
+});
+
 /* ---------- Class Management ---------- */
 app.get("/api/manage-classes", requireLogin, requireAdmin, (req, res) => {
     connection.query(
