@@ -141,11 +141,35 @@
     @keyframes bb-dots{ 0%{content:"";} 25%{content:".";} 50%{content:"..";} 75%{content:"...";} }
 
     /* ============ batch: sticky save bar ============ */
+    /* FIX (pack 111 - owner: "the save is falling under the bottom nav causing
+       not to be able to save it").
+       Every staff page also carries the shared fixed quick-nav bar at the
+       bottom of the screen (css/staff-navigation.css, z-index 995, ~61px
+       tall). This save bar is fixed too, so the navigation sat ON TOP of
+       "Save All Scores" on phones/tablets and the tap never arrived. The save
+       bar is now lifted by the bar's real height - --ams-bb-nav-lift is set by
+       js/scores-batch.js, and the calc() fallback below covers the short
+       moment before that measurement exists. z-index stays under the drawer
+       (1002) but above the quick-nav (995). */
     .bb-savebar{
-      position:fixed; left:0; right:0; bottom:0; z-index:35;
+      position:fixed; left:0; right:0; z-index:1000;
+      bottom: var(--ams-bb-nav-lift, 0px);
       background:rgba(255,255,255,.97); backdrop-filter:blur(6px);
       border-top:2px solid #0F3D2E; box-shadow:0 -4px 18px rgba(0,0,0,.12);
       padding:10px 14px calc(10px + env(safe-area-inset-bottom));
+    }
+    /* Lifted off the bottom edge -> the save bar no longer sits in the phone's
+       gesture/safe area, so its own safe-area padding would only add a gap. */
+    html.ams-bb-lifted .bb-savebar{ padding-bottom:10px; }
+    /* The "Install App" bubble is bottom-right at z-index 99999 - lift it while
+       the save bar is on screen so it can't swallow taps on Save either. */
+    body.ams-bb-savebar-on #amsInstallBtn{
+      bottom: calc(var(--ams-bb-nav-lift, 0px) + var(--ams-bb-save-h, 78px) + 14px) !important;
+    }
+    /* Toasts (z-index 99999) are bottom-right as well: keep the save result
+       message above the save bar + bottom nav instead of on top of them. */
+    #ams-toast-root{
+      bottom: calc(var(--ams-bb-nav-lift, 0px) + var(--ams-bb-save-h, 0px) + 22px);
     }
     .bb-savebar-inner{ max-width:1180px; margin:0 auto; display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
     #bbSaveBtn{
@@ -163,6 +187,20 @@
     #amsSinglePanel .card-section input#loadStudentId{ flex:1 1 220px; min-width:180px; }
 
     /* ============ responsive ============ */
+    /* FIX (pack 111): on phones/tablets the page content must clear BOTH the
+       shared bottom quick-nav bar and the sticky save bar (staff-navigation.css
+       used to force padding-bottom:88px here, which only covered the nav). */
+    @media (max-width:1024px){
+      /* html/body prefix = higher specificity than staff-navigation.css, which
+         is injected into <head> after this block and also uses !important. */
+      html body.ams-staff-navigation .bb-savebar{
+        bottom: var(--ams-bb-nav-lift, calc(61px + env(safe-area-inset-bottom)));
+      }
+      html body.ams-staff-navigation .sc-wrap,
+      html body.ams-bb-savebar-on .sc-wrap{
+        padding-bottom: calc(var(--ams-bb-nav-lift, 61px) + var(--ams-bb-save-h, 0px) + 26px) !important;
+      }
+    }
     @media (max-width:900px){
       .bb-pick-grid{ grid-template-columns:repeat(2,1fr); }
     }

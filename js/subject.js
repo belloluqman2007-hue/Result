@@ -159,12 +159,35 @@ function deleteClass(id) {
 // Looks for the specific ids used across the app (studentClass, className,
 // subjectClass) so this works on add-student.html, add-subject.html, and
 // teacher-dashboard.html alike.
+// FIX (pack 111): remember what the class <select>s currently hold. This
+// function ran on every page load (and again after the quick-card refresh), and
+// rebuilding the IDENTICAL options reset every class choice and made the
+// student / subject pickers flicker ("display and disappear 3 times"). Same
+// list as last time -> leave the selects untouched.
+let amsClassesSelectSignature = null;
+
 function loadClassesIntoSelects() {
     const targetIds = ["studentClass", "className", "subjectClass"];
+
+    function fillStudentDropdown() {
+        if (typeof populateStudentDropdown === "function") {
+            const sc = document.getElementById("studentClass");
+            populateStudentDropdown(sc ? sc.value : "");
+        }
+    }
 
     fetch("/classes")
         .then(response => response.json())
         .then(classes => {
+            classes = Array.isArray(classes) ? classes : [];
+
+            const signature = classes.map(c => String(c.class_name || "")).join("|");
+            if (signature === amsClassesSelectSignature) {
+                fillStudentDropdown();
+                return;
+            }
+            amsClassesSelectSignature = signature;
+
             targetIds.forEach(id => {
                 const select = document.getElementById(id);
                 if (!select) return;
