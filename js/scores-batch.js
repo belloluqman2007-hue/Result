@@ -62,6 +62,11 @@
   }
 
   function sidKey(s) { return String(s == null ? "" : s).trim().toLowerCase(); }
+  function subjectKey(s) {
+    return String(s == null ? "" : s).trim().toLowerCase()
+      .replace(/[\u064B-\u065F\u0670\u06D6-\u06ED\u0640]/g, "")
+      .replace(/\s+/g, " ");
+  }
 
   /* ---------------- bottom navigation vs. the sticky save bar ----------------
      FIX (pack 111 - owner: "the save is falling under the bottom nav causing not
@@ -268,24 +273,57 @@
       return Promise.resolve();
     }
     sel.innerHTML = '<option value="">Loading subjects…</option>';
-    return fetch("/subjects?class=" + encodeURIComponent(className))
+
+    var term = ($("bbTerm") || {}).value || "";
+    var session = ($("bbSession") || {}).value || "";
+    var activePromise = fetch("/subjects?class=" + encodeURIComponent(className))
       .then(function (r) { return r.ok ? r.json() : []; })
-      .then(function (list) {
-        list = Array.isArray(list) ? list : [];
-        if (!list.length) {
-          sel.innerHTML = '<option value="">No subjects for this class yet</option>';
-          return;
+      .then(function (list) { return Array.isArray(list) ? list : []; })
+      .catch(function () { return []; });
+
+    /* Spreadsheet imports can contain a subject that was later disabled or
+       was never added to the active subject list. The gradebook already
+       includes saved subjects for this class/term/session; merge those into
+       the picker so an imported score can still be opened and edited in Batch
+       Entry instead of appearing to be missing. */
+    var savedPromise = (term && session)
+      ? fetch("/api/gradebook?class=" + encodeURIComponent(className) +
+          "&term=" + encodeURIComponent(term) + "&session=" + encodeURIComponent(session))
+          .then(function (r) { return r.ok ? r.json() : null; })
+          .then(function (pack) { return pack && Array.isArray(pack.subjects) ? pack.subjects : []; })
+          .catch(function () { return []; })
+      : Promise.resolve([]);
+
+    return Promise.all([activePromise, savedPromise]).then(function (lists) {
+      var names = [];
+      var seen = Object.create(null);
+      function add(name) {
+        name = String(name == null ? "" : name).trim();
+        var key = subjectKey(name);
+        if (!name || !key || seen[key]) return;
+        seen[key] = true;
+        names.push(name);
+      }
+      (lists[0] || []).forEach(function (s) { add(s && s.subject_name); });
+      (lists[1] || []).forEach(function (s) { add(typeof s === "string" ? s : s && s.subject_name); });
+      names.sort(function (a, b) { return a.localeCompare(b, undefined, { sensitivity: "base" }); });
+
+      sel.innerHTML = names.length
+        ? '<option value="">Select subject…</option>' + names.map(function (name) {
+            return '<option value="' + esc(name) + '">' + esc(name) + "</option>";
+          }).join("")
+        : '<option value="">No subjects for this class yet</option>';
+      if (selected) {
+        sel.value = selected;
+        if (sel.value !== selected) {
+          var normalized = subjectKey(selected);
+          var match = names.find(function (name) { return subjectKey(name) === normalized; });
+          sel.value = match || "";
         }
-        sel.innerHTML = '<option value="">Select subject…</option>' + list.map(function (s) {
-          return '<option value="' + esc(s.subject_name) + '">' + esc(s.subject_name) + "</option>";
-        }).join("");
-        if (selected) {
-          sel.value = selected;
-          if (sel.value !== selected) sel.value = "";
-        }
-      }).catch(function () {
-        sel.innerHTML = '<option value="">Could not load subjects</option>';
-      });
+      }
+    }).catch(function () {
+      sel.innerHTML = '<option value="">Could not load subjects</option>';
+    });
   }
 
   /* ---------------- load the class grid ---------------- */
@@ -674,12 +712,19 @@
       loadBatchSubjects(clsSel.value, "").then(function () { bbAutoLoad(250); });
       writeSaved();
     });
-    ["bbSession", "bbTerm", "bbSubject"].forEach(function (id) {
+    ["bbSession", "bbTerm"].forEach(function (id) {
       var el = $(id);
       if (el) el.addEventListener("change", function () {
         writeSaved();
-        bbAutoLoad(300);
+        var cls = ($("bbClass") || {}).value || "";
+        var subject = ($("bbSubject") || {}).value || "";
+        loadBatchSubjects(cls, subject).then(function () { bbAutoLoad(300); });
       });
+    });
+    var subjectSel = $("bbSubject");
+    if (subjectSel) subjectSel.addEventListener("change", function () {
+      writeSaved();
+      bbAutoLoad(300);
     });
     var search = $("bbSearch");
     if (search) search.addEventListener("input", applyBatchSearch);
