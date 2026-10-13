@@ -1,5 +1,35 @@
 # UI Modernization — Change Log
 
+## Pack 111 - 2026-10-13
+
+Owner: "In the batch entry. The save is falling under the bottom nav causing not to be able to save it. In the single student score if I want to select student it will display and disappear same time for 3 times before it stay likewise picking subjects also. Fix and merge now."
+
+### Root cause 1 - the batch save bar really was under the bottom navigation
+
+Every staff page loads `js/staff-navigation.js` (through `js/ui.js`), and on phones/tablets it injects the shared fixed quick-nav bar at the bottom of the screen: Home · Students · Scores · Results · Attendance · Chat · ☰ Menu. It is `position:fixed; bottom:0; z-index:995` and about **61px** tall.
+
+`scores.html` had its own fixed save bar too, at `bottom:0; z-index:35` - so the navigation sat **on top of "Save All Scores"**. The button was not just hidden, it was unreachable: every tap landed on the nav bar. The page's own bottom padding (88px, forced by `staff-navigation.css`) only protected the content, never the save bar.
+
+| File | What changed |
+|---|---|
+| `js/scores-batch.js` | Measures the real bottom navigation (height + pinned-to-bottom check, so a hidden desktop bar counts as 0) and publishes it as `--ams-bb-nav-lift` plus its own height as `--ams-bb-save-h`. Re-syncs on resize, on rotation, whenever the bar is injected/replaced (MutationObserver), when the nav resizes (ResizeObserver) and each time the save bar appears, grows a progress line or is hidden. |
+| `scores.html` | `.bb-savebar` is lifted with `bottom: var(--ams-bb-nav-lift)` and stacks at `z-index:1000` (above the nav's 995, still below the drawer's 1002). A `@media (max-width:1024px)` fallback keeps it lifted (61px + safe area) even before the measurement lands, and the page content is padded by **both** the nav and the save bar. The floating "Install App" bubble (z-index 99999, bottom-right) and the toast root are lifted out of the Save button's way as well. |
+
+### Root cause 2 - the pickers were redrawn on top of themselves
+
+The quick-pick student `<select>` was asked for its list from **four** places at once - the `onload` on `<body>`, `onDOMReady`, a 50ms timer and the `DOMContentLoaded` handler - and *every* answer replaced the `<select>` with `innerHTML`. Replacing the options resets the selection, so a student picked in between was thrown away again: the list genuinely appeared and vanished about three times before it stayed. `loadClassesIntoSelects()` rebuilt the class list (and called the student fill) on top of that, and `loadSubjects()` redrew the subject list on every class fill **and** on every quick-card refresh, appending with `innerHTML +=` - one full re-parse (and one reset) per subject.
+
+| File | What changed |
+|---|---|
+| `js/app.js` | `populateStudentDropdown()` now shares a single in-flight `/students` request, caches the list for 60s, and **skips the redraw entirely when the options are unchanged** - a selection change alone no longer triggers one. The picked student is carried across a real redraw (and kept as a visible `(selected)` row if the filter no longer contains them). A redraw is postponed while the native picker is open and flushes on blur/change. The three duplicate fills are folded into one scheduler that tolerates a `<select>` built a moment later. |
+| `js/app.js` | `loadSubjects()` draws the same list once (with a signature check), ignores an answer for a class that is no longer selected, and builds the options as **one** string instead of `innerHTML +=` per subject, so the chosen subject survives a refresh (the pack 26 restore now actually has something to restore). |
+| `js/subject.js` | `loadClassesIntoSelects()` only rebuilds the class `<select>`s when the class list really changed; an identical list leaves the picks (class, and therefore student and subject) untouched. |
+| `test/scores-page-ux-test.js`, `package.json` | New regression test: runs the real page files in a VM with a fake DOM/fetch and asserts one draw per list, the picked student/subject surviving every late fill, no redraw while a picker is open, the stale-answer guard, the measured `--ams-bb-nav-lift`/`--ams-bb-save-h`, the lifted stacking order and the CSS fallbacks. It fails 22/33 on the pre-pack code and passes 34/34 now. Added to `npm test`. |
+
+The navigation itself is untouched: it is still the same bar, in the same place, on the same pages - it just no longer sits on top of the scores screen's Save button.
+
+---
+
 ## Pack 110 - 2026-09-15
 
 Owner: "The AI in the public website needs to know all about the school at the public website. Fix and merge."

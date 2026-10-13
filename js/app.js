@@ -510,6 +510,37 @@ function calculateScore() {
 }
 
 
+/* ------------------------------------------------------------------
+   FIX (pack 111 - owner: "if I want to select student it will display
+   and disappear same time for 3 times before it stay likewise picking
+   subjects also").
+   A <select> is never rebuilt while the teacher's native picker is open:
+   on phones that closes the list under the finger and the choice looks
+   like it "disappeared". The redraw waits for blur/change (with a 2s
+   safety net) and the signature checks inside the callers mean the
+   deferred draw usually turns out to be a no-op.
+------------------------------------------------------------------ */
+function amsQueueSelectRender(el, render) {
+    if (!el || document.activeElement !== el) { render(); return; }
+    let done = false;
+    function flush() {
+        if (done) return;
+        done = true;
+        el.removeEventListener("blur", flush);
+        el.removeEventListener("change", flush);
+        render();
+    }
+    el.addEventListener("blur", flush);
+    el.addEventListener("change", flush);
+    setTimeout(flush, 2000);
+}
+
+// What the subject <select> currently shows (class + option list). Used to
+// skip redraws that would only rebuild the identical options.
+let amsSubjectDropSignature = null;
+// Guards against an older /subjects answer overwriting a newer class pick.
+let amsSubjectRequestId = 0;
+
 function loadSubjects() {
 
     const classSelect = document.getElementById("studentClass");
@@ -529,44 +560,59 @@ function loadSubjects() {
     // loadClassesIntoSelects() already used for classes.
     const previousSubject = subjectSelect.value;
 
-    if (!selectedClass) {
-        subjectSelect.innerHTML =
-            '<option value="" disabled selected>Select a class first</option>';
-        return;
+    function restoreSubject() {
+        // FIX (pack 26): restore the teacher's earlier choice if it is
+        // still in the refreshed list (no wipe on quick-card refresh).
+        if (!previousSubject) return;
+        const stillThere = Array.from(subjectSelect.options)
+            .some(o => o.value === previousSubject);
+        if (stillThere) subjectSelect.value = previousSubject;
     }
 
-    const url = `/subjects?class=${encodeURIComponent(selectedClass)}`;
-
-    fetch(url)
-        .then(response => response.json())
-        .then(subjects => {
-
-            if (subjects.length === 0) {
+    function drawSubjects(subjects) {
+        // FIX (pack 111): the same list was drawn 3+ times while the page
+        // finished loading (onload, quick-card refresh, class fill) and every
+        // redraw reset the picker. Identical class + options -> touch nothing.
+        const sig = "class:" + selectedClass + "|" + (subjects || []).map(s => s.subject_name).join("|");
+        if (sig === amsSubjectDropSignature) {
+            restoreSubject();
+            return;
+        }
+        amsQueueSelectRender(subjectSelect, function () {
+            if (sig === amsSubjectDropSignature) { restoreSubject(); return; }
+            amsSubjectDropSignature = sig;
+            if (!subjects.length) {
                 subjectSelect.innerHTML =
                     '<option value="" disabled selected>No subjects set up for this class yet</option>';
                 return;
             }
-
+            // FIX (pack 111): built as ONE string. The old
+            // `innerHTML += ...` re-parsed the whole <select> for every
+            // subject, which reset the selection to the first row each time -
+            // the "picking subjects also disappears" half of the report.
             subjectSelect.innerHTML =
-                '<option value="" disabled selected>Select Subject</option>';
+                '<option value="" disabled selected>Select Subject</option>' +
+                subjects.map(subject =>
+                    `<option value="${subject.subject_name}">${subject.subject_name}</option>`
+                ).join("");
+            restoreSubject();
+        });
+    }
 
-            subjects.forEach(subject => {
+    if (!selectedClass) {
+        drawSubjects([]);
+        return;
+    }
 
-                subjectSelect.innerHTML +=
-                    `<option value="${subject.subject_name}">
-                        ${subject.subject_name}
-                    </option>`;
+    const url = `/subjects?class=${encodeURIComponent(selectedClass)}`;
+    const requestId = ++amsSubjectRequestId;
 
-            });
-
-            // FIX (pack 26): restore the teacher's earlier choice if it is
-            // still in the refreshed list (no wipe on quick-card refresh).
-            if (previousSubject) {
-                const stillThere = Array.from(subjectSelect.options)
-                    .some(o => o.value === previousSubject);
-                if (stillThere) subjectSelect.value = previousSubject;
-            }
-
+    fetch(url)
+        .then(response => response.json())
+        .then(subjects => {
+            // A newer class pick already answered - this one is stale.
+            if (requestId !== amsSubjectRequestId) return;
+            drawSubjects(Array.isArray(subjects) ? subjects : []);
         })
         .catch(error => console.log(error));
 
@@ -574,7 +620,24 @@ function loadSubjects() {
 
 
 // NEW (Pack 56/60/80): Quick-pick student dropdown for score entry
+// FIX (pack 111 - owner: "if I want to select student it will display and
+// disappear same time for 3 times before it stay"): the list used to be asked
+// for from four places at once (body onload, onDOMReady, a 50ms timer and the
+// DOMContentLoaded handler) and _every_ answer replaced the <select> with
+// innerHTML, so a student the teacher had just picked was thrown away again -
+// it really did appear and vanish about three times before it stayed. Now the
+// request is shared, identical lists are not redrawn, the current choice is
+// always carried over and a redraw waits until the picker is closed.
 let amsCachedStudentList = null;
+let amsCachedStudentListAt = 0;   // freshness stamp for the cached list
+let amsStudentListRequest = null; // shared in-flight /students request
+let amsStudentDropSignature = null;
+
+function amsEscOption(v) {
+    return String(v == null ? "" : v)
+        .replace(/&/g, "&amp;").replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
 
 function normalizeArClass(str) {
     return String(str || "")
@@ -584,41 +647,89 @@ function normalizeArClass(str) {
         .toLowerCase();
 }
 
-function populateStudentDropdown(className) {
+function populateStudentDropdown(className, force) {
     const drop = document.getElementById("studentSelectDropdown");
     if (!drop) return;
 
+    const normTarget = normalizeArClass(className);
+
     function renderList(list) {
         const arr = Array.isArray(list) ? list : [];
-        const normTarget = normalizeArClass(className);
-        const inClass = normTarget ? arr.filter(s => normalizeArClass(s.class_name) === normTarget) : arr;
+        const inClass = normTarget ? arr.filter(s => normalizeArClass(s.class_name) === normTarget) : arr.slice();
+        inClass.sort((a, b) => String(a.full_name || "").localeCompare(String(b.full_name || "")));
         const label = normTarget
             ? ('-- Select Student in ' + (className || "").trim() + ' (' + inClass.length + ' found) --')
             : ('-- All Students (' + inClass.length + ' found) - pick class to filter --');
-        drop.innerHTML = '<option value="">' + label + '</option>';
-        inClass.sort((a, b) => String(a.full_name || "").localeCompare(String(b.full_name || "")));
-        inClass.forEach(s => {
-            const opt = document.createElement("option");
-            opt.value = s.student_id;
-            opt.textContent = (s.student_id || "") + " - " + (s.full_name || "") + (normTarget ? "" : (" (" + (s.class_name || "-") + ")"));
-            drop.appendChild(opt);
+
+        // The teacher's current pick - never lose it silently.
+        const keep = drop.value || "";
+        const keepInList = keep && inClass.some(s => String(s.student_id) === keep);
+        // The signature describes the OPTIONS only: a selection change inside
+        // an unchanged list must never trigger a redraw.
+        const sig = normTarget + "|" + label + "|" +
+            inClass.map(s => s.student_id).join(",") +
+            (keep && !keepInList ? "|extra:" + keep : "");
+
+        // FIX (pack 111): exactly the same options as last time -> leave the
+        // DOM (and the selection) alone instead of redrawing it.
+        if (sig === amsStudentDropSignature) return;
+
+        amsQueueSelectRender(drop, function () {
+            // Something newer may have been drawn while we waited for the
+            // picker to close.
+            if (sig === amsStudentDropSignature) return;
+            let html = '<option value="">' + amsEscOption(label) + '</option>';
+            inClass.forEach(s => {
+                html += '<option value="' + amsEscOption(s.student_id) + '">' +
+                    amsEscOption((s.student_id || "") + " - " + (s.full_name || "") +
+                        (normTarget ? "" : " (" + (s.class_name || "-") + ")")) +
+                    '</option>';
+            });
+            // If the picked student is not part of this filtered list, keep a
+            // row for them so the choice stays visible in the dropdown.
+            if (keep && !keepInList) {
+                html += '<option value="' + amsEscOption(keep) + '">' +
+                    amsEscOption(keep + " (selected)") + '</option>';
+            }
+            drop.innerHTML = html;
+            if (keep) drop.value = keep;
+            if (drop.value !== keep && keep) {
+                // Browser refused the value (option missing) - make sure at
+                // least the placeholder is selected, never a random student.
+                drop.value = "";
+            }
+            amsStudentDropSignature = sig;
         });
     }
 
-    if (amsCachedStudentList) {
+    if (amsCachedStudentList && !force && (Date.now() - amsCachedStudentListAt) < 60000) {
         renderList(amsCachedStudentList);
         return;
     }
 
-    fetch("/students")
-        .then(r => r.json())
-        .then(list => {
-            amsCachedStudentList = Array.isArray(list) ? list : [];
-            renderList(amsCachedStudentList);
-        })
-        .catch(() => {
-            drop.innerHTML = '<option value="">Could not load students list - check connection</option>';
-        });
+    if (!amsStudentListRequest) {
+        const pending = fetch("/students")
+            .then(r => r.ok ? r.json() : null)
+            .then(list => (Array.isArray(list) ? list : null))
+            .catch(() => null);
+        amsStudentListRequest = pending;
+        // Calls made while this request is in flight share it, then it is
+        // released so a later call can refresh (and so a failure can retry).
+        pending.then(() => { if (amsStudentListRequest === pending) amsStudentListRequest = null; });
+    }
+
+    amsStudentListRequest.then(list => {
+        if (!list) {
+            if (amsStudentDropSignature === null) {
+                amsStudentDropSignature = "error";
+                drop.innerHTML = '<option value="">Could not load students list - check connection</option>';
+            }
+            return;
+        }
+        amsCachedStudentList = list;
+        amsCachedStudentListAt = Date.now();
+        renderList(list);
+    });
 }
 
 window.pickStudentFromDropdown = function(sid) {
@@ -641,13 +752,27 @@ function onDOMReady(fn) {
     }
 }
 
-onDOMReady(function() {
-    populateStudentDropdown("");
-});
-setTimeout(function() { populateStudentDropdown(""); }, 50);
+/* FIX (pack 111): the three separate fills that used to sit here are folded
+   into one scheduler. populateStudentDropdown() now shares a single /students
+   request and skips redrawing an unchanged list, so an extra call is harmless
+   (and a page that builds the <select> a moment later is still covered). */
+function amsScheduleStudentDropdown() {
+    let tries = 0;
+    (function attempt() {
+        const drop = document.getElementById("studentSelectDropdown");
+        if (drop) {
+            const cls = document.getElementById("studentClass");
+            populateStudentDropdown(cls ? cls.value : "");
+            return;
+        }
+        if (++tries < 12) setTimeout(attempt, 150);
+    })();
+}
+
+onDOMReady(amsScheduleStudentDropdown);
 
 document.addEventListener("DOMContentLoaded", function () {
-    populateStudentDropdown("");
+    amsScheduleStudentDropdown();
 
     fetch("/dashboard-summary")
         .then(response => response.json())

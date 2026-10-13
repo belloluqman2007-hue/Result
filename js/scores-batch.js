@@ -63,6 +63,84 @@
 
   function sidKey(s) { return String(s == null ? "" : s).trim().toLowerCase(); }
 
+  /* ---------------- bottom navigation vs. the sticky save bar ----------------
+     FIX (pack 111 - owner: "the save is falling under the bottom nav causing not
+     to be able to save it").
+     Every staff page carries the shared fixed quick-nav bar at the bottom of the
+     screen (created by js/staff-navigation.js, styled in css/staff-navigation.css
+     at z-index 995, about 61px tall). The batch save bar is fixed to the bottom
+     as well, so on phones/tablets the navigation really did sit on top of
+     "Save All Scores" - the button was unreachable.
+     We now measure that bar and publish it as --ams-bb-nav-lift; scores.html
+     uses it to lift the save bar (and to pad the page) above the navigation. */
+  var bbNavWatch = { ro: null, el: null };
+  var bbSyncing = false;
+
+  function bbNavBar() {
+    return document.querySelector(".ams-shared-quicknav, .ams-quicknav");
+  }
+
+  function bbSyncBottomSpace() {
+    if (!document.documentElement || bbSyncing) return;
+    bbSyncing = true;
+    try { bbMeasureBottomSpace(); } finally { bbSyncing = false; }
+  }
+
+  function bbMeasureBottomSpace() {
+    var doc = document.documentElement;
+
+    /* 1. How tall is the bottom navigation right now? It only counts when it is
+          actually rendered and pinned to the bottom of the viewport (it is
+          display:none on desktop, and both nav implementations are fixed). */
+    var navH = 0;
+    var nav = bbNavBar();
+    if (nav && nav.getBoundingClientRect) {
+      var r = nav.getBoundingClientRect();
+      var cs = window.getComputedStyle ? window.getComputedStyle(nav) : null;
+      var off = cs && (cs.display === "none" || cs.visibility === "hidden");
+      var pinned = !cs || cs.position === "fixed";
+      if (!off && pinned && r.height > 0 && r.bottom >= (window.innerHeight || 0) - 2) {
+        navH = Math.round(r.height);
+      }
+    }
+    doc.classList.toggle("ams-bb-lifted", navH > 0);
+    doc.style.setProperty("--ams-bb-nav-lift", navH + "px");
+
+    /* 2. How tall is the save bar? (measured after step 1 so the lifted padding
+          is already applied). It only counts while it is on screen. */
+    var bar = $("bbSaveBar");
+    var barH = 0;
+    if (bar && bar.getBoundingClientRect && bar.style.display !== "none") {
+      barH = Math.round(bar.getBoundingClientRect().height);
+    }
+    doc.style.setProperty("--ams-bb-save-h", barH + "px");
+    if (document.body) document.body.classList.toggle("ams-bb-savebar-on", barH > 0);
+
+    /* 3. Follow the navigation even when it is swapped in later (a fresh bar is
+          created after the /me answer) or resized (rotation, zoom, labels). */
+    if (window.ResizeObserver) {
+      if (bbNavWatch.el !== nav) {
+        if (bbNavWatch.ro) bbNavWatch.ro.disconnect();
+        bbNavWatch.ro = new ResizeObserver(function () { bbSyncBottomSpace(); });
+        if (nav) bbNavWatch.ro.observe(nav);
+        bbNavWatch.el = nav;
+      }
+    }
+  }
+
+  function bbWatchBottomNav() {
+    bbSyncBottomSpace();
+    if (window.MutationObserver && document.body) {
+      new MutationObserver(function () { bbSyncBottomSpace(); })
+        .observe(document.body, { childList: true });
+    }
+    window.addEventListener("resize", bbSyncBottomSpace);
+    window.addEventListener("orientationchange", function () { setTimeout(bbSyncBottomSpace, 250); });
+    /* The bar is injected after a /me round-trip; a couple of late syncs make
+       sure the lift is right even if no observer fires. */
+    [250, 800, 1800].forEach(function (ms) { setTimeout(bbSyncBottomSpace, ms); });
+  }
+
   /* ---------------- tab switching ---------------- */
   window.amsScoresTab = function (which) {
     var batchPanel = $("amsBatchPanel");
@@ -75,6 +153,7 @@
     if (batchBtn) batchBtn.classList.toggle("active", showBatch);
     if (singleBtn) singleBtn.classList.toggle("active", !showBatch);
     try { localStorage.setItem(LS_KEY + "-tab", showBatch ? "batch" : "single"); } catch (e) {}
+    bbSyncBottomSpace(); /* the tab decides whether the save bar is on screen */
     if (!showBatch) {
       var anchor = $("score-entry");
       if (anchor && anchor.scrollIntoView) anchor.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -194,6 +273,7 @@
     if (grid) grid.innerHTML = '<div class="bb-loading">Loading students…</div>';
     var bar = $("bbSaveBar");
     if (bar) bar.style.display = "none";
+    bbSyncBottomSpace(); /* save bar hidden again - free the space it took */
 
     fetch("/api/scores/batch?class=" + encodeURIComponent(cls) +
       "&term=" + encodeURIComponent(term) +
@@ -219,6 +299,7 @@
             : "No students found in " + cls + ". Check Students / Class Management for the exact class name.";
         }
         if (bar) bar.style.display = n ? "" : "none";
+        bbSyncBottomSpace(); /* keep Save All Scores above the bottom nav */
         updateBatchCount();
       })
       .catch(function (err) {
@@ -239,6 +320,7 @@
     if (grid) grid.innerHTML = '<div class="bb-empty">Pick the class details above and press <b>Load Students</b> — the whole class appears here.</div>';
     var bar = $("bbSaveBar");
     if (bar) bar.style.display = "none";
+    bbSyncBottomSpace();
     var status = $("bbStatus");
     if (status) status.textContent = "Pick a class, session, term and subject — just once.";
     batchStudents = [];
@@ -458,6 +540,7 @@
     var prog = $("bbProgress");
     if (btn) { btn.disabled = true; btn.innerHTML = "⏳ Saving " + payload.length + " scores…"; }
     if (prog) { prog.style.display = "block"; prog.textContent = "Saving " + payload.length + " scores in one go…"; }
+    bbSyncBottomSpace(); /* the bar grew a progress line - re-measure it */
     writeSaved();
 
     fetch("/api/scores/batch", {
@@ -506,6 +589,7 @@
         batchSaving = false;
         if (btn) btn.disabled = false;
         if (prog) prog.style.display = "none";
+        bbSyncBottomSpace();
         updateBatchCount();
         notify((err && err.message) || "Could not save scores.", "error");
       });
@@ -514,6 +598,7 @@
   /* ---------------- init ---------------- */
   function initBatchTab() {
     if (!$("bbClass")) return;
+    bbWatchBottomNav();
     var saved = readSaved();
     var termSel = $("bbTerm");
     if (termSel && saved.term) termSel.value = saved.term;
