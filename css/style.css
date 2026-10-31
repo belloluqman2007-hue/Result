@@ -1032,8 +1032,19 @@ nav a{
        CHANGED (one-page fix): 276mm instead of exactly 277mm - a box that
        is EXACTLY the printable height can be rounded up by the browser's
        pagination engine onto a phantom blank second sheet. 1mm of headroom
-       is invisible but kills the "prints on two pages" bug. */
+       is invisible but kills the "prints on two pages" bug.
+       CHANGED (strictly one page - owner, with the new attendance row):
+       max-height + overflow:hidden make one page a hard guarantee, not
+       just the measured expectation. The fit-zoom (beforeprint +
+       Print button, js/report-card.js) already scales long sheets to
+       fit with headroom to spare, so in practice nothing is ever
+       clipped - this cap only exists so that even a pathological sheet
+       (zoom unavailable, huge subject list) physically CANNOT produce
+       a second printed page. Screen and PDF-capture (.rcpzip) layouts
+       are untouched by this print-only cap. */
     min-height:276mm;
+    max-height:276mm;
+    overflow:hidden;
     margin:0;
     padding:0;
     border:2px solid var(--emerald);
@@ -1200,7 +1211,10 @@ nav a{
     line-height:1.2;
   }
   .report-header{
-    padding:14px 22px !important;
+    /* CHANGED (attendance row): 2px less header padding - part of the
+       ~33px the print skin reclaims so the new Student Information row
+       does not push the sheet past one page. */
+    padding:12px 22px !important;
     gap:12px;
   }
   .school-details h1{
@@ -1238,9 +1252,14 @@ nav a{
   }
   /* CHANGED (one-page fix): see the note on #resultTable above - the
      bilingual labels added height, so cells lose half a pixel of
-     padding to keep long sheets on ONE A4 page. */
+     padding to keep long sheets on ONE A4 page.
+     CHANGED (attendance row): another half pixel (4.5px -> 4px) - the
+     table now has a 4th row, and this returns ~4px of its height.
+     The .rcpzip measurement skin stays at 4.5px, i.e. the measured
+     sheet is always a shade TALLER than the printed one, so the
+     fit-zoom can only ever err on the safe (smaller) side. */
   .student-info-table td{
-    padding:4.5px 9px;
+    padding:4px 9px;
     font-size:11.5px;
     line-height:1.25;
   }
@@ -1256,8 +1275,16 @@ nav a{
     line-height:1.25;
   }
   .signature-section{
-    margin-top:10px !important;
-    padding-top:7px;
+    /* CHANGED (strictly one page): the screen rule leaves a 30px
+       margin-bottom here and print never overrode it, so the PRINTED
+       sheet was ~22px taller than the .rcpzip copy the fit-zoom
+       measures - exactly the kind of gap that pushes a long sheet
+       onto page 2. Print now ends 8px below the signatures (the
+       measurement skin keeps 10px, staying safely taller), and the
+       reclaimed ~22px on its own pays for the new attendance row. */
+    margin-top:8px !important;
+    margin-bottom:8px !important;
+    padding-top:6px;
     gap:14px !important;
   }
   .signature-img{
@@ -1308,7 +1335,10 @@ nav a{
   flex-wrap:nowrap;
   align-items:center;
   text-align:left;
-  padding:14px 22px;
+  /* CHANGED (attendance row): 14px -> 13px, mirroring the print trim
+     while staying 1px above print (12px) so the measured/captured
+     sheet never under-reads the printed one. */
+  padding:13px 22px;
   gap:12px;
 }
 .rcpzip .school-details{ text-align:center; }
@@ -1331,7 +1361,9 @@ nav a{
 .rcpzip .student-info-table,
 .rcpzip #resultTable{ width:calc(100% - 40px); }
 .rcpzip .student-info-table{ margin-top:8px; margin-bottom:6px; }
-.rcpzip .student-info-table td{ padding:5px 9px; font-size:11.5px; line-height:1.25; }
+/* CHANGED (attendance row): 5px -> 4.5px for the new 4-row table -
+   still 0.5px above the print skin (4px), keeping measurements safe. */
+.rcpzip .student-info-table td{ padding:4.5px 9px; font-size:11.5px; line-height:1.25; }
 
 .rcpzip #resultTable{
   flex:1 1 auto;
@@ -1348,7 +1380,9 @@ nav a{
 .rcpzip .summary-table td{ padding:5px 8px; font-size:11.5px; line-height:1.25; }
 .rcpzip .signature-section{
   flex-direction:row;
-  margin:10px 20px 12px;
+  /* CHANGED (attendance row): 10px/12px -> 9px/10px, mirroring the
+     print trims (8px/8px) from safely above. */
+  margin:9px 20px 10px;
   padding-top:7px;
   gap:14px;
 }

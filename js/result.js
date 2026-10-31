@@ -26,6 +26,18 @@ function amsTermAr(term) {
     return "";
 }
 
+/* NEW (owner request): one-line attendance for the Student Information
+   block - identical wording to the shared report builder
+   (js/report-card.js), so the staff sheet, the portal sheet and the
+   class ZIP all print the same figures. */
+function amsAttendanceText(att) {
+    if (!att || !att.available) return { main: "-", absentLate: "-" };
+    return {
+        main: att.percentage + "% (" + att.attended + " of " + att.school_days + " days)",
+        absentLate: att.absent + " / " + att.late
+    };
+}
+
 /* The 3rd-term report shows a Total alongside the three /100 term
    scores. Prefer the API's explicit cumulative_total and keep a safe
    client-side fallback for reports returned by an older server. */
@@ -106,6 +118,8 @@ function searchResult() {
                 document.getElementById("studentTerm").textContent = "-";
                 document.getElementById("studentSession").textContent = "-";
                 document.getElementById("studentPosition").textContent = "-";
+                document.getElementById("studentAttendance").textContent = "-";
+                document.getElementById("studentAbsentLate").textContent = "-";
                 document.getElementById("totalSubjects").textContent = "0";
                 document.getElementById("grandTotal").textContent = "0";
                 document.getElementById("teacherRemark").textContent = "-";
@@ -146,6 +160,23 @@ function searchResult() {
                     else if (position == 3) suffix = "rd";
 
                     document.getElementById("studentPosition").textContent = position + suffix;
+                });
+
+            /* NEW (owner request): this term's attendance on the report
+               sheet. Read-only summary behind the same publish gate as
+               the scores; the result row's own student_id/class spelling
+               is used so the register match is exact. Any failure shows
+               "-" - attendance can never break the report. The row is
+               always in the sheet (fixed height), so the one-page print
+               fit measurement is identical whether or not this has
+               answered yet. */
+            fetch(`/report-attendance/${encodeURIComponent(data[0].student_id)}?term=${encodeURIComponent(data[0].term)}&session=${encodeURIComponent(data[0].session)}&className=${encodeURIComponent(data[0].class_name)}`)
+                .then(response => response.ok ? response.json() : null)
+                .catch(() => null)
+                .then(att => {
+                    const t = amsAttendanceText(att);
+                    document.getElementById("studentAttendance").textContent = t.main;
+                    document.getElementById("studentAbsentLate").textContent = t.absentLate;
                 });
 
             fetch(`/student/${studentId}`)
