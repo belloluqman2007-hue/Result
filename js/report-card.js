@@ -85,17 +85,33 @@
             return fetch(posUrl)
                 .then(r => r.ok ? r.json() : {})
                 .catch(() => ({}))
-                .then(positionData => ({
-                    rows: Array.isArray(rows) ? rows : [],
-                    student: st,
-                    position: positionData && positionData.position ? positionData.position : null,
-                    signatures: Array.isArray(sigPack)
-                        ? sigPack
-                        : (sigPack.signatures || []),
-                    classSignatures: Array.isArray(sigPack)
-                        ? []
-                        : (sigPack.classSignatures || [])
-                }));
+                .then(positionData => {
+                    const pack = {
+                        rows: Array.isArray(rows) ? rows : [],
+                        student: st,
+                        position: positionData && positionData.position ? positionData.position : null,
+                        signatures: Array.isArray(sigPack)
+                            ? sigPack
+                            : (sigPack.signatures || []),
+                        classSignatures: Array.isArray(sigPack)
+                            ? []
+                            : (sigPack.classSignatures || []),
+                        attendance: null
+                    };
+                    /* NEW (owner request): the report sheet carries this
+                       term's attendance. Read-only summary from
+                       /report-attendance (same publish gate as the scores
+                       themselves); the result row's own student_id/class
+                       spelling is used so the register match is exact.
+                       ANY failure leaves attendance null and the sheet
+                       prints "-" - attendance can never break a report. */
+                    const attId = (pack.rows[0] && pack.rows[0].student_id) || studentId;
+                    const attCls = (pack.rows[0] && pack.rows[0].class_name) || cls || "";
+                    return fetch(`/report-attendance/${enc(attId)}?term=${enc(term)}&session=${enc(session)}&className=${enc(attCls)}`)
+                        .then(r => r.ok ? r.json() : null)
+                        .catch(() => null)
+                        .then(att => { pack.attendance = att; return pack; });
+                });
         });
     };
 
@@ -105,6 +121,20 @@
         else if (position == 2) suffix = "nd";
         else if (position == 3) suffix = "rd";
         return position + suffix;
+    }
+
+    /* NEW (owner request): one-line attendance for the Student
+       Information block - identical wording to the live Check Result
+       page (js/result.js -> amsAttendanceText). Kept to a single short
+       line per cell so the extra row is the ONLY height the feature
+       adds, and the print skin reclaims more than that elsewhere
+       (css/style.css) so the sheet stays strictly ONE A4 page. */
+    function amsAttendanceText(att) {
+        if (!att || !att.available) return { main: "-", absentLate: "-" };
+        return {
+            main: att.percentage + "% (" + att.attended + " of " + att.school_days + " days)",
+            absentLate: att.absent + " / " + att.late
+        };
     }
 
     /* Build the report sheet DOM node (same markup/classes as the live
@@ -199,6 +229,9 @@
 
         const positionText = pack.position ? positionSuffix(pack.position) : "-";
 
+        // NEW (owner request): this term's attendance, one compact row.
+        const attText = amsAttendanceText(pack.attendance);
+
         root.innerHTML = `
     <div class="report-header">
       <img src="images/LOGO.JPG" class="school-logo">
@@ -229,6 +262,10 @@
       <tr>
         <td><strong>Position:</strong> <span class="ar-lbl" lang="ar">الدرجة</span></td><td>${positionText}</td>
         <td><strong>Session:</strong> <span class="ar-lbl" lang="ar">العام الدراسي</span></td><td>${esc(session)}</td>
+      </tr>
+      <tr>
+        <td><strong>Attendance:</strong> <span class="ar-lbl" lang="ar">الحضور</span></td><td>${esc(attText.main)}</td>
+        <td><strong>Absent / Late:</strong> <span class="ar-lbl" lang="ar">الغياب / التأخير</span></td><td>${esc(attText.absentLate)}</td>
       </tr>
     </table>
 
@@ -455,9 +492,15 @@
                 stage.remove();
                 if (!h) return 1;
                 // A4 printable height (297mm - 2x10mm margins) ≈ 277mm ≈ 1046px.
-                // Leave a tiny safety margin so rounding never pushes a line
-                // onto a second sheet.
-                const target = 1030;
+                // CHANGED (strictly one page): the safety margin grows from
+                // ~16px to ~41px (≈11mm). The measured skin (.rcpzip) and
+                // the real print skin can differ by font rounding or a
+                // late-loading signature image; the bigger headroom absorbs
+                // that, so a long sheet (e.g. now carrying the attendance
+                // row) is scaled onto page 1 with room to spare and can
+                // never spill a line onto a second sheet. Sheets that
+                // already fit are untouched (zoom stays 1).
+                const target = 1005;
                 if (h <= target) return 1;
                 return Math.max(0.35, target / h);
             })
@@ -486,7 +529,8 @@
             const h = clone.getBoundingClientRect().height;
             stage.remove();
             if (!h) return 1;
-            const target = 1030; // A4 printable height, small safety margin
+            // Same >=41px safety margin as amsFitPrintZoom (strictly one page).
+            const target = 1005; // A4 printable height minus safety headroom
             if (h <= target) return 1;
             return Math.max(0.35, target / h);
         } catch (e) {

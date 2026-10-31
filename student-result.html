@@ -126,6 +126,17 @@ alt="Student Photo">
     <td id="studentSession"></td>
 </tr>
 
+<!-- NEW (owner request): this term's attendance on the report sheet.
+     One compact row inside the existing Student Information table, so the
+     sheet's one-page print fit is unchanged (the print skin in
+     css/style.css reclaims more height than this row adds). -->
+<tr>
+    <td><strong>Attendance:</strong> <span class="ar-lbl" lang="ar">الحضور</span></td>
+    <td id="studentAttendance"></td>
+
+    <td><strong>Absent / Late:</strong> <span class="ar-lbl" lang="ar">الغياب / التأخير</span></td>
+    <td id="studentAbsentLate"></td>
+</tr>
 
 </table>
   <!-- The first/second-term placeholder matches the live report table.

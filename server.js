@@ -7974,6 +7974,146 @@ app.get("/attendance/student", requireLogin, (req, res) => {
     });
 });
 
+/* ---------- report-sheet attendance (owner request) ---------------------
+   The report sheet now carries an Attendance row (times present out of
+   the days school opened, plus absent/late) for the SAME term + session
+   as the scores printed above it.
+
+   `attendance` rows carry only a DATE - no term/session columns - and
+   nothing else in the system stores per-term date ranges, so the term
+   window is derived from the session's two years using the standard
+   Nigerian academic calendar this school follows (its own published
+   calendar resumes 3rd Term on 02/05, i.e. the May boundary below):
+       1st Term:  1 Sep (year 1)  - 31 Dec (year 1)
+       2nd Term:  1 Jan (year 2)  - 30 Apr (year 2)
+       3rd Term:  1 May (year 2)  - 31 Aug (year 2)
+   The three windows are contiguous (Sep-Aug), so every marked day lands
+   in exactly one term. If the school's terms ever move off these months,
+   this one helper is the only place to adjust.
+
+   The route sits behind publishResultGate - the very gate /search-result
+   uses - so staff pass freely and a portal parent can only ever read
+   their own child's attendance for a published term, exactly like the
+   scores themselves. Every failure mode answers HTTP 200 with
+   { available:false } (the sheet then shows "-"): a missing/legacy
+   attendance table must NEVER break a report. All reads stay on the
+   `attendance` table alone (pack 109 collation doctrine). */
+function amsReportTermWindow(term, session) {
+    const m = /^(\d{4})\s*\/\s*(\d{4})/.exec(String(session || "").trim());
+    if (!m) return null;
+    const y1 = m[1];
+    const y2 = m[2];
+    const t = String(term || "").trim();
+    if (t === "1st Term") return { from: y1 + "-09-01", to: y1 + "-12-31" };
+    if (t === "2nd Term") return { from: y2 + "-01-01", to: y2 + "-04-30" };
+    if (t === "3rd Term") return { from: y2 + "-05-01", to: y2 + "-08-31" };
+    return null;
+}
+
+app.get("/report-attendance/:studentId", publishResultGate, (req, res) => {
+    const sid = String(req.params.studentId || "").trim();
+    const win = amsReportTermWindow(req.query.term, req.query.session);
+    const className = String(req.query.className || "").trim();
+    const empty = {
+        available: false, present: 0, absent: 0, late: 0, marked: 0,
+        attended: 0, school_days: 0, percentage: null,
+        from: win ? win.from : null, to: win ? win.to : null
+    };
+    if (!sid || !win) return res.json(empty);
+
+    attSchema(function (schema) {
+        if (!attTable(schema, "attendance") || !attHas(schema, "attendance", "att_date") || !attHas(schema, "attendance", "status")) {
+            return res.json(empty);
+        }
+        /* The pupil's own marks inside the term window. The id is matched
+           the tolerant way /search-result matches it (trim + case), so a
+           hand-typed "am101" still finds the register's "AM101" rows. */
+        connection.query(
+            "SELECT status FROM attendance " +
+            "WHERE (TRIM(student_id) = TRIM(?) OR LOWER(TRIM(student_id)) = LOWER(TRIM(?))) " +
+            "AND att_date BETWEEN ? AND ?",
+            [sid, sid, win.from, win.to],
+            (err, rows) => {
+                if (err) {
+                    console.log("[attendance] report summary failed:", err.code || err.sqlMessage || err.message);
+                    return res.json(empty);
+                }
+                let present = 0, absent = 0, late = 0;
+                (rows || []).forEach(function (r) {
+                    if (r.status === "present") present++;
+                    else if (r.status === "absent") absent++;
+                    else if (r.status === "late") late++;
+                });
+                const marked = present + absent + late;
+                /* No register marks for this pupil in the term (joined
+                   late, register not yet kept that term...): say "no
+                   record" rather than printing a misleading 0%. */
+                if (!marked) return res.json(empty);
+
+                const finish = function (schoolDays) {
+                    const attended = present + late; // a late pupil DID attend that day
+                    /* "Times school opened" can never read lower than the
+                       days this pupil was actually marked (class transfer
+                       mid-term, a register day saved under another class
+                       spelling) - otherwise Present could exceed Opened. */
+                    const opened = Math.max(Number(schoolDays) || 0, marked);
+                    res.json({
+                        available: true,
+                        present: present, absent: absent, late: late, marked: marked,
+                        attended: attended, school_days: opened,
+                        percentage: opened ? Math.round((attended / opened) * 100) : null,
+                        from: win.from, to: win.to
+                    });
+                };
+
+                /* Days school opened = days the register was taken for
+                   this pupil's class in the window. */
+                if (className && attHas(schema, "attendance", "class_name")) {
+                    connection.query(
+                        "SELECT COUNT(DISTINCT att_date) AS days FROM attendance " +
+                        "WHERE att_date BETWEEN ? AND ? AND TRIM(class_name) = TRIM(?)",
+                        [win.from, win.to, className],
+                        (e2, r2) => {
+                            const days = (!e2 && r2 && r2[0]) ? Number(r2[0].days) || 0 : 0;
+                            if (days) return finish(days);
+                            /* Stored under a sloppier spelling of the same
+                               class (double space / NBSP / case): fold the
+                               distinct (date, class) pairs in JS instead. */
+                            connection.query(
+                                "SELECT DISTINCT att_date, class_name FROM attendance WHERE att_date BETWEEN ? AND ?",
+                                [win.from, win.to],
+                                (e3, r3) => {
+                                    if (e3 || !r3) return finish(0);
+                                    const want = attFoldClass(className);
+                                    const set = new Set();
+                                    r3.forEach(function (r) {
+                                        if (attFoldClass(r.class_name) !== want) return;
+                                        const d = r.att_date;
+                                        set.add(d instanceof Date
+                                            ? d.getFullYear() + "-" + d.getMonth() + "-" + d.getDate()
+                                            : String(d).slice(0, 10));
+                                    });
+                                    finish(set.size);
+                                }
+                            );
+                        }
+                    );
+                } else if (!attHas(schema, "attendance", "class_name")) {
+                    /* Pre-pack-13 table without class_name: the only honest
+                       "school opened" left is school-wide register days. */
+                    connection.query(
+                        "SELECT COUNT(DISTINCT att_date) AS days FROM attendance WHERE att_date BETWEEN ? AND ?",
+                        [win.from, win.to],
+                        (e2, r2) => finish((!e2 && r2 && r2[0]) ? Number(r2[0].days) || 0 : 0)
+                    );
+                } else {
+                    finish(0); // no class supplied: opened falls back to marked days
+                }
+            }
+        );
+    });
+});
+
 /* NEW (pack 108): BOOT REPAIR for the attendance table. Purely additive and
    guarded the same way as the other pack migrations (its own short-lived
    connection, information_schema consulted first, retried a few times while
