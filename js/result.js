@@ -38,6 +38,19 @@ function amsAttendanceText(att) {
     };
 }
 
+/* FIX ("Error fetching result" while the old sheet stays up): write a
+   report cell only when this copy of the page actually has it. The
+   attendance cells are the newest on the sheet, and a phone can hold a
+   cached pre-attendance student-result.html while this script arrives
+   fresh (code is network-first, pages are not version-pinned). A bare
+   getElementById(...).textContent on the missing cell threw inside
+   searchResult()'s handler, which the .catch turned into the generic
+   "Error fetching result." alert - results had fetched perfectly. */
+function amsSetCellText(id, txt) {
+    var el = document.getElementById(id);
+    if (el) el.textContent = txt;
+}
+
 /* The 3rd-term report shows a Total alongside the three /100 term
    scores. Prefer the API's explicit cumulative_total and keep a safe
    client-side fallback for reports returned by an older server. */
@@ -118,8 +131,8 @@ function searchResult() {
                 document.getElementById("studentTerm").textContent = "-";
                 document.getElementById("studentSession").textContent = "-";
                 document.getElementById("studentPosition").textContent = "-";
-                document.getElementById("studentAttendance").textContent = "-";
-                document.getElementById("studentAbsentLate").textContent = "-";
+                amsSetCellText("studentAttendance", "-");
+                amsSetCellText("studentAbsentLate", "-");
                 document.getElementById("totalSubjects").textContent = "0";
                 document.getElementById("grandTotal").textContent = "0";
                 document.getElementById("teacherRemark").textContent = "-";
@@ -139,7 +152,15 @@ function searchResult() {
             document.getElementById("studentTerm").textContent = termAr ? data[0].term + " (" + termAr + ")" : data[0].term;
             document.getElementById("studentSession").textContent = data[0].session;
 
-            const className = data[0].class_name;
+            /* FIX ("Error fetching result" on newer results, old ones
+               fine): rows saved by paths that did not know the class
+               (e.g. a spreadsheet import for a pupil whose students
+               record has no class) hold class_name = NULL, and
+               null.includes() threw right here - before a single score
+               row was drawn, so the previous sheet stayed on screen
+               behind the alert. Coerce once; "" falls through to the
+               primary label exactly like any non-Arabic class name. */
+            const className = String(data[0].class_name || "");
             if (className.includes("الثّانويّ")) {
                 document.getElementById("reportLevel").textContent = "STUDENT REPORT SHEET كشف درجات الطّالب (الثّانويّة)";
             } else if (className.includes("الإعداديّ")) {
@@ -175,8 +196,8 @@ function searchResult() {
                 .catch(() => null)
                 .then(att => {
                     const t = amsAttendanceText(att);
-                    document.getElementById("studentAttendance").textContent = t.main;
-                    document.getElementById("studentAbsentLate").textContent = t.absentLate;
+                    amsSetCellText("studentAttendance", t.main);
+                    amsSetCellText("studentAbsentLate", t.absentLate);
                 });
 
             fetch(`/student/${studentId}`)

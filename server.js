@@ -3095,6 +3095,13 @@ console.log("THIS IS MY SERVER.JS")
    In particular, spreadsheet imports must not create rows that single and
    batch entry then treat as separate scores. */
 function amsUpsertScoreResult(values, cb) {
+    /* FIX: a null class_name (spreadsheet import for a pupil whose
+       students record has none) must never be STORED - the report
+       pages call .includes() on it and the pupil's result then
+       "errors" after fetching perfectly. "" is the results table's
+       own default; every writer funnels through here except batch /
+       gradebook, which already require a non-empty class. */
+    if (values[2] == null) values[2] = "";
     const studentId = String(values[0] || "").trim();
     const term = String(values[3] || "").trim();
     const session = String(values[4] || "").trim();
@@ -3337,6 +3344,18 @@ app.get("/search-result/:studentId", publishResultGate, (req, res) => { // CHANG
         // CHANGED (pack 112): one row per term+session+subject (newest wins),
         // so a score the old /save-result duplicated is only listed once.
         currentTermResults = amsDedupeResultRows(currentTermResults);
+
+        /* FIX ("Error fetching result" on newer results, old ones fine):
+           rows written by paths that did not know the class (spreadsheet
+           import for a pupil whose students record has class_name NULL)
+           carry class_name = NULL. The Check Result page and the report
+           builder both call .includes() on it to pick the report-level
+           label, so those pupils' results THREW after fetching perfectly
+           and the page showed its generic fetch-error alert over the
+           previous sheet. Heal at read (display only - the stored row
+           is untouched) so every client, cached script or not, reads a
+           string. amsUpsertScoreResult now also refuses to WRITE null. */
+        currentTermResults.forEach((r) => { if (r && r.class_name == null) r.class_name = ""; });
 
         // For 3rd Term, also pull 1st and 2nd Term results for the same
         // student and session so we can show a cumulative subject average.
