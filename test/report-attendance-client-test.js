@@ -128,6 +128,18 @@ async function main() {
   ok(noAtt.innerHTML.indexOf("Attendance:") !== -1 && noAtt.innerHTML.indexOf("of 62 days") === -1,
     "no attendance record -> row still present, figures shown as '-'");
 
+  /* FIX (report-search repair): rows stored with class_name NULL made
+     first.class_name.includes() throw, so the portal said "Network
+     error" and the ZIP skipped the pupil. The builder must now shrug
+     and fall back to the primary report-level label. */
+  const nullClassRows = ROWS.map(function (r) { return Object.assign({}, r, { class_name: null }); });
+  let nullThrew = false, nullCard = null;
+  try {
+    nullCard = rc.amsBuildReportCard({ rows: nullClassRows, student: null, position: 2, signatures: [], classSignatures: [], attendance: ATT }, "1st Term", "2025/2026");
+  } catch (e) { nullThrew = true; }
+  ok(!nullThrew && nullCard && nullCard.innerHTML.indexOf("Mathematics") !== -1,
+    "rows with NULL class_name still build a full report sheet");
+
   /* ---- js/report-card.js: pack fetch ---- */
   fetchedUrls.length = 0;
   const fetched = await rc.amsFetchReportPack("am101", "1st Term", "2025/2026"); // hand-typed lower-case id

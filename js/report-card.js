@@ -151,11 +151,19 @@
 
         const first = data[0];
 
+        /* FIX ("Error fetching result" on newer results): same
+           NULL-class_name coercion as js/result.js - rows written
+           without a class (spreadsheet import for a pupil whose
+           students record has none) made first.class_name.includes()
+           throw, so the portal said "Network error" and the class ZIP
+           skipped the pupil entirely. */
+        const firstClass = String(first.class_name || "");
+
         // Report level label - identical rules to js/result.js
         let reportLevel;
-        if (first.class_name.includes("الثّانويّ")) {
+        if (firstClass.includes("الثّانويّ")) {
             reportLevel = "STUDENT REPORT SHEET كشف درجات الطّالب (الثّانويّة)";
-        } else if (first.class_name.includes("الإعداديّ")) {
+        } else if (firstClass.includes("الإعداديّ")) {
             reportLevel = "STUDENT REPORT SHEET كشف درجات الطّالب (الإعداديّة)";
         } else {
             reportLevel = "STUDENT REPORT SHEET كشف درجات الطّالب (الابتدائيّة)";
@@ -164,7 +172,7 @@
         const photoSrc = (pack.student && pack.student.photo_path) ? pack.student.photo_path : "images/default.png";
         // CHANGED (per-class signature): the signature assigned to THIS
         // report's class wins; shared Class Teacher signature = fallback.
-        const perClassSig = (pack.classSignatures || []).find(c => c.class_name === first.class_name);
+        const perClassSig = (pack.classSignatures || []).find(c => c.class_name === firstClass);
         const classTeacherSig = perClassSig || pack.signatures.find(s => s.role === "class_teacher");
         const principalSig = pack.signatures.find(s => s.role === "principal");
 
