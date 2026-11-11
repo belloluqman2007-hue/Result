@@ -105,11 +105,264 @@ function initExam() {
     }
     function scheduleTypingPaginate(delay) {
         clearTimeout(paginateTimer);
-        paginateTimer = setTimeout(function () { keepExamCaret(paginateExam); }, delay);
+        paginateTimer = setTimeout(function () {
+            /* FIX (unanswered Enter): a paragraph break creates an EMPTY
+               block. Re-laying the pages out while that block is still
+               empty lets the structure repair throw the block (and the
+               caret) away, so the next keystroke vanishes. A break alone
+               never changes the layout - skip that refresh and keep the
+               teacher typing on the new line. */
+            if (caretIsOnEmptyLine()) { rescueCaretBlock(); return; }
+            keepExamCaret(paginateExam);
+        }, delay);
     }
+
+    /* ----------------------------------------------------------------
+       FIX (unanswered Enter / "second line does not respond"):
+       ----------------------------------------------------------------
+       The browser implements a paragraph break in a contenteditable by
+       putting the caret in a block that is still EMPTY, e.g.
+
+           <div class="page-content">line 1<div><br></div></div>
+
+       ...and on some engines (Chrome/Android in particular) it puts that
+       empty block next to - or even INSIDE - the page structure instead
+       of inside the paragraph. Two things then went wrong:
+
+         1. ensureExamStructure() treats any second .page-content on a
+            page as a broken legacy save and MERGES it into the first
+            zone (and deletes the empty one). The block the caret was
+            sitting in was destroyed, so the caret was dropped and the
+            next keystroke went nowhere - exactly "I wrote the first line
+            and it will not go to the second line".
+
+         2. An empty block was never re-created, so even when the caret
+            survived there was no editable line to type on.
+
+       Now, BEFORE any re-layout, a caret sitting in an empty block gets
+       that block re-attached to the END of its own page's text zone
+       (where it belongs) and is focused again, so typing continues on
+       the new line. While the teacher is still mid-line we do not
+       re-layout at all - a paragraph break alone never needs one. */
+    function rescueCaretBlock() {
+        const sel = window.getSelection();
+        if (!sel || !sel.rangeCount) return;
+        const range = sel.getRangeAt(0);
+        const node = range.startContainer;
+        const el = node.nodeType === 1 ? node : node.parentElement;
+        if (!el || !flow.contains(el)) return;
+
+        // The block the caret is in, up to (but never including) the flow.
+        let moved = false;
+        let block = el === flow ? null : el.closest(
+            "p,div,li,td,th,blockquote,h1,h2,h3,h4,h5,h6");
+        if (!block || block === flow) return;
+        if (block.classList.contains("exam-page") || block.classList.contains("page-content")) {
+            if (block.classList.contains("exam-page")) return;
+            // The caret is inside a .page-content element itself. When the
+            // page holds MORE than one, the browser has just parked the new
+            // line OUTSIDE the real text zone - that is the "escaped" case.
+            const page = block.closest(".exam-page");
+            if (!page || page.classList.contains("page-one")) return;
+            const zones = Array.from(page.querySelectorAll(".page-content"));
+            if (zones.length > 1 && zones[0] !== block) {
+                while (block.firstChild) zones[0].appendChild(block.firstChild);
+                block.remove();
+                block = zones[0];
+                moved = true;
+            } else {
+                return; // a normal caret right inside the page's text zone
+            }
+        }
+
+        const page = block.closest(".exam-page");
+        if (!page || page.classList.contains("page-one")) return;
+
+        let zone = block.closest(".page-content");
+        if (!zone) {
+            // The block escaped the text zone entirely (it is a direct child
+            // of the page): move it - and every stray sibling - back in.
+            zone = page.querySelector(".page-content");
+            if (!zone) {
+                zone = document.createElement("div");
+                zone.className = "page-content exam-body spacing-" +
+                    (document.getElementById("spacingSelect").value || "normal");
+                page.appendChild(zone);
+            }
+            moved = true;
+            Array.from(page.children).forEach(function (child) {
+                if (child === zone) return;
+                if (child.classList.contains("page-content")) {
+                    while (child.firstChild) zone.appendChild(child.firstChild);
+                    child.remove();
+                    return;
+                }
+                if (child.classList.contains("page-warn-chip")) return;
+                zone.appendChild(child);
+            });
+            if (!zone.contains(block) && block.parentNode !== zone) zone.appendChild(block);
+        }
+
+        // Put the caret-carrying block back at the end of the zone so the
+        // teacher keeps typing BELOW what was written, never inside it.
+        if (zone.lastElementChild !== block) {
+            zone.appendChild(block);
+            moved = true;
+        }
+        /* IMPORTANT: when nothing had to be moved, leave the caret exactly
+           where the browser put it. Re-setting it on every keystroke would
+           type every letter at the start of the line (reversed text). */
+        if (!moved) return;
+        try {
+            const r = document.createRange();
+            r.selectNodeContents(block);
+            r.collapse(true);
+            sel.removeAllRanges();
+            sel.addRange(r);
+            if (!flow.contains(document.activeElement)) flow.focus({ preventScroll: true });
+        } catch (e) {}
+    }
+
+    /* Split a text node at the caret so wrapping/splitting never loses the
+       caret. Returns the [before, after] text nodes when it had to split. */
+    function splitTextAtCaret(range) {
+        const node = range.startContainer;
+        if (node.nodeType !== 3) return false;
+        const offset = range.startOffset;
+        if (offset <= 0 || offset >= node.nodeValue.length) return false;
+        const tail = node.splitText(offset);
+        range.setStart(tail, 0);
+        range.collapse(true);
+        return true;
+    }
+
+    /* ----------------------------------------------------------------
+       FIX (unanswered Enter): OUR OWN new line.
+       ----------------------------------------------------------------
+       Left alone, Chrome splits the very div the caret is sitting in - and
+       when that div IS the page's .page-content it clones the class with
+       it, so the page ends up with TWO text zones and one line of text
+       glued onto the end of the previous one. The exam engine then merges
+       the zones (pack 19 rule) and the caret, the line break or both are
+       lost: "I write the first line, press Enter, and the second line does
+       not respond".
+
+       So Enter is handled here instead: the line is split at the caret and
+       a brand-new <div> line is created right below it, inside the same
+       text zone, with the caret already in it. One clear line per question,
+       exactly like Word - and nothing for the engine to repair. */
+    function examInsertNewLine() {
+        const sel = window.getSelection();
+        if (!sel || !sel.rangeCount) return false;
+        let range = sel.getRangeAt(0);
+        const node = range.startContainer;
+        const el = node.nodeType === 1 ? node : node.parentElement;
+        if (!el || !flow.contains(el)) return false;
+
+        const page = el.closest(".exam-page");
+        if (!page || page.classList.contains("page-one")) return false; // page 1 is the cover
+        const zone = el.closest(".page-content") ||
+            page.querySelector(".page-content");
+        if (!zone) return false;
+        if (!range.collapsed) range.deleteContents();
+
+        const BLOCK_SEL = "p,div,li,blockquote,h1,h2,h3,h4,h5,h6,pre,td,th";
+        let block = el === zone ? null : el.closest(BLOCK_SEL);
+        if (block && (block === zone || !zone.contains(block))) block = null;
+
+        // Caret sitting directly in the zone (loose text): wrap THAT line in
+        // its own div first so there is a real block to split.
+        if (!block) {
+            const textNode = (range.startContainer.nodeType === 3)
+                ? range.startContainer
+                : null;
+            const holder = textNode || el;
+            const wrapper = document.createElement("div");
+            if (textNode) {
+                const offset = range.startOffset;
+                textNode.parentNode.insertBefore(wrapper, textNode);
+                wrapper.appendChild(textNode);
+                const r2 = document.createRange();
+                r2.setStart(textNode, Math.min(offset, textNode.nodeValue.length));
+                r2.collapse(true);
+                sel.removeAllRanges();
+                sel.addRange(r2);
+                range = r2;
+            } else {
+                wrapper.appendChild(document.createElement("br"));
+                zone.appendChild(wrapper);
+            }
+            block = wrapper;
+        }
+
+        // Keep any trailing empty-looking <br> placeholders out of the maths.
+        Array.from(block.querySelectorAll(":scope > br")).forEach(function (br) {
+            if (!br.nextSibling) br.remove();
+        });
+
+        // Everything from the caret to the end of the line goes to the new one.
+        const tailRange = document.createRange();
+        tailRange.selectNodeContents(block);
+        tailRange.setStart(range.endContainer, range.endOffset);
+        const tail = tailRange.extractContents();
+
+        const newLine = document.createElement(block.tagName === "LI" ? "li" : "div");
+        /* A bare <br> left in the tail is just the browser's "empty line"
+           placeholder - it must not travel into the new line, or every
+           Enter would leave another blank line behind. */
+        if (tail.textContent.trim() || (tail.querySelector && tail.querySelector("img,table"))) {
+            newLine.appendChild(tail);
+        }
+        if (!newLine.textContent.trim() && !newLine.querySelector("img,table")) {
+            newLine.innerHTML = "<br>";
+        }
+        if (!block.textContent.trim() && !block.querySelector("img,table,br")) {
+            block.innerHTML = "<br>";
+        }
+        block.parentNode.insertBefore(newLine, block.nextSibling);
+
+        const r = document.createRange();
+        r.selectNodeContents(newLine);
+        r.collapse(true);
+        sel.removeAllRanges();
+        sel.addRange(r);
+        if (!flow.contains(document.activeElement)) flow.focus({ preventScroll: true });
+
+        // The page grew by one line: re-fit once the teacher pauses. The new
+        // line is a real block, so no re-layout can mistake it for garbage.
+        scheduleTypingPaginate(800);
+        return true;
+    }
+
+    /* True while the caret sits in a block that holds nothing yet - the
+       line the browser just created for the teacher with Enter. */
+    function caretIsOnEmptyLine() {
+        const sel = window.getSelection();
+        if (!sel || !sel.rangeCount) return false;
+        const node = sel.getRangeAt(0).startContainer;
+        const el = node.nodeType === 1 ? node : node.parentElement;
+        if (!el || !flow.contains(el)) return false;
+        const block = el === flow ? null : el.closest(
+            "p,div,li,td,th,blockquote,h1,h2,h3,h4,h5,h6");
+        if (!block || block === flow || block.classList.contains("exam-page")) return false;
+        if (block.querySelector("img,table,ul,ol,.manual-page-break")) return false;
+        return !block.textContent.replace(/\u200b/g, "").trim();
+    }
+
     flow.addEventListener("input", function (e) {
         if (e && e.isComposing) return; // mid Arabic IME composition: hands off
+        rescueCaretBlock();
         scheduleTypingPaginate(800);
+    });
+    /* Enter = a real new line, created by us (see examInsertNewLine). */
+    flow.addEventListener("keydown", function (e) {
+        if (!e || e.isComposing || e.isComposing === undefined && e.keyCode === 229) return;
+        if (e.key !== "Enter" && e.keyCode !== 13) return;
+        if (e.ctrlKey || e.metaKey || e.altKey || e.shiftKey) return; // Ctrl+Enter = page break
+        if (examInsertNewLine()) {
+            e.preventDefault();
+            e.stopPropagation();
+        }
     });
     // Tapping out of page text normally refreshes promptly. Do not refresh
     // when focus moves into an exam tool: mobile native select sheets close if
@@ -580,6 +833,10 @@ function appendBodyPage(flow, afterEl) {
 // headers left over from old saved exams / old markup, and guarantee every
 // body page has exactly one content zone - but never add one to the cover.
 function ensureExamStructure(flow) {
+    /* FIX (unanswered Enter): capture the block the caret is in BEFORE the
+       repair runs. If the repair has to move it, the caret is put back into
+       it afterwards instead of being dropped on the floor. */
+    const caretAnchor = examCaretAnchor(flow);
     flow.querySelectorAll(".exam-page-header").forEach(function (h) { h.remove(); });
 
     // NEW (multi-exam in one PDF): every cover gets its template stamped
@@ -622,24 +879,106 @@ function ensureExamStructure(flow) {
                question. Merge all zones into the first one; untouched for
                pages that already have a single zone. */
             for (let i = 1; i < contents.length; i++) {
-                const empty = !contents[i].textContent.trim() && !contents[i].querySelector("img,table");
-                if (!empty) {
-                    // keep every merged zone on its OWN line: zones that hold
-                    // loose inline fragments (font/span without a block) are
-                    // wrapped in a block so lines can never glue together.
-                    const hasBlock = !!contents[i].querySelector("p,div,ol,ul,table,blockquote,h1,h2,h3,h4,h5,h6,li");
-                    if (hasBlock) {
-                        while (contents[i].firstChild) contents[0].appendChild(contents[i].firstChild);
-                    } else {
-                        const line = document.createElement("div");
-                        while (contents[i].firstChild) line.appendChild(contents[i].firstChild);
-                        contents[0].appendChild(line);
-                    }
+                /* FIX (unanswered Enter): a zone that is EMPTY apart from a
+                   new-line <br> is the line the browser just made for the
+                   teacher with Enter. It used to be dropped here - together
+                   with the caret inside it - which is exactly why the next
+                   keystroke went nowhere. Move that line's blocks into the
+                   real zone (so text order is kept) instead of deleting it. */
+                const hasBlock = !!contents[i].querySelector("p,div,ol,ul,table,blockquote,h1,h2,h3,h4,h5,h6,li");
+                if (hasBlock) {
+                    while (contents[i].firstChild) contents[0].appendChild(contents[i].firstChild);
+                } else {
+                    // keep every merged zone on its OWN line: loose inline
+                    // fragments (font/span without a block) are wrapped in a
+                    // block so lines can never glue together.
+                    const line = document.createElement("div");
+                    while (contents[i].firstChild) line.appendChild(contents[i].firstChild);
+                    contents[0].appendChild(line);
                 }
                 contents[i].remove();
             }
         }
     });
+
+    // FIX (unanswered Enter): put the caret back in the block it was in
+    // (it may have been moved into the real zone above) so the very next
+    // keystroke lands on the teacher's new line.
+    restoreExamCaret(caretAnchor);
+}
+
+/* Where is the caret right now, in terms of the BLOCK it sits in? Used to
+   keep it safe when the structure repair has to move things around. */
+function examCaretAnchor(flow) {
+    try {
+        const sel = window.getSelection();
+        if (!sel || !sel.rangeCount) return null;
+        const r = sel.getRangeAt(0);
+        if (!flow.contains(r.startContainer)) return null;
+        const startEl = r.startContainer.nodeType === 1 ? r.startContainer : r.startContainer.parentElement;
+        if (!startEl) return null;
+        const block = startEl === flow ? null : startEl.closest(
+            "p,div,li,td,th,blockquote,h1,h2,h3,h4,h5,h6");
+        if (!block || block === flow || block.classList.contains("exam-page")) return null;
+        return { block: block, page: block.closest(".exam-page"), offset: r.startOffset };
+    } catch (e) {
+        return null;
+    }
+}
+
+/* Put the caret back inside `anchor.block` (still the SAME node - the
+   engine moves blocks, it never rebuilds them). */
+function restoreExamCaret(anchor) {
+    if (!anchor) return;
+    const flow = document.getElementById("examFlow");
+    /* FIX (unanswered Enter): the block the caret was in may have been the
+       extra text zone the browser created for the new line, and the repair
+       above merges such zones away. Instead of dropping the caret (which is
+       what made the second line "not respond"), hand the teacher a real,
+       fresh line at the end of that page's text - already focused, ready
+       for the next keystroke. */
+    if (!anchor.block || !document.body.contains(anchor.block)) {
+        const page = anchor.page && document.body.contains(anchor.page) ? anchor.page : null;
+        const zone = page && page.querySelector(".page-content");
+        if (!zone) return;
+        let line = zone.lastElementChild;
+        const lineIsEmpty = line && /^(P|DIV)$/.test(line.tagName) &&
+            !line.textContent.trim() && !line.querySelector("img,table");
+        if (!lineIsEmpty) {
+            line = document.createElement("div");
+            line.appendChild(document.createElement("br"));
+            zone.appendChild(line);
+        }
+        try {
+            const r = document.createRange();
+            r.selectNodeContents(line);
+            r.collapse(true);
+            const sel = window.getSelection();
+            sel.removeAllRanges();
+            sel.addRange(r);
+            if (!flow || !flow.contains(document.activeElement)) {
+                if (flow) flow.focus({ preventScroll: true });
+            }
+        } catch (e) {}
+        return;
+    }
+    const sel = window.getSelection();
+    if (!flow || !sel) return;
+    // Only step in when the caret was actually lost or parked outside the
+    // block - never fight the browser about a caret that is already right.
+    const current = sel.rangeCount ? sel.getRangeAt(0) : null;
+    if (current && anchor.block.contains(current.startContainer)) return;
+    try {
+        const r = document.createRange();
+        const target = anchor.block;
+        const max = target.childNodes.length;
+        let offset = Math.min(anchor.offset, max);
+        r.setStart(target, offset);
+        r.collapse(true);
+        sel.removeAllRanges();
+        sel.addRange(r);
+        if (!flow.contains(document.activeElement)) flow.focus({ preventScroll: true });
+    } catch (e) {}
 }
 
 function paginateExam() {
@@ -1328,41 +1667,205 @@ function saveExam() {
     });
 }
 
+/* ==========================================================================
+   NEW (exam space - owner: "what is the best way to organize created exam
+   from each user ... user must be able to draft exam, not everything will
+   be showing to other users")
+
+   The saved-exam panel is now the teacher's EXAM SPACE, in three groups:
+
+     My drafts     - only ever visible to the teacher writing them
+     My published  - the teacher's own papers, shared with the staff
+     Staff bank    - other teachers' PUBLISHED papers (admins can manage
+                     everything; a teacher gets a read-only copy)
+
+   A brand-new exam is always created as a DRAFT, and only its author (or
+   an admin) can publish, edit or delete it. Nothing half-written is ever
+   shown to anyone else.
+========================================================================== */
+let examSpaceData = [];
+
+function examSpaceEsc(v) {
+    return String(v == null ? "" : v).replace(/[&<>"']/g, function (c) {
+        return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
+    });
+}
+
+function examSpaceDate(v) {
+    if (!v) return "";
+    const d = new Date(v);
+    if (isNaN(d.getTime())) return "";
+    return d.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
+}
+
 function openLoadPanel() {
+    const body = document.getElementById("examSpaceBody");
+    if (body) body.innerHTML = '<p class="exam-space-empty">Loading your exams…</p>';
+    document.getElementById("loadPanelOverlay").style.display = "flex";
     fetch("/exams")
-        .then(response => response.json())
-        .then(exams => {
-            const table = document.getElementById("savedExamsTable");
-            table.innerHTML = `
-                <tr>
-                    <th>Title</th>
-                    <th>Class</th>
-                    <th>Subject</th>
-                    <th>Term</th>
-                    <th>Session</th>
-                    <th>Action</th>
-                </tr>
-            `;
-
-            exams.forEach(exam => {
-                const row = table.insertRow();
-                row.insertCell(0).textContent = exam.title;
-                row.insertCell(1).textContent = exam.class_name;
-                row.insertCell(2).textContent = exam.subject;
-                row.insertCell(3).textContent = exam.term;
-                row.insertCell(4).textContent = exam.session;
-                row.insertCell(5).innerHTML = `
-                    <button type="button" onclick="askLoadExamStep(${exam.id}, this)">Open</button>
-                    <button type="button" onclick="deleteExamFromPanel(${exam.id})" style="background:#8C3B2E; border-color:#8C3B2E; color:#fff;">Delete</button>
-                `;
-            });
-
-            document.getElementById("loadPanelOverlay").style.display = "flex";
+        .then(function (response) {
+            if (!response.ok) throw new Error("HTTP " + response.status);
+            return response.json();
         })
-        .catch(error => {
+        .then(function (exams) {
+            examSpaceData = Array.isArray(exams) ? exams : [];
+            renderExamSpace();
+        })
+        .catch(function (error) {
             console.log(error);
-            alert("Error loading saved exams.");
+            if (body) {
+                body.innerHTML = '<p class="exam-space-empty exam-space-error">Could not load your exams. ' +
+                    "Please check the connection and try again.</p>";
+            }
         });
+}
+
+/* One exam row: title + details on the left, the actions that THIS teacher
+   is allowed to use on the right. */
+function examSpaceRow(exam) {
+    const isDraft = exam.status === "draft";
+    const canEdit = exam.can_edit !== false && exam.mine !== false;
+    const owner = exam.created_by ? examSpaceEsc(exam.created_by) : "school paper";
+    const when = examSpaceDate(exam.updated_at || exam.created_at);
+    const meta = [exam.class_name, exam.subject, exam.term, exam.session].filter(Boolean).map(examSpaceEsc).join(" · ");
+    const actions = [];
+
+    actions.push('<button type="button" class="es-btn es-open" onclick="askLoadExamStep(' + exam.id +
+        ', this)">' + (canEdit ? "Open" : "View") + "</button>");
+    if (canEdit) {
+        actions.push('<button type="button" class="es-btn" onclick="duplicateExam(' + exam.id +
+            ')">Duplicate</button>');
+        if (isDraft) {
+            actions.push('<button type="button" class="es-btn es-publish" onclick="publishExam(' + exam.id +
+                ', \'published\')">Publish</button>');
+        } else {
+            actions.push('<button type="button" class="es-btn" onclick="publishExam(' + exam.id +
+                ', \'draft\')">Unpublish</button>');
+        }
+        actions.push('<button type="button" class="es-btn es-danger" onclick="deleteExamFromPanel(' +
+            exam.id + ')">Delete</button>');
+    }
+
+    return '<article class="es-card' + (isDraft ? " es-draft" : "") + '" data-search="' +
+        examSpaceEsc((exam.title || "") + " " + (exam.class_name || "") + " " + (exam.subject || "") +
+            " " + (exam.term || "") + " " + (exam.session || "") + " " + owner).toLowerCase() + '">' +
+        '<div class="es-main">' +
+            '<b class="es-title">' + examSpaceEsc(exam.title || "Untitled exam") + "</b>" +
+            '<span class="es-meta">' + meta + "</span>" +
+            '<span class="es-sub">' +
+                '<span class="es-badge ' + (isDraft ? "es-badge-draft" : "es-badge-live") + '">' +
+                    (isDraft ? "Draft · private" : "Published") + "</span>" +
+                '<span class="es-owner">by ' + owner + "</span>" +
+                (when ? '<span class="es-when">· ' + when + "</span>" : "") +
+            "</span>" +
+        "</div>" +
+        '<div class="es-actions">' + actions.join("") + "</div>" +
+    "</article>";
+}
+
+function renderExamSpace() {
+    const body = document.getElementById("examSpaceBody");
+    if (!body) return;
+    if (!examSpaceData.length) {
+        body.innerHTML = '<p class="exam-space-empty">No exams yet. Write your first paper and press ' +
+            "<b>Save Exam</b> - it is kept here as your private draft until you publish it.</p>";
+        return;
+    }
+    const groups = [
+        { key: "drafts", title: "My drafts", hint: "Private - only you can open these until you publish them." },
+        { key: "mine", title: "My published exams", hint: "Your finished papers, shared with the whole staff." },
+        { key: "shared", title: "Staff exam bank", hint: "Papers other teachers have published." }
+    ];
+    let html = "";
+    groups.forEach(function (g) {
+        const rows = examSpaceData.filter(function (e) { return (e.group || "shared") === g.key; });
+        if (!rows.length && g.key === "shared") return; // nothing to show
+        html += '<section class="es-group es-group-' + g.key + '">' +
+            "<header><h4>" + g.title + ' <span class="es-count">' + rows.length + "</span></h4>" +
+            "<p>" + g.hint + "</p></header>" +
+            (rows.length ? rows.map(examSpaceRow).join("") :
+                '<p class="exam-space-empty">Nothing here yet.</p>') +
+            "</section>";
+    });
+    body.innerHTML = html;
+    filterExamSpace();
+}
+
+function filterExamSpace() {
+    const input = document.getElementById("examSpaceSearch");
+    const q = (input && input.value || "").trim().toLowerCase();
+    document.querySelectorAll("#examSpaceBody .es-card").forEach(function (card) {
+        const hay = card.getAttribute("data-search") || "";
+        card.style.display = !q || hay.indexOf(q) !== -1 ? "" : "none";
+    });
+}
+
+/* Publish / unpublish one of YOUR exams. */
+function publishExam(id, status) {
+    const verb = status === "published" ? "publish" : "unpublish";
+    fetch("/exam/" + id + "/status", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: status })
+    })
+        .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, d: d }; }); })
+        .then(function (res) {
+            const msg = res.d && res.d.message ? res.d.message : "Exam " + verb + "ed.";
+            if (window.amsToast) window.amsToast(msg, res.ok ? "success" : "error", 5000);
+            else alert(msg);
+            if (res.ok) openLoadPanel();
+        })
+        .catch(function () {
+            if (window.amsToast) window.amsToast("Could not " + verb + " the exam.", "error");
+            else alert("Could not " + verb + " the exam.");
+        });
+}
+
+/* Make your own editable copy of an exam (drafts or published, yours or the
+   staff bank) - the original is never touched. */
+function duplicateExam(id) {
+    fetch("/exam/" + id)
+        .then(function (r) { return r.json(); })
+        .then(function (exam) {
+            currentExamId = null; // the copy is a NEW paper, saved as a fresh draft
+            try { examGotoStep(1); } catch (e) {}
+            try { if (document.getElementById("examTitle")) document.getElementById("examTitle").value = "Copy of " + (exam.title || "Exam"); } catch (e) {}
+            try {
+                [[ "examClass", exam.class_name ], [ "examSubject", exam.subject ],
+                 [ "examTerm", exam.term ], [ "examSession", exam.session ],
+                 [ "examDuration", exam.duration ]].forEach(function (pair) {
+                    const sel = document.getElementById(pair[0]);
+                    if (!sel) return;
+                    if (pair[1] && !Array.from(sel.options).some(function (o) { return o.value === pair[1]; })) {
+                        sel.innerHTML += "<option value=\"" + examSpaceEsc(pair[1]) + "\">" + examSpaceEsc(pair[1]) + "</option>";
+                    }
+                    if (pair[1]) sel.value = pair[1];
+                });
+            } catch (e) {}
+            try { closeLoadPanel(); } catch (e) {}
+            if (window.amsToast) {
+                window.amsToast("Copied into your drafts - save it to make it yours.", "info", 6000);
+            }
+        })
+        .catch(function () {
+            alert("Could not copy this exam.");
+        });
+}
+
+/* A brand-new, empty paper: clears the editor and starts a fresh draft. */
+function newExamDraft() {
+    if (currentExamId && !confirm("Start a new exam? The current one is closed - save it first if you still need it.")) return;
+    currentExamId = null;
+    try {
+        resetFlow("");
+        ["examTitle", "examDate"].forEach(function (id) {
+            const el = document.getElementById(id);
+            if (el) el.value = "";
+        });
+    } catch (e) {}
+    try { closeLoadPanel(); } catch (e) {}
+    try { examGotoStep(1); } catch (e) {}
+    if (window.amsToast) window.amsToast("New draft started - fill in the details, then write and save.", "info", 6000);
 }
 
 function closeLoadPanel() {
@@ -1376,14 +1879,32 @@ let pendingLoadExamId = null;
 
 function askLoadExamStep(id, btn) {
     pendingLoadExamId = id;
+    /* NEW (exam space): the exam title now lives in the card, not in a
+       table cell - and a paper that is NOT this teacher's own opens as a
+       read-only view, with "Duplicate" offered as the way to work on it. */
+    const card = btn && btn.closest ? btn.closest(".es-card") : null;
     const row = btn && btn.closest ? btn.closest("tr") : null;
-    const name = row && row.cells && row.cells[0] ? row.cells[0].textContent : "";
+    const name = card
+        ? (card.querySelector(".es-title") || {}).textContent || ""
+        : (row && row.cells && row.cells[0] ? row.cells[0].textContent : "");
+    const mineEntry = examSpaceData.filter(function (e) { return String(e.id) === String(id); })[0];
+    const canEdit = !mineEntry || (mineEntry.can_edit !== false && mineEntry.mine !== false);
     document.getElementById("loadStepExamName").textContent = name;
     const ovl = document.getElementById("loadStepOverlay");
     const b1 = document.getElementById("loadStepBtn1");
     const b2 = document.getElementById("loadStepBtn2");
+    const b3 = document.getElementById("loadStepBtn3");
     b1.onclick = function () { chooseLoadExamStep(1); };
     b2.onclick = function () { chooseLoadExamStep(2); };
+    if (b3) {
+        b3.style.display = canEdit ? "none" : "inline-flex";
+        b3.onclick = function () {
+            document.getElementById("loadStepOverlay").style.display = "none";
+            pendingLoadExamId = null;
+            duplicateExam(id);
+        };
+    }
+    b1.style.display = canEdit ? "" : "none"; // details of another teacher's paper stay read-only
     ovl.style.display = "flex";
 }
 
@@ -1529,18 +2050,22 @@ function resetFlow(flowHtml) {
 }
 
 function deleteExamFromPanel(id) {
-    const confirmed = confirm("Delete this exam permanently?");
-    if (!confirmed) return;
+    const entry = examSpaceData.filter(function (e) { return String(e.id) === String(id); })[0];
+    const label = entry && entry.title ? 'Delete "' + entry.title + '" permanently?' : "Delete this exam permanently?";
+    if (!confirm(label)) return;
 
     fetch(`/exam/${id}`, { method: "DELETE" })
-        .then(response => response.json())
-        .then(data => {
-            alert(data.message);
+        .then(response => response.json().then(function (d) { return { ok: response.ok, d: d }; }))
+        .then(function (res) {
+            const msg = (res.d && res.d.message) || (res.ok ? "Exam deleted." : "Could not delete this exam.");
+            if (window.amsToast) window.amsToast(msg, res.ok ? "success" : "error", 5000);
+            else alert(msg);
             openLoadPanel();
         })
         .catch(error => {
             console.log(error);
-            alert("Error deleting exam.");
+            if (window.amsToast) window.amsToast("Error deleting exam.", "error");
+            else alert("Error deleting exam.");
         });
 }
 
