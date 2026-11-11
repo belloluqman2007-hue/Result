@@ -111,7 +111,7 @@
         <!-- NEW (request): open a saved exam straight from Step 1 too,
              not only from Step 2. -->
         <div class="meta-field meta-actions">
-          <button type="button" onclick="openLoadPanel()">&#128194; Open Saved Exam</button>
+          <button type="button" onclick="openLoadPanel()">&#128218; My Exam Space</button>
         </div>
 
         <!-- NEW: printing is possible straight from the details step -->
@@ -147,7 +147,7 @@
              anything before printing. -->
         <button type="button" class="ams-ai-btn" onclick="amsOpenAiModal()" title="The AI writer drafts full numbered questions straight into this paper from a topic - you stay the examiner and edit before printing">&#10024; AI: Write Questions</button>
         <button type="button" onclick="saveExam()">Save Exam</button>
-        <button type="button" onclick="openLoadPanel()">Open Saved Exam</button>
+        <button type="button" onclick="openLoadPanel()">&#128218; My Exam Space</button>
         <!-- CHANGED (auto pagination, request #1): this now inserts a Word-style
              page break - pages themselves are created automatically. -->
         <button type="button" onclick="insertPageBreak()">&#8626; Page Break</button>
@@ -386,26 +386,42 @@
       <div class="load-step-actions">
         <button type="button" id="loadStepBtn1">Step 1 &ndash; Details</button>
         <button type="button" id="loadStepBtn2">Step 2 &ndash; Write Questions</button>
+        <!-- NEW (exam space): another teacher's published paper opens as a
+             read-only view - the way to work on it is your own copy. -->
+        <button type="button" id="loadStepBtn3" style="display:none;">&#128203; Duplicate to my drafts</button>
       </div>
       <button type="button" onclick="closeLoadStepPanel()" class="close-btn">Cancel</button>
     </div>
   </div>
 
-  <!-- Load Saved Exam panel -->
+  <!-- ==================================================================
+       NEW (exam space - owner: "the best way to organize created exam
+       from each user ... user must be able to draft exam, not everything
+       will be showing to other users")
+       ------------------------------------------------------------------
+       The old "Saved Exams" table is now the teacher's own EXAM SPACE:
+         · My drafts   - private, only the author sees them
+         · My published - the author's papers shared with the staff
+         · Staff bank  - every other teacher's PUBLISHED paper (read-only
+                         unless you are an admin)
+       A paper only leaves "My drafts" when its author publishes it.
+       ================================================================== -->
   <div id="loadPanelOverlay" class="load-panel-overlay" style="display:none;">
-    <div class="load-panel">
-      <h3>Saved Exams</h3>
+    <div class="load-panel exam-space-panel">
+      <h3>&#128218; Exam Space</h3>
       <button type="button" onclick="closeLoadPanel()" class="close-btn">Close</button>
-      <table id="savedExamsTable">
-        <tr>
-          <th>Title</th>
-          <th>Class</th>
-          <th>Subject</th>
-          <th>Term</th>
-          <th>Session</th>
-          <th>Action</th>
-        </tr>
-      </table>
+      <p class="exam-space-note">
+        Everything you write is saved as a <b>private draft</b>. Publish a paper when it is ready
+        and the whole staff can open it - until then nobody else sees it.
+      </p>
+      <div class="exam-space-toolbar">
+        <input type="search" id="examSpaceSearch" placeholder="Search title, class, subject…"
+               oninput="filterExamSpace()">
+        <button type="button" onclick="newExamDraft()">&#43; New Exam (draft)</button>
+      </div>
+      <div id="examSpaceBody" class="exam-space-body">
+        <p class="exam-space-empty">Loading your exams…</p>
+      </div>
     </div>
   </div>
 

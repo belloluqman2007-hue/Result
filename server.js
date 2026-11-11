@@ -899,6 +899,11 @@ function ensureCoreTablesAndDefaultAdmin() {
             body_html LONGTEXT NOT NULL,
             created_by VARCHAR(100) NULL,
             exam_date DATE NULL,
+            /* NEW (exam space): every exam is a DRAFT until its owner
+               publishes it. Only published exams are visible to anyone
+               except the teacher who wrote them (and the admins). */
+            status VARCHAR(16) NOT NULL DEFAULT 'draft',
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         ) DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
         `CREATE TABLE IF NOT EXISTS signatures (
@@ -2025,6 +2030,67 @@ function pack32Retry(attempt, err) {
 runPack32Migrations(1);
 
 /* ------------------------------------------------------------------
+   NEW (exam space - owner: "user must be able to draft exam, not
+   everything will be showing to other users"): the `exams` table gets
+   its DRAFT / PUBLISHED state and a real `updated_at`. Guarded and
+   idempotent like the other packs - an existing database is simply
+   upgraded in place, and every older exam keeps working (it is read as
+   published only when it already had no owner filter applied).
+------------------------------------------------------------------ */
+function runExamSpaceMigrations(attempt) {
+    const conn = addonConnection();
+    conn.connect((err) => {
+        if (err) { conn.destroy(); return examSpaceRetry(attempt, err); }
+        const alters = [
+            "ALTER TABLE exams ADD COLUMN status VARCHAR(16) NOT NULL DEFAULT 'draft'",
+            "ALTER TABLE exams ADD COLUMN updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP"
+        ];
+        let missingTable = false;
+        let statusColumnJustAdded = false; // only publish-in-place on the FIRST run
+        let i = 0;
+        (function nextAlter() {
+            if (i >= alters.length) {
+                return afterAlters();
+            }
+            const isStatusAlter = i === 0;
+            conn.query(alters[i++], (qErr) => {
+                if (qErr && qErr.code !== "ER_DUP_FIELDNAME") {
+                    console.log("Exam space migration notice:", qErr.code || qErr.message);
+                    if (qErr.code === "ER_NO_SUCH_TABLE") missingTable = true;
+                }
+                if (!qErr && isStatusAlter) statusColumnJustAdded = true;
+                if (missingTable) { conn.destroy(); return examSpaceRetry(attempt, { code: "ER_NO_SUCH_TABLE" }); }
+                nextAlter();
+            });
+        })();
+
+        function afterAlters() {
+            /* The brand-new column defaults every EXISTING row to 'draft'.
+               Those papers were already being used by the school, so on the
+               single run that creates the column they are marked PUBLISHED -
+               otherwise the whole exam bank would vanish from every teacher's
+               library the moment this pack is deployed. The step is skipped
+               on every later boot (the column already exists), so real drafts
+               are never published by accident. */
+            const finish = function () {
+                conn.end();
+                console.log("Exam space setup ready (drafts, publishing, per-user library).");
+            };
+            if (!statusColumnJustAdded) return finish();
+            conn.query("UPDATE exams SET status = 'published'", (uErr) => {
+                if (uErr) console.log("Exam space migration notice:", uErr.code || uErr.message);
+                finish();
+            });
+        }
+    });
+}
+function examSpaceRetry(attempt, err) {
+    if (attempt >= 6) { console.log("Exam space setup warning:", err.code || err.message || err); return; }
+    setTimeout(() => runExamSpaceMigrations(attempt + 1), 4000);
+}
+runExamSpaceMigrations(1);
+
+/* ------------------------------------------------------------------
    NEW (pack 22 - owner requests): announcement AUDIENCES
    (teacher/student/parent/general) + announcement-or-EVENT kind +
    exam timetable dates. Guarded + idempotent like packs 15/17/20.
@@ -2597,9 +2663,17 @@ app.get("/recent-activity", requireLogin, async (req, res) => {
         });
     });
 
-    const latestExams = await safeQuery(
+    /* NEW (exam space): the activity feed reads edited exams first and
+       falls back to creation time, so it keeps working while the exam-space
+       migration has not run on this database yet. */
+    let latestExams = await safeQuery(
         `SELECT title, updated_at FROM exams ORDER BY updated_at DESC LIMIT 3`
     );
+    if (!latestExams || !latestExams.length) {
+        latestExams = await safeQuery(
+            `SELECT title, created_at AS updated_at FROM exams ORDER BY id DESC LIMIT 3`
+        );
+    }
     latestExams.forEach((x) => {
         items.push({
             type: "exam",
@@ -3852,65 +3926,103 @@ ${body_html}
     });
 }
 
+/* NEW (exam space): save or update ONE exam.
+   ---------------------------------------------------------------------
+   * a NEW exam is always created as a DRAFT owned by the signed-in
+     teacher (nothing shows to anybody else until it is published);
+   * an UPDATE keeps whoever wrote it - ownership can never be taken
+     over by simply saving - and only the author (or an admin) may
+     update it;
+   * `status` is only changed through POST /exam/:id/status, so an
+     ordinary save can never silently publish a paper. */
 app.post("/save-exam", requireLogin, writeRateLimit, (req, res) => {
     const { id, title, class_name, subject, term, session, duration, instructions, body_html } = req.body;
     const examDate = /^\d{4}-\d{2}-\d{2}$/.test(req.body.exam_date || "") ? req.body.exam_date : null;
+    const me = examOwner(req);
 
     if (!title || !class_name || !subject || !term || !session || !body_html) {
         return res.status(400).json({ message: "Title, class, subject, term, session, and content are all required." });
     }
 
-    autoStoreExamToVault(title, class_name, subject, term, session, duration, instructions, body_html);
+    /* NEW (exam space): the shared File Store is for PUBLISHED papers only.
+       A draft never leaves the teacher's own exam space, so nothing is
+       copied to the vault until the paper is published. */
+    function storeToVault() {
+        autoStoreExamToVault(title, class_name, subject, term, session, duration, instructions, body_html);
+    }
 
     if (id) {
-        // Update an existing exam
-        connection.query(
-            `UPDATE exams SET title=?, class_name=?, subject=?, term=?, session=?, duration=?, instructions=?, body_html=?, exam_date=? WHERE id=?`,
-            [title, class_name, subject, term, session, duration || null, instructions || null, body_html, examDate, id],
-            (err) => {
-                if (err && err.code === "ER_BAD_FIELD_ERROR") {
-                    return connection.query(
-                        `UPDATE exams SET title=?, class_name=?, subject=?, term=?, session=?, duration=?, instructions=?, body_html=? WHERE id=?`,
-                        [title, class_name, subject, term, session, duration || null, instructions || null, body_html, id],
-                        (err2) => {
-                            if (err2) { console.log(err2); return res.status(500).json({ message: "Error updating exam." }); }
-                            res.json({ message: "Exam updated successfully.", id });
+        return connection.query(
+            "SELECT id, created_by, status FROM exams WHERE id = ?",
+            [id],
+            (ownErr, ownRows) => {
+                if (ownErr) { console.log(ownErr); return res.status(500).json({ message: "Error updating exam." }); }
+                if (!ownRows || !ownRows.length) return res.status(404).json({ message: "Exam not found." });
+                if (!examCanEdit(req, ownRows[0])) {
+                    return res.status(403).json({ message: "This exam belongs to another teacher - only they (or the office) can change it. Save it under a new title instead." });
+                }
+                const owner = String(ownRows[0].created_by || "") || me;
+                if (examStatusOf(ownRows[0]) === "published") storeToVault();
+                connection.query(
+                    `UPDATE exams SET title=?, class_name=?, subject=?, term=?, session=?, duration=?, instructions=?, body_html=?, exam_date=?, created_by=? WHERE id=?`,
+                    [title, class_name, subject, term, session, duration || null, instructions || null, body_html, examDate, owner, id],
+                    (err) => {
+                        if (err && err.code === "ER_BAD_FIELD_ERROR") {
+                            return connection.query(
+                                `UPDATE exams SET title=?, class_name=?, subject=?, term=?, session=?, duration=?, instructions=?, body_html=? WHERE id=?`,
+                                [title, class_name, subject, term, session, duration || null, instructions || null, body_html, id],
+                                (err2) => {
+                                    if (err2) { console.log(err2); return res.status(500).json({ message: "Error updating exam." }); }
+                                    res.json({ message: "Draft updated.", id, status: examStatusOf(ownRows[0]) });
+                                }
+                            );
                         }
-                    );
-                }
-                if (err) {
-                    console.log(err);
-                    return res.status(500).json({ message: "Error updating exam." });
-                }
-                res.json({ message: "Exam updated successfully.", id });
-            }
-        );
-    } else {
-        // Create a new exam
-        connection.query(
-            `INSERT INTO exams (title, class_name, subject, term, session, duration, instructions, body_html, created_by, exam_date)
-             VALUES (?,?,?,?,?,?,?,?,?,?)`,
-            [title, class_name, subject, term, session, duration || null, instructions || null, body_html, req.session.username, examDate],
-            (err, result) => {
-                if (err && err.code === "ER_BAD_FIELD_ERROR") {
-                    return connection.query(
-                        `INSERT INTO exams (title, class_name, subject, term, session, duration, instructions, body_html, created_by)
-                         VALUES (?,?,?,?,?,?,?,?,?)`,
-                        [title, class_name, subject, term, session, duration || null, instructions || null, body_html, req.session.username],
-                        (err2, result2) => {
-                            if (err2) { console.log(err2); return res.status(500).json({ message: "Error saving exam." }); }
-                            res.json({ message: "Exam saved successfully.", id: result2.insertId });
+                        if (err) {
+                            console.log(err);
+                            return res.status(500).json({ message: "Error updating exam." });
                         }
-                    );
-                }
-                if (err) {
-                    console.log(err);
-                    return res.status(500).json({ message: "Error saving exam." });
-                }
-                res.json({ message: "Exam saved successfully.", id: result.insertId });
+                        const status = examStatusOf(ownRows[0]);
+                        res.json({
+                            message: status === "published" ? "Exam updated successfully." : "Draft saved - only you can see it until you publish it.",
+                            id,
+                            status
+                        });
+                    }
+                );
             }
         );
     }
+
+    // Create a new exam - ALWAYS a private draft owned by the teacher who
+    // saved it, so nothing is written to the shared File Store yet.
+
+    connection.query(
+        `INSERT INTO exams (title, class_name, subject, term, session, duration, instructions, body_html, created_by, exam_date, status)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
+        [title, class_name, subject, term, session, duration || null, instructions || null, body_html, me, examDate, "draft"],
+        (err, result) => {
+            if (err && err.code === "ER_BAD_FIELD_ERROR") {
+                return connection.query(
+                    `INSERT INTO exams (title, class_name, subject, term, session, duration, instructions, body_html, created_by)
+                     VALUES (?,?,?,?,?,?,?,?,?)`,
+                    [title, class_name, subject, term, session, duration || null, instructions || null, body_html, me],
+                    (err2, result2) => {
+                        if (err2) { console.log(err2); return res.status(500).json({ message: "Error saving exam." }); }
+                        res.json({ message: "Saved.", id: result2.insertId, status: "published" });
+                    }
+                );
+            }
+            if (err) {
+                console.log(err);
+                return res.status(500).json({ message: "Error saving exam." });
+            }
+            res.json({
+                message: "Draft saved - it is private to you until you publish it.",
+                id: result.insertId,
+                status: "draft"
+            });
+        }
+    );
 });
 
 // NEW (pack 22 - owner: exam timetable visible to parents/students):
@@ -3926,7 +4038,7 @@ app.get("/portal/exams", (req, res) => {
             if (err || !stu.length) return res.json([]);
             connection.query(
                 `SELECT id, title, subject, term, session, duration, exam_date
-                 FROM exams WHERE class_name = ?
+                 FROM exams WHERE class_name = ? AND status = 'published'
                  ORDER BY exam_date IS NULL, exam_date DESC, updated_at DESC LIMIT 40`,
                 [stu[0].class_name],
                 (err2, rows) => {
@@ -5635,15 +5747,123 @@ app.delete("/api/teacher-classes/:id", requireLogin, requireAdmin, (req, res) =>
     });
 });
 
+/* =====================================================================
+   NEW (exam space - owner: "what is the best way to organize created
+   exam from each user ... user must be able to draft exam, not
+   everything will be showing to other users")
+   ---------------------------------------------------------------------
+   ONE rule, applied everywhere below:
+
+     * every exam belongs to the staff member who created it
+       (exams.created_by) and starts as a DRAFT;
+     * a DRAFT is private - only its owner (and an admin) can see or
+       open it, so a half-written paper is never exposed;
+     * a PUBLISHED exam is shared with the whole staff, which is what
+       "the exam bank" means for the school;
+     * the head teacher (admin) sees and manages everything.
+
+   The list is grouped for the UI: the caller's own drafts, the caller's
+   own published papers, then everybody else's published papers. His own
+   drafts are therefore never mixed in with the shared bank.
+   ===================================================================== */
+const EXAM_STATUSES = ["draft", "published"];
+
+function examIsAdmin(req) {
+    return !!(req.session && req.session.role === "admin");
+}
+function examOwner(req) {
+    return String((req.session && req.session.username) || "");
+}
+function examStatusOf(row) {
+    const st = String(row && row.status || "").toLowerCase();
+    if (st === "published" || st === "draft") return st;
+    /* Legacy rows (saved before this pack, no status column value): a paper
+       with a known owner is treated as published so nothing the school
+       already uses disappears; an ownerless paper is school-wide. */
+    return "published";
+}
+/* Can this session open / change this exam? */
+function examCanAccess(req, row, opts) {
+    if (!row) return false;
+    if (examIsAdmin(req)) return true;
+    const me = examOwner(req);
+    const owner = String(row.created_by || "");
+    const status = examStatusOf(row);
+    if (!owner) return true;                       // legacy school paper
+    if (owner === me) return true;                 // it is mine
+    if (status === "published" && !(opts && opts.writeOnly)) return true;
+    return false;
+}
+/* Can this session change (update/delete/publish) this exam? */
+function examCanEdit(req, row) {
+    if (!row) return false;
+    if (examIsAdmin(req)) return true;
+    const owner = String(row.created_by || "");
+    return !owner || owner === examOwner(req);
+}
+
 app.get("/exams", requireLogin, (req, res) => {
+    const me = examOwner(req);
+    /* NEW (exam space): the caller's own papers + the shared bank. Drafts
+       of OTHER teachers are filtered out in SQL, never sent to the browser. */
     connection.query(
-        "SELECT id, title, class_name, subject, term, session, created_at FROM exams ORDER BY id DESC",
+        `SELECT id, title, class_name, subject, term, session, duration, exam_date,
+                created_by, status, created_at, updated_at
+         FROM exams
+         WHERE created_by = ? OR created_by IS NULL OR created_by = ''
+            OR status = 'published'
+            ${examIsAdmin(req) ? "OR 1=1" : ""}
+         ORDER BY COALESCE(updated_at, created_at) DESC, id DESC`,
+        [me],
         (err, rows) => {
             if (err) {
-                console.log(err);
-                return res.status(500).send("Database Error");
+                /* A database that has not finished the migration yet: fall
+                   back to the plain list so the page keeps working. */
+                return connection.query(
+                    "SELECT id, title, class_name, subject, term, session, created_at FROM exams ORDER BY id DESC",
+                    (err2, rows2) => {
+                        if (err2) { console.log(err2); return res.status(500).send("Database Error"); }
+                        res.json((rows2 || []).map(function (r) {
+                            r.status = "published";
+                            r.created_by = r.created_by || null;
+                            r.mine = true;
+                            return r;
+                        }));
+                    }
+                );
             }
-            res.json(rows || []);
+            const list = (rows || []).map(function (r) {
+                const status = examStatusOf(r);
+                const owner = String(r.created_by || "");
+                const mine = !owner || owner === me;
+                let group = "shared";
+                if (mine) group = status === "draft" ? "drafts" : "mine";
+                if (examIsAdmin(req) && !mine) group = "shared";
+                return {
+                    id: r.id,
+                    title: r.title,
+                    class_name: r.class_name,
+                    subject: r.subject,
+                    term: r.term,
+                    session: r.session,
+                    duration: r.duration || "",
+                    exam_date: r.exam_date || null,
+                    created_by: owner || "",
+                    status: status,
+                    mine: mine,
+                    group: group,
+                    can_edit: examCanEdit(req, r),
+                    created_at: r.created_at,
+                    updated_at: r.updated_at || r.created_at
+                };
+            });
+            /* Drafts first, then my published papers, then the shared bank. */
+            const order = { drafts: 0, mine: 1, shared: 2 };
+            list.sort(function (a, b) {
+                if (order[a.group] !== order[b.group]) return order[a.group] - order[b.group];
+                return String(b.updated_at || "").localeCompare(String(a.updated_at || ""));
+            });
+            res.json(list);
         }
     );
 });
@@ -5660,21 +5880,96 @@ app.get("/exam/:id", requireLogin, (req, res) => {
             if (rows.length === 0) {
                 return res.status(404).json({ message: "Exam not found." });
             }
-            res.json(rows[0]);
+            /* NEW (exam space): another teacher's DRAFT is not theirs to
+               read - the same 404 as a missing paper, so nothing leaks. */
+            if (!examCanAccess(req, rows[0])) {
+                return res.status(404).json({ message: "Exam not found." });
+            }
+            const exam = rows[0];
+            exam.status = examStatusOf(exam);
+            exam.mine = !exam.created_by || String(exam.created_by) === examOwner(req);
+            exam.can_edit = examCanEdit(req, rows[0]);
+            res.json(exam);
         }
     );
 });
 
 app.delete("/exam/:id", requireLogin, (req, res) => {
     connection.query(
-        "DELETE FROM exams WHERE id = ?",
+        "SELECT id, created_by, status FROM exams WHERE id = ?",
         [req.params.id],
-        (err) => {
-            if (err) {
-                console.log(err);
-                return res.status(500).json({ message: "Error deleting exam." });
+        (err, rows) => {
+            if (err) { console.log(err); return res.status(500).json({ message: "Error deleting exam." }); }
+            if (!rows || !rows.length) return res.status(404).json({ message: "Exam not found." });
+            /* NEW (exam space): only the author (or an admin) may delete. */
+            if (!examCanEdit(req, rows[0])) {
+                return res.status(403).json({ message: "This exam belongs to another teacher - only they (or the office) can delete it." });
             }
-            res.json({ message: "Exam deleted." });
+            connection.query(
+                "DELETE FROM exams WHERE id = ?",
+                [req.params.id],
+                (err2) => {
+                    if (err2) {
+                        console.log(err2);
+                        return res.status(500).json({ message: "Error deleting exam." });
+                    }
+                    res.json({ message: rows[0].created_by && String(rows[0].created_by) !== (req.session.username || "")
+                        ? "Exam deleted."
+                        : "Exam deleted. It is gone from your exam space." });
+                }
+            );
+        }
+    );
+});
+
+/* NEW (exam space): DRAFT <-> PUBLISHED, one small route. Publishing a paper
+   makes it visible to every teacher; un-publishing takes it back to the
+   author's private drafts. */
+app.post("/exam/:id/status", requireLogin, writeRateLimit, (req, res) => {
+    const status = String(req.body && req.body.status || "").toLowerCase();
+    if (EXAM_STATUSES.indexOf(status) === -1) {
+        return res.status(400).json({ message: "Status must be draft or published." });
+    }
+    connection.query(
+        "SELECT id, created_by, status FROM exams WHERE id = ?",
+        [req.params.id],
+        (err, rows) => {
+            if (err) { console.log(err); return res.status(500).json({ message: "Database error" }); }
+            if (!rows || !rows.length) return res.status(404).json({ message: "Exam not found." });
+            if (!examCanEdit(req, rows[0])) {
+                return res.status(403).json({ message: "Only the teacher who wrote this exam (or the office) can publish it." });
+            }
+            connection.query(
+                "UPDATE exams SET status = ? WHERE id = ?",
+                [status, req.params.id],
+                (err2) => {
+                    if (err2) { console.log(err2); return res.status(500).json({ message: "Database error" }); }
+                    /* NEW (exam space): the shared File Store mirrors the
+                       published state - a paper appears there when it is
+                       published and disappears again when it goes back to
+                       being a private draft. */
+                    connection.query("SELECT * FROM exams WHERE id = ?", [req.params.id], (rErr, rRows) => {
+                        const ex = !rErr && rRows && rRows[0];
+                        if (ex && status === "published") {
+                            autoStoreExamToVault(ex.title, ex.class_name, ex.subject, ex.term, ex.session,
+                                ex.duration, ex.instructions, ex.body_html);
+                        } else if (ex) {
+                            const vaultName = `${ex.class_name} - ${ex.subject} - ${ex.title} (Printable).html`;
+                            connection.query(
+                                "DELETE FROM school_file_store WHERE folder_path = '/Saved Exams' AND original_name = ?",
+                                [vaultName], () => {}
+                            );
+                        }
+                    });
+                    res.json({
+                        message: status === "published"
+                            ? "Exam published - the whole staff can now open it."
+                            : "Exam moved back to your private drafts.",
+                        id: Number(req.params.id),
+                        status: status
+                    });
+                }
+            );
         }
     );
 });
@@ -10514,7 +10809,7 @@ function syncExamsToVault(cb) {
             if (!rows || !rows.length) {
                 connection.query("INSERT INTO school_file_store (folder_path, file_name, original_name, is_folder) VALUES ('/', 'Saved Exams', 'Saved Exams', 1)", () => {});
             }
-            connection.query("SELECT * FROM exams", (err2, exams) => {
+            connection.query("SELECT * FROM exams WHERE status = 'published'", (err2, exams) => {
                 if (err2 || !exams || !exams.length) { if (cb) cb(); return; }
                 exams.forEach((ex) => {
                     // CHANGED (pack 82): dedup on the single new "(Printable).html" name...

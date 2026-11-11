@@ -1354,3 +1354,170 @@ body{
   pointer-events:none; white-space:nowrap;
 }
 @media print{ .ams-pdfprog{ display:none !important; } }
+
+/* ==========================================================================
+   NEW (exam space): the saved-exam panel is now the teacher's own exam
+   library - drafts (private) / my published papers / the staff bank.
+   Screen only; it never reaches the printed paper.
+   ========================================================================== */
+.exam-space-panel{
+  width:760px;
+  max-width:94%;
+  max-height:86vh;
+}
+.exam-space-note{
+  margin:-6px 0 14px;
+  font-size:13px;
+  line-height:1.55;
+  color:#4b5f54;
+}
+.exam-space-toolbar{
+  display:flex;
+  gap:10px;
+  flex-wrap:wrap;
+  margin-bottom:16px;
+}
+.exam-space-toolbar input[type="search"]{
+  flex:1 1 240px;
+  min-width:0;
+  padding:10px 12px;
+  border:1.5px solid #d7e0da;
+  border-radius:10px;
+  font-family:inherit;
+  font-size:14px;
+}
+.exam-space-toolbar button{
+  flex:0 0 auto;
+}
+.exam-space-body{
+  display:flex;
+  flex-direction:column;
+  gap:20px;
+}
+.exam-space-empty{
+  margin:0;
+  padding:14px 4px;
+  font-size:13.5px;
+  color:#61756a;
+}
+.exam-space-error{ color:#8C3B2E; font-weight:700; }
+
+.es-group > header{
+  margin:0 0 8px;
+  padding:0;
+  background:none;
+  border:none;
+  color:inherit;
+  display:block;
+  justify-content:flex-start;
+}
+.es-group h4{
+  margin:0;
+  font-size:14.5px;
+  font-weight:800;
+  color:#14532d;
+  display:flex;
+  align-items:center;
+  gap:8px;
+}
+.es-count{
+  background:#eaf3ed;
+  color:#14532d;
+  border-radius:999px;
+  padding:1px 9px;
+  font-size:12px;
+  font-weight:800;
+}
+.es-group > header p{
+  margin:2px 0 0;
+  font-size:12px;
+  color:#7d8f84;
+}
+.es-group-drafts h4{ color:#8a6d12; }
+.es-group-drafts .es-count{ background:#fdf3d8; color:#8a6d12; }
+
+.es-card{
+  display:flex;
+  align-items:center;
+  gap:14px;
+  flex-wrap:wrap;
+  border:1.5px solid #e3ebe6;
+  border-left:4px solid #14532d;
+  border-radius:12px;
+  padding:12px 14px;
+  margin-bottom:10px;
+  background:#fff;
+}
+.es-card.es-draft{
+  border-left-color:#d9a419;
+  background:#fffdf6;
+}
+.es-main{
+  flex:1 1 260px;
+  min-width:0;
+  display:flex;
+  flex-direction:column;
+  gap:3px;
+}
+.es-title{
+  font-size:14.5px;
+  color:#12261c;
+  word-break:break-word;
+}
+.es-meta{
+  font-size:12.5px;
+  color:#4b5f54;
+}
+.es-sub{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  flex-wrap:wrap;
+  font-size:11.5px;
+  color:#7d8f84;
+}
+.es-badge{
+  border-radius:999px;
+  padding:2px 9px;
+  font-size:11px;
+  font-weight:800;
+}
+.es-badge-draft{ background:#fdf3d8; color:#8a6d12; }
+.es-badge-live{ background:#e6f4ec; color:#14532d; }
+.es-actions{
+  display:flex;
+  gap:8px;
+  flex-wrap:wrap;
+}
+/* The floating "Exam Tools" button (z-index 1000) and the shared bottom
+   navigation must never sit on top of this panel: lift the overlay above
+   them so every Open / Publish / Delete button stays tappable. */
+#loadPanelOverlay.load-panel-overlay,
+#loadStepOverlay.load-panel-overlay{
+  z-index:1200;
+}
+
+.es-btn{
+  border:1.5px solid #cdd9d1;
+  background:#fff;
+  color:#26433a;
+  border-radius:9px;
+  padding:7px 12px;
+  font-size:12.5px;
+  font-weight:700;
+  cursor:pointer;
+  font-family:inherit;
+}
+.es-btn:hover{ background:#f2f7f4; }
+.es-open{ border-color:#14532d; color:#14532d; }
+.es-publish{ border-color:#c9930a; background:#fdf7e6; color:#7a5c07; }
+.es-danger{ border-color:#c98b80; color:#8C3B2E; }
+.es-danger:hover{ background:#fdf3f1; }
+@media screen and (max-width: 560px){
+  .es-card{ padding:11px 12px; }
+  .es-actions{ width:100%; gap:6px; }
+  /* three buttons fit on the first row, Delete takes the second one */
+  .es-actions .es-btn{ flex:1 1 40%; min-width:0; }
+  .es-actions .es-danger{ flex:1 1 100%; }
+  .exam-space-panel{ max-height:90vh; }
+}
