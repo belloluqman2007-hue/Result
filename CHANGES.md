@@ -1,5 +1,53 @@
 # UI Modernization — Change Log
 
+## Pack 113 - 2026-11-15
+
+Owner: "In the exam section. From the third question. If questions is written and need to be arranged it will just be jumping from up to down down to up. Fix that now and any other possible errors there. Fast and merge now"
+
+### Root cause 1 - the question the teacher was typing was thrown to the bottom of the page
+
+Every keystroke in the exam editor runs `rescueCaretBlock()` (`js/exam.js`, the `input` listener installed by `initExam`). That function's last instructions were:
+
+```js
+// Put the caret-carrying block back at the end of the zone so the
+// teacher keeps typing BELOW what was written, never inside it.
+if (zone.lastElementChild !== block) {
+    zone.appendChild(block);
+    moved = true;
+}
+```
+
+So **whatever block the caret sat in was moved to the END of the page**. While the teacher types the newest question that is invisible (it is already last). The moment they go back to an earlier one - question 3 of 6, to fix a spelling or add a word - the next letter moved that question below question 6. Type again and the page is re-ordered again: exactly the reported "jumping from up to down, down to up", starting at the point where there is something *after* the line being written (the third question onward, or any question that is not the last).
+
+Proven before the fix with the real page + real `js/exam.js` in jsdom:
+
+```
+typed one letter in Q3 -> Q1,Q2,Q4,Q5,Q6,Q3x      (Q3 thrown to the bottom)
+```
+
+The block is now **left exactly where it is**. It is only moved when it genuinely escaped the text zone (the real repair, handled earlier in the same function), never merely for not being last.
+
+### Root cause 2 - Enter left the caret OUTSIDE the new line
+
+The same family of bug, found while auditing the rest of the editor: the editor's own Enter handler created the new line, put the caret in it, and **then** called `flow.focus()`. Focusing the editable area re-creates its selection (it lands on the flow itself), so the caret was wiped from the new line straight after being placed. The line existed but the next letter did not go into it - the old "second line does not respond" coming back through another door. All four places that restore the caret now **focus first, then set the range** (`rescueCaretBlock`, `examInsertNewLine`, and both branches of `restoreExamCaret`).
+
+### Other errors fixed in the same section
+
+| Fault found | What it did | Fix |
+|---|---|---|
+| `saveExam()` read `document.querySelector("#coverPage .js-cover-instructions").innerHTML` | On any paper whose cover was missing (an old saved exam, a paper saved before Step 1 was filled) the click threw `Cannot read properties of null` **before the request was sent** - the exam was silently never saved | Read defensively (`instrEl ? instrEl.innerHTML : ""`); the save now always sends |
+| `duplicateExam(id)` copied only title/class/subject/term/session/duration, then reset the editor | "Duplicate" produced a **blank paper** - no cover, no questions, just "Copy of ..." | The full paper is loaded into the editor exactly like Open (cover values, instructions, every question block through `resetFlow`), the copy becomes a new unsaved draft, and the teacher lands on Step 2 with the questions in front of them |
+
+### Files
+
+| File | What changed |
+|---|---|
+| `js/exam.js` | `rescueCaretBlock()` no longer re-appends the caret block to the end of the text zone (root cause of the up/down jumping). The four caret restores focus the flow **before** placing the range, so Enter's new line keeps the caret. `saveExam()` no longer throws when the cover page is absent. `duplicateExam()` now carries the cover, the instructions and every question into the new draft instead of making an empty copy. |
+| `test/exam-question-order-test.js` (NEW) | Regression test: boots the real `create-exam.html` + real `js/exam.js` in jsdom and proves (A) typing in any question - first, middle, last - never changes the order, and survives the 800ms automatic re-pagination; (B) the question typed in is still the same child, never appended at the end; (C) Enter in the middle splits in place **and the caret really is inside the new line** (the next letters land there); (D) the pagination engine never re-orders, including the spill path (a question taller than a page) and 200 random question-size layouts; (E) Duplicate brings the questions with it; (F) saving without a cover still sends the exam. **Fails 6/12 on the pre-fix code, passes 16/16 now.** Wired into `npm test`. |
+| `sw.js` | Cache `v71` -> `v72`, so phones drop the old `js/exam.js` on the next load. |
+
+Exam layout, font sizing, printing, PDF/Word download, saving, the exam space (drafts/publishing) and every other route are untouched.
+
 ## Pack 112 - 2026-10-13
 
 Owner: "If student is picking in both batch entry and single student score it must automatically display scores that as been input before not just empty space and to avoid duplicate. Fix and merge now"

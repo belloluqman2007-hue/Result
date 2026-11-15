@@ -203,23 +203,35 @@ function initExam() {
             if (!zone.contains(block) && block.parentNode !== zone) zone.appendChild(block);
         }
 
-        // Put the caret-carrying block back at the end of the zone so the
-        // teacher keeps typing BELOW what was written, never inside it.
-        if (zone.lastElementChild !== block) {
-            zone.appendChild(block);
-            moved = true;
-        }
+        /* FIX (question order - owner: "from the third question, if questions
+           is written and need to be arranged it will just be jumping from up
+           to down down to up"):
+           The block the caret is in was ALWAYS re-appended to the END of the
+           zone ("so the teacher keeps typing below what was written"). That
+           was harmless only while typing the LAST line. The moment the
+           teacher went back to an earlier question - question 3 of 6, say -
+           the next keystroke moved that question to the bottom of the page,
+           so the paper silently re-ordered itself up/down/up/down after every
+           letter. The block now stays EXACTLY where it is: it is only moved
+           when it genuinely escaped the text zone (handled above), never for
+           being "not last". The caret is left alone as well, so typing
+           continues in place. */
         /* IMPORTANT: when nothing had to be moved, leave the caret exactly
            where the browser put it. Re-setting it on every keystroke would
            type every letter at the start of the line (reversed text). */
         if (!moved) return;
+        /* FIX (caret after focus): focus() MUST come before the range is set.
+           Focusing the editable flow re-creates its selection (it lands on
+           the flow itself), so focusing AFTER addRange() threw the caret
+           away again - the line was repaired but the teacher had to click
+           back into it before the next letter landed. */
+        if (!flow.contains(document.activeElement)) flow.focus({ preventScroll: true });
         try {
             const r = document.createRange();
             r.selectNodeContents(block);
             r.collapse(true);
             sel.removeAllRanges();
             sel.addRange(r);
-            if (!flow.contains(document.activeElement)) flow.focus({ preventScroll: true });
         } catch (e) {}
     }
 
@@ -321,12 +333,18 @@ function initExam() {
         }
         block.parentNode.insertBefore(newLine, block.nextSibling);
 
+        /* FIX (caret in the new line - see rescueCaretBlock): focus the
+           editable area FIRST, then place the caret in the new line. The old
+           order (caret, then focus) reset the selection to the flow itself,
+           so after pressing Enter the next letter did not land on the new
+           line - the "Enter does nothing / second line does not respond"
+           complaint coming back through a different door. */
+        if (!flow.contains(document.activeElement)) flow.focus({ preventScroll: true });
         const r = document.createRange();
         r.selectNodeContents(newLine);
         r.collapse(true);
         sel.removeAllRanges();
         sel.addRange(r);
-        if (!flow.contains(document.activeElement)) flow.focus({ preventScroll: true });
 
         // The page grew by one line: re-fit once the teacher pauses. The new
         // line is a real block, so no re-layout can mistake it for garbage.
@@ -950,15 +968,15 @@ function restoreExamCaret(anchor) {
             zone.appendChild(line);
         }
         try {
+            /* FIX (caret after focus): focus the flow BEFORE placing the
+               caret - focusing resets the selection (see rescueCaretBlock). */
+            if (flow && !flow.contains(document.activeElement)) flow.focus({ preventScroll: true });
             const r = document.createRange();
             r.selectNodeContents(line);
             r.collapse(true);
             const sel = window.getSelection();
             sel.removeAllRanges();
             sel.addRange(r);
-            if (!flow || !flow.contains(document.activeElement)) {
-                if (flow) flow.focus({ preventScroll: true });
-            }
         } catch (e) {}
         return;
     }
@@ -973,11 +991,12 @@ function restoreExamCaret(anchor) {
         const target = anchor.block;
         const max = target.childNodes.length;
         let offset = Math.min(anchor.offset, max);
+        /* FIX (caret after focus): focus first, then restore the caret. */
+        if (!flow.contains(document.activeElement)) flow.focus({ preventScroll: true });
         r.setStart(target, offset);
         r.collapse(true);
         sel.removeAllRanges();
         sel.addRange(r);
-        if (!flow.contains(document.activeElement)) flow.focus({ preventScroll: true });
     } catch (e) {}
 }
 
@@ -1630,7 +1649,13 @@ function saveExam() {
     // CHANGED (multi-exam in one PDF): the classic "instructions" column
     // stores the FIRST cover's instructions; extra covers keep their own
     // inside the saved flow (see serializeFlow).
-    const instructions = document.querySelector("#coverPage .js-cover-instructions").innerHTML;
+    // FIX (save crashed with no cover): this used to read .innerHTML straight
+    // off querySelector(), so on any paper whose cover page was missing (an
+    // old saved exam, a paper started before Step 1 was filled) the click
+    // threw "Cannot read properties of null" and the exam was NEVER saved -
+    // no request was even sent. It is now read defensively.
+    const instrEl = document.querySelector("#coverPage .js-cover-instructions");
+    const instructions = instrEl ? instrEl.innerHTML : "";
 
     if (!title || !cls || !subject || !term || !session) {
         alert("Please fill in the Exam Title and all the fields in the details step before saving.");
@@ -1822,29 +1847,59 @@ function publishExam(id, status) {
 }
 
 /* Make your own editable copy of an exam (drafts or published, yours or the
-   staff bank) - the original is never touched. */
+   staff bank) - the original is never touched.
+   FIX (Duplicate made an EMPTY copy): the old code only copied the title,
+   class, subject, term, session and duration, then reset the editor - the
+   questions and the cover were thrown away, so "Duplicate" produced a blank
+   paper with "Copy of ..." on it. The full paper is now loaded into the
+   editor exactly like Open does (cover values, instructions and every
+   question block), the copy becomes a NEW unsaved draft, and the teacher
+   lands on Step 2 with the questions in front of them. */
 function duplicateExam(id) {
     fetch("/exam/" + id)
-        .then(function (r) { return r.json(); })
+        .then(function (r) {
+            if (!r.ok) throw new Error("HTTP " + r.status);
+            return r.json();
+        })
         .then(function (exam) {
             currentExamId = null; // the copy is a NEW paper, saved as a fresh draft
-            try { examGotoStep(1); } catch (e) {}
-            try { if (document.getElementById("examTitle")) document.getElementById("examTitle").value = "Copy of " + (exam.title || "Exam"); } catch (e) {}
-            try {
-                [[ "examClass", exam.class_name ], [ "examSubject", exam.subject ],
-                 [ "examTerm", exam.term ], [ "examSession", exam.session ],
-                 [ "examDuration", exam.duration ]].forEach(function (pair) {
-                    const sel = document.getElementById(pair[0]);
-                    if (!sel) return;
-                    if (pair[1] && !Array.from(sel.options).some(function (o) { return o.value === pair[1]; })) {
-                        sel.innerHTML += "<option value=\"" + examSpaceEsc(pair[1]) + "\">" + examSpaceEsc(pair[1]) + "</option>";
-                    }
-                    if (pair[1]) sel.value = pair[1];
-                });
-            } catch (e) {}
             try { closeLoadPanel(); } catch (e) {}
+
+            // Fill Step 1 from the original (no cover to show yet).
+            try { if (document.getElementById("examTitle")) document.getElementById("examTitle").value = "Copy of " + (exam.title || "Exam"); } catch (e) {}
+            try { if (document.getElementById("examClass")) document.getElementById("examClass").value = exam.class_name || ""; } catch (e) {}
+            try { if (document.getElementById("examSubject")) document.getElementById("examSubject").value = exam.subject || ""; } catch (e) {}
+            try { if (document.getElementById("examTerm")) document.getElementById("examTerm").value = exam.term || ""; } catch (e) {}
+            try { if (document.getElementById("examSession")) document.getElementById("examSession").value = exam.session || ""; } catch (e) {}
+            try { if (document.getElementById("examDuration")) document.getElementById("examDuration").value = exam.duration || ""; } catch (e) {}
+
+            // Put the ORIGINAL'S QUESTIONS into the editor (same path Open uses).
+            var flowHtml = "";
+            try {
+                var parsed = JSON.parse(exam.body_html);
+                if (Array.isArray(parsed)) flowHtml = parsed.join("");
+                else if (typeof parsed === "string") flowHtml = parsed;
+                else flowHtml = exam.body_html;
+            } catch (e) {
+                flowHtml = exam.body_html || "";
+            }
+            try { resetFlow(flowHtml || ""); } catch (e) {}
+
+            // Keep the cover instructions of a classic (single) paper.
+            try {
+                var isMultiSave = exam.body_html && exam.body_html.indexOf("page-one") !== -1;
+                if (exam.instructions && !isMultiSave) {
+                    var instrEl = document.querySelector("#coverPage .js-cover-instructions");
+                    if (instrEl) instrEl.innerHTML = exam.instructions;
+                }
+            } catch (e) {}
+
+            try { generateCoverPage(); } catch (e) {}
+            try { fitAllCoverOneLiners(); } catch (e) {}
+            try { examGotoStep(2); } catch (e) {}
+
             if (window.amsToast) {
-                window.amsToast("Copied into your drafts - save it to make it yours.", "info", 6000);
+                window.amsToast("Copied into your drafts - the questions are here; press Save Exam to make it yours.", "success", 7000);
             }
         })
         .catch(function () {
