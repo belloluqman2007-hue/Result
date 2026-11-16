@@ -606,11 +606,3 @@ public class MainActivity extends BridgeActivity {
         }
     }
 }
-pter, attrs);
-                } catch (Exception ex) {
-                    Toast.makeText(MainActivity.this, "Print unavailable on this device.", Toast.LENGTH_SHORT).show();
-                }
-            });
-        }
-    }
-}
