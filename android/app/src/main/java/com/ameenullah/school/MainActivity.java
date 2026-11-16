@@ -3,10 +3,12 @@ package com.ameenullah.school;
 import android.annotation.SuppressLint;
 import android.app.DownloadManager;
 import android.content.ActivityNotFoundException;
+import android.content.BroadcastReceiver;
 import android.content.ContentResolver;
 import android.content.ContentValues;
 import android.content.Context;
 import android.content.Intent;
+import android.content.IntentFilter;
 import android.graphics.Color;
 import android.net.Uri;
 import android.os.Build;
@@ -43,13 +45,19 @@ import java.io.File;
 import java.io.FileOutputStream;
 import java.io.OutputStream;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.Locale;
+import java.util.Map;
 
 public class MainActivity extends BridgeActivity {
 
     private static final String LOCAL_SPLASH_URL = "https://localhost/index.html";
     private static final String LOCAL_OFFLINE_URL = "https://localhost/offline.html";
     private long lastBackPressTime = 0L;
+
+    // DownloadManager id -> MediaStore Downloads URI awaiting IS_PENDING=0.
+    private final Map<Long, Uri> pendingDownloads = new HashMap<>();
+    private BroadcastReceiver downloadCompleteReceiver = null;
 
     private static final String DOCUMENT_START_BRIDGE_JS =
         "(function(){" +
@@ -139,10 +147,23 @@ public class MainActivity extends BridgeActivity {
     @Override
     public void onPause() {
         super.onPause();
+        // Persist the login session cookie to disk so the user stays logged
+        // in when the app is closed and reopened.
         try {
             CookieManager.getInstance().flush();
         } catch (Exception ignored) {
         }
+    }
+
+    @Override
+    protected void onDestroy() {
+        // Final flush on teardown (e.g. Back-button exit) so the session
+        // cookie survives process death.
+        try {
+            CookieManager.getInstance().flush();
+        } catch (Exception ignored) {
+        }
+        super.onDestroy();
     }
 
     private void styleSystemBars() {
@@ -369,15 +390,74 @@ public class MainActivity extends BridgeActivity {
             req.setTitle(fileName);
             req.setDescription("Downloading school file...");
             req.setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED);
-            req.setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, fileName);
+
+            Uri mediaStoreUri = null;
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                // Android 10+ (scoped storage): reserve a MediaStore Downloads
+                // entry and point DownloadManager at it. The legacy
+                // setDestinationInExternalPublicDir() path is blocked on
+                // API 29+ without storage permission and fails with
+                // "permission denied" in the Downloads app.
+                ContentResolver resolver = getContentResolver();
+                ContentValues values = new ContentValues();
+                values.put(MediaStore.Downloads.DISPLAY_NAME, fileName);
+                values.put(MediaStore.Downloads.MIME_TYPE, resolveMimeType(fileName, mimeType));
+                values.put(MediaStore.Downloads.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS);
+                values.put(MediaStore.Downloads.IS_PENDING, 1);
+                mediaStoreUri = resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values);
+                if (mediaStoreUri != null) {
+                    req.setDestinationUri(mediaStoreUri);
+                } else {
+                    req.setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, fileName);
+                    mediaStoreUri = null;
+                }
+            } else {
+                req.setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, fileName);
+            }
 
             DownloadManager dm = (DownloadManager) getSystemService(Context.DOWNLOAD_SERVICE);
             if (dm != null) {
-                dm.enqueue(req);
+                long downloadId = dm.enqueue(req);
+                if (mediaStoreUri != null) {
+                    pendingDownloads.put(downloadId, mediaStoreUri);
+                    ensureDownloadCompleteReceiver();
+                }
                 Toast.makeText(this, "Downloading " + fileName + "...", Toast.LENGTH_SHORT).show();
             }
         } catch (Exception ex) {
+            Toast.makeText(this, "Download failed: " + ex.getMessage(), Toast.LENGTH_LONG).show();
             openExternalUri(Uri.parse(url));
+        }
+    }
+
+    // Clears MediaStore IS_PENDING once a DownloadManager download finishes,
+    // so the completed file shows up in the phone's Downloads folder.
+    // Registered on the application context (process lifetime) so it survives
+    // activity recreation while a download is in flight.
+    private void ensureDownloadCompleteReceiver() {
+        if (downloadCompleteReceiver != null) return;
+        downloadCompleteReceiver = new BroadcastReceiver() {
+            @Override
+            public void onReceive(Context context, Intent intent) {
+                if (intent == null) return;
+                long id = intent.getLongExtra(DownloadManager.EXTRA_DOWNLOAD_ID, -1);
+                Uri uri = pendingDownloads.remove(id);
+                if (uri != null) {
+                    try {
+                        ContentValues done = new ContentValues();
+                        done.put(MediaStore.Downloads.IS_PENDING, 0);
+                        getContentResolver().update(uri, done, null, null);
+                    } catch (Exception ignored) {
+                    }
+                }
+            }
+        };
+        IntentFilter filter = new IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE);
+        Context appContext = getApplicationContext();
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            appContext.registerReceiver(downloadCompleteReceiver, filter, Context.RECEIVER_NOT_EXPORTED);
+        } else {
+            appContext.registerReceiver(downloadCompleteReceiver, filter);
         }
     }
 
@@ -519,6 +599,14 @@ public class MainActivity extends BridgeActivity {
                         .setMediaSize(PrintAttributes.MediaSize.ISO_A4)
                         .build();
                     printManager.print(safeJob, adapter, attrs);
+                } catch (Exception ex) {
+                    Toast.makeText(MainActivity.this, "Print unavailable on this device.", Toast.LENGTH_SHORT).show();
+                }
+            });
+        }
+    }
+}
+pter, attrs);
                 } catch (Exception ex) {
                     Toast.makeText(MainActivity.this, "Print unavailable on this device.", Toast.LENGTH_SHORT).show();
                 }
