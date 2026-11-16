@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <shortcut
+        android:shortcutId="check_result"
+        android:enabled="true"
+        android:icon="@mipmap/ic_launcher_round"
+        android:shortcutShortLabel="@string/shortcut_result_short"
+        android:shortcutLongLabel="@string/shortcut_result_long">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetPackage="com.ameenullah.school"
+            android:targetClass="com.ameenullah.school.MainActivity">
+            <extra android:name="target_path" android:value="/portal-login.html" />
+        </intent>
+    </shortcut>
+
+    <shortcut
+        android:shortcutId="parent_portal"
+        android:enabled="true"
+        android:icon="@mipmap/ic_launcher_round"
+        android:shortcutShortLabel="@string/shortcut_portal_short"
+        android:shortcutLongLabel="@string/shortcut_portal_long">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetPackage="com.ameenullah.school"
+            android:targetClass="com.ameenullah.school.MainActivity">
+            <extra android:name="target_path" android:value="/portal.html" />
+        </intent>
+    </shortcut>
+
+    <shortcut
+        android:shortcutId="staff_login"
+        android:enabled="true"
+        android:icon="@mipmap/ic_launcher_round"
+        android:shortcutShortLabel="@string/shortcut_staff_short"
+        android:shortcutLongLabel="@string/shortcut_staff_long">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetPackage="com.ameenullah.school"
+            android:targetClass="com.ameenullah.school.MainActivity">
+            <extra android:name="target_path" android:value="/login.html" />
+        </intent>
+    </shortcut>
+</shortcuts>

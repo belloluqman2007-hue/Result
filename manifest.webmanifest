@@ -7,8 +7,8 @@
   "scope": "./",
   "display": "standalone",
   "orientation": "any",
-  "background_color": "#2f5021",
-  "theme_color": "#2f5021",
+  "background_color": "#0B2E22",
+  "theme_color": "#0B2E22",
   "icons": [
     {
       "src": "icons/icon-192.png",
@@ -33,6 +33,29 @@
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Check Result",
+      "short_name": "Result",
+      "description": "Check published student results",
+      "url": "./portal-login.html",
+      "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Parent Portal",
+      "short_name": "Portal",
+      "description": "Open the Parent & Student Portal",
+      "url": "./portal.html",
+      "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Staff Login",
+      "short_name": "Staff",
+      "description": "Teacher & Admin Login",
+      "url": "./login.html",
+      "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }]
     }
   ]
 }

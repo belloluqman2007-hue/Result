@@ -1,0 +1,138 @@
+name: Build Android App (APK & Play Store AAB)
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "android/**"
+      - "mobile-app/**"
+      - "capacitor.config.json"
+      - "images/LOGO.JPG"
+      - "package.json"
+      - "package-lock.json"
+      - ".github/workflows/android-apk.yml"
+  pull_request:
+    paths:
+      - "android/**"
+      - "mobile-app/**"
+      - "capacitor.config.json"
+      - "package.json"
+      - ".github/workflows/android-apk.yml"
+  workflow_dispatch:
+    inputs:
+      server_url:
+        description: "Optional live server URL override (leave empty to use mobile-app/app-config.json)"
+        required: false
+        type: string
+      publish_release:
+        description: "Publish signed APK to GitHub Releases (powers /download/app.apk on the website)"
+        required: false
+        default: true
+        type: boolean
+
+permissions:
+  contents: write
+
+jobs:
+  build-android:
+    name: Build Signed Android APK & AAB
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: "temurin"
+          java-version: "21"
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Set up Gradle cache
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Install dependencies & sync Capacitor Android assets
+        env:
+          AMS_APP_SERVER_URL: ${{ inputs.server_url }}
+        run: |
+          npm ci
+          npm run app:sync
+
+      - name: Prepare optional production keystore
+        id: keystore
+        env:
+          KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          if [ -n "$KEYSTORE_B64" ]; then
+            echo "$KEYSTORE_B64" | base64 --decode > "$RUNNER_TEMP/ameenullah-release.jks"
+            echo "keystore_path=$RUNNER_TEMP/ameenullah-release.jks" >> "$GITHUB_OUTPUT"
+            echo "Using custom ANDROID_KEYSTORE_BASE64 secret for release signing."
+          else
+            echo "keystore_path=" >> "$GITHUB_OUTPUT"
+            echo "No custom keystore secret set; using built-in signed APK fallback so APK installs directly on phones."
+          fi
+
+      - name: Build Signed APK and Play Store App Bundle (AAB)
+        working-directory: android
+        env:
+          ANDROID_KEYSTORE_PATH: ${{ steps.keystore.outputs.keystore_path }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          chmod +x ./gradlew
+          ./gradlew assembleRelease bundleRelease --no-daemon
+
+      - name: Collect signed outputs
+        run: |
+          mkdir -p release-dist
+          cp android/app/build/outputs/apk/release/app-release.apk release-dist/Ameenullah-School.apk
+          cp android/app/build/outputs/bundle/release/app-release.aab release-dist/Ameenullah-School.aab
+          ls -lh release-dist/
+
+      - name: Upload Android APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Ameenullah-School-APK
+          path: release-dist/Ameenullah-School.apk
+          if-no-files-found: error
+          retention-days: 90
+
+      - name: Upload Play Store AAB artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Ameenullah-School-PlayStore-AAB
+          path: release-dist/Ameenullah-School.aab
+          if-no-files-found: error
+          retention-days: 90
+
+      - name: Publish APK to GitHub Releases (latest)
+        if: >-
+          (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
+          (github.event_name == 'workflow_dispatch' && inputs.publish_release != false)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="apk-latest"
+          TITLE="Ameenullah School Android App"
+          NOTES="Official Android mobile app (.apk) for **Ameenullah School of Arabic and Islamic Studies**.\n\n- **Direct Phone Install:** Download \`Ameenullah-School.apk\` on any Android phone and tap to install.\n- **Play Store Bundle:** \`Ameenullah-School.aab\` is ready for Google Play Console upload."
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" release-dist/Ameenullah-School.apk release-dist/Ameenullah-School.aab --clobber
+            gh release edit "$TAG" --title "$TITLE" --latest
+          else
+            gh release create "$TAG" release-dist/Ameenullah-School.apk release-dist/Ameenullah-School.aab \
+              --title "$TITLE" \
+              --notes "$(printf '%b' "$NOTES")" \
+              --latest
+          fi
