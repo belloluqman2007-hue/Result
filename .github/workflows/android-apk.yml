@@ -56,8 +56,38 @@ jobs:
           distribution: "temurin"
           java-version: "21"
 
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
+      - name: Set up Android SDK (preinstalled + ensure API 36)
+        # GitHub-hosted ubuntu-latest runners already ship the Android SDK
+        # ($ANDROID_HOME / $ANDROID_SDK_ROOT). The third-party
+        # android-actions/setup-android action proved fragile in CI (it failed
+        # before Gradle ever ran), so we use the preinstalled SDK directly and
+        # explicitly install the API 36 platform + build-tools Capacitor 8 needs.
+        run: |
+          if [ -z "$ANDROID_HOME" ]; then
+            if [ -n "$ANDROID_SDK_ROOT" ]; then
+              export ANDROID_HOME="$ANDROID_SDK_ROOT"
+            else
+              export ANDROID_HOME=/usr/local/lib/android/sdk
+            fi
+          fi
+          export ANDROID_SDK_ROOT="$ANDROID_HOME"
+          echo "ANDROID_HOME=$ANDROID_HOME"
+          echo "ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT"
+          ls -la "$ANDROID_HOME" || true
+          SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          if [ ! -x "$SDKMANAGER" ]; then
+            SDKMANAGER="$(command -v sdkmanager || true)"
+          fi
+          echo "sdkmanager: $SDKMANAGER"
+          if [ -n "$SDKMANAGER" ] && [ -x "$SDKMANAGER" ]; then
+            yes | "$SDKMANAGER" --licenses >/dev/null 2>&1 || true
+            "$SDKMANAGER" "platform-tools" "platforms;android-36" "build-tools;36.0.0"
+            "$SDKMANAGER" --list_installed
+          else
+            echo "::warning::sdkmanager not found; relying on preinstalled Android SDK."
+          fi
+          echo "ANDROID_HOME=$ANDROID_HOME" >> "$GITHUB_ENV"
+          echo "ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT" >> "$GITHUB_ENV"
 
       - name: Set up Gradle cache
         uses: gradle/actions/setup-gradle@v4
