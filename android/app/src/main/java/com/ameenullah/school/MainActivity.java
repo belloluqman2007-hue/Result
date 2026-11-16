@@ -33,6 +33,7 @@ import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.widget.Toast;
 import androidx.activity.OnBackPressedCallback;
+import androidx.core.content.ContextCompat;
 import androidx.core.content.FileProvider;
 import androidx.core.splashscreen.SplashScreen;
 import androidx.core.view.WindowInsetsControllerCompat;
@@ -156,9 +157,11 @@ public class MainActivity extends BridgeActivity {
     }
 
     @Override
-    protected void onDestroy() {
+    public void onDestroy() {
         // Final flush on teardown (e.g. Back-button exit) so the session
-        // cookie survives process death.
+        // cookie survives process death. Must stay public: Capacitor's
+        // BridgeActivity.onDestroy() is public, so a protected override would
+        // be a weaker access privilege and fail the release build.
         try {
             CookieManager.getInstance().flush();
         } catch (Exception ignored) {
@@ -454,11 +457,15 @@ public class MainActivity extends BridgeActivity {
         };
         IntentFilter filter = new IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE);
         Context appContext = getApplicationContext();
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            appContext.registerReceiver(downloadCompleteReceiver, filter, Context.RECEIVER_NOT_EXPORTED);
-        } else {
-            appContext.registerReceiver(downloadCompleteReceiver, filter);
-        }
+        // ContextCompat applies the API 33+ export flag itself and is exempt
+        // from the UnspecifiedRegisterReceiverFlag lint error that fails
+        // release builds when the raw 2-arg registerReceiver() is used.
+        ContextCompat.registerReceiver(
+            appContext,
+            downloadCompleteReceiver,
+            filter,
+            ContextCompat.RECEIVER_NOT_EXPORTED
+        );
     }
 
     private String sanitizeFileName(String rawName, String mimeType) {
