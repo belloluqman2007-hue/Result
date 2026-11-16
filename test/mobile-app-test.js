@@ -173,7 +173,23 @@ function bootChildServer(port, extraEnv = {}) {
   );
   check("MainActivity flushes the login session cookie on pause AND destroy (stay logged in)",
     mainActivity.includes("CookieManager.getInstance().flush()") &&
-    mainActivity.includes("protected void onDestroy()")
+    mainActivity.includes("public void onDestroy()") &&
+    !mainActivity.includes("protected void onDestroy()")
+  );
+  // Capacitor's BridgeActivity declares public onPause/onDestroy, so overriding
+  // them as protected is a "weaker access privileges" compile error that breaks
+  // the release build. Pin the exact modifiers.
+  check("MainActivity lifecycle overrides match Capacitor's access modifiers",
+    mainActivity.includes("public void onPause()") &&
+    mainActivity.includes("public void onDestroy()") &&
+    mainActivity.includes("protected void onCreate(Bundle savedInstanceState)") &&
+    mainActivity.includes("protected void onNewIntent(Intent intent)") &&
+    !mainActivity.includes("protected void onPause()")
+  );
+  check("Download-complete receiver registered via lint-safe ContextCompat",
+    mainActivity.includes("ContextCompat.registerReceiver") &&
+    mainActivity.includes("ContextCompat.RECEIVER_NOT_EXPORTED") &&
+    !/appContext\.registerReceiver\(/.test(mainActivity)
   );
   check("MainActivity downloads via MediaStore on Android 10+ (no legacy permission-denied path)",
     mainActivity.includes("setDestinationUri") &&
