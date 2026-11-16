@@ -112,11 +112,74 @@ function amsIndexHtml(req, res) {
 app.use((req, res, next) => {
     if (String(process.env.AMS_CANONICAL_REDIRECT || "").toLowerCase() === "off") return next();
     if (req.method !== "GET" && req.method !== "HEAD") return next();
+    if (/AmeenullahAndroidApp/i.test(String(req.headers["user-agent"] || ""))) return next();
     const host = amsRequestHost(req);
     if (!host || AMS_KNOWN_PUBLIC_HOSTS.indexOf(host) === -1) return next();
     if (host === amsPrimaryHost()) return next();
     if (String(req.headers.accept || "").indexOf("text/html") === -1) return next();
     res.redirect(301, "https://" + amsPrimaryHost() + req.originalUrl);
+});
+
+// NEW (Mobile App pack): public discovery/health endpoint & direct APK download
+// route for the official Ameenullah School Android App (com.ameenullah.school).
+const AMS_MOBILE_CONFIG_PATH = path.join(__dirname, "mobile-app", "app-config.json");
+function readMobileAppConfig() {
+    try {
+        return JSON.parse(fs.readFileSync(AMS_MOBILE_CONFIG_PATH, "utf8"));
+    } catch (_) {
+        return {
+            appId: "com.ameenullah.school",
+            appName: "Ameenullah School",
+            shortName: "Ameenullah",
+            versionName: "1.0.0",
+            apkFileName: "Ameenullah-School.apk",
+            githubRepo: "belloluqman2007-hue/Result"
+        };
+    }
+}
+
+app.options("/api/app-config", (req, res) => {
+    res.set("Access-Control-Allow-Origin", "*");
+    res.set("Access-Control-Allow-Methods", "GET, OPTIONS");
+    res.sendStatus(204);
+});
+
+app.get("/api/app-config", (req, res) => {
+    const mobileCfg = readMobileAppConfig();
+    const explicitSite = String(process.env.SITE_URL || "").trim().replace(/\/+$/, "");
+    res.set("Access-Control-Allow-Origin", "*");
+    res.set("Cache-Control", "no-store");
+    res.json({
+        ok: true,
+        appId: mobileCfg.appId || "com.ameenullah.school",
+        appName: mobileCfg.appName || "Ameenullah School",
+        shortName: mobileCfg.shortName || "Ameenullah",
+        versionName: mobileCfg.versionName || "1.0.0",
+        explicitSiteUrl: Boolean(explicitSite),
+        serverUrl: explicitSite || amsSiteBase(req),
+        apkDownloadUrl: "/download/app.apk"
+    });
+});
+
+app.get("/download/app.apk", (req, res) => {
+    const customApkUrl = String(process.env.APK_DOWNLOAD_URL || "").trim();
+    if (customApkUrl) {
+        return res.redirect(302, customApkUrl);
+    }
+    const mobileCfg = readMobileAppConfig();
+    const apkName = mobileCfg.apkFileName || "Ameenullah-School.apk";
+    const localCandidates = [
+        path.join(__dirname, apkName),
+        path.join(__dirname, "uploads", apkName)
+    ];
+    for (const candidate of localCandidates) {
+        if (fs.existsSync(candidate)) {
+            res.type("application/vnd.android.package-archive");
+            return res.download(candidate, apkName);
+        }
+    }
+    const repo = mobileCfg.githubRepo || "belloluqman2007-hue/Result";
+    return res.redirect(302, "https://github.com/" + repo + "/releases/latest/download/" + apkName);
 });
 
 // NEW (Pack 54/55 + canonical fix): Explicit high-priority SEO routes for

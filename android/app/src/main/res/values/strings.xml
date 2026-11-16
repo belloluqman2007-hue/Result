@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Ameenullah</string>
+    <string name="title_activity_main">Ameenullah School</string>
+    <string name="package_name">com.ameenullah.school</string>
+    <string name="custom_url_scheme">com.ameenullah.school</string>
+    <string name="shortcut_result_short">Check Result</string>
+    <string name="shortcut_result_long">Check Student Result</string>
+    <string name="shortcut_portal_short">Parent Portal</string>
+    <string name="shortcut_portal_long">Open Parent Portal</string>
+    <string name="shortcut_staff_short">Staff Login</string>
+    <string name="shortcut_staff_long">Teacher &amp; Admin Login</string>
+</resources>

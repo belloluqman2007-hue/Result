@@ -14,6 +14,20 @@
 (function () {
   "use strict";
 
+  var isNativeAndroidApp = Boolean(
+    window.AmeenullahAndroid ||
+    window.AMS_IS_ANDROID_APP ||
+    (window.Capacitor && typeof window.Capacitor.isNativePlatform === "function" && window.Capacitor.isNativePlatform()) ||
+    /AmeenullahAndroidApp/i.test(navigator.userAgent || "")
+  );
+
+  if (isNativeAndroidApp) {
+    document.documentElement.classList.add("ams-native-app");
+    var dlBtn = document.getElementById("wb2DownloadAppBtn");
+    if (dlBtn) dlBtn.style.display = "none";
+    return;
+  }
+
   // ---------- 1. Register the service worker ----------
   if ("serviceWorker" in navigator) {
     window.addEventListener("load", function () {

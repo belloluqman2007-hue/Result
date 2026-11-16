@@ -1,0 +1,15 @@
+{
+  "appId": "com.ameenullah.school",
+  "appName": "Ameenullah School",
+  "shortName": "Ameenullah",
+  "versionName": "1.0.0",
+  "versionCode": 1,
+  "serverUrl": "https://result-cfn8.onrender.com",
+  "fallbackServerUrls": [
+    "https://result-production-69ea.up.railway.app"
+  ],
+  "apkFileName": "Ameenullah-School.apk",
+  "githubRepo": "belloluqman2007-hue/Result",
+  "themeColor": "#0B2E22",
+  "accentColor": "#EFBE4A"
+}

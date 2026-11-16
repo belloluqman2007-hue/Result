@@ -1,0 +1,569 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>Ameenullah School</title>
+  <style>
+    :root {
+      --emerald-deep: #072017;
+      --emerald: #0B2E22;
+      --emerald-mid: #164A37;
+      --gold: #EFBE4A;
+      --gold-soft: rgba(239, 190, 74, 0.18);
+      --cream: #FAF7F0;
+      --muted: rgba(255, 255, 255, 0.76);
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    html, body {
+      min-height: 100%;
+      font-family: "Segoe UI", system-ui, -apple-system, Roboto, Arial, sans-serif;
+      background: radial-gradient(circle at 50% 18%, #164A37 0%, #0B2E22 52%, #061A13 100%);
+      color: #fff;
+    }
+    body {
+      min-height: 100vh;
+      min-height: 100dvh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: space-between;
+      padding: calc(env(safe-area-inset-top, 16px) + 20px) 22px calc(env(safe-area-inset-bottom, 16px) + 18px);
+      text-align: center;
+    }
+    .top-bismillah {
+      font-size: 1.25rem;
+      color: var(--gold);
+      letter-spacing: 0.3px;
+      opacity: 0.95;
+      font-family: "Amiri", "Traditional Arabic", serif;
+    }
+    .center-wrap {
+      width: 100%;
+      max-width: 410px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 14px;
+    }
+    .crest-ring {
+      width: 126px;
+      height: 126px;
+      border-radius: 50%;
+      background: #ffffff;
+      padding: 8px;
+      box-shadow:
+        0 0 0 4px rgba(239, 190, 74, 0.45),
+        0 18px 46px rgba(0, 0, 0, 0.45);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      animation: floatCrest 3.2s ease-in-out infinite;
+    }
+    @keyframes floatCrest {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(-4px); }
+    }
+    .crest-ring img {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      border-radius: 50%;
+    }
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 5px 14px;
+      border-radius: 999px;
+      background: var(--gold-soft);
+      border: 1px solid rgba(239, 190, 74, 0.4);
+      color: var(--gold);
+      font-size: 0.76rem;
+      font-weight: 700;
+      letter-spacing: 0.7px;
+      text-transform: uppercase;
+    }
+    h1 {
+      font-size: 1.22rem;
+      line-height: 1.32;
+      font-weight: 800;
+      letter-spacing: 0.4px;
+      color: #ffffff;
+    }
+    .ar-name {
+      font-size: 1.15rem;
+      color: var(--gold);
+      font-family: "Amiri", "Traditional Arabic", serif;
+      margin-top: -4px;
+    }
+    .location {
+      font-size: 0.8rem;
+      color: var(--muted);
+      letter-spacing: 0.4px;
+    }
+    .status-box {
+      margin-top: 10px;
+      width: 100%;
+      background: rgba(255, 255, 255, 0.07);
+      border: 1px solid rgba(255, 255, 255, 0.13);
+      border-radius: 18px;
+      padding: 18px 18px 16px;
+      backdrop-filter: blur(10px);
+    }
+    .spinner-row {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 11px;
+      font-size: 0.94rem;
+      font-weight: 600;
+      color: #fff;
+    }
+    .spinner {
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      border: 2.6px solid rgba(239, 190, 74, 0.25);
+      border-top-color: var(--gold);
+      animation: spin 0.85s linear infinite;
+      flex-shrink: 0;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .sub-hint {
+      margin-top: 8px;
+      font-size: 0.82rem;
+      line-height: 1.45;
+      color: var(--muted);
+    }
+    .progress-track {
+      margin-top: 12px;
+      height: 4px;
+      width: 100%;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.12);
+      overflow: hidden;
+    }
+    .progress-bar {
+      height: 100%;
+      width: 24%;
+      border-radius: 999px;
+      background: linear-gradient(90deg, var(--gold), #ffe08a);
+      transition: width 0.5s ease;
+    }
+    .quick-grid {
+      margin-top: 14px;
+      width: 100%;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 9px;
+    }
+    .q-btn {
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(255, 255, 255, 0.16);
+      color: #fff;
+      border-radius: 12px;
+      padding: 11px 10px;
+      font-size: 0.82rem;
+      font-weight: 600;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      transition: background 0.18s ease, border-color 0.18s ease, transform 0.12s ease;
+    }
+    .q-btn.active, .q-btn:active {
+      background: rgba(239, 190, 74, 0.22);
+      border-color: var(--gold);
+      color: #fff;
+    }
+    .offline-actions {
+      display: none;
+      margin-top: 14px;
+      gap: 10px;
+      flex-direction: column;
+    }
+    .offline-actions.visible { display: flex; }
+    .btn-gold {
+      background: linear-gradient(135deg, #EFBE4A, #d99f26);
+      color: #1d1502;
+      border: none;
+      border-radius: 999px;
+      padding: 12px 22px;
+      font-size: 0.94rem;
+      font-weight: 800;
+      cursor: pointer;
+      box-shadow: 0 8px 20px rgba(0, 0, 0, 0.28);
+    }
+    .btn-ghost {
+      background: transparent;
+      color: var(--muted);
+      border: 1px solid rgba(255, 255, 255, 0.22);
+      border-radius: 999px;
+      padding: 9px 16px;
+      font-size: 0.8rem;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .settings-modal {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(4, 15, 11, 0.82);
+      z-index: 50;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+    .settings-modal.open { display: flex; }
+    .settings-card {
+      background: #fff;
+      color: #1c2822;
+      border-radius: 18px;
+      padding: 22px 20px;
+      width: 100%;
+      max-width: 380px;
+      text-align: left;
+      box-shadow: 0 24px 60px rgba(0, 0, 0, 0.45);
+    }
+    .settings-card h2 {
+      font-size: 1.05rem;
+      color: var(--emerald);
+      margin-bottom: 6px;
+    }
+    .settings-card p {
+      font-size: 0.82rem;
+      color: #52635a;
+      line-height: 1.45;
+      margin-bottom: 12px;
+    }
+    .settings-card input {
+      width: 100%;
+      padding: 11px 12px;
+      border: 1.5px solid #c9d6cf;
+      border-radius: 10px;
+      font-size: 0.9rem;
+      margin-bottom: 12px;
+      outline: none;
+    }
+    .settings-card input:focus { border-color: var(--emerald); }
+    .settings-row {
+      display: flex;
+      gap: 8px;
+      justify-content: flex-end;
+      flex-wrap: wrap;
+    }
+    .settings-row button {
+      padding: 9px 14px;
+      border-radius: 9px;
+      font-size: 0.83rem;
+      font-weight: 700;
+      cursor: pointer;
+      border: none;
+    }
+    .s-save { background: var(--emerald); color: #fff; }
+    .s-reset { background: #eef3f0; color: #2b3d34; }
+    .s-cancel { background: transparent; color: #66756d; }
+    .foot {
+      font-size: 0.75rem;
+      color: rgba(255, 255, 255, 0.55);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .foot button {
+      background: none;
+      border: none;
+      color: rgba(239, 190, 74, 0.8);
+      font-size: 0.75rem;
+      cursor: pointer;
+      text-decoration: underline;
+    }
+  </style>
+  <script src="app-config.js"></script>
+</head>
+<body>
+  <div class="top-bismillah" lang="ar" dir="rtl">بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ</div>
+
+  <main class="center-wrap">
+    <div class="crest-ring" id="crestTap">
+      <img src="logo.jpg" alt="Ameenullah School Crest">
+    </div>
+    <div class="badge">&#11088; Knowledge &amp; Worship &#11088;</div>
+    <h1>AMEENULLAH SCHOOL OF<br>ARABIC &amp; ISLAMIC STUDIES</h1>
+    <div class="ar-name" lang="ar" dir="rtl">مدرسة أمين اللّه للعلوم العربيّة الإسلاميّة</div>
+    <div class="location">Ijebu-Ode, Ogun State &middot; Official Mobile App</div>
+
+    <div class="status-box">
+      <div class="spinner-row">
+        <span class="spinner" id="statusSpinner"></span>
+        <span id="statusTitle">Connecting to school portal&hellip;</span>
+      </div>
+      <p class="sub-hint" id="statusHint">Opening your live results, classes, and school dashboard.</p>
+      <div class="progress-track" id="progressTrack">
+        <div class="progress-bar" id="progressBar"></div>
+      </div>
+
+      <div class="offline-actions" id="offlineActions">
+        <button type="button" class="btn-gold" id="retryBtn">&#128260; Reconnect Now</button>
+        <button type="button" class="btn-ghost" id="openSettingsBtn">&#9881; Server URL Settings</button>
+      </div>
+    </div>
+
+    <div class="quick-grid" aria-label="Choose destination">
+      <button type="button" class="q-btn active" data-path="/">&#127968; School Home</button>
+      <button type="button" class="q-btn" data-path="/portal-login.html">&#128202; Check Result</button>
+      <button type="button" class="q-btn" data-path="/portal.html">&#128101; Parent Portal</button>
+      <button type="button" class="q-btn" data-path="/login.html">&#128272; Staff Login</button>
+    </div>
+  </main>
+
+  <footer class="foot">
+    <span>AMSAIS Mobile</span>
+    <span>&middot;</span>
+    <button type="button" id="footSettingsBtn">Server Settings</button>
+  </footer>
+
+  <div class="settings-modal" id="settingsModal" role="dialog" aria-modal="true" aria-labelledby="settingsHeading">
+    <div class="settings-card">
+      <h2 id="settingsHeading">School Server Address</h2>
+      <p>Your app connects directly to your live hosted school server. Only change this if your school moved to a new domain.</p>
+      <input type="url" id="serverUrlInput" placeholder="https://result-cfn8.onrender.com" autocomplete="off" spellcheck="false">
+      <div class="settings-row">
+        <button type="button" class="s-cancel" id="cancelSettingsBtn">Cancel</button>
+        <button type="button" class="s-reset" id="resetSettingsBtn">Use Default</button>
+        <button type="button" class="s-save" id="saveSettingsBtn">Save &amp; Connect</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    (function () {
+      "use strict";
+
+      var cfg = window.AMS_APP_CONFIG || {};
+      var STORAGE_KEY = "ams_custom_server_url";
+      var LAST_PATH_KEY = "ams_preferred_start_path";
+
+      var params = new URLSearchParams(window.location.search || "");
+      var requestedPath = params.get("path") || sessionStorage.getItem(LAST_PATH_KEY) || "/";
+      if (requestedPath.charAt(0) !== "/") requestedPath = "/" + requestedPath;
+
+      var statusSpinner = document.getElementById("statusSpinner");
+      var statusTitle = document.getElementById("statusTitle");
+      var statusHint = document.getElementById("statusHint");
+      var progressTrack = document.getElementById("progressTrack");
+      var progressBar = document.getElementById("progressBar");
+      var offlineActions = document.getElementById("offlineActions");
+      var quickBtns = document.querySelectorAll(".q-btn");
+
+      function highlightPath(path) {
+        for (var i = 0; i < quickBtns.length; i++) {
+          var b = quickBtns[i];
+          b.classList.toggle("active", b.getAttribute("data-path") === path);
+        }
+      }
+      highlightPath(requestedPath);
+
+      for (var i = 0; i < quickBtns.length; i++) {
+        quickBtns[i].addEventListener("click", function () {
+          requestedPath = this.getAttribute("data-path") || "/";
+          sessionStorage.setItem(LAST_PATH_KEY, requestedPath);
+          highlightPath(requestedPath);
+          startConnection();
+        });
+      }
+
+      function cleanBaseUrl(u) {
+        var s = String(u || "").trim().replace(/\/+$/, "");
+        if (!s) return "";
+        if (!/^https?:\/\//i.test(s)) s = "https://" + s;
+        return s;
+      }
+
+      function candidateServers() {
+        var list = [];
+        var custom = cleanBaseUrl(localStorage.getItem(STORAGE_KEY));
+        if (custom) list.push(custom);
+        var primary = cleanBaseUrl(cfg.serverUrl || "https://result-cfn8.onrender.com");
+        if (primary && list.indexOf(primary) === -1) list.push(primary);
+        var fallbacks = Array.isArray(cfg.fallbackServerUrls) ? cfg.fallbackServerUrls : [];
+        for (var j = 0; j < fallbacks.length; j++) {
+          var fb = cleanBaseUrl(fallbacks[j]);
+          if (fb && list.indexOf(fb) === -1) list.push(fb);
+        }
+        return list;
+      }
+
+      function fetchWithTimeout(url, opts, timeoutMs) {
+        return new Promise(function (resolve, reject) {
+          var done = false;
+          var timer = setTimeout(function () {
+            if (done) return;
+            done = true;
+            reject(new Error("timeout"));
+          }, timeoutMs);
+          fetch(url, opts)
+            .then(function (res) {
+              if (done) return;
+              done = true;
+              clearTimeout(timer);
+              resolve(res);
+            })
+            .catch(function (err) {
+              if (done) return;
+              done = true;
+              clearTimeout(timer);
+              reject(err);
+            });
+        });
+      }
+
+      function probeServer(baseUrl, timeoutMs) {
+        var stamp = Date.now();
+        // 1. Try /api/app-config first (lets the server announce a canonical SITE_URL update)
+        return fetchWithTimeout(
+          baseUrl + "/api/app-config?t=" + stamp,
+          { method: "GET", mode: "cors", cache: "no-store" },
+          timeoutMs
+        )
+          .then(function (res) {
+            if (res && res.ok) {
+              return res.json().then(function (data) {
+                if (data && data.explicitSiteUrl && data.serverUrl && !localStorage.getItem(STORAGE_KEY)) {
+                  return cleanBaseUrl(data.serverUrl) || baseUrl;
+                }
+                return baseUrl;
+              }).catch(function () { return baseUrl; });
+            }
+            throw new Error("non-200");
+          })
+          .catch(function () {
+            // 2. Fallback opaque probe (works even before /api/app-config is deployed)
+            return fetchWithTimeout(
+              baseUrl + "/manifest.webmanifest?t=" + stamp,
+              { method: "GET", mode: "no-cors", cache: "no-store" },
+              timeoutMs
+            ).then(function () {
+              return baseUrl;
+            });
+          });
+      }
+
+      var activeRun = 0;
+
+      function showOffline(msg) {
+        statusSpinner.style.display = "none";
+        progressTrack.style.display = "none";
+        statusTitle.textContent = "Unable to Reach School Server";
+        statusHint.textContent = msg || "Please check your mobile data or Wi-Fi connection and tap Reconnect.";
+        offlineActions.classList.add("visible");
+      }
+
+      function startConnection() {
+        var runId = ++activeRun;
+        offlineActions.classList.remove("visible");
+        statusSpinner.style.display = "inline-block";
+        progressTrack.style.display = "block";
+        progressBar.style.width = "22%";
+        statusTitle.textContent = "Connecting to school portal\u2026";
+        statusHint.textContent = "Opening your live results, classes, and school dashboard.";
+
+        if (navigator.onLine === false) {
+          showOffline("No internet connection detected on this phone. Turn on mobile data or Wi-Fi and tap Reconnect.");
+          return;
+        }
+
+        var servers = candidateServers();
+        var maxAttempts = 10; // ~45s window to comfortably ride out Render cold start
+        var attempt = 0;
+
+        var wakeHintTimer = setTimeout(function () {
+          if (runId !== activeRun) return;
+          statusTitle.textContent = "Waking up school server\u2026";
+          statusHint.textContent = "First connection of the day can take up to 25 seconds. Please hold on\u2026";
+          progressBar.style.width = "55%";
+        }, 3600);
+
+        function tryRound() {
+          if (runId !== activeRun) return;
+          attempt++;
+          var pct = Math.min(92, 20 + attempt * 8);
+          progressBar.style.width = pct + "%";
+
+          // Probe primary first; on later attempts also race fallback deployments
+          var pool = attempt === 1 ? [servers[0]] : servers;
+          var idx = 0;
+
+          function nextInPool() {
+            if (runId !== activeRun) return;
+            if (idx >= pool.length) {
+              if (attempt < maxAttempts) {
+                setTimeout(tryRound, 2000);
+              } else {
+                clearTimeout(wakeHintTimer);
+                showOffline("The school server did not respond in time. Please check your connection and tap Reconnect.");
+              }
+              return;
+            }
+            var candidate = pool[idx++];
+            probeServer(candidate, attempt === 1 ? 6500 : 8000)
+              .then(function (resolvedBase) {
+                if (runId !== activeRun) return;
+                clearTimeout(wakeHintTimer);
+                progressBar.style.width = "100%";
+                statusTitle.textContent = "Connected!";
+                window.location.replace(resolvedBase + requestedPath);
+              })
+              .catch(function () {
+                nextInPool();
+              });
+          }
+
+          nextInPool();
+        }
+
+        tryRound();
+      }
+
+      document.getElementById("retryBtn").addEventListener("click", startConnection);
+      window.addEventListener("online", startConnection);
+
+      // Server URL modal controls
+      var modal = document.getElementById("settingsModal");
+      var urlInput = document.getElementById("serverUrlInput");
+
+      function openModal() {
+        urlInput.value = localStorage.getItem(STORAGE_KEY) || cfg.serverUrl || "https://result-cfn8.onrender.com";
+        modal.classList.add("open");
+      }
+      function closeModal() {
+        modal.classList.remove("open");
+      }
+
+      document.getElementById("openSettingsBtn").addEventListener("click", openModal);
+      document.getElementById("footSettingsBtn").addEventListener("click", openModal);
+      document.getElementById("cancelSettingsBtn").addEventListener("click", closeModal);
+      document.getElementById("resetSettingsBtn").addEventListener("click", function () {
+        localStorage.removeItem(STORAGE_KEY);
+        urlInput.value = cfg.serverUrl || "https://result-cfn8.onrender.com";
+        closeModal();
+        startConnection();
+      });
+      document.getElementById("saveSettingsBtn").addEventListener("click", function () {
+        var val = cleanBaseUrl(urlInput.value);
+        if (val) {
+          localStorage.setItem(STORAGE_KEY, val);
+        } else {
+          localStorage.removeItem(STORAGE_KEY);
+        }
+        closeModal();
+        startConnection();
+      });
+
+      startConnection();
+    })();
+  </script>
+</body>
+</html>

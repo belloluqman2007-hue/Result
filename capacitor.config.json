@@ -1,0 +1,20 @@
+{
+  "appId": "com.ameenullah.school",
+  "appName": "Ameenullah School",
+  "webDir": "mobile-app/www",
+  "bundledWebRuntime": false,
+  "server": {
+    "androidScheme": "https",
+    "allowNavigation": [
+      "*.onrender.com",
+      "*.up.railway.app",
+      "*.vercel.app",
+      "result-cfn8.onrender.com",
+      "result-production-69ea.up.railway.app"
+    ]
+  },
+  "android": {
+    "backgroundColor": "#0B2E22",
+    "allowMixedContent": false
+  }
+}
