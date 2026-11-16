@@ -30,6 +30,257 @@ const TERM_ARABIC = {
     "3rd Term": "الثَّالِثَة"
 };
 
+/* ==========================================================================
+   NEW (request - owner: "in the font size and spacing must be working
+   differently for each page not I will change font from a page and every
+   other written exam will change ... and I must be able to enlarge some
+   words within the exam written, not everything will be changing")
+
+   The exam used to carry ONE shared font size + ONE shared spacing for the
+   whole document, so touching the picker while writing question 3 of exam 3
+   restyled every page of every exam in the booklet. Now:
+
+     * every question page stores ITS OWN base size (data-page-font-pt) and
+       ITS OWN spacing (--exam-page-font-pt / --exam-page-line), so a change
+       lands on one page only - and those attributes live inside the saved
+       HTML, so saved / loaded / printed / vault copies keep the exact look;
+     * the toolbar works on the page the teacher is WRITING ON
+       (activeBodyPage), and the pickers follow the caret from page to page;
+     * the word size of a SELECTED phrase is kept inline (data-word-size on a
+       <span>) and is never stripped by a page-size change, so a highlighted
+       word can stay bigger than the rest of the paper.
+========================================================================== */
+
+/* DEFAULT page metrics - the school paper look. A page without its own
+   value (an older saved exam) behaves exactly like before. */
+const EXAM_DEFAULT_PT = 32;
+const EXAM_DEFAULT_SPACING = "normal";
+const EXAM_SPACING_VALUES = ["compact", "normal", "relaxed", "spacious"];
+const EXAM_SPACING_LINES = { compact: 1.4, normal: 1.6, relaxed: 1.8, spacious: 2.0 };
+const EXAM_WORD_MIN_PT = 8;    // a word can never become unreadable
+const EXAM_WORD_MAX_PT = 160;  // ...nor blow the page apart
+
+/* The question page the teacher is working on right now. Everything the
+   font/spacing/word-size tools do is scoped to this ONE page. */
+let activeBodyPage = null;
+/* The last real (not collapsed) text range inside #examFlow. Tapping a
+   <select> moves focus away from the editable area and some browsers drop
+   the highlight, so it is remembered and restored before formatting. */
+let savedExamSelectionRange = null;
+
+/* Is a remembered range still pointing at nodes that are really in the page?
+   (A range kept across a re-layout can hold detached nodes, and asking
+   document.body.contains() about those throws in some browsers.) */
+function examRangeIsLive(range) {
+    if (!range) return false;
+    try {
+        return !!(range.startContainer && range.endContainer &&
+            document.body.contains(range.startContainer) &&
+            document.body.contains(range.endContainer));
+    } catch (e) {
+        return false;
+    }
+}
+
+/* Which question page does `node` live in? (null for the cover / outside) */
+function examPageOfNode(node) {
+    if (!node) return null;
+    const el = node.nodeType === 1 ? node : node.parentElement;
+    if (!el || !el.closest) return null;
+    const page = el.closest("#examFlow .exam-page.body-page");
+    return page || null;
+}
+
+/* The page the tools should act on. Falls back to the last page with a
+   writing zone so a fresh document always has a target. */
+function currentBodyPage() {
+    const flow = document.getElementById("examFlow");
+    if (!flow) return null;
+    if (activeBodyPage && flow.contains(activeBodyPage) &&
+        activeBodyPage.classList.contains("body-page")) {
+        return activeBodyPage;
+    }
+    const page = flow.querySelector(".exam-page.body-page");
+    if (page) activeBodyPage = page;
+    return page || null;
+}
+
+/* Page index as the teacher counts it: the cover is page 1, so the first
+   question page is page 2 - exactly like the printed booklet. */
+function examPageNumber(page) {
+    const flow = document.getElementById("examFlow");
+    if (!flow || !page) return 0;
+    return Array.from(flow.querySelectorAll(".exam-page")).indexOf(page) + 1;
+}
+
+/* Read one page's own base font size (pt). */
+function pageBaseFontPt(page) {
+    if (!page) return EXAM_DEFAULT_PT;
+    const zone = page.querySelector(".page-content");
+    const fromData = zone && parseFloat(zone.getAttribute("data-page-font-pt"));
+    if (fromData && fromData > 0) return fromData;
+    // Older saved exams only carry the inline style - read it back.
+    const fromStyle = zone && zone.style && parseFloat(zone.style.fontSize);
+    if (fromStyle && fromStyle > 0) return fromStyle;
+    return EXAM_DEFAULT_PT;
+}
+
+/* Write one page's own base font size. The attribute + the custom property
+   are what the CSS reads; the inline font-size keeps exports (Word/PDF
+   capture/vault) pixel-identical on every device. */
+function setPageBaseFontPt(page, pt) {
+    if (!page) return;
+    const zone = page.querySelector(".page-content");
+    if (!zone) return;
+    const previous = pageBaseFontPt(page);
+    const value = Math.round(pt * 100) / 100;
+    zone.setAttribute("data-page-font-pt", String(value));
+    zone.style.setProperty("--exam-page-font-pt", value + "pt");
+    zone.style.setProperty("font-size", value + "pt", "important");
+
+    /* Selected words keep their SIZE RATIO to the page's text: a word set to
+       44pt on a 32pt page (1.375x) stays 1.375x - i.e. 38.5pt - if the page
+       later goes to 28pt. The ratio is stored on the word itself, so this can
+       never drift, and a word is never silently wiped by a page resize. */
+    zone.querySelectorAll("[data-word-size]").forEach(function (word) {
+        let ratio = parseFloat(word.getAttribute("data-word-ratio"));
+        if (!ratio || ratio <= 0) {
+            const own = wordPtOf(word, previous);
+            ratio = previous > 0 ? own / previous : 1;
+        }
+        word.setAttribute("data-word-ratio", String(Math.round(ratio * 1000) / 1000));
+        const wordPt = Math.round(value * ratio * 10) / 10;
+        word.style.setProperty("--word-pt", String(wordPt));
+        word.style.setProperty("font-size", wordPt + "pt", "important");
+    });
+}
+
+/* Read / write one page's own spacing. */
+function pageSpacing(page) {
+    const zone = page && page.querySelector(".page-content");
+    if (!zone) return EXAM_DEFAULT_SPACING;
+    const stored = zone.getAttribute("data-page-spacing");
+    if (stored && EXAM_SPACING_VALUES.indexOf(stored) !== -1) return stored;
+    const hit = EXAM_SPACING_VALUES.filter(function (v) {
+        return zone.classList.contains("spacing-" + v);
+    })[0];
+    if (hit) return hit;
+    const fromVar = zone.style && zone.style.getPropertyValue("--exam-page-line");
+    if (fromVar) {
+        const match = EXAM_SPACING_VALUES.filter(function (v) {
+            return Math.abs(EXAM_SPACING_LINES[v] - parseFloat(fromVar)) < 0.01;
+        })[0];
+        if (match) return match;
+    }
+    return EXAM_DEFAULT_SPACING;
+}
+
+function setPageSpacing(page, spacing) {
+    const zone = page && page.querySelector(".page-content");
+    if (!zone) return;
+    const value = EXAM_SPACING_VALUES.indexOf(spacing) === -1 ? EXAM_DEFAULT_SPACING : spacing;
+    EXAM_SPACING_VALUES.forEach(function (v) { zone.classList.remove("spacing-" + v); });
+    zone.classList.add("spacing-" + value);
+    zone.setAttribute("data-page-spacing", value);
+    zone.style.setProperty("--exam-page-line", String(EXAM_SPACING_LINES[value]));
+}
+
+/* Apply a BASE font size to ONE page (the page holding the selection, else
+   the page being written on). Never touches any other page or exam.
+   Returns the page that changed, or null when there was nowhere to put it. */
+function applyPageFont(pt) {
+    const value = Math.min(EXAM_WORD_MAX_PT, Math.max(8, Number(pt) || EXAM_DEFAULT_PT));
+    const page = targetBodyPage();
+    if (!page) return null;
+    setPageBaseFontPt(page, value);
+    // The Step 1 picker is the START size for new pages: mirror it so the
+    // next page created keeps the look the teacher just chose.
+    const step1 = document.getElementById("examFontSelect");
+    if (step1) {
+        const rounded = String(Math.round(value));
+        if (!Array.from(step1.options).some(function (o) { return o.value === rounded; })) {
+            const opt = document.createElement("option");
+            opt.textContent = rounded + "pt";
+            step1.appendChild(opt);
+        }
+        step1.value = rounded;
+    }
+    refreshPageScopeUI();
+    return page;
+}
+
+/* Point the two page pickers at `page`. Kept separate from
+   refreshPageScopeUI() so it can be skipped when touching a <select> would
+   destroy the teacher's highlight. */
+function syncPageScopePickers(page) {
+    const fontTools = document.getElementById("examFontSelectTools");
+    const spacingSel = document.getElementById("spacingSelect");
+    const pt = pageBaseFontPt(page);
+    const rounded = String(Math.round(pt));
+    if (fontTools) {
+        if (!Array.from(fontTools.options).some(function (o) { return o.value === rounded; })) {
+            const opt = document.createElement("option");
+            opt.textContent = rounded + "pt (this page)";
+            fontTools.appendChild(opt);
+        }
+        /* Only write when the value actually differs. Assigning the SAME value
+           still re-seats focus/selection in some browsers, and that is what
+           used to wipe out a live highlight (the "nothing gets resized" bug). */
+        if (fontTools.value !== rounded) fontTools.value = rounded;
+    }
+    if (spacingSel) {
+        const want = pageSpacing(page);
+        if (spacingSel.value !== want) spacingSel.value = want;
+    }
+    return pt;
+}
+
+/* The page indicator in the toolbar + the active page outline on screen. */
+function refreshPageScopeUI() {
+    const page = currentBodyPage();
+    const flow = document.getElementById("examFlow");
+    if (flow) {
+        flow.querySelectorAll(".exam-page.is-active-page").forEach(function (p) {
+            if (p !== page) p.classList.remove("is-active-page");
+        });
+        if (page) page.classList.add("is-active-page");
+    }
+    /* NOTE: syncPageScopePickers() below only writes a picker when its value
+       actually differs - re-assigning the SAME value still re-seats focus in
+       some browsers and would wipe out a live word highlight. */
+    const label = document.getElementById("examPageScopeHint");
+    if (label) {
+        if (!page) {
+            label.textContent = "Page font & spacing appear here once the questions page exists.";
+        } else {
+            label.innerHTML = "Writing on <b>page " + examPageNumber(page) + "</b>" +
+                " \u00B7 font &amp; spacing apply to this page only." +
+                " Select words first to resize just those words.";
+        }
+    }
+    // CHANGED: the Step 1 picker stays the "start size" for NEW pages; the
+    // page pickers in the toolbar follow the page being written on.
+    syncPageScopePickers(page);
+    return page;
+}
+
+/* Point the tools at `page` (called whenever the caret enters a page). */
+function noteActiveBodyPage(page) {
+    if (!page || !page.classList.contains("body-page")) return;
+    activeBodyPage = page;
+    refreshPageScopeUI();
+}
+
+/* Called from the caret/mouse events: the teacher is moving through the
+   document (not picking from a dropdown), so it is safe to re-point the two
+   page pickers at the page under the caret. */
+function followCaretPage(node) {
+    const page = examPageOfNode(node);
+    if (!page) return;
+    activeBodyPage = page;
+    refreshPageScopeUI();
+}
+
 // Native mobile pickers (font size, spacing, language, etc.) can be dismissed
 // by a DOM reflow while they are open. Phone browsers also emit resize events
 // when opening those pickers. Treat an active exam-tool field as a short layout
@@ -409,6 +660,37 @@ function initExam() {
         }, 500);
     });
 
+    /* NEW (request - "it should be working independently and when
+       selected"): remember the highlight so tapping a <select> (Font Size /
+       A+ / A-) never loses the words the teacher picked. Also follow the
+       caret from PAGE to PAGE, so the font/spacing pickers always show (and
+       change) the page being written - not some other exam.
+       `selectionchange` only fires on document, so it is bound there. */
+    const trackSelection = function () {
+        const sel = window.getSelection();
+        if (!sel || !sel.rangeCount) return;
+        const range = sel.getRangeAt(0);
+        if (!range) return;
+        followCaretPage(range.startContainer);
+        if (!range.collapsed) rememberExamSelection();
+    };
+    document.addEventListener("selectionchange", trackSelection);
+    flow.addEventListener("mouseup", trackSelection);
+    flow.addEventListener("keyup", function (e) {
+        // Shift+arrows / Ctrl+A are selections; skip the rest for speed.
+        if (e.shiftKey || e.key === "a" || e.key === "A" || e.ctrlKey || e.metaKey) trackSelection();
+    });
+    flow.addEventListener("touchend", function () { setTimeout(trackSelection, 30); });
+    flow.addEventListener("focusin", trackSelection);
+
+    // Ctrl/Cmd+S = the floating Save button (and never the browser's dialog).
+    document.addEventListener("keydown", function (e) {
+        if ((e.ctrlKey || e.metaKey) && !e.altKey && (e.key === "s" || e.key === "S" || e.keyCode === 83)) {
+            e.preventDefault();
+            saveExam();
+        }
+    });
+
     // Image tools: click an image to select it, click away to deselect.
     flow.addEventListener("click", handleFlowClick);
     document.addEventListener("click", function (e) {
@@ -458,20 +740,21 @@ function initExam() {
     // teacher never has to go back to Step 1 to resize questions.
     const fontSel = document.getElementById("examFontSelect");
     const fontSelTools = document.getElementById("examFontSelectTools");
+    /* CHANGED (request - per-page font size):
+
+       This used to loop over EVERY `#examFlow .exam-body` and force one size
+       on all of them - which is exactly why changing the font on one page
+       restyled every other page AND every other exam in the booklet. It also
+       stripped every inline font-size, wiping the sizes of words the teacher
+       had enlarged on purpose.
+
+       Now it changes ONE page: the page holding the selection, else the page
+       being written on. Selected words keep their own size (only the page's
+       base size moves, and each word keeps its original ratio to it). */
     function applyExamFontFrom(val, other) {
-        document.querySelectorAll("#examFlow .exam-body").forEach(function (b) {
-            /* FIX (pack 18 - owner: "font size is not working for the first
-               page if written exam"): paragraphs/words sized earlier through
-               the legacy toolbar (which still emits <font size> tags) or by
-               paste kept their locked inline size and ignored this picker.
-               Unlock them first so the chosen exam-wide size really wins. */
-            b.querySelectorAll("font[size]").forEach(function (f) { f.removeAttribute("size"); });
-            b.querySelectorAll("[style]").forEach(function (el) {
-                if (el.style && el.style.fontSize) el.style.fontSize = "";
-            });
-            b.style.setProperty("font-size", val + "pt", "important");
-        });
+        const okay = applyPageFont(parseFloat(val));
         if (other && other.value !== val) other.value = val;
+        if (!okay) return;
         paginateExam();
     }
     // FIX (pack 83): when Sakkal Majalla is missing (phones/Mac) reduce sizes via CSS .no-sakkal
@@ -490,9 +773,35 @@ function initExam() {
     if (fontSel) fontSel.addEventListener("change", function () { applyExamFontFrom(fontSel.value, fontSelTools); });
     if (fontSelTools) fontSelTools.addEventListener("change", function () { applyExamFontFrom(fontSelTools.value, fontSel); });
     if (fontSel && fontSelTools) fontSelTools.value = fontSel.value;
+    /* Exposed so the rest of the page (and the tests) can drive the very same
+       page-scoped font routine the pickers use. */
+    window.applyExamFontFrom = applyExamFontFrom;
+
+    /* NEW (request): the selected-word buttons must not steal the highlight.
+       mousedown is cancelled (so the browser keeps the selection), while the
+       click still fires - on desktop AND on phones, where some browsers only
+       move focus and never render a workable selection. */
+    ["examWordBiggerBtn", "examWordSmallerBtn", "examWordResetBtn"].forEach(function (id) {
+        const btn = document.getElementById(id);
+        if (!btn) return;
+        btn.addEventListener("mousedown", function (e) { e.preventDefault(); });
+        btn.addEventListener("touchstart", function (e) { e.preventDefault(); }, { passive: false });
+    });
+    const wordSel = document.getElementById("fontSizeSelect");
+    if (wordSel) {
+        /* Make sure a tap on ANY exam-number picker does not drop the
+           highlight. (The size picker then acts on the words; the page
+           pickers use the selection only to know WHICH page to change.) */
+        wordSel.addEventListener("pointerdown", rememberExamSelection);
+        if (fontSelTools) fontSelTools.addEventListener("pointerdown", rememberExamSelection);
+        if (fontSel) fontSel.addEventListener("pointerdown", rememberExamSelection);
+        const spacingSel = document.getElementById("spacingSelect");
+        if (spacingSel) spacingSel.addEventListener("pointerdown", rememberExamSelection);
+    }
 
     refreshAllPageHeaders();
     paginateExam();
+    refreshPageScopeUI();
 }
 
 // Prevent toolbar/palette button clicks from stealing focus away from the
@@ -728,6 +1037,24 @@ function generateCoverPage() {
     if (!cover) return;
     if (!cover.querySelector(".cover-header")) buildCover(cover);
     fillCover(cover, false);
+    /* NEW (request - per-page font size): "Generate Cover Page" also applies
+       the Step 1 question size to THIS exam's first question page, so the
+       start size the teacher just chose is what they see while writing. Every
+       other page (and every other exam) keeps its own size. */
+    const flow = document.getElementById("examFlow");
+    if (flow && cover && cover.parentNode === flow) {
+        let next = cover.nextElementSibling;
+        while (next && !next.classList.contains("page-one")) {
+            if (next.classList.contains("body-page") && next.querySelector(".page-content")) {
+                const start = examBaseFontPt();
+                if (pageBaseFontPt(next) === EXAM_DEFAULT_PT && start !== EXAM_DEFAULT_PT) {
+                    setPageBaseFontPt(next, start);
+                }
+                break;
+            }
+            next = next.nextElementSibling;
+        }
+    }
     refreshAllPageHeaders();
     paginateExam(); // chrome height changed -> re-fit the blocks
 }
@@ -826,17 +1153,28 @@ function placeBlock(block, page) {
 // (CHANGED (school paper design): question pages carry no school header).
 // NEW (multi-exam in one PDF): when paginating a middle section the page
 // is inserted right after `afterEl`; by default it goes to the end.
-function appendBodyPage(flow, afterEl) {
+function appendBodyPage(flow, afterEl, fromPage) {
     const page = document.createElement("div");
     page.className = "exam-page body-page";
-    const spacing = document.getElementById("spacingSelect").value;
-    page.innerHTML = `<div class="page-content exam-body spacing-${spacing}"></div>`;
-    // FIX (pack 83): new pages must inherit the currently selected question font size (otherwise Huge reverts to 32pt default)
-    try {
-        var base = examBaseFontPt();
-        var pc = page.querySelector(".page-content");
-        if (pc) pc.style.setProperty("font-size", base + "pt", "important");
-    } catch(e) {}
+    /* CHANGED (request - per-page font size + spacing): a brand-new page
+       starts from the page being written on (so continuing to type feels
+       identical), and only falls back to the Step 1 picker when there is no
+       page yet. It is stamped with its OWN data-page-font-pt /
+       data-page-spacing, so changing it later never touches any earlier
+       page or another exam in the booklet. */
+    /* `fromPage` = the page this one grows out of (pagination passes the
+       page right before it, so a spilled question keeps ITS OWN exam's
+       settings and never copies another exam further up the booklet). */
+    const source = (fromPage && fromPage.classList && fromPage.classList.contains("body-page"))
+        ? fromPage
+        : currentBodyPage();
+    const spacing = source ? pageSpacing(source)
+        : (document.getElementById("spacingSelect") || { value: EXAM_DEFAULT_SPACING }).value;
+    const pt = source ? pageBaseFontPt(source) : examBaseFontPt();
+    page.innerHTML = `<div class="page-content exam-body"></div>`;
+    const pc = page.querySelector(".page-content");
+    setPageSpacing(page, spacing);
+    setPageBaseFontPt(page, pt);
     if (afterEl && afterEl.parentNode === flow) {
         flow.insertBefore(page, afterEl.nextElementSibling);
     } else {
@@ -885,9 +1223,12 @@ function ensureExamStructure(flow) {
         const contents = Array.from(page.querySelectorAll(".page-content"));
         if (!contents.length) {
             const content = document.createElement("div");
-            const spacing = document.getElementById("spacingSelect").value;
-            content.className = `page-content exam-body spacing-${spacing}`;
+            content.className = `page-content exam-body`;
             page.appendChild(content);
+            /* NEW (request - per-page settings): a repaired page gets its own
+               stored size/spacing instead of borrowing the global picker. */
+            setPageSpacing(page, EXAM_DEFAULT_SPACING);
+            setPageBaseFontPt(page, examBaseFontPt());
         } else if (contents.length > 1) {
             /* FIX (pack 19 - owner: "the second exam shows only two lines"):
                some saved exams ended up with ONE body zone per typed line on
@@ -1008,6 +1349,22 @@ function paginateExam() {
 
     ensureExamStructure(flow);
 
+    /* NEW (request - per-page font size + spacing): every question page owns
+       its size/spacing. A page that has none yet (the paper just created, an
+       older saved exam) is stamped ONCE here and then left alone - this is
+       what keeps later changes to page 3 from leaking into page 2 or into a
+       second exam further down the booklet. */
+    flow.querySelectorAll(".exam-page.body-page").forEach(function (page) {
+        const zone = page.querySelector(".page-content");
+        if (!zone) return;
+        if (!zone.getAttribute("data-page-font-pt")) {
+            setPageBaseFontPt(page, (zone.style && parseFloat(zone.style.fontSize)) || examBaseFontPt());
+        }
+        if (!zone.getAttribute("data-page-spacing")) {
+            setPageSpacing(page, pageSpacing(page));
+        }
+    });
+
     // NEW (multi-exam in one PDF): the paper is laid out per EXAM
     // SECTION - one cover plus the question pages that belong to it.
     // A question can never travel into another exam's section: covers
@@ -1059,11 +1416,15 @@ function examBaseFontPt() {
 function autoFitOnePage(page) {
     const content = page.querySelector(".page-content");
     if (!content) return null;
-    const base = examBaseFontPt();
+    /* CHANGED (request - per-page font size): the fit uses THIS page's own
+       size, never the shared Step 1 picker - otherwise every re-layout
+       stamped the same size back onto every page and undid the teacher's
+       per-page choices. */
+    const base = pageBaseFontPt(page);
     const blocks = Array.from(content.children).filter(function (b) {
         return !b.classList.contains("manual-page-break");
     });
-    if (!blocks.length) { content.style.setProperty("font-size", base + "pt", "important"); return base; }
+    if (!blocks.length) { setPageBaseFontPt(page, base); return base; }
 
     const budget = budgetFor(page);
     const measure = function (pt) {
@@ -1074,10 +1435,10 @@ function autoFitOnePage(page) {
     };
 
     // Fits at the teacher's chosen size? Keep it - the exact paper look.
-    if (measure(base) <= budget + 1) return base;
+    if (measure(base) <= budget + 1) { setPageBaseFontPt(page, base); return base; }
 
     // Doesn't fit -> don't shrink to tiny, keep chosen size and signal spill
-    content.style.setProperty("font-size", base + "pt", "important");
+    setPageBaseFontPt(page, base);
     return null;
 }
 
@@ -1093,8 +1454,12 @@ function autoFitOnePage(page) {
 function spillSegmentAcrossPages(flow, seg) {
     const first = seg.bodies[0];
     const firstContent = first.querySelector(".page-content");
-    const base = examBaseFontPt();
-    firstContent.style.setProperty("font-size", base + "pt", "important");
+    /* CHANGED (request - per-page font size): spill keeps the FIRST page's
+       own size (it used to reset it to the shared picker, silently resizing
+       a page the teacher had sized by hand). New pages created below inherit
+       it, so the spilled questions all read the same. */
+    const base = pageBaseFontPt(first);
+    setPageBaseFontPt(first, base);
     seg.spilled = true;
 
     const blocks = Array.from(firstContent.children).filter(function (b) {
@@ -1110,15 +1475,15 @@ function spillSegmentAcrossPages(flow, seg) {
             // single block taller than a page: own page, warning explains
             if (pageAlreadyHasBlocks) {
                 pageIdx++;
-                if (!seg.bodies[pageIdx]) seg.bodies.push(appendBodyPage(flow, seg.bodies[pageIdx - 1]));
+                if (!seg.bodies[pageIdx]) seg.bodies.push(appendBodyPage(flow, seg.bodies[pageIdx - 1], seg.bodies[pageIdx - 1]));
             }
             placeBlock(block, seg.bodies[pageIdx]);
             pageIdx++;
-            if (!seg.bodies[pageIdx]) seg.bodies.push(appendBodyPage(flow, seg.bodies[pageIdx - 1]));
+            if (!seg.bodies[pageIdx]) seg.bodies.push(appendBodyPage(flow, seg.bodies[pageIdx - 1], seg.bodies[pageIdx - 1]));
             remaining = budgetFor(seg.bodies[pageIdx]);
         } else if (h > remaining + 1) {
             pageIdx++;
-            if (!seg.bodies[pageIdx]) seg.bodies.push(appendBodyPage(flow, seg.bodies[pageIdx - 1]));
+            if (!seg.bodies[pageIdx]) seg.bodies.push(appendBodyPage(flow, seg.bodies[pageIdx - 1], seg.bodies[pageIdx - 1]));
             placeBlock(block, seg.bodies[pageIdx]);
             remaining = budgetFor(seg.bodies[pageIdx]) - h;
         } else {
@@ -1181,7 +1546,7 @@ function paginateSegment(flow, seg) {
         // next page and everything after it follows onto that page.
         if (block.classList.contains("manual-page-break")) {
             pageIdx++;
-            if (!seg.bodies[pageIdx]) seg.bodies.push(appendBodyPage(flow, seg.bodies[pageIdx - 1]));
+            if (!seg.bodies[pageIdx]) seg.bodies.push(appendBodyPage(flow, seg.bodies[pageIdx - 1], seg.bodies[pageIdx - 1]));
             placeBlock(block, seg.bodies[pageIdx]);
             remaining = budgetFor(seg.bodies[pageIdx]);
             return;
@@ -1196,19 +1561,19 @@ function paginateSegment(flow, seg) {
             // (it will overflow - the warning chip explains what to do).
             if (pageAlreadyHasBlocks) {
                 pageIdx++;
-                if (!seg.bodies[pageIdx]) seg.bodies.push(appendBodyPage(flow, seg.bodies[pageIdx - 1]));
+                if (!seg.bodies[pageIdx]) seg.bodies.push(appendBodyPage(flow, seg.bodies[pageIdx - 1], seg.bodies[pageIdx - 1]));
             }
             placeBlock(block, seg.bodies[pageIdx]);
 
             // Following blocks continue on a fresh page.
             pageIdx++;
-            if (!seg.bodies[pageIdx]) seg.bodies.push(appendBodyPage(flow, seg.bodies[pageIdx - 1]));
+            if (!seg.bodies[pageIdx]) seg.bodies.push(appendBodyPage(flow, seg.bodies[pageIdx - 1], seg.bodies[pageIdx - 1]));
             remaining = budgetFor(seg.bodies[pageIdx]);
         } else if (h > remaining + 1) {
             // THE IMPORTANT RULE: doesn't fit in the remaining space,
             // so the WHOLE question moves to the next page - never split.
             pageIdx++;
-            if (!seg.bodies[pageIdx]) seg.bodies.push(appendBodyPage(flow, seg.bodies[pageIdx - 1]));
+            if (!seg.bodies[pageIdx]) seg.bodies.push(appendBodyPage(flow, seg.bodies[pageIdx - 1], seg.bodies[pageIdx - 1]));
             placeBlock(block, seg.bodies[pageIdx]);
             remaining = budgetFor(seg.bodies[pageIdx]) - h;
         } else {
@@ -1369,19 +1734,379 @@ function format(command) {
     paginateExamSoon();
 }
 
-function setFontSize() {
-    const size = document.getElementById("fontSizeSelect").value;
-    document.execCommand("fontSize", false, size);
+/* ==========================================================================
+   SELECTED-WORD SIZING  (NEW - request: "I must be able to enlarge some
+   words within the exam written not everything will be changing together")
+
+   The old toolbar used document.execCommand("fontSize", 1..7). Two problems:
+     1. <font size="6"> is 24pt - SMALLER than the paper's 32pt text, so
+        "X-Large" actually shrank the words the teacher wanted bigger.
+     2. Tapping a <select> on desktop/mobile moves focus out of the editable
+        area and the highlight is lost, so nothing was resized at all.
+   Now: the selection is remembered (selectionchange/mouseup/keyup/touchend),
+   restored before formatting, and the words are wrapped in a real
+   <span data-word-size> carrying the exact size in pt.
+========================================================================== */
+
+/* Remember the latest highlight (only real, non-empty selections inside the
+   exam are useful - a collapsed caret is not a selection). */
+function rememberExamSelection() {
+    const flow = document.getElementById("examFlow");
+    const sel = window.getSelection();
+    if (!flow || !sel || !sel.rangeCount) return;
+    const range = sel.getRangeAt(0);
+    if (!range || range.collapsed) return;
+    if (!flow.contains(range.startContainer) || !flow.contains(range.endContainer)) return;
+    savedExamSelectionRange = range.cloneRange();
+    const page = examPageOfNode(range.startContainer);
+    if (page) noteActiveBodyPage(page);
+    syncWordSizeControls();
+}
+
+/* Restore the remembered highlight into the live selection (used before
+   formatting, so a word pick can be repeated without re-selecting). Returns
+   the restored range, or null when there is nothing usable left. */
+function restoreExamSelection() {
+    if (!savedExamSelectionRange || !examRangeIsLive(savedExamSelectionRange)) return null;
+    const flow = document.getElementById("examFlow");
+    const sel = window.getSelection();
+    if (!flow || !sel) return null;
+    try {
+        if (!flow.contains(savedExamSelectionRange.startContainer) ||
+            !flow.contains(savedExamSelectionRange.endContainer)) return null;
+        sel.removeAllRanges();
+        sel.addRange(savedExamSelectionRange);
+        return savedExamSelectionRange;
+    } catch (e) {
+        return null;
+    }
+}
+
+/* Only a LIVE highlight counts as "the teacher selected these words".
+   A remembered range must never turn a caret into a word selection - that
+   would silently turn a page-size pick into a word-size pick. */
+function examSelectedWordsRange() {
+    const sel = window.getSelection();
+    const flow = document.getElementById("examFlow");
+    if (!sel || !sel.rangeCount || !flow) return null;
+    const live = sel.getRangeAt(0);
+    if (!live || live.collapsed) return null;
+    if (!flow.contains(live.startContainer) || !flow.contains(live.endContainer)) return null;
+    if (!/\S/.test(live.toString().replace(/\u200b/g, ""))) return null;
+    return live;
+}
+
+/* Size (pt) a word currently carries, read back from --word-pt or the
+   legacy inline font-size / <font size> markup. */
+function wordPtOf(el, fallback) {
+    if (!el) return fallback;
+    const fromVar = el.style && parseFloat(el.style.getPropertyValue("--word-pt"));
+    if (fromVar && fromVar > 0) return fromVar;
+    const fromStyle = el.style && parseFloat(el.style.fontSize);
+    if (fromStyle && fromStyle > 0) return fromStyle;
+    const fontTag = el.tagName === "FONT" ? el : (el.closest ? el.closest("font[size]") : null);
+    if (fontTag && fontTag.getAttribute("size")) {
+        const map = { "1": 8, "2": 10, "3": 16, "4": 18, "5": 24, "6": 24, "7": 36 };
+        const legacy = map[String(fontTag.getAttribute("size"))];
+        if (legacy) return legacy;
+    }
+    return fallback;
+}
+
+/* Wrap each text slice of `range` in a <span data-word-size> of `pt`. Works
+   for a partial word, a whole sentence or several paragraphs. */
+function applyWordPt(range, pt) {
+    if (!range) return false;
+    const value = Math.min(EXAM_WORD_MAX_PT, Math.max(EXAM_WORD_MIN_PT, Math.round(pt)));
+    const targets = [];
+    const walker = document.createTreeWalker(
+        range.commonAncestorContainer.nodeType === 1
+            ? range.commonAncestorContainer
+            : range.commonAncestorContainer.parentNode,
+        NodeFilter.SHOW_TEXT,
+        null
+    );
+    let node;
+    while ((node = walker.nextNode())) {
+        if (!/\S/.test((node.nodeValue || "").replace(/\u200b/g, ""))) continue;
+        if (!range.intersectsNode(node)) continue;
+        targets.push(node);
+    }
+    if (!targets.length) return false;
+
+    const spans = [];
+    const touchedZones = [];
+    targets.forEach(function (textNode) {
+        let start = 0;
+        let end = textNode.nodeValue.length;
+        if (textNode === range.startContainer) start = range.startOffset;
+        if (textNode === range.endContainer) end = range.endOffset;
+        if (end <= start) return;
+
+        /* Cut the text node into [before][selected][after] and wrap ONLY the
+           selected middle. (splitText returns the TAIL, so the selection is
+           always the tail of the FIRST cut - never the other way round, which
+           used to wrap the words the teacher did not highlight.) */
+        let piece = textNode;
+        if (end < textNode.nodeValue.length) {
+            textNode.splitText(end); // tail after the selection stays outside
+        }
+        if (start > 0) {
+            piece = piece.splitText(start); // [start..end) = the highlighted text
+        }
+
+        // Re-use an existing word span instead of nesting one inside another.
+        const existing = piece.parentNode && piece.parentNode.closest
+            ? piece.parentNode.closest("[data-word-size]")
+            : null;
+        let span;
+        if (existing) {
+            span = existing;
+        } else {
+            span = document.createElement("span");
+            span.setAttribute("data-word-size", "1");
+            piece.parentNode.insertBefore(span, piece);
+            span.appendChild(piece);
+        }
+        spans.push(span);
+        /* A part of the page's base size NOW: from here on the word follows
+           the page size by this ratio (see setPageBaseFontPt), which is what
+           keeps it "the word I enlarged" whatever size the page gets later. */
+        const zone = span.closest(".exam-body");
+        if (zone && touchedZones.indexOf(zone) === -1) touchedZones.push(zone);
+    });
+
+    if (!spans.length) return false;
+
+    const page = examPageOfNode(spans[0]);
+    const basePt = pageBaseFontPt(page);
+    const ratio = basePt > 0 ? Math.round((value / basePt) * 1000) / 1000 : 1;
+    spans.forEach(function (span) {
+        span.setAttribute("data-word-ratio", String(ratio));
+        span.style.setProperty("--word-pt", String(value));
+        span.style.setProperty("font-size", value + "pt", "important");
+    });
+    /* ALSO rewrite the page's own base size. That single re-stamp gives every
+       word on the page its final ratio to the page text - including words
+       whose span belongs to another part of the page - so a later page-size
+       change keeps each word's proportion exactly. */
+    touchedZones.forEach(function (zone) {
+        const owner = zone.closest(".exam-page");
+        if (owner) setPageBaseFontPt(owner, basePt);
+    });
+
+    // The highlight is lost while the DOM is rebuilt - put it back on the
+    // resized words so the teacher can press A+ again immediately.
+    try {
+        const sel = window.getSelection();
+        const after = document.createRange();
+        after.setStartBefore(spans[0]);
+        after.setEndAfter(spans[spans.length - 1]);
+        sel.removeAllRanges();
+        sel.addRange(after);
+        savedExamSelectionRange = after.cloneRange();
+    } catch (e) {}
+
+    if (page) noteActiveBodyPage(page);
+    syncWordSizeControls();
+    paginateExamSoon();
+    return true;
+}
+
+/* Size of the words under the current selection (for A+ / A- and the
+   picker). The whole highlight is inspected - a selection can start in front
+   of the word span (e.g. right after A+ restored it), so looking only at the
+   start node would read the page size and every A+ would restart from it. */
+function selectedWordsPt() {
+    const range = examSelectedWordsRange();
+    if (!range) return null;
+    const node = range.startContainer;
+    const page = examPageOfNode(node);
+    const fallback = pageBaseFontPt(page);
+
+    const wordInside = function (root) {
+        if (!root) return null;
+        if (root.nodeType === 1 && root.closest && root.closest("[data-word-size]")) {
+            return root.closest("[data-word-size]");
+        }
+        if (root.querySelector && root.querySelector("[data-word-size]")) {
+            return root.querySelector("[data-word-size]");
+        }
+        const el = root.nodeType === 1 ? root : root.parentElement;
+        // The selection may start just OUTSIDE the word span - the very next
+        // sibling is then the word.
+        return el && el.nextElementSibling &&
+            el.nextElementSibling.hasAttribute &&
+            el.nextElementSibling.hasAttribute("data-word-size")
+            ? el.nextElementSibling
+            : null;
+    };
+
+    const word = wordInside(node) || wordInside(range.commonAncestorContainer);
+    return wordPtOf(word, fallback);
+}
+
+/* Read the intent out of whatever the picker is showing (a pt number, an
+   em multiplier like "1.5x" or a legacy HTML size). */
+function wordPtFromControlValue(value) {
+    const raw = String(value == null ? "" : value).trim();
+    if (!raw) return null;
+    const num = parseFloat(raw);
+    if (!num || num <= 0) return null;
+    if (raw.indexOf("em") !== -1) return EXAM_DEFAULT_PT * num;
+    if (num <= 7) { // legacy HTML font size (1..7)
+        const map = { 1: 8, 2: 10, 3: 18, 4: 24, 5: 32, 6: 44, 7: 56 };
+        return map[Math.round(num)] || null;
+    }
+    return num;
+}
+
+/* A+ / A- */
+function enlargeSelectedWords(step) {
+    const current = selectedWordsPt();
+    if (current === null) return examNeedSelectionHint();
+    applyWordPt(examSelectedWordsRange(), current + (step || 4));
+}
+
+function shrinkSelectedWords(step) {
+    const current = selectedWordsPt();
+    if (current === null) return examNeedSelectionHint();
+    const range = examSelectedWordsRange();
+    if (!range) return examNeedSelectionHint();
+    applyWordPt(range, current - (step || 4));
+}
+
+/* Remove the custom size from the selected words (they follow the page). */
+function resetSelectedWordSize() {
+    const range = examSelectedWordsRange();
+    if (!range) return examNeedSelectionHint();
+    const roots = [];
+    const walker = document.createTreeWalker(
+        range.commonAncestorContainer.nodeType === 1
+            ? range.commonAncestorContainer
+            : range.commonAncestorContainer.parentNode,
+        NodeFilter.SHOW_ELEMENT, null
+    );
+    const check = function (el) {
+        if (el.querySelectorAll) {
+            el.querySelectorAll("[data-word-size]").forEach(function (s) { roots.push(s); });
+        }
+        if (el.closest && el.closest("[data-word-size]")) roots.push(el.closest("[data-word-size]"));
+    };
+    check(walker.currentNode);
+    let node;
+    while ((node = walker.nextNode())) check(node);
+
+    roots.forEach(function (span) {
+        span.style.removeProperty("--word-pt");
+        span.style.removeProperty("--word-scale");
+        span.style.removeProperty("font-size");
+        span.removeAttribute("data-word-size");
+        span.removeAttribute("data-word-ratio");
+        if (!span.getAttribute("style")) span.removeAttribute("style");
+        if (!span.attributes.length && span.parentNode) {
+            while (span.firstChild) span.parentNode.insertBefore(span.firstChild, span);
+            span.remove();
+        }
+    });
+    syncWordSizeControls();
     paginateExamSoon();
 }
 
+function examNeedSelectionHint() {
+    const msg = "Select (highlight) the words you want first - then use A+ / A-. Only the words you selected will change.";
+    if (window.amsToast) window.amsToast(msg, "info", 5000);
+    else alert(msg);
+    return false;
+}
+
+/* Keep the selected-word controls in step with the caret. */
+function syncWordSizeControls() {
+    const sel = document.getElementById("fontSizeSelect");
+    if (!sel) return;
+    const pt = selectedWordsPt();
+    if (pt === null) return; // never fight the teacher while they pick
+    const rounded = String(Math.round(pt));
+    const has = Array.from(sel.options).some(function (o) { return o.value === rounded; });
+    if (!has) return;
+    sel.value = rounded;
+}
+
+/* CHANGED (request - "when selected"): the size picker now sizes the
+   SELECTED WORDS. With a highlight it changes only those words; with no
+   highlight it falls back to the page the teacher is writing on. */
+function setFontSize() {
+    const sel = document.getElementById("fontSizeSelect");
+    const raw = sel ? sel.value : "";
+    const pt = wordPtFromControlValue(raw);
+    if (pt === null) return; // the "Word size…" placeholder row
+
+    /* CHANGED (request - "when selected"): decide between "size these words"
+       and "size this page" from the LIVE highlight only. A remembered range
+       belongs to text that may no longer be highlighted (the teacher moved
+       the caret away), and using it here used to size the old page instead of
+       the one being written on. */
+    const liveRange = examSelectedWordsRange();
+    if (liveRange) {
+        applyWordPt(liveRange, pt);
+    } else {
+        /* No words highlighted: this is a PAGE size pick. Forget the old
+           highlight so the page under the caret wins. */
+        savedExamSelectionRange = null;
+        const page = targetBodyPage();
+        if (page) setPageBaseFontPt(page, pt);
+        refreshPageScopeUI();
+    }
+    if (sel) sel.value = "";  // back to the placeholder, ready for the next pick
+}
+
+/* CHANGED (request - "in the font size and spacing must be working
+   differently for each page not I will change font from a page and every
+   other written exam will change"): page spacing now lands on the page the
+   teacher is writing on (or the page holding the selection) and nowhere
+   else. The other pages - and the other exams in the booklet - keep theirs. */
 function setSpacing() {
-    const spacing = document.getElementById("spacingSelect").value;
-    document.querySelectorAll(".exam-body").forEach(body => {
-        body.classList.remove("spacing-compact", "spacing-normal", "spacing-relaxed", "spacing-spacious");
-        body.classList.add(`spacing-${spacing}`);
-    });
+    const sel = document.getElementById("spacingSelect");
+    const chosen = sel ? String(sel.value || "") : "";
+    const page = targetBodyPage();
+    if (!page) return;
+    const value = EXAM_SPACING_VALUES.indexOf(chosen) === -1 ? EXAM_DEFAULT_SPACING : chosen;
+    setPageSpacing(page, value);
+    /* refreshPageScopeUI() re-reads the page and writes the picker back; the
+       chosen value is restored AFTER it so a pick can never be undone by a
+       stale read (which is exactly what used to silently discard the pick). */
+    refreshPageScopeUI();
+    if (sel) sel.value = value;
     paginateExamSoon();
+}
+
+/* The page a page-level action must land on: the page holding the current
+   selection wins (the teacher is obviously working there), otherwise the
+   page last written on. */
+function targetBodyPage() {
+    /* Only a REAL, still-live selection decides the page. A remembered range
+       is a ghost (the browser may have collapsed it), so it is only used when
+       the live selection is empty AND the remembered nodes are still in the
+       document - otherwise the page the teacher last wrote on wins.
+       NOTE: this must not re-sync the toolbar pickers - writing to a <select>
+       aborts the caret/selection change that is being handled right now. */
+    const sel = window.getSelection();
+    if (sel && sel.rangeCount && !sel.getRangeAt(0).collapsed) {
+        const page = examPageOfNode(sel.getRangeAt(0).startContainer);
+        if (page) { activeBodyPage = page; return page; }
+    }
+    /* A CARET always wins over a remembered highlight: the remembered range
+       is only here to survive a <select> click, not to override the page the
+       teacher has since clicked back into. */
+    if (sel && sel.rangeCount && sel.getRangeAt(0).collapsed) {
+        const page = examPageOfNode(sel.getRangeAt(0).startContainer);
+        if (page) { activeBodyPage = page; return page; }
+    }
+    if (savedExamSelectionRange && examRangeIsLive(savedExamSelectionRange)) {
+        const page = examPageOfNode(savedExamSelectionRange.startContainer);
+        if (page) { activeBodyPage = page; return page; }
+    }
+    return currentBodyPage();
 }
 
 function toggleDirection() {
@@ -1617,12 +2342,34 @@ function toggleVoice() {
 function serializeFlow() {
     deselectExamImage(); // never persist the on-screen image tools
     const flow = document.getElementById("examFlow");
+    /* NEW (request - per-page font size + spacing): make sure EVERY page
+       carries its own stored size/spacing BEFORE the HTML is serialized.
+       They travel inside body_html, so a saved exam reopens, prints and
+       reaches the File Store vault with exactly the per-page look the
+       teacher set - and no page can fall back to a shared size. */
+    flow.querySelectorAll(".exam-page.body-page").forEach(function (page) {
+        const zone = page.querySelector(".page-content");
+        if (!zone) return;
+        if (!zone.getAttribute("data-page-font-pt")) setPageBaseFontPt(page, pageBaseFontPt(page));
+        if (!zone.getAttribute("data-page-spacing")) setPageSpacing(page, pageSpacing(page));
+    });
     const covers = flow.querySelectorAll(".exam-page.page-one");
 
-    if (covers.length <= 1) {
-        // Single exam - the classic format: questions only, one string.
+    /* CHANGED (request - per-page font size + spacing): ONE exam can now use
+       several question pages with DIFFERENT sizes (the teacher may set page 1
+       to 22pt and page 2 to 40pt), so the questions-only string would glue
+       the two pages together and lose which size belonged to which page.
+       Pages that all share one size still save in the classic format (old
+       saved exams keep loading exactly as before); as soon as they differ -
+       or a page carries its own spacing - the whole flow is saved so every
+       page keeps its own look. */
+    const zones = Array.from(flow.querySelectorAll(".page-content"));
+    const sizes = zones.map(function (z) { return z.getAttribute("data-page-font-pt") || ""; });
+    const sameSize = sizes.every(function (v) { return v === sizes[0]; });
+    if (covers.length <= 1 && sameSize) {
+        // Single exam, one size - the classic format: questions only.
         let html = "";
-        flow.querySelectorAll(".page-content").forEach(function (content) {
+        zones.forEach(function (content) {
             html += content.innerHTML;
         });
         return html;
@@ -1637,8 +2384,50 @@ function serializeFlow() {
     return clone.innerHTML;
 }
 
+/* ==========================================================================
+   NEW (request - owner: "put save icon on the exam space to be easily to
+   access"): ONE save routine for every entry point - the floating icon, the
+   Step 1 / Step 2 buttons, the Exam Space panel and Ctrl/Cmd+S.
+
+   It is deliberately forgiving, because a one-tap save that refuses to run
+   is worse than no button at all:
+     * a blank title is filled from the details the teacher already chose
+       (e.g. "2nd Term Exam - Tajweed") instead of blocking the save;
+     * missing details switch the sidebar to Step 1 and open it, so the
+       teacher sees exactly which field to fix;
+     * an empty page still saves (server requires non-empty body_html);
+     * the floating button reports "Saved", "Saving…" or "Not saved".
+========================================================================== */
+
+/* Default title for a one-tap save: "<Term> Exam - <Subject>". */
+function examDefaultTitle(term, subject) {
+    if (term && subject) return term + " Exam - " + subject;
+    if (subject) return subject + " Exam";
+    if (term) return term + " Exam";
+    return "";
+}
+
+/* The floating save icon doubles as the save STATUS display. */
+function setQuickSaveState(state, text) {
+    const btn = document.getElementById("examQuickSaveBtn");
+    const label = document.getElementById("examQuickSaveLabel");
+    if (!btn) return;
+    btn.classList.remove("is-saved", "is-busy", "is-error");
+    if (state === "saved") btn.classList.add("is-saved");
+    else if (state === "busy") btn.classList.add("is-busy");
+    else if (state === "error") btn.classList.add("is-error");
+    if (label) label.textContent = text || "Save";
+    btn.disabled = state === "busy";
+    clearTimeout(setQuickSaveState._t);
+    if (state === "saved") {
+        setQuickSaveState._t = setTimeout(function () {
+            setQuickSaveState("idle", "Save");
+        }, 2600);
+    }
+}
+
 function saveExam() {
-    const title = document.getElementById("examTitle").value.trim();
+    const titleEl = document.getElementById("examTitle");
     const cls = document.getElementById("examClass").value;
     const subject = document.getElementById("examSubject").value;
     const term = document.getElementById("examTerm").value;
@@ -1657,9 +2446,49 @@ function saveExam() {
     const instrEl = document.querySelector("#coverPage .js-cover-instructions");
     const instructions = instrEl ? instrEl.innerHTML : "";
 
+    // NEW (request): a one-tap save never dies on a blank title.
+    let title = titleEl ? titleEl.value.trim() : "";
+    if (!title) {
+        title = examDefaultTitle(term, subject);
+        if (title && titleEl) titleEl.value = title;
+    }
+
     if (!title || !cls || !subject || !term || !session) {
-        alert("Please fill in the Exam Title and all the fields in the details step before saving.");
+        // Show the teacher the field that needs attention.
+        if (typeof examGotoStep === "function") {
+            try { examGotoStep(1); } catch (e) {}
+        }
+        if (typeof toggleExamSidebar === "function") {
+            try { toggleExamSidebar(true); } catch (e) {}
+        }
+        setQuickSaveState("error", "Not saved");
+        const msg = "Please fill in the exam details (title, class, subject, term and session) - then press Save again.";
+        if (window.amsToast) window.amsToast(msg, "error", 5000);
+        else alert(msg);
+        const focusEl = !cls ? document.getElementById("examClass")
+            : !subject ? document.getElementById("examSubject")
+            : !term ? document.getElementById("examTerm")
+            : !session ? document.getElementById("examSession")
+            : document.getElementById("examTitle");
+        if (focusEl && focusEl.focus) { try { focusEl.focus({ preventScroll: false }); } catch (e) { focusEl.focus(); } }
         return;
+    }
+
+    // NEW (request): the teacher may reach Step 2 without ever generating the
+    // cover - stamp it now so the saved paper always carries its letterhead.
+    try {
+        const cover = document.querySelector("#coverPage");
+        if (cover && !cover.querySelector(".cover-header")) buildCover(cover);
+        if (cover) fillCover(cover, true);
+    } catch (e) {}
+
+    // NEW (request): the server refuses an empty body_html, so a save from a
+    // fresh paper still goes through and the draft is kept.
+    let bodyHtml = "";
+    try { bodyHtml = serializeFlow(); } catch (e) { bodyHtml = ""; }
+    if (!bodyHtml || !bodyHtml.replace(/<[^>]*>/g, "").replace(/\u200b/g, "").trim()) {
+        const hasVisual = /<(img|table|ul|ol|hr)\b/i.test(bodyHtml || "");
+        if (!hasVisual) bodyHtml = "<p><br></p>";
     }
 
     const payload = {
@@ -1672,8 +2501,10 @@ function saveExam() {
         duration,
         exam_date: examDate, // NEW (pack 22)
         instructions,
-        body_html: serializeFlow() // single flow string (was: JSON page array)
+        body_html: bodyHtml // single flow string (was: JSON page array)
     };
+
+    setQuickSaveState("busy", "Saving…");
 
     fetch("/save-exam", {
         method: "POST",
@@ -1682,13 +2513,17 @@ function saveExam() {
     })
     .then(response => response.json())
     .then(data => {
-        if (window.amsToast) window.amsToast(data.message, "success", 4000);
-        else alert(data.message);
+        const message = (data && data.message) || "Saved.";
+        if (window.amsToast) window.amsToast(message, "success", 4000);
+        else alert(message);
         if (data.id) currentExamId = data.id;
+        setQuickSaveState("saved", "Saved \u2713");
     })
     .catch(error => {
         console.log(error);
-        alert("Error saving exam.");
+        setQuickSaveState("error", "Not saved");
+        if (window.amsToast) window.amsToast("Error saving exam - check your connection and try again.", "error", 5000);
+        else alert("Error saving exam.");
     });
 }
 
@@ -2085,6 +2920,9 @@ function resetFlow(flowHtml) {
     if (isMulti) {
         flow.innerHTML = flowHtml;
         paginateExam(); // re-stamps covers, re-adds remove buttons, re-fits
+        activeBodyPage = flow.querySelector(".exam-page.body-page");
+        savedExamSelectionRange = null;
+        refreshPageScopeUI();
         return;
     }
 
@@ -2102,6 +2940,9 @@ function resetFlow(flowHtml) {
         flowHtml && flowHtml.trim() !== "" ? flowHtml : "<p><br></p>";
 
     paginateExam();
+    activeBodyPage = firstBody; // NEW: the tools follow the freshly-loaded paper
+    savedExamSelectionRange = null;
+    refreshPageScopeUI();
 }
 
 function deleteExamFromPanel(id) {
