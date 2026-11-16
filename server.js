@@ -265,7 +265,7 @@ class MySqlSessionStore extends session.Store {
         });
     }
     set(sid, sess, cb) {
-        const maxAge = (sess.cookie && sess.cookie.maxAge) || (1000 * 60 * 60 * 8);
+        const maxAge = (sess.cookie && sess.cookie.maxAge) || (1000 * 60 * 60 * 24 * 30);
         const expires = Date.now() + maxAge;
         const data = JSON.stringify(sess);
         this.whenReady(() => {
@@ -282,7 +282,7 @@ class MySqlSessionStore extends session.Store {
         });
     }
     touch(sid, sess, cb) {
-        const maxAge = (sess.cookie && sess.cookie.maxAge) || (1000 * 60 * 60 * 8);
+        const maxAge = (sess.cookie && sess.cookie.maxAge) || (1000 * 60 * 60 * 24 * 30);
         this.whenReady(() => {
             this.db.query("UPDATE app_sessions SET expires_at = ? WHERE sid = ?", [Date.now() + maxAge, sid], (err) => cb && cb(err));
         });
@@ -307,10 +307,15 @@ app.use(session({
     store: sessionStore, // pack 25: MySQL-backed sessions
     resave: false,
     saveUninitialized: false,
+    // Stay logged in across app restarts: the Android app (and the website)
+    // keeps the session cookie for 30 days, and every active visit rolls the
+    // expiry forward so regular users are not logged out overnight.
+    rolling: true,
     cookie: {
-        maxAge: 1000 * 60 * 60 * 8, // 8 hour session
+        maxAge: 1000 * 60 * 60 * 24 * 30, // 30 day session (was 8 hours)
         secure: isProduction, // only send cookie over HTTPS in production
-        httpOnly: true
+        httpOnly: true,
+        sameSite: "lax"
     }
 }));
 

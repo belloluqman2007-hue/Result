@@ -171,6 +171,16 @@ function bootChildServer(port, extraEnv = {}) {
     mainActivity.includes("getOnBackPressedDispatcher()") &&
     mainActivity.includes("AmeenullahAndroidApp/1.0")
   );
+  check("MainActivity flushes the login session cookie on pause AND destroy (stay logged in)",
+    mainActivity.includes("CookieManager.getInstance().flush()") &&
+    mainActivity.includes("protected void onDestroy()")
+  );
+  check("MainActivity downloads via MediaStore on Android 10+ (no legacy permission-denied path)",
+    mainActivity.includes("setDestinationUri") &&
+    mainActivity.includes("MediaStore.Downloads") &&
+    mainActivity.includes("IS_PENDING") &&
+    mainActivity.includes("ACTION_DOWNLOAD_COMPLETE")
+  );
 
   const mipmaps = [
     ["mipmap-mdpi", 48, 108],
@@ -217,6 +227,18 @@ function bootChildServer(port, extraEnv = {}) {
       cfgJson.ok === true &&
       cfgJson.appId === "com.ameenullah.school" &&
       cfgJson.apkDownloadUrl === "/download/app.apk"
+    );
+
+    const csrfRes = await httpGet(port, "/api/csrf-token");
+    const setCookie = csrfRes.headers["set-cookie"];
+    const cookieStr = Array.isArray(setCookie) ? setCookie.join("; ") : String(setCookie || "");
+    const expiresMatch = /Expires=([^;]+)/i.exec(cookieStr);
+    const expiresMs = expiresMatch ? Date.parse(expiresMatch[1]) : NaN;
+    const daysOut = Number.isFinite(expiresMs) ? (expiresMs - Date.now()) / (1000 * 60 * 60 * 24) : NaN;
+    check("Session cookie lasts 30 days (stay logged in across app restarts)",
+      csrfRes.status === 200 &&
+      Number.isFinite(daysOut) && daysOut > 29 && daysOut < 31 &&
+      /SameSite=Lax/i.test(cookieStr)
     );
 
     const apkRes = await httpGet(port, "/download/app.apk");
