@@ -18,11 +18,9 @@
    Amiri/Traditional Arabic render the same pt size visually MUCH larger.
    JS adds .no-sakkal to <html> when document.fonts.check fails, and we
    reduce the exam sizes so the paper matches the Windows/Sakkal look. */
-.no-sakkal .exam-body { font-size: 22pt !important; }
-.no-sakkal .exam-body.spacing-compact { font-size: 10pt !important; }
-.no-sakkal .exam-body.spacing-normal { font-size: 12pt !important; }
-.no-sakkal .exam-body.spacing-relaxed { font-size: 13pt !important; }
-.no-sakkal .exam-body.spacing-spacious { font-size: 14pt !important; }
+/* CHANGED (kept in sync with css/exam.css - per-page font size): spacing must
+   never decide the font size. The page's own data-page-font-pt decides. */
+.no-sakkal .exam-body:not([data-page-font-pt]) { font-size: 22pt !important; }
 .no-sakkal .page-one .cover-arabic-name { font-size: 22pt !important; }
 .no-sakkal .page-one .cover-info-table td,
 .no-sakkal .page-one .cover-instructions .instruction-line,
@@ -911,8 +909,19 @@ body{
   outline:none;
   font-family:'Sakkal Majalla','Traditional Arabic','Amiri','Cairo',serif;
   font-weight:700;
-  font-size:32pt;
-  line-height:2;
+  /* CHANGED (kept in sync with css/exam.css): the size comes from the page
+     itself, so one page's pick never restyles the rest of the booklet. */
+  font-size:var(--exam-page-font-pt, 32pt);
+  line-height:var(--exam-page-line, 2);
+}
+
+/* CHANGED (kept in sync with css/exam.css): a selected word keeps its own
+   size, and no page rule can flatten it. */
+.exam-flow [data-word-size],
+.exam-body p [data-word-size],
+.exam-body li [data-word-size],
+.exam-body [data-word-size][data-word-size]{
+  font-size:calc(var(--word-pt, 36) * 1pt);
 }
 
 .exam-body ol{
@@ -936,6 +945,15 @@ body{
   margin-bottom:10px;
 }
 
+/* CHANGED (kept in sync with css/exam.css): the page size must beat a legacy
+   inline font-size left on a paragraph, while a real word span still wins. */
+.exam-body[data-page-font-pt] .exam-body p,
+.exam-body[data-page-font-pt] .exam-body li,
+.exam-body[data-page-font-pt][data-page-font-pt] p,
+.exam-body[data-page-font-pt][data-page-font-pt] li{
+  font-size:inherit;
+}
+
 /* The spacing selector still works - every step stays in the same
    paper style, only the density changes. Standardized in Pack 78/80
    for clean rendering across Windows, Mac, and mobile fallbacks.
@@ -944,6 +962,7 @@ body{
    spacing used !important font-size which overrode the picker, making
    Huge still look small. */
 .exam-body.spacing-compact{
+  --exam-page-line:1.4;
   line-height:1.4 !important;
 }
 .exam-body.spacing-compact p,
@@ -952,6 +971,7 @@ body{
 }
 
 .exam-body.spacing-normal{
+  --exam-page-line:1.6;
   line-height:1.6 !important;
 }
 .exam-body.spacing-normal p,
@@ -960,6 +980,7 @@ body{
 }
 
 .exam-body.spacing-relaxed{
+  --exam-page-line:1.8;
   line-height:1.8 !important;
 }
 .exam-body.spacing-relaxed p,
@@ -968,6 +989,7 @@ body{
 }
 
 .exam-body.spacing-spacious{
+  --exam-page-line:2.0;
   line-height:2.0 !important;
 }
 .exam-body.spacing-spacious p,

@@ -23,6 +23,20 @@
   <button type="button" class="exam-side-toggle" id="examSideToggle" onclick="toggleExamSidebar()">
     &#9776; Exam Tools
   </button>
+
+  <!-- NEW (request - owner: "put save icon on the exam space to be easily
+       to access"): the one-tap SAVE that is always on screen. It floats in
+       the top-right corner - the only corner no other exam control uses
+       (menu top-left, Exam Tools bottom-left, quick-nav bottom) - so the
+       teacher can save from anywhere in a long paper without opening the
+       tools or scrolling back up. Ctrl/Cmd+S does the same thing. -->
+  <button type="button" class="exam-quick-save" id="examQuickSaveBtn" onclick="saveExam()"
+          title="Save this exam now (Ctrl+S)" aria-label="Save exam">
+    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <path d="M5 3h11l5 5v13a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1zm2 1v6h9V6.5L14.5 4H7zm5 10a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7z"/>
+    </svg>
+    <span class="exam-quick-save-label" id="examQuickSaveLabel">Save</span>
+  </button>
   <div class="exam-side-scrim" id="examSideScrim" onclick="toggleExamSidebar(false)"></div>
 
   <aside class="exam-toolbar-outer exam-sidebar" id="examSidebar">
@@ -94,8 +108,8 @@
              NEVER spill to a second page - they shrink automatically to
              stay on their one page. -->
         <div class="meta-field">
-          <label>Questions Font Size</label>
-          <select id="examFontSelect" title="Starting size of the questions - it shrinks automatically to keep every exam on ONE page">
+          <label>Questions Font Size (start size)</label>
+          <select id="examFontSelect" title="Start size for the questions. After this, each page keeps its own size - changing one page never resizes the others.">
             <option value="22">Small (22pt)</option>
             <option value="26">Medium (26pt)</option>
             <option value="32" selected>Large - 32pt (like the school paper)</option>
@@ -105,6 +119,9 @@
         </div>
 
         <div class="meta-field meta-actions">
+          <!-- NEW (request): a Save icon right here in Step 1 too, so the
+               teacher never has to walk through the wizard to save. -->
+          <button type="button" class="exam-save-btn" onclick="saveExam()" title="Save this exam (Ctrl+S)">&#128190; Save Exam</button>
           <button type="button" onclick="generateCoverPage()">Generate Cover Page</button>
         </div>
 
@@ -146,7 +163,9 @@
              numbered questions straight into the paper, teacher edits
              anything before printing. -->
         <button type="button" class="ams-ai-btn" onclick="amsOpenAiModal()" title="The AI writer drafts full numbered questions straight into this paper from a topic - you stay the examiner and edit before printing">&#10024; AI: Write Questions</button>
-        <button type="button" onclick="saveExam()">Save Exam</button>
+        <!-- NEW (request): the Save icon sits first in the actions bar and is
+             impossible to miss - same action as the floating button. -->
+        <button type="button" class="exam-save-btn" onclick="saveExam()" title="Save this exam (Ctrl+S)">&#128190; Save Exam</button>
         <button type="button" onclick="openLoadPanel()">&#128218; My Exam Space</button>
         <!-- CHANGED (auto pagination, request #1): this now inserts a Word-style
              page break - pages themselves are created automatically. -->
@@ -165,6 +184,12 @@
       </div>
 
       <!-- Rich text toolbar -->
+      <!-- NEW (request): the toolbar now remembers which page you are
+           writing on, so "Font Size" / "Spacing" change THAT page only. -->
+      <p class="exam-page-scope-hint" id="examPageScopeHint">
+        Writing on <b>page 1</b> &middot; font &amp; spacing apply to this page only.
+        Select words first to resize just those words.
+      </p>
       <div class="exam-format-toolbar">
         <button type="button" onclick="format('bold')"><b>B</b></button>
         <button type="button" onclick="format('italic')"><i>I</i></button>
@@ -189,8 +214,13 @@
         <!-- NEW (editor upgrade, request #2): maths/science symbols -->
         <button type="button" onclick="toggleMathPalette()" id="mathToggleBtn">&sum; Symbols</button>
         <span class="divider"></span>
-        <label class="toolbar-label">Spacing:</label>
-        <select id="spacingSelect" onchange="setSpacing()">
+        <!-- NEW (request - owner: "I must be able to enlarge some words
+             within the exam written not everything will be changing
+             together"): page-scoped font size + spacing pickers, followed by
+             the SELECTED-WORD sizer. Select any words and press A+ / A- (or
+             pick a size) - only those words change, on that one page. -->
+        <label class="toolbar-label" id="examPageScopeLabel">This page:</label>
+        <select id="spacingSelect" onchange="setSpacing()" title="Line spacing - applies to the page you are writing on only">
           <option value="compact">Compact</option>
           <option value="normal" selected>Normal</option>
           <option value="relaxed">Relaxed</option>
@@ -201,7 +231,7 @@
              the question font size right inside the tools. Mirrors the
              Step 1 picker both ways (exam.js keeps them in sync). -->
         <label class="toolbar-label">Font Size:</label>
-        <select id="examFontSelectTools" title="Question font size - same picker as Step 1; auto-fit still protects the page">
+        <select id="examFontSelectTools" title="Question font size for THIS page - other pages keep their own size">
           <option value="22">Small (22pt)</option>
           <option value="26">Medium (26pt)</option>
           <option value="32" selected>Large (32pt)</option>
@@ -209,13 +239,29 @@
           <option value="40">Huge (40pt)</option>
         </select>
         <span class="divider"></span>
-        <button type="button" onclick="toggleDirection()" id="dirToggleBtn">RTL / LTR</button>
-        <select id="fontSizeSelect" onchange="setFontSize()">
-          <option value="3">Normal</option>
-          <option value="4">Large</option>
-          <option value="5">Larger</option>
-          <option value="6">X-Large</option>
+        <!-- NEW (request): selected-word sizing. These buttons keep the text
+             selection alive (mousedown is cancelled) and grow/shrink ONLY the
+             highlighted words. -->
+        <label class="toolbar-label" id="examWordSizeLabel">Selected words:</label>
+        <button type="button" class="exam-word-btn" id="examWordBiggerBtn" onclick="enlargeSelectedWords(4)"
+                title="Make the SELECTED words bigger (only the words you highlighted)">A+</button>
+        <button type="button" class="exam-word-btn" id="examWordSmallerBtn" onclick="shrinkSelectedWords(4)"
+                title="Make the SELECTED words smaller (only the words you highlighted)">A-</button>
+        <select id="fontSizeSelect" onchange="setFontSize()" title="Size for the SELECTED words - pick a word size, not a page size">
+          <option value="">Word size…</option>
+          <option value="20">Very small (20pt)</option>
+          <option value="24">Small (24pt)</option>
+          <option value="28">Medium (28pt)</option>
+          <option value="32">Large (32pt)</option>
+          <option value="36">Extra large (36pt)</option>
+          <option value="44">Big (44pt)</option>
+          <option value="56">Huge (56pt)</option>
+          <option value="72">Biggest (72pt)</option>
         </select>
+        <button type="button" class="exam-word-btn" id="examWordResetBtn" onclick="resetSelectedWordSize()"
+                title="Remove the custom size from the selected words (back to the page size)">A&#8635;</button>
+        <span class="divider"></span>
+        <button type="button" onclick="toggleDirection()" id="dirToggleBtn">RTL / LTR</button>
         <span class="divider"></span>
         <button type="button" id="voiceBtn" onclick="toggleVoice()">&#127908; Voice</button>
         <select id="voiceLang">
@@ -417,6 +463,9 @@
       <div class="exam-space-toolbar">
         <input type="search" id="examSpaceSearch" placeholder="Search title, class, subject…"
                oninput="filterExamSpace()">
+        <!-- NEW (request): save the paper currently open without closing
+             this panel. -->
+        <button type="button" class="exam-save-btn" onclick="saveExam()" title="Save the exam you are working on (Ctrl+S)">&#128190; Save Current</button>
         <button type="button" onclick="newExamDraft()">&#43; New Exam (draft)</button>
       </div>
       <div id="examSpaceBody" class="exam-space-body">

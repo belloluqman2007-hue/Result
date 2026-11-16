@@ -17,12 +17,18 @@
 /* FIX (pack 83): when Sakkal Majalla is not installed (phones/Mac) fallbacks
    Amiri/Traditional Arabic render the same pt size visually MUCH larger.
    JS adds .no-sakkal to <html> when document.fonts.check fails, and we
-   reduce the exam sizes so the paper matches the Windows/Sakkal look. */
-.no-sakkal .exam-body { font-size: 22pt !important; }
-.no-sakkal .exam-body.spacing-compact { font-size: 10pt !important; }
-.no-sakkal .exam-body.spacing-normal { font-size: 12pt !important; }
-.no-sakkal .exam-body.spacing-relaxed { font-size: 13pt !important; }
-.no-sakkal .exam-body.spacing-spacious { font-size: 14pt !important; }
+   reduce the exam sizes so the paper matches the Windows/Sakkal look.
+
+   CHANGED (request - owner: "font size and spacing must be working
+   differently for each page not I will change font from a page and every
+   other written exam will change"): these rules used to force ONE font size
+   per spacing class on every page. Spacing must never decide the font size,
+   otherwise every page of every exam on a non-Sakkal device collapses to the
+   same 10-14pt and the per-page picker cannot win. Spacing classes below now
+   control line-height/margins only; the page's own `data-page-font-pt`
+   decides its text size, and the .no-sakkal .exam-body rule only supplies the
+   default when a page has not stored one yet. */
+.no-sakkal .exam-body:not([data-page-font-pt]) { font-size: 22pt !important; }
 .no-sakkal .page-one .cover-arabic-name { font-size: 22pt !important; }
 .no-sakkal .page-one .cover-info-table td,
 .no-sakkal .page-one .cover-instructions .instruction-line,
@@ -96,11 +102,93 @@ body{
      so it cannot steal taps from selects/buttons near the bottom. */
   z-index:1003;
 }
-
 .exam-side-back{
   margin:10px 0 0 10px;
   display:inline-block;
 }
+
+/* ==========================================================
+   NEW (request - owner: "put save icon on the exam space to be
+   easily to access"): the always-visible floating SAVE button.
+
+   Placed in the TOP-RIGHT corner because it is the only corner
+   this page leaves free: the shared staff menu floats top-left,
+   "Exam Tools" sits bottom-left and the staff quick-nav covers
+   the bottom - so nothing can ever sit on top of it, on desktop
+   or on a phone. It scrolls with nothing (position:fixed) and it
+   is hidden in print / PDF capture.
+========================================================== */
+.exam-quick-save{
+  position:fixed;
+  top:12px;
+  right:14px;
+  z-index:1010;                 /* above the pages, below the Exam Space panel */
+  display:inline-flex;
+  align-items:center;
+  gap:8px;
+  padding:10px 16px;
+  border:none;
+  border-radius:999px;
+  background:linear-gradient(140deg, #14532d, #2E7D5B);
+  color:#fff;
+  font-family:'Cairo', sans-serif;
+  font-size:14px;
+  font-weight:800;
+  cursor:pointer;
+  box-shadow:0 10px 26px rgba(15,61,46,.35);
+  -webkit-tap-highlight-color:transparent;
+}
+.exam-quick-save:hover{ filter:brightness(1.06); }
+.exam-quick-save:focus-visible{
+  outline:3px solid #C9930A;
+  outline-offset:2px;
+}
+.exam-quick-save svg{
+  width:18px;
+  height:18px;
+  flex:0 0 auto;
+  fill:currentColor;
+}
+.exam-quick-save-label{ line-height:1; }
+/* Saved state: the button stops being a "press me" and reports success. */
+.exam-quick-save.is-saved{
+  background:linear-gradient(140deg, #0F766E, #2FB68C);
+}
+.exam-quick-save.is-busy{ opacity:.72; cursor:progress; }
+.exam-quick-save.is-error{
+  background:linear-gradient(140deg, #8C3B2E, #B4442F);
+}
+
+/* The save icon inside the Step 1 / Step 2 / Exam Space buttons: bold enough
+   to read as the primary action without breaking the existing button row. */
+.exam-save-btn{
+  background:linear-gradient(140deg, #14532d, #2E7D5B);
+  color:#fff;
+  border:none;
+  font-weight:800;
+  box-shadow:0 4px 12px rgba(15,61,46,.22);
+}
+.exam-save-btn:hover{ filter:brightness(1.07); }
+
+/* Print / PDF capture: the floating save is chrome, never part of the paper. */
+@media print{
+  .exam-quick-save{ display:none !important; }
+}
+.ams-capturing .exam-quick-save{ display:none !important; }
+
+/* NEW (request - per-page font & spacing): mark the page the tools are
+   pointing at, so it is obvious that "Font Size" changes THIS page only.
+   Screen only - it never reaches print/PDF. */
+@media screen{
+  #examFlow .exam-page.body-page.is-active-page{
+    outline:3px solid rgba(20,83,45,.35);
+    outline-offset:3px;
+  }
+}
+@media print{
+  #examFlow .exam-page.is-active-page{ outline:none !important; }
+}
+.ams-capturing .exam-page.is-active-page{ outline:none !important; }
 
 /* Sidebar fields stack vertically - one per row */
 .exam-sidebar .exam-meta-bar{
@@ -923,8 +1011,23 @@ body{
   outline:none;
   font-family:'Sakkal Majalla','Traditional Arabic','Amiri','Cairo',serif;
   font-weight:700;
-  font-size:32pt;
-  line-height:2;
+  /* CHANGED (request - per-page font size): the size is stored ON THE PAGE
+     itself (data-page-font-pt, set by js/exam.js) instead of coming from one
+     shared rule. `var()` keeps old saved exams (no stored size) at exactly
+     the old 32pt look.
+     NOT !important any more: the page size is written inline by js/exam.js
+     and a selected-WORD size (<span data-word-size>) must always be able to
+     win over it. */
+  font-size:var(--exam-page-font-pt, 32pt);
+  line-height:var(--exam-page-line, 2);
+}
+
+/* CHANGED (request - "I must be able to enlarge some words within the exam
+   written not everything will be changing together"): a word size is kept
+   in --word-pt so the SAME word can follow its page's auto-fit scale
+   (--word-scale) while still being bigger than the text around it. */
+.exam-flow [data-word-size]{
+  font-size:calc(var(--word-pt, 36) * 1pt);
 }
 
 .exam-body ol{
@@ -948,6 +1051,28 @@ body{
   margin-bottom:10px;
 }
 
+/* NEW (request - per-page font size): the page size must also beat a legacy
+   inline font-size left on a paragraph by the OLD word-size toolbar (those
+   were the "locked" sizes that stopped the picker from working at all).
+   `.exam-body.… .exam-body p` outranks a plain inline style, while a genuine
+   selected word is still matched by the more specific rule further down. */
+.exam-body[data-page-font-pt] .exam-body p,
+.exam-body[data-page-font-pt] .exam-body li,
+.exam-body[data-page-font-pt][data-page-font-pt] p,
+.exam-body[data-page-font-pt][data-page-font-pt] li{
+  font-size:inherit;
+}
+
+/* NEW (request - selected words): `font-size:inherit` above would flatten a
+   highlighted word back to the page size, because the word <span> sits
+   INSIDE a paragraph. Give the word span the same specificity as the
+   paragraph rule so its own (larger) size always wins. */
+.exam-body p [data-word-size],
+.exam-body li [data-word-size],
+.exam-body [data-word-size][data-word-size]{
+  font-size:calc(var(--word-pt, 36) * 1pt);
+}
+
 /* The spacing selector still works - every step stays in the same
    paper style, only the density changes. Standardized in Pack 78/80
    for clean rendering across Windows, Mac, and mobile fallbacks.
@@ -956,6 +1081,7 @@ body{
    spacing used !important font-size which overrode the picker, making
    Huge still look small. */
 .exam-body.spacing-compact{
+  --exam-page-line:1.4;
   line-height:1.4 !important;
 }
 .exam-body.spacing-compact p,
@@ -964,6 +1090,7 @@ body{
 }
 
 .exam-body.spacing-normal{
+  --exam-page-line:1.6;
   line-height:1.6 !important;
 }
 .exam-body.spacing-normal p,
@@ -972,6 +1099,7 @@ body{
 }
 
 .exam-body.spacing-relaxed{
+  --exam-page-line:1.8;
   line-height:1.8 !important;
 }
 .exam-body.spacing-relaxed p,
@@ -980,6 +1108,7 @@ body{
 }
 
 .exam-body.spacing-spacious{
+  --exam-page-line:2.0;
   line-height:2.0 !important;
 }
 .exam-body.spacing-spacious p,
@@ -991,6 +1120,30 @@ body{
   font-size:11px;
   font-weight:700;
   color:var(--emerald);
+}
+
+/* NEW (request - per-page + selected-word sizing): the tiny status line
+   above the toolbar tells the teacher which page the font/spacing pickers
+   are about to change. Screen only. */
+.exam-page-scope-hint{
+  margin:0;
+  padding:8px 16px 0;
+  font-size:11.5px;
+  line-height:1.45;
+  color:#456B5C;
+  font-family:'Cairo', sans-serif;
+}
+.exam-page-scope-hint b{ color:#14532d; }
+
+/* NEW (request): A+ / A- / A-reset for the SELECTED words. */
+.exam-word-btn{
+  min-width:40px;
+  font-weight:800;
+  letter-spacing:.3px;
+}
+.exam-word-btn.is-off{
+  opacity:.55;
+  cursor:not-allowed;
 }
 
 .exam-body table{
@@ -1240,6 +1393,28 @@ body{
 
   .exam-next-page-wrap{ padding:0 10px 90px; } /* room for the floating button */
   .exam-next-page-wrap button{ width:100%; }
+
+  /* NEW (request - "put save icon on the exam space to be easily to
+     access"): on a phone the floating save keeps the icon and drops the
+     word, so it stays a compact, unmissable round button that never covers
+     the page's first line. */
+  .exam-quick-save{
+    padding:0;
+    width:48px;
+    height:48px;
+    justify-content:center;
+    border-radius:999px;
+    top:10px;
+    right:10px;
+  }
+  .exam-quick-save svg{ width:22px; height:22px; }
+  .exam-quick-save-label{
+    position:absolute;
+    width:1px; height:1px;
+    overflow:hidden;
+    clip:rect(0 0 0 0);
+    white-space:nowrap;
+  }
 }
 
 /* ==================================================================
