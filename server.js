@@ -27,6 +27,8 @@ const session = require("express-session");
 const bcrypt = require("bcryptjs");
 const connection = require("./db");
 const { publicSchoolKnowledge } = require("./public-school-knowledge");
+/* NEW: "sign in once per device" — long-lived device tokens (see auth-remember.js). */
+const rememberAuth = require("./auth-remember");
 
 // NEW (Third Term Results feature): pure parser/export-builder for the
 // school's internal grade workbook (one sheet per class). The module
@@ -208,14 +210,15 @@ app.get("/sitemap.xml", (req, res) => {
 
 const isProduction = process.env.NODE_ENV === "production";
 
-// Railway (and most hosting platforms) sit your app behind a proxy that
-// terminates HTTPS before forwarding to your app over plain HTTP. Without
-// this, Express never recognizes the connection as secure, so a
+// Railway / Render / Vercel (and most hosting platforms) sit your app behind a
+// proxy that terminates HTTPS before forwarding to your app over plain HTTP.
+// Without this, Express never recognizes the connection as secure, so a
 // secure-only session cookie silently fails to persist - causing an
 // infinite bounce back to the login page after a successful login.
-if (isProduction) {
-    app.set("trust proxy", 1);
-}
+// FIX (stay-signed-in): trust the proxy ALWAYS (not only when NODE_ENV is
+// "production"). A deployment that forgot to set NODE_ENV used to lose the
+// secure cookie AND put every visitor in one shared rate-limit bucket.
+app.set("trust proxy", 1);
 
 if (!process.env.SESSION_SECRET) {
     console.log("WARNING: SESSION_SECRET is not set in your environment. Using an insecure default - fine for local development, but you MUST set a real SESSION_SECRET before deploying this online.");
@@ -232,6 +235,14 @@ class MySqlSessionStore extends session.Store {
         super();
         this.db = db;
         this.tableReady = false;
+        /* FIX (stay-signed-in): a last-resort in-process copy of every session.
+           If MySQL hiccups (cold start, dropped pool, table not created yet)
+           the old code answered "no session" and the user silently landed back
+           on the login page - which is exactly the "I must log in every time"
+           complaint. Now a read that fails falls back to this copy instead, so
+           a database wobble can never sign anyone out mid-use. */
+        this.mem = new Map();
+        this.warnedFallback = false;
         this.ready = new Promise((resolve) => {
             db.query(
                 `CREATE TABLE IF NOT EXISTS app_sessions (
@@ -247,20 +258,49 @@ class MySqlSessionStore extends session.Store {
             if (!this.tableReady) return;
             db.query("DELETE FROM app_sessions WHERE expires_at < ?", [Date.now()], () => {});
         }, 1000 * 60 * 60).unref(); // hourly sweep of expired rows
+        setInterval(() => {
+            const now = Date.now();
+            this.mem.forEach((entry, sid) => {
+                if (!entry || entry.expires <= now) this.mem.delete(sid);
+            });
+        }, 1000 * 60 * 30).unref();
     }
     whenReady(cb) {
         if (this.tableReady) return cb();
         this.ready.then(cb);
     }
+    memGet(sid) {
+        const entry = this.mem.get(sid);
+        if (!entry) return null;
+        if (entry.expires <= Date.now()) { this.mem.delete(sid); return null; }
+        return entry.sess;
+    }
+    memSet(sid, sess, maxAge) {
+        /* Bounded on purpose: the free tier must not grow without limit. */
+        if (this.mem.size > 5000) {
+            const oldest = this.mem.keys().next();
+            if (!oldest.done) this.mem.delete(oldest.value);
+        }
+        this.mem.set(sid, { sess, expires: Date.now() + (Number(maxAge) || 1000 * 60 * 60 * 24 * 30) });
+    }
     get(sid, cb) {
         this.whenReady(() => {
             this.db.query("SELECT sess, expires_at FROM app_sessions WHERE sid = ?", [sid], (err, rows) => {
-                if (err) return cb(null, null); // read hiccup -> treat as logged out, never crash
-                if (!rows || !rows.length) return cb(null, null);
-                if (rows[0].expires_at && rows[0].expires_at < Date.now()) {
+                if (err) {
+                    const cached = this.memGet(sid);
+                    if (cached) return cb(null, cached);
+                    return cb(null, null); // read hiccup -> treat as logged out, never crash
+                }
+                if (!rows || !rows.length) return cb(null, this.memGet(sid));
+                if (rows[0].expires_at && Number(rows[0].expires_at) < Date.now()) {
                     return this.destroy(sid, () => cb(null, null));
                 }
-                try { cb(null, JSON.parse(rows[0].sess)); } catch (e) { cb(null, null); }
+                try {
+                    const parsed = JSON.parse(rows[0].sess);
+                    const maxAge = (parsed.cookie && parsed.cookie.maxAge) || (1000 * 60 * 60 * 24 * 30);
+                    this.memSet(sid, parsed, maxAge);
+                    cb(null, parsed);
+                } catch (e) { cb(null, this.memGet(sid)); }
             });
         });
     }
@@ -268,21 +308,31 @@ class MySqlSessionStore extends session.Store {
         const maxAge = (sess.cookie && sess.cookie.maxAge) || (1000 * 60 * 60 * 24 * 30);
         const expires = Date.now() + maxAge;
         const data = JSON.stringify(sess);
+        this.memSet(sid, sess, maxAge);
         this.whenReady(() => {
             this.db.query(
                 "INSERT INTO app_sessions (sid, sess, expires_at) VALUES (?,?,?) ON DUPLICATE KEY UPDATE sess = VALUES(sess), expires_at = VALUES(expires_at)",
                 [sid, data, expires],
-                (err) => cb && cb(err)
+                (err) => {
+                    if (err && !this.warnedFallback) {
+                        this.warnedFallback = true;
+                        console.warn("[session] MySQL store unavailable - keeping sessions in memory this run (" + (err.code || err.message) + "). Users stay signed in; sessions reset on the next restart.");
+                    }
+                    cb && cb(null);      /* never fail a login because of the store */
+                }
             );
         });
     }
     destroy(sid, cb) {
+        this.mem.delete(sid);
         this.whenReady(() => {
             this.db.query("DELETE FROM app_sessions WHERE sid = ?", [sid], (err) => cb && cb(err));
         });
     }
     touch(sid, sess, cb) {
         const maxAge = (sess.cookie && sess.cookie.maxAge) || (1000 * 60 * 60 * 24 * 30);
+        const cached = this.memGet(sid);
+        if (cached) this.memSet(sid, cached, maxAge);
         this.whenReady(() => {
             this.db.query("UPDATE app_sessions SET expires_at = ? WHERE sid = ?", [Date.now() + maxAge, sid], (err) => cb && cb(err));
         });
@@ -318,6 +368,152 @@ app.use(session({
         sameSite: "lax"
     }
 }));
+
+/* ======================================================================
+   NEW (owner: "I can't be logging in every time I want to access the app")
+   ----------------------------------------------------------------------
+   "Sign in once per device". A successful login can mint a long-lived
+   device token (auth-remember.js). The browser/phone keeps it in an
+   HttpOnly cookie; the hash lives in MySQL. Any request that arrives with
+   NO session but WITH a valid device token is signed straight back in.
+   This is what makes the app open on the dashboard instead of the login
+   form, even after a restart, a deploy, a cleared session cookie, or a
+   changed SESSION_SECRET.
+   ====================================================================== */
+const rememberService = rememberAuth.createRememberService(connection, {
+    ttlMs: rememberAuth.TOKEN_TTL_MS
+});
+rememberService.startCleanup();
+rememberService.ensureTable();
+
+function amsDeviceCookieOptions() {
+    return {
+        httpOnly: true,
+        sameSite: "lax",
+        secure: isProduction,   // same rule as the session cookie
+        path: "/",
+        maxAge: rememberAuth.TOKEN_TTL_MS
+    };
+}
+
+function amsCurrentDeviceToken(req) {
+    return rememberAuth.readCookie(req, rememberService.cookieName);
+}
+
+function amsSetDeviceCookie(res, token) {
+    try {
+        res.cookie(rememberService.cookieName, token, amsDeviceCookieOptions());
+    } catch (e) {
+        console.warn("[remember] could not set device cookie:", e.message);
+    }
+}
+
+function amsClearDeviceCookie(res) {
+    try {
+        res.clearCookie(rememberService.cookieName, {
+            httpOnly: true,
+            sameSite: "lax",
+            secure: isProduction,
+            path: "/"
+        });
+    } catch (e) { /* nothing to clear */ }
+}
+
+/* Replace any older token on this device so rows never pile up. */
+function amsIssueDeviceToken(req, res, record, cb) {
+    const done = typeof cb === "function" ? cb : function () {};
+    const existing = amsCurrentDeviceToken(req);
+    const mint = () => {
+        rememberService.issue(Object.assign({}, record, {
+            userAgent: req.headers["user-agent"] || "",
+            ip: req.ip || ""
+        }), (err, token) => {
+            if (err || !token) return done(err || null);
+            amsSetDeviceCookie(res, token);
+            done(null);
+        });
+    };
+    if (existing) rememberService.revokeToken(existing, mint);
+    else mint();
+}
+
+function amsRevokeCurrentDevice(req, cb) {
+    const token = amsCurrentDeviceToken(req);
+    if (!token) return cb && cb(null, false);
+    rememberService.revokeToken(token, (err) => cb && cb(err || null, true));
+}
+
+/* Sign out every OTHER device of this account (used by Settings and by a
+   password change). The device the user is on right now keeps working. */
+function amsSignOutOtherDevices(userId, currentSid, currentSelector, cb) {
+    const done = typeof cb === "function" ? cb : function () {};
+    rememberService.list("staff", String(userId), (listErr, rows) => {
+        const others = (rows || []).filter((row) => row.selector !== currentSelector);
+        let pending = others.length;
+        let revoked = 0;
+        const finishList = () => {
+            connection.query(
+                "DELETE FROM app_sessions WHERE sid <> ? AND JSON_UNQUOTE(JSON_EXTRACT(sess, '$.userId')) = ?",
+                [currentSid || "", String(userId)],
+                () => done(null, revoked)
+            );
+        };
+        if (!pending) return finishList();
+        others.forEach((row) => {
+            rememberService.revokeBySelector(row.selector, () => {
+                revoked++;
+                if (--pending === 0) finishList();
+            });
+        });
+    });
+}
+
+/* Static assets and public probes must never pay for a database lookup. */
+const AMS_REMEMBER_SKIP = new RegExp(
+    "^(?:/(?:css|js|images|icons|uploads|templates|sql)/)" +
+    "|^/(?:sw\\.js|manifest\\.webmanifest|robots\\.txt|sitemap\\.xml|favicon[^/]*|api/app-config)\\b",
+    "i"
+);
+
+app.use(function (req, res, next) {
+    if (!req.session) return next();
+    if (req.session.userId || req.session.portalStudentId) return next(); // already signed in
+    const token = amsCurrentDeviceToken(req);
+    if (!token) return next();                                            // ordinary visitor
+    if (AMS_REMEMBER_SKIP.test(req.path || "")) return next();            // static asset
+    rememberService.verify(token, function (verifyErr, row, nextExpiry) {
+        if (verifyErr || !row) {
+            amsClearDeviceCookie(res);
+            return next();
+        }
+        /* Keep the browser cookie alive as long as the device is used. */
+        if (nextExpiry) res.cookie(rememberService.cookieName, token, amsDeviceCookieOptions());
+        req.amsDeviceRemembered = true;
+
+        if (String(row.subject_kind) === "portal") {
+            req.session.portalStudentId = row.subject_id;
+            req.session.portalStudentIds = [row.subject_id];
+            return portalFamilyIds(row.subject_id, function (familyErr, ids) {
+                if (!familyErr && ids && ids.length) req.session.portalStudentIds = ids;
+                next();
+            });
+        }
+
+        /* Staff: re-read the account so a deleted or changed account is
+           honoured instead of trusting a stale token. */
+        connection.query("SELECT id, username, role FROM users WHERE id = ?", [row.subject_id], function (userErr, users) {
+            if (userErr || !users || !users.length) {
+                rememberService.revokeBySelector(row.selector, function () {});
+                amsClearDeviceCookie(res);
+                return next();
+            }
+            req.session.userId = users[0].id;
+            req.session.username = users[0].username;
+            req.session.role = users[0].role;
+            next();
+        });
+    });
+});
 
 // SECURITY: CSRF protection via double-submit cookie (csrf-csrf, Express 5 compatible)
 // Uses SESSION_SECRET as the signing secret. Issues token via /api/csrf-token.
@@ -569,18 +765,46 @@ app.post("/login", (req, res) => {
                 req.session.username = user.username;
                 req.session.role = user.role;
 
-                res.json({
-                    message: "Login successful",
+                /* NEW (stay-signed-in): remember this device unless the page
+                   explicitly asked not to. Writing the session first, then
+                   answering, means the very next page load can never miss it. */
+                const wantsRemember = !(req.body && (req.body.remember === false ||
+                    req.body.remember === "false" || req.body.remember === 0 || req.body.remember === "0"));
+                const finish = (remembered) => {
+                    req.session.save(() => {
+                        res.json({
+                            message: "Login successful",
+                            role: user.role,
+                            staySignedIn: Boolean(remembered)
+                        });
+                    });
+                };
+                if (!wantsRemember) {
+                    amsRevokeCurrentDevice(req, () => {
+                        amsClearDeviceCookie(res);
+                        finish(false);
+                    });
+                    return;
+                }
+                amsIssueDeviceToken(req, res, {
+                    kind: "staff",
+                    id: user.id,
+                    username: user.username,
                     role: user.role
-                });
+                }, () => finish(true));
             });
         }
     );
 });
 
 app.post("/logout", (req, res) => {
-    req.session.destroy(() => {
-        res.json({ message: "Logged out" });
+    /* NEW (stay-signed-in): signing out must also forget the device, otherwise
+       the next page load would silently sign the user back in. */
+    amsRevokeCurrentDevice(req, () => {
+        amsClearDeviceCookie(res);
+        req.session.destroy(() => {
+            res.json({ message: "Logged out" });
+        });
     });
 });
 
@@ -589,11 +813,114 @@ app.get("/me", (req, res) => {
         res.json({
             loggedIn: true,
             username: req.session.username,
-            role: req.session.role
+            role: req.session.role,
+            /* true when this browser/phone will open straight into the app
+               without asking for the password again */
+            staySignedIn: Boolean(amsCurrentDeviceToken(req)),
+            restored: Boolean(req.amsDeviceRemembered)
         });
     } else {
-        res.json({ loggedIn: false });
+        res.json({ loggedIn: false, staySignedIn: false });
     }
+});
+
+/* ======================================================================
+   NEW (stay-signed-in): where the mobile app / PWA should open.
+   Signed-in staff land on the dashboard, a signed-in parent on the portal,
+   everyone else on the public website - so opening the app never shows a
+   login form to somebody who is already signed in on that device.
+   ====================================================================== */
+app.get("/app-start", (req, res) => {
+    res.set("Cache-Control", "no-store");
+    if (req.session && req.session.userId) return res.redirect("/teacher-dashboard.html");
+    if (req.session && req.session.portalStudentId) return res.redirect("/portal.html");
+    return res.redirect("/");
+});
+
+/* ======================================================================
+   NEW (stay-signed-in): Settings -> "Sign-in & devices" controls.
+   All of these are ordinary logged-in staff actions, guarded by CSRF like
+   every other write route.
+   ====================================================================== */
+function amsDevicePayload(row, currentSelector) {
+    return {
+        id: row.selector,
+        label: row.label || rememberAuth.describeUserAgent(row.user_agent),
+        created_at: Number(row.created_at) || 0,
+        last_used_at: Number(row.last_used_at) || 0,
+        expires_at: Number(row.expires_at) || 0,
+        current: row.selector === currentSelector
+    };
+}
+
+app.get("/api/signin/devices", requireLogin, (req, res) => {
+    const cookieToken = amsCurrentDeviceToken(req);
+    const currentSelector = cookieToken.indexOf(".") > 0 ? cookieToken.split(".")[0] : "";
+    rememberService.list("staff", String(req.session.userId), (err, rows) => {
+        if (err) return res.json({ devices: [], staySignedIn: Boolean(currentSelector), current: currentSelector });
+        res.json({
+            staySignedIn: Boolean(currentSelector),
+            current: currentSelector,
+            devices: (rows || []).map((row) => amsDevicePayload(row, currentSelector))
+        });
+    });
+});
+
+app.post("/api/signin/stay-signed-in", writeRateLimit, requireLogin, (req, res) => {
+    const wanted = req.body ? req.body.enabled : true;
+    const enabled = !(wanted === false || wanted === "false" || wanted === 0 || wanted === "0");
+    if (!enabled) {
+        return amsRevokeCurrentDevice(req, () => {
+            amsClearDeviceCookie(res);
+            res.json({
+                staySignedIn: false,
+                message: "This device will ask for your password the next time you sign in."
+            });
+        });
+    }
+    amsIssueDeviceToken(req, res, {
+        kind: "staff",
+        id: req.session.userId,
+        username: req.session.username,
+        role: req.session.role
+    }, (err) => {
+        if (err) {
+            return res.status(200).json({
+                staySignedIn: false,
+                message: "Could not save this device. You can still use the app normally, you will just sign in again next time."
+            });
+        }
+        res.json({
+            staySignedIn: true,
+            message: "Done - this device will stay signed in. A fingerprint, face unlock or PIN on your phone protects the app."
+        });
+    });
+});
+
+app.post("/api/signin/devices/revoke", writeRateLimit, requireLogin, (req, res) => {
+    const selector = String((req.body && req.body.id) || "").trim();
+    if (!selector) return res.status(400).json({ message: "Pick a device to remove." });
+    rememberService.list("staff", String(req.session.userId), (err, rows) => {
+        const owned = (rows || []).some((row) => row.selector === selector);
+        if (err || !owned) return res.status(404).json({ message: "That device is no longer signed in." });
+        rememberService.revokeBySelector(selector, () => {
+            const currentSelector = amsCurrentDeviceToken(req).split(".")[0];
+            if (currentSelector === selector) amsClearDeviceCookie(res);
+            res.json({ message: "That device has been signed out." });
+        });
+    });
+});
+
+app.post("/api/signin/sign-out-everywhere", writeRateLimit, requireLogin, (req, res) => {
+    const currentSelector = amsCurrentDeviceToken(req).split(".")[0] || "";
+    amsSignOutOtherDevices(req.session.userId, req.sessionID, currentSelector, (err, removed) => {
+        res.json({
+            message: removed
+                ? "Signed out of every other device (" + removed + " removed). This device stays signed in."
+                : "No other device was signed in. This device stays signed in.",
+            removed: removed || 0
+        });
+    });
 });
 
 // Protect the dashboard pages - must come before express.static
@@ -5779,7 +6106,17 @@ app.post("/api/change-password", requireLogin, (req, res) => {
                 if (hErr) return res.status(500).json({ message: "Could not set password" });
                 connection.query("UPDATE users SET password_hash = ? WHERE username = ?", [hash, req.session.username], (uErr) => {
                     if (uErr) return res.status(500).json({ message: "Database error" });
-                    res.json({ message: "Password changed. Use it next time you log in." });
+                    /* SECURITY (stay-signed-in): a new password must invalidate
+                       other phones/laptops that were remembered with the old
+                       one. This device stays signed in. */
+                    const currentSelector = amsCurrentDeviceToken(req).split(".")[0] || "";
+                    amsSignOutOtherDevices(req.session.userId, req.sessionID, currentSelector, (signErr, removed) => {
+                        res.json({
+                            message: removed
+                                ? "Password changed. You are signed out on " + removed + " other device(s); this device stays signed in."
+                                : "Password changed. Use it next time you log in."
+                        });
+                    });
                 });
             });
         });
@@ -7175,11 +7512,33 @@ app.post("/portal-login", (req, res) => {
             if (familyErr) console.log("Family links lookup notice:", familyErr.message || familyErr);
             req.session.portalStudentId = st.student_id;
             req.session.portalStudentIds = familyErr ? [st.student_id] : familyIds;
-            res.json({
-                message: "Login successful",
-                student: portalPublicStudent(st),
-                linked_children: req.session.portalStudentIds.length
-            });
+
+            /* NEW (stay-signed-in): parents should not retype the student ID and
+               surname on every visit either. */
+            const wantsRemember = !(req.body && (req.body.remember === false ||
+                req.body.remember === "false" || req.body.remember === 0 || req.body.remember === "0"));
+            const finish = (remembered) => {
+                req.session.save(() => {
+                    res.json({
+                        message: "Login successful",
+                        student: portalPublicStudent(st),
+                        linked_children: req.session.portalStudentIds.length,
+                        staySignedIn: Boolean(remembered)
+                    });
+                });
+            };
+            if (!wantsRemember) {
+                return amsRevokeCurrentDevice(req, () => {
+                    amsClearDeviceCookie(res);
+                    finish(false);
+                });
+            }
+            amsIssueDeviceToken(req, res, {
+                kind: "portal",
+                id: st.student_id,
+                username: st.student_id,
+                role: "portal"
+            }, () => finish(true));
         });
     });
 });
@@ -7286,11 +7645,16 @@ app.post("/portal/children/switch", (req, res) => {
 });
 
 app.post("/portal/logout", (req, res) => {
-    if (req.session) {
-        delete req.session.portalStudentId;
-        delete req.session.portalStudentIds;
-    }
-    res.json({ message: "Logged out" });
+    /* NEW (stay-signed-in): forget this device too, otherwise the very next
+       load would silently restore the portal session. */
+    amsRevokeCurrentDevice(req, () => {
+        amsClearDeviceCookie(res);
+        if (req.session) {
+            delete req.session.portalStudentId;
+            delete req.session.portalStudentIds;
+        }
+        res.json({ message: "Logged out" });
+    });
 });
 
 /* Terms/sessions that (a) the student actually has results for AND
