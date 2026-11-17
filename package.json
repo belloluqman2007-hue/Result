@@ -9,7 +9,7 @@
     "app:set-url": "node mobile-app/scripts/sync-config.js",
     "app:icons": "node mobile-app/scripts/generate-android-resources.js",
     "app:open": "npx cap open android",
-    "test": "node test/attendance-500-test.js && node test/attendance-page-client-test.js && node test/family-receipt-role-test.js && node test/public-ai-knowledge-test.js && node test/scores-page-ux-test.js && node test/scores-prefill-duplicate-test.js && node test/report-attendance-test.js && node test/report-attendance-client-test.js && node test/check-result-search-test.js && node test/search-result-null-class-test.js && node test/exam-space-test.js && node test/exam-question-order-test.js && node test/exam-page-font-test.js && node test/mobile-app-test.js",
+    "test": "node test/attendance-500-test.js && node test/attendance-page-client-test.js && node test/family-receipt-role-test.js && node test/public-ai-knowledge-test.js && node test/scores-page-ux-test.js && node test/scores-prefill-duplicate-test.js && node test/report-attendance-test.js && node test/report-attendance-client-test.js && node test/check-result-search-test.js && node test/search-result-null-class-test.js && node test/exam-space-test.js && node test/exam-question-order-test.js && node test/exam-page-font-test.js && node test/mobile-app-test.js && node test/stay-signed-in-test.js",
     "test:mobile-app": "node test/mobile-app-test.js",
     "test:register-api": "node test/attendance-500-test.js",
     "test:register-page": "node test/attendance-page-client-test.js"

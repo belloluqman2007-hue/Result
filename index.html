@@ -116,6 +116,9 @@
       <div class="wb2-cta-row">
         <a class="wb2-btn wb2-btn-gold" href="#admission">&#127979; Apply for Admission</a>
         <a class="wb2-btn wb2-btn-ghost" href="portal-login.html">&#128218; Check Result</a>
+        <!-- NEW (stay-signed-in): only appears when this device is already
+             signed in, so the owner never signs in twice on one phone. -->
+        <a class="wb2-btn wb2-btn-gold" id="wb2ContinueBtn" href="app-start" style="display:none;">&#128273; Continue to my dashboard</a>
 
         <a class="wb2-btn wb2-btn-ghost" href="#login">&#128272; Portal Login</a>
         <a class="wb2-btn wb2-btn-ghost" id="wb2DownloadAppBtn" href="/download/app.apk">&#128242; Download Android App</a>
@@ -446,6 +449,34 @@
   <script src="js/csrf.js"></script>
   <script src="js/website.js"></script>
   <script src="js/pwa.js" defer></script>
+  <script>
+    /* NEW (stay-signed-in): "Continue" shortcut on the public home page.
+       The server already restores a remembered device, so a signed-in
+       visitor gets one tap into the app instead of the login form. */
+    (function () {
+      var btn = document.getElementById("wb2ContinueBtn");
+      if (!btn) return;
+      function show(href, label) {
+        btn.textContent = label;
+        btn.setAttribute("href", href);
+        btn.style.display = "inline-flex";
+      }
+      fetch("/me", { credentials: "same-origin" })
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (me) {
+          if (me && me.loggedIn) {
+            show("teacher-dashboard.html", "\uD83D\uDD11 Continue as " + (me.username || "staff"));
+            return;
+          }
+          return fetch("/portal/me", { credentials: "same-origin" })
+            .then(function (r) { return r.ok ? r.json() : null; })
+            .then(function (portal) {
+              if (portal && portal.loggedIn) show("portal.html", "\uD83D\uDCDA Open the Parent Portal");
+            });
+        })
+        .catch(function () { /* signed out or offline - keep the normal buttons */ });
+    })();
+  </script>
   <script>
     /* NEW (pack 26): gentle scroll-reveal for the site sections.
        Purely presentational; every section stays readable without JS. */

@@ -23,6 +23,19 @@
     .st-card input{ width:100%; padding:11px 12px; border:1px solid #d7e0da; border-radius:11px; font-size:14px; font-family:inherit; }
     .st-btn{ margin-top:16px; width:100%; background:#14532d; color:#fff; border:none; border-radius:11px; padding:12px; font-weight:800; font-size:15px; cursor:pointer; }
     .st-note{ margin-top:12px; font-size:13px; text-align:center; min-height:18px; }
+    .st-toggle{ display:flex; gap:11px; align-items:flex-start; background:#f4f8f5; border:1px solid #dbe7de; border-radius:13px; padding:13px; cursor:pointer; }
+    .st-toggle input{ width:20px; height:20px; margin:1px 0 0; accent-color:#14532d; flex:0 0 auto; }
+    .st-toggle span{ font-size:14px; line-height:1.35; }
+    .st-toggle small{ display:block; margin-top:3px; font-size:12.5px; color:#5B6B62; font-weight:500; }
+    .st-devices{ margin-top:14px; display:flex; flex-direction:column; gap:9px; }
+    .st-device{ display:flex; align-items:center; gap:10px; border:1px solid #e6ece7; border-radius:12px; padding:10px 12px; font-size:13px; }
+    .st-device .st-dev-meta{ flex:1; min-width:0; }
+    .st-device b{ display:block; color:#14532d; font-size:13.5px; }
+    .st-device small{ color:#5B6B62; }
+    .st-device .st-tag{ background:#e7f2ea; color:#14532d; border-radius:999px; padding:2px 8px; font-size:11px; font-weight:800; }
+    .st-device button{ background:#fdecea; color:#a02c1c; border:1px solid #f5c6c0; border-radius:9px; padding:6px 10px; font-size:12px; font-weight:700; cursor:pointer; }
+    .st-btn-quiet{ background:#fff; color:#14532d; border:1px solid #cfdcd4; }
+    .st-help{ margin:16px 0 0; font-size:12.5px; line-height:1.45; color:#5B6B62; background:#faf7f0; border:1px solid #efe6d2; border-radius:12px; padding:11px 12px; }
   </style>
 </head>
 <body>
@@ -45,6 +58,33 @@
       <button class="st-btn" type="submit">&#128273; Change Password</button>
     </form>
     <div class="st-note" id="stNote"></div>
+  </div>
+
+  <!-- NEW (owner: "I can't be logging in every time I want to access the app")
+       Sign in once per device: the phone/laptop stays signed in until the
+       user signs out. Nothing about the password is stored on the device. -->
+  <div class="st-card">
+    <h3>&#128241; Sign-in &amp; devices</h3>
+    <div class="st-who">Open the app without typing your password every time.</div>
+
+    <label class="st-toggle" for="stStay">
+      <input type="checkbox" id="stStay">
+      <span>
+        <b>Keep me signed in on this device</b>
+        <small>This phone or computer opens straight on your dashboard. Your phone's own fingerprint, face unlock or PIN still protects it.</small>
+      </span>
+    </label>
+
+    <div class="st-devices" id="stDevices">Loading devices&hellip;</div>
+
+    <button class="st-btn st-btn-quiet" type="button" id="stSignOutAll">Sign out of every other device</button>
+    <div class="st-note" id="stDeviceNote"></div>
+
+    <p class="st-help">
+      <b>Tip - unlock with fingerprint:</b> keep your phone's screen lock on.
+      Android/iPhone asks for your fingerprint or PIN when you open the phone,
+      then Ameenullah opens straight on your dashboard - no typing.
+    </p>
   </div>
 
   <script src="js/csrf.js"></script>
@@ -76,6 +116,123 @@
         })
         .catch(function () { note.textContent = "Network error - try again."; note.style.color = "#C0392B"; });
     });
+  })();
+
+  /* ------------------------------------------------------------------
+     NEW (stay-signed-in): "Sign-in & devices" card.
+     Talks to /api/signin/* (staff only, CSRF-protected by js/csrf.js).
+     ------------------------------------------------------------------ */
+  (function () {
+    var stay = document.getElementById("stStay");
+    var listBox = document.getElementById("stDevices");
+    var note = document.getElementById("stDeviceNote");
+    var signOutAll = document.getElementById("stSignOutAll");
+    if (!stay || !listBox) return;
+
+    function esc(value) {
+      return String(value == null ? "" : value)
+        .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+    }
+    function say(message, ok) {
+      if (!note) return;
+      note.textContent = message || "";
+      note.style.color = ok ? "#14532d" : "#C0392B";
+    }
+    function when(ts) {
+      if (!ts) return "";
+      try {
+        return new Date(ts).toLocaleString(undefined, {
+          day: "numeric", month: "short", year: "numeric",
+          hour: "2-digit", minute: "2-digit"
+        });
+      } catch (e) { return ""; }
+    }
+
+    function render(data) {
+      stay.checked = Boolean(data && data.staySignedIn);
+      var devices = (data && data.devices) || [];
+      if (!devices.length) {
+        listBox.innerHTML = '<div class="st-device"><div class="st-dev-meta">' +
+          '<b>No saved devices yet</b><small>Turn the switch on to open the app without signing in again.</small>' +
+          '</div></div>';
+        return;
+      }
+      listBox.innerHTML = devices.map(function (device) {
+        return '<div class="st-device">' +
+          '<div class="st-dev-meta">' +
+          '<b>' + esc(device.label) + (device.current ? ' <span class="st-tag">THIS DEVICE</span>' : '') + '</b>' +
+          '<small>Last used ' + esc(when(device.last_used_at)) + '</small>' +
+          '</div>' +
+          '<button type="button" data-device="' + esc(device.id) + '">Remove</button>' +
+          '</div>';
+      }).join("");
+      var buttons = listBox.querySelectorAll("button[data-device]");
+      for (var i = 0; i < buttons.length; i++) {
+        buttons[i].addEventListener("click", function () {
+          var id = this.getAttribute("data-device");
+          this.disabled = true;
+          this.textContent = "…";
+          fetch("/api/signin/devices/revoke", {
+            method: "POST",
+            credentials: "same-origin",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ id: id })
+          })
+            .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, d: d }; }); })
+            .then(function (res) { say(res.d.message || "", res.ok); load(); })
+            .catch(function () { say("Network error - try again.", false); load(); });
+        });
+      }
+    }
+
+    function load() {
+      fetch("/api/signin/devices", { credentials: "same-origin" })
+        .then(function (r) { return r.json(); })
+        .then(render)
+        .catch(function () {
+          listBox.innerHTML = '<div class="st-device"><div class="st-dev-meta"><b>Could not load devices</b>' +
+            '<small>Check your connection and reload.</small></div></div>';
+        });
+    }
+
+    stay.addEventListener("change", function () {
+      var wanted = stay.checked;
+      stay.disabled = true;
+      fetch("/api/signin/stay-signed-in", {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ enabled: wanted })
+      })
+        .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, d: d }; }); })
+        .then(function (res) {
+          if (res.d && typeof res.d.staySignedIn === "boolean") stay.checked = res.d.staySignedIn;
+          say(res.d.message || (res.ok ? "Saved." : "Could not save."), res.ok);
+          load();
+        })
+        .catch(function () { say("Network error - try again.", false); })
+        .finally(function () { stay.disabled = false; });
+    });
+
+    if (signOutAll) {
+      signOutAll.addEventListener("click", function () {
+        if (!window.confirm("Sign out every other phone and computer that is still signed in to your account?")) return;
+        signOutAll.disabled = true;
+        fetch("/api/signin/sign-out-everywhere", {
+          method: "POST",
+          credentials: "same-origin",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({})
+        })
+          .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, d: d }; }); })
+          .then(function (res) { say(res.d.message || "", res.ok); load(); })
+          .catch(function () { say("Network error - try again.", false); })
+          .finally(function () { signOutAll.disabled = false; });
+      });
+    }
+
+    load();
   })();
   </script>
 </body>

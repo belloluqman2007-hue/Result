@@ -312,9 +312,9 @@
     </div>
 
     <div class="quick-grid" aria-label="Choose destination">
-      <button type="button" class="q-btn active" data-path="/">&#127968; School Home</button>
+      <button type="button" class="q-btn active" data-path="/app-start">&#128273; Continue to my dashboard</button>
+      <button type="button" class="q-btn" data-path="/">&#127968; School Home</button>
       <button type="button" class="q-btn" data-path="/portal-login.html">&#128202; Check Result</button>
-      <button type="button" class="q-btn" data-path="/portal.html">&#128101; Parent Portal</button>
       <button type="button" class="q-btn" data-path="/login.html">&#128272; Staff Login</button>
     </div>
   </main>
@@ -345,9 +345,27 @@
       var cfg = window.AMS_APP_CONFIG || {};
       var STORAGE_KEY = "ams_custom_server_url";
       var LAST_PATH_KEY = "ams_preferred_start_path";
+      /* NEW (stay-signed-in): the phone now remembers where you were and, above
+         all, opens on /app-start. That route asks the server who is signed in
+         on this device: staff go straight to the dashboard, a parent straight
+         to the portal - no login form, no retyping a password on every launch.
+         localStorage (unlike sessionStorage) survives the app being closed. */
+      var DEFAULT_START_PATH = "/app-start";
+
+      function savedPath() {
+        try {
+          return localStorage.getItem(LAST_PATH_KEY) || sessionStorage.getItem(LAST_PATH_KEY) || "";
+        } catch (e) {
+          return "";
+        }
+      }
+      function savePath(path) {
+        try { localStorage.setItem(LAST_PATH_KEY, path); } catch (e) {}
+        try { sessionStorage.setItem(LAST_PATH_KEY, path); } catch (e) {}
+      }
 
       var params = new URLSearchParams(window.location.search || "");
-      var requestedPath = params.get("path") || sessionStorage.getItem(LAST_PATH_KEY) || "/";
+      var requestedPath = params.get("path") || savedPath() || DEFAULT_START_PATH;
       if (requestedPath.charAt(0) !== "/") requestedPath = "/" + requestedPath;
 
       var statusSpinner = document.getElementById("statusSpinner");
@@ -368,8 +386,8 @@
 
       for (var i = 0; i < quickBtns.length; i++) {
         quickBtns[i].addEventListener("click", function () {
-          requestedPath = this.getAttribute("data-path") || "/";
-          sessionStorage.setItem(LAST_PATH_KEY, requestedPath);
+          requestedPath = this.getAttribute("data-path") || DEFAULT_START_PATH;
+          savePath(requestedPath);
           highlightPath(requestedPath);
           startConnection();
         });
